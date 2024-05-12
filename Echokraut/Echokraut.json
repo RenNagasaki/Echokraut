@@ -1,0 +1,10 @@
+{
+  "Author": "Ren Nagasaki",
+  "Name": "Echokraut",
+  "Punchline": "A TTS Plugin that breaks the silence! For self hosted TTS Services.",
+  "Description": "A description that shows up in /xlplugins. List any major slash-command(s).",
+  "ApplicableVersion": "any",
+  "Tags": [
+    "TTS"
+  ]
+}
