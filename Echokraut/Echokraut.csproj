@@ -3,18 +3,16 @@
   <Import Project="Dalamud.Plugin.Bootstrap.targets" />
 
   <PropertyGroup>
-    <Version>0.0.0.1</Version>
-    <Description>A sample plugin.</Description>
-    <PackageProjectUrl>https://github.com/goatcorp/Echokraut</PackageProjectUrl>
+    <Version>0.0.0.3</Version>
+    <Description>A TTS Dalamud Plugin that breaks the silence! For self hosted TTS Services.</Description>
+    <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
 
   <ItemGroup>
-    <Content Include="..\Data\goat.png">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      <Visible>false</Visible>
-    </Content>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="R3" Version="1.1.11" />
   </ItemGroup>
 
   <ItemGroup>

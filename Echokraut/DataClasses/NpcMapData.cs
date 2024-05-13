@@ -17,6 +17,6 @@ namespace Echokraut.DataClasses
         public decimal patchVersion { get; set; }
         public string race { get; set; }
         public string gender { get; set; }
-        public FF14Voice voiceItem { get; set; }
+        public BackendVoiceItem voiceItem { get; set; }
     }
 }

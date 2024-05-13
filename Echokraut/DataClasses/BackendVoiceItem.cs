@@ -1,12 +1,6 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 namespace Echokraut.DataClasses
 {
-    public class FF14Voice
+    public class BackendVoiceItem
     {
         public string voiceName { get; set; }
         public string voice { get; set; }
@@ -21,7 +15,7 @@ namespace Echokraut.DataClasses
         }
         public override bool Equals(object obj)
         {
-            var item = obj as FF14Voice;
+            var item = obj as BackendVoiceItem;
 
             if (item == null)
             {

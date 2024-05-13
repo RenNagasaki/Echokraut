@@ -1,10 +1,10 @@
 using Dalamud.Configuration;
 using Dalamud.Plugin;
-using Echokraut.DataClasses;
+using Echokraut.Enums;
 using System;
 using System.Collections.Generic;
 
-namespace Echokraut;
+namespace Echokraut.DataClasses;
 
 [Serializable]
 public class Configuration : IPluginConfiguration
@@ -12,7 +12,14 @@ public class Configuration : IPluginConfiguration
     public int Version { get; set; } = 0;
 
     public bool IsConfigWindowMovable { get; set; } = true;
-    public List<NpcMapData> mappedNpcs { get; set; } = new List<NpcMapData>();
+    public TTSBackends BackendSelection { get; set; } = TTSBackends.Alltalk;
+    public AlltalkData Alltalk { get; set; } = new AlltalkData();
+    public List<NpcMapData> MappedNpcs { get; set; } = new List<NpcMapData>();
+    public bool Enabled { get; set; } = false;
+    public bool VoiceBattletalk { get; set; } = false;
+    public bool VoiceDialog { get; set; } = false;
+    public bool CancelSpeechOnTextAdvance { get; set; } = true;
+    public bool RemoveStutters { get; set; } = true;
 
     // the below exist just to make saving less cumbersome
     [NonSerialized]
