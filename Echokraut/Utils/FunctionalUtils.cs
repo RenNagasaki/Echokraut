@@ -1,14 +1,16 @@
-﻿using System;
+using Dalamud.Plugin.Services;
+using System;
 using System.Linq;
 
-namespace Echokraut.TextToTalk.Utils;
+namespace Echokraut.Utils;
 
 public static class FunctionalUtils
 {
-    public static void RunSafely(Action fn, Action<Exception> onFail)
+    public static void RunSafely(Action fn, Action<Exception> onFail, IPluginLog log)
     {
         try
         {
+            log.Info("HELLO IM HERE");
             fn();
         }
         catch (Exception e)

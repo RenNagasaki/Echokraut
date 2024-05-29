@@ -1,7 +1,7 @@
 using System.Runtime.InteropServices;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
-namespace Echokraut.TextToTalk.Talk;
+namespace Echokraut.Helper;
 
 [StructLayout(LayoutKind.Explicit, Size = 0x280)]
 public unsafe struct AddonBattleTalk

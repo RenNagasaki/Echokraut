@@ -1,4 +1,4 @@
-﻿namespace Echokraut.TextToTalk.TextProviders;
+namespace Echokraut.Enums;
 
 public enum AddonPollSource
 {

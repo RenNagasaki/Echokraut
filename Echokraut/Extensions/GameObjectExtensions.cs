@@ -1,7 +1,7 @@
-﻿using Dalamud.Game.ClientState.Objects.SubKinds;
+using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.ClientState.Objects.Types;
 
-namespace Echokraut.TextToTalk.Extensions;
+namespace Echokraut.Extensions;
 
 public static class GameObjectExtensions
 {

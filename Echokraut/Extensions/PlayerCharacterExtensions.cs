@@ -1,6 +1,6 @@
 ﻿using Dalamud.Game.ClientState.Objects.SubKinds;
 
-namespace Echokraut.TextToTalk.Extensions;
+namespace Echokraut.Extensions;
 
 public static class PlayerCharacterExtensions
 {

@@ -4,7 +4,9 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
-using Echokraut.TextToTalk.Talk;
+using Echokraut.DataClasses;
+using Echokraut.Helper;
+using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
@@ -30,7 +32,7 @@ namespace Echokraut.TextToTalk.Utils
             return new AddonTalkText
             {
                 Speaker = ReadTextNode(talkAddon->AtkTextNode220),
-                Text = ReadTextNode(talkAddon->AtkTextNode228),
+                Text = ReadTextNode(talkAddon->AtkTextNode228)
             };
         }
 
@@ -49,6 +51,21 @@ namespace Echokraut.TextToTalk.Utils
 
             var textPtr = textNode->NodeText.StringPtr;
             var textLength = textNode->NodeText.BufUsed - 1; // Null-terminated; chop off the null byte
+            if (textLength is <= 0 or > int.MaxValue) return "";
+
+            var textLengthInt = Convert.ToInt32(textLength);
+
+            var seString = SeString.Parse(textPtr, textLengthInt);
+            return seString.TextValue
+                .Trim()
+                .Replace("\n", "")
+                .Replace("\r", "");
+        }
+
+        private static unsafe string ReadStringNode(Utf8String textNode)
+        {
+            var textPtr = textNode.StringPtr;
+            var textLength = textNode.BufUsed - 1; // Null-terminated; chop off the null byte
             if (textLength is <= 0 or > int.MaxValue) return "";
 
             var textLengthInt = Convert.ToInt32(textLength);

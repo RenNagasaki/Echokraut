@@ -21,6 +21,7 @@ public class ConfigWindow : Window, IDisposable
     private Echokraut plugin;
     private IPluginLog log;
     private string testConnectionRes = "";
+    private BackendVoiceItem removeVoiceItem = new BackendVoiceItem() { voiceName = "Remove", race = NpcRaces.Default, gender = Gender.None };
 
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
@@ -63,9 +64,9 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.EndTabItem();
             }
 
-            if (ImGui.BeginTabItem("Voices"))
+            if (ImGui.BeginTabItem("NPCs"))
             {
-                DrawVoices();
+                DrawNpcs();
                 ImGui.EndTabItem();
             }
         }
@@ -77,6 +78,36 @@ public class ConfigWindow : Window, IDisposable
     {
         if (ImGui.CollapsingHeader("General"))
         {
+            var enabled = this.Configuration.Enabled;
+            if (ImGui.Checkbox("Enabled", ref enabled))
+            {
+                this.Configuration.Enabled = enabled;
+                this.Configuration.Save();
+            }
+            var voiceDialog = this.Configuration.VoiceDialog;
+            if (ImGui.Checkbox("Voice dialog", ref voiceDialog))
+            {
+                this.Configuration.VoiceDialog = voiceDialog;
+                this.Configuration.Save();
+            }
+            var voiceBattleDialog = this.Configuration.VoiceBattleDialog;
+            if (ImGui.Checkbox("Voice battle dialog", ref voiceBattleDialog))
+            {
+                this.Configuration.VoiceBattleDialog = voiceBattleDialog;
+                this.Configuration.Save();
+            }
+            var cancelAdvance = this.Configuration.CancelSpeechOnTextAdvance;
+            if (ImGui.Checkbox("Cancel voice on text advance", ref cancelAdvance))
+            {
+                this.Configuration.CancelSpeechOnTextAdvance = cancelAdvance;
+                this.Configuration.Save();
+            }
+            var removeStutters = this.Configuration.RemoveStutters;
+            if (ImGui.Checkbox("Remove stutters", ref removeStutters))
+            {
+                this.Configuration.RemoveStutters = removeStutters;
+                this.Configuration.Save();
+            }
         }
 
 
@@ -85,18 +116,25 @@ public class ConfigWindow : Window, IDisposable
             var backends = Enum.GetValues<TTSBackends>().ToArray();
             var backendsDisplay = backends.Select(b => b.ToString()).ToArray();
             var presetIndex = Enum.GetValues<TTSBackends>().ToList().IndexOf(this.Configuration.BackendSelection);
-            if (ImGui.Combo($"##EKCBoxBackend", ref presetIndex, backendsDisplay, backendsDisplay.Length))
+            if (ImGui.Combo($"Select Backend##EKCBoxBackend", ref presetIndex, backendsDisplay, backendsDisplay.Length))
             {
-                this.Configuration.BackendSelection = backends[presetIndex]; 
+                var backendSelection = backends[presetIndex];
+                this.Configuration.BackendSelection = backendSelection; 
                 this.Configuration.Save();
+                this.plugin.BackendHelper.SetBackendType(backendSelection);
 
-                log.Debug($"Updated backendselection to: {Constants.BACKENDS[presetIndex]}");
+                log.Info($"Updated backendselection to: {Constants.BACKENDS[presetIndex]}");
             }
 
             if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
             {
                 if (ImGui.InputText($"Base Url##EKBaseUrl", ref this.Configuration.Alltalk.BaseUrl, 40))
                     this.Configuration.Save();
+
+                if (ImGui.Button($"Load Voices##EKLoadVoices"))
+                {
+                    BackendGetVoices();
+                }
             }
 
             if (ImGui.Button($"Test Connection##EKTestConnection"))
@@ -126,8 +164,54 @@ public class ConfigWindow : Window, IDisposable
         }
     }
 
-    private void DrawVoices()
+    private async void BackendGetVoices()
     {
+        try
+        {
+            if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
+              plugin.BackendHelper.SetBackendType(this.Configuration.BackendSelection);
+        }
+        catch (Exception ex)
+        {
+            log.Error(ex.ToString());
+        }
+    }
 
+    private void DrawNpcs()
+    {
+        var voices = plugin.BackendHelper.mappedVoices;
+        voices.Insert(0, removeVoiceItem);
+        var voicesDisplay = voices.Select(b => b.ToString()).ToArray();
+        NpcMapData toBeRemoved = null;
+        foreach (NpcMapData mapData in Configuration.MappedNpcs)
+        {
+            var presetIndex = voices.IndexOf(mapData.voiceItem);
+            if (ImGui.Combo($"{mapData}##EKCBoxNPC{mapData}", ref presetIndex, voicesDisplay, voicesDisplay.Length))
+            {
+                var newVoiceItem = voices[presetIndex];
+
+                if (newVoiceItem != null)
+                {
+                    log.Info($"Updated Voice for Character: {mapData} from: {mapData.voiceItem} to: {newVoiceItem}");
+
+                    mapData.voiceItem = newVoiceItem;
+                    this.Configuration.Save();
+                }
+                else if (newVoiceItem == removeVoiceItem)
+                {
+                    log.Info($"Removing Configuration for Character: {mapData}");
+                    toBeRemoved = mapData;
+                }
+                else
+                    log.Error($"Couldnt update Voice for Character: {mapData}");
+            }
+
+        }
+
+        if (toBeRemoved != null)
+        {
+            Configuration.MappedNpcs.Remove(toBeRemoved);
+            Configuration.Save();
+        }
     }
 }

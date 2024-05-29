@@ -8,148 +8,181 @@ using System.Web;
 using System.Globalization;
 using Echokraut.DataClasses;
 using Echokraut.Exceptions;
+using Echokraut.Enums;
+using Dalamud.Plugin.Services;
 
 namespace Echokraut.Backend
 {
     public class AlltalkBackend : ITTSBackend
     {
-        public async Task<Stream> GenerateAudioStreamFromVoice(BackendData data, string voiceLine, string voice, string language)
+        AlltalkData data;
+        public AlltalkBackend(AlltalkData data)
         {
-            //LogHelper.logThread("Generating Alltalk Audio");
+            this.data = data;
+        }
+
+        public async Task<Stream> GenerateAudioStreamFromVoice(IPluginLog log, string voiceLine, string voice, string language)
+        {
+            log.Info("Generating Alltalk Audio");
             HttpClient httpClient = new HttpClient();
             httpClient.BaseAddress = new Uri(data.BaseUrl);
-            httpClient.Timeout = TimeSpan.FromSeconds(1);
+            httpClient.Timeout = TimeSpan.FromSeconds(5);
 
             HttpResponseMessage res = null;
-            while (res == null)
+            try
             {
-                try
-                {
-                    var uriBuilder = new UriBuilder(data.BaseUrl);
-                    uriBuilder.Path = data.StreamPath;
-                    var query = HttpUtility.ParseQueryString(uriBuilder.Query);
-                    query["text"] = voiceLine;
-                    query["voice"] = voice;
-                    query["language"] = getAlltalkLanguage(language);
-                    query["output_file"] = "ignoreme.wav";
-                    uriBuilder.Query = query.ToString();
-                    //LogHelper.logThread("Requesting...");
-                    using var req = new HttpRequestMessage(HttpMethod.Get, uriBuilder.Uri);
+                var uriBuilder = new UriBuilder(data.BaseUrl);
+                uriBuilder.Path = data.StreamPath;
+                var query = HttpUtility.ParseQueryString(uriBuilder.Query);
+                query["text"] = voiceLine;
+                query["voice"] = voice;
+                query["language"] = getAlltalkLanguage(language);
+                query["output_file"] = "ignoreme.wav";
+                uriBuilder.Query = query.ToString();
+                log.Info("Requesting...");
+                using var req = new HttpRequestMessage(HttpMethod.Get, uriBuilder.Uri);
 
-                    res = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead);
-                    EnsureSuccessStatusCode(res);
+                res = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+                EnsureSuccessStatusCode(res);
 
-                    // Copy the sound to a new buffer and enqueue it
-                    //LogHelper.logThread("Getting response...");
-                    var responseStream = await res.Content.ReadAsStreamAsync();
-                    //LogHelper.logThread("Done");
+                // Copy the sound to a new buffer and enqueue it
+                log.Info("Getting response...");
+                var responseStream = await res.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                log.Info("Done");
 
-                    return responseStream;
-                }
-                catch (Exception ex)
-                {
-                    //LogHelper.logThread(ex.ToString());
-                }
+                return responseStream;
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex.ToString());
             }
 
             return null;
         }
 
-        public List<BackendVoiceItem> GetAvailableVoices(BackendData data)
+        public List<BackendVoiceItem> GetAvailableVoices(IPluginLog log)
         {
-            HttpClient httpClient = new HttpClient();
-            httpClient.BaseAddress = new Uri(data.BaseUrl);
-            httpClient.Timeout = TimeSpan.FromSeconds(1);
-            //LogHelper.logThread("Loading Alltalk Voices");
+            log.Info("Loading Alltalk Voices");
             var mappedVoices = new List<BackendVoiceItem>();
-            var uriBuilder = new UriBuilder(data.BaseUrl) { Path = data.VoicesPath };
-            var result = httpClient.GetStringAsync(uriBuilder.Uri);
-            result.Wait();
-            string resultStr = result.Result.Replace("\\", "");
-            AlltalkVoices voices = System.Text.Json.JsonSerializer.Deserialize<AlltalkVoices>(resultStr);
-
-            foreach (string voice in voices.voices)
+            try
             {
-                if (voice == Constants.NARRATORVOICE)
+                HttpClient httpClient = new HttpClient();
+                httpClient.BaseAddress = new Uri(data.BaseUrl);
+                httpClient.Timeout = TimeSpan.FromSeconds(5);
+                var uriBuilder = new UriBuilder(data.BaseUrl) { Path = data.VoicesPath };
+                var result = httpClient.GetStringAsync(uriBuilder.Uri);
+                result.Wait();
+                string resultStr = result.Result.Replace("\\", "");
+                AlltalkVoices voices = System.Text.Json.JsonSerializer.Deserialize<AlltalkVoices>(resultStr);
+
+                foreach (string voice in voices.voices)
                 {
-                    var voiceItem = new BackendVoiceItem()
+                    if (voice == Constants.NARRATORVOICE)
                     {
-                        voiceName = Constants.NARRATORVOICE.Replace(".wav", ""),
-                        voice = voice
-                    };
-                    mappedVoices.Add(voiceItem);
-                }
-                else
-                {
-                    string[] splitVoice = voice.Split('_');
-                    var gender = splitVoice[0];
-                    var race = splitVoice[1];
-                    string voiceName = splitVoice[2].Replace(".wav", "");
-
-                    var voiceItem = new BackendVoiceItem()
-                    {
-                        gender = gender,
-                        race = race,
-                        voice = voice
-                    };
-
-                    voiceItem.patchVersion = 1.0m;
-                    var splitVoicePatch = voiceName.Split("@");
-                    voiceItem.voiceName = splitVoicePatch[0];
-                    if (splitVoicePatch.Length > 1)
-                        voiceItem.patchVersion = Convert.ToDecimal(splitVoicePatch[1], new CultureInfo("en-US"));
-                    mappedVoices.Add(voiceItem);
-
-                    if (voice.Contains("NPC") && Constants.RACESFORRANDOMNPC.Contains(race))
-                    {
-                        voiceItem = new BackendVoiceItem()
+                        var voiceItem = new BackendVoiceItem()
                         {
-                            gender = gender,
-                            race = "Default",
-                            voiceName = voiceName,
+                            voiceName = Constants.NARRATORVOICE.Replace(".wav", ""),
                             voice = voice
                         };
                         mappedVoices.Add(voiceItem);
                     }
+                    else
+                    {
+                        string[] splitVoice = voice.Split('_');
+                        var genderStr = splitVoice[0];
+                        var raceStr = splitVoice[1];
+                        string voiceName = splitVoice[2].Replace(".wav", "");
+
+                        object gender = Gender.Male;
+                        object race = NpcRaces.Default;
+                        var voiceItem = new BackendVoiceItem()
+                        {
+                            gender = (Gender)gender,
+                            race = (NpcRaces)race,
+                            voice = voice
+                        };
+
+                        if (Enum.TryParse(typeof(Gender), genderStr, true, out gender))
+                        {
+                            if (Enum.TryParse(typeof(NpcRaces), raceStr, true, out race))
+                            {
+                                voiceItem.gender = (Gender)gender;
+                                voiceItem.race = (NpcRaces)race;
+                            }
+                            else
+                                race = NpcRaces.Default;
+                        }
+                        else
+                            gender = Gender.Male;
+
+                        voiceItem.patchVersion = 1.0m;
+                        var splitVoicePatch = voiceName.Split("@");
+                        voiceItem.voiceName = splitVoicePatch[0];
+                        if (splitVoicePatch.Length > 1)
+                            voiceItem.patchVersion = Convert.ToDecimal(splitVoicePatch[1], new CultureInfo("en-US"));
+                        mappedVoices.Add(voiceItem);
+
+                        if (voice.Contains("NPC") && Constants.RACESFORRANDOMNPC.Contains((NpcRaces)race))
+                        {
+                            voiceItem = new BackendVoiceItem()
+                            {
+                                gender = (Gender)gender,
+                                race = NpcRaces.Default,
+                                voiceName = voiceName,
+                                voice = voice
+                            };
+                            mappedVoices.Add(voiceItem);
+                        }
+                    }
                 }
+                log.Info("Done");
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex.ToString());
             }
 
-            //LogHelper.logThread("Done");
             return mappedVoices;
         }
 
-        public async void StopGenerating(BackendData data)
-        {
-            HttpClient httpClient = new HttpClient();
-            httpClient.BaseAddress = new Uri(data.BaseUrl);
-            httpClient.Timeout = TimeSpan.FromSeconds(1);
-            //LogHelper.logThread("Stopping Alltalk Generation");
-            HttpResponseMessage res = null;
-            while (res == null)
-            {
-                try
-                {
-                    var content = new StringContent("");
-                    res = await httpClient.PutAsync(data.StopPath, content);
-                } catch (Exception ex)
-                {
-                    //LogHelper.logThread(ex.ToString());
-                }
-            }
-        }
-
-        public async Task<string> CheckReady(BackendData data)
+        public async void StopGenerating(IPluginLog log)
         {
             HttpClient httpClient = new HttpClient();
             httpClient.BaseAddress = new Uri(data.BaseUrl);
             httpClient.Timeout = TimeSpan.FromSeconds(5);
-            //LogHelper.logThread("Checking if Alltalk is ready");
-            var res = await httpClient.GetAsync(data.ReadyPath);
+            log.Info("Stopping Alltalk Generation");
+            HttpResponseMessage res = null;
+            try
+            {
+                var content = new StringContent("");
+                res = await httpClient.PutAsync(data.StopPath, content).ConfigureAwait(false);
+            } catch (Exception ex)
+            {
+                log.Error(ex.ToString());
+            }
+        }
 
-            var responseString = await res.Content.ReadAsStringAsync();
-            //LogHelper.logThread("Ready");
+        public async Task<string> CheckReady(IPluginLog log)
+        {
+            HttpClient httpClient = new HttpClient();
+            httpClient.BaseAddress = new Uri(data.BaseUrl);
+            httpClient.Timeout = TimeSpan.FromSeconds(5);
+            log.Info("Checking if Alltalk is ready");
+            try
+            {
+                var res = await httpClient.GetAsync(data.ReadyPath).ConfigureAwait(false);
 
-            return responseString;
+                var responseString = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+                return responseString;
+                log.Info("Ready");
+            }
+            catch (Exception ex)
+            {
+                log.Error(ex.ToString());
+            }
+
+            return "NotReady";
         }
 
         private static void EnsureSuccessStatusCode(HttpResponseMessage res)
@@ -168,6 +201,8 @@ namespace Echokraut.Backend
                     return "de";
                 case "English":
                     return "en";
+                case "French":
+                    return "fr";
             }
 
             return "de";

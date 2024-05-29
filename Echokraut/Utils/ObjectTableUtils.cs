@@ -2,8 +2,9 @@ using System.Linq;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
+using Echokraut.TextToTalk.Utils;
 
-namespace Echokraut.TextToTalk.Utils;
+namespace Echokraut.Utils;
 
 public static class ObjectTableUtils
 {

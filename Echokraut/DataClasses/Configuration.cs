@@ -16,7 +16,7 @@ public class Configuration : IPluginConfiguration
     public AlltalkData Alltalk { get; set; } = new AlltalkData();
     public List<NpcMapData> MappedNpcs { get; set; } = new List<NpcMapData>();
     public bool Enabled { get; set; } = false;
-    public bool VoiceBattletalk { get; set; } = false;
+    public bool VoiceBattleDialog { get; set; } = false;
     public bool VoiceDialog { get; set; } = false;
     public bool CancelSpeechOnTextAdvance { get; set; } = true;
     public bool RemoveStutters { get; set; } = true;

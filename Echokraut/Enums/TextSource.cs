@@ -1,4 +1,4 @@
-namespace Echokraut.TextToTalk
+namespace Echokraut.Enums
 {
     public enum TextSource
     {

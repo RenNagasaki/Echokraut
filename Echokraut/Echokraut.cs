@@ -8,24 +8,21 @@ using Echokraut.Windows;
 using Dalamud.Game;
 using Echokraut.Enums;
 using Echokraut.Backend;
-using Echokraut.TextToTalk.TextProviders;
-using Echokraut.TextToTalk.Talk;
 using System;
-using Echokraut.TextToTalk;
 using R3;
 using Echokraut.TextToTalk.Utils;
 using Echokraut.DataClasses;
-using FF14_Echokraut.Helpers;
 using Dalamud.Game.Text;
 using System.Collections.Generic;
 using System.Linq;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Text.SeStringHandling;
 using GameObject = Dalamud.Game.ClientState.Objects.Types.GameObject;
-using Echokraut.TextToTalk.Enums;
-using Echokraut.TextToTalk.Extensions;
 using Lumina.Excel.GeneratedSheets;
-using Echokraut.TextToTalk.Events;
+using Echokraut.Helper;
+using Echokraut.Extensions;
+using Echokraut.Utils;
+using NAudio.Wave;
 
 namespace Echokraut;
 
@@ -42,16 +39,19 @@ public partial class Echokraut : IDalamudPlugin
     private IObjectTable ObjectTable { get; init; }
     private IGameGui GameGui { get; init; }
     private IDataManager DataManager { get; init; }
+    private IChatGui ChatGui { get; init; }
     private Configuration Configuration { get; init; }
     public BackendHelper BackendHelper { get; init; }
 
-    private readonly IDisposable unsubscribeAll;
     public readonly WindowSystem WindowSystem = new("Echokraut");
     private ConfigWindow ConfigWindow { get; init; }
-    private readonly IAddonTalkHandler addonTalkHandler;
-    private readonly IAddonBattleTalkHandler addonBattleTalkHandler;
-    private readonly AddonTalkManager addonTalkManager;
-    private readonly AddonBattleTalkManager addonBattleTalkManager;
+
+    #region TextToTalk Base
+    private readonly AddonTalkHelper addonTalkHandler;
+    private readonly AddonBattleTalkHelper addonBattleTalkHandler;
+    private readonly UngenderedOverrideManager ungenderedOverrides;
+    private readonly SoundHelper soundHelper;
+    #endregion
 
     public Echokraut(
         [RequiredVersion("1.0")] DalamudPluginInterface pluginInterface,
@@ -62,7 +62,10 @@ public partial class Echokraut : IDalamudPlugin
         [RequiredVersion("1.0")] ICondition condition,
         [RequiredVersion("1.0")] IObjectTable objectTable,
         [RequiredVersion("1.0")] IDataManager dataManager,
-        [RequiredVersion("1.0")] IGameGui gameGui)
+        [RequiredVersion("1.0")] IChatGui chatGui,
+        [RequiredVersion("1.0")] IGameGui gameGui,
+        [RequiredVersion("1.0")] ISigScanner sigScanner,
+        [RequiredVersion("1.0")] IGameInteropProvider gameInterop)
     {
         PluginInterface = pluginInterface;
         CommandManager = commandManager;
@@ -71,19 +74,22 @@ public partial class Echokraut : IDalamudPlugin
         Condition = condition;
         ObjectTable = objectTable;
         DataManager = dataManager;
+        ChatGui = chatGui;
         GameGui = gameGui;
+        this.Log = log;
 
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Configuration.Initialize(PluginInterface);
-        this.BackendHelper = new BackendHelper(Configuration, log);
 
-        ConfigWindow = new ConfigWindow(this, log, Configuration);
+        this.BackendHelper = new BackendHelper(Configuration, this.Log);
+        this.BackendHelper.SetBackendType(Configuration.BackendSelection);
+        this.ConfigWindow = new ConfigWindow(this, this.Log, Configuration);
 
-        var sharedState = new SharedState();
-        this.addonTalkManager = new AddonTalkManager(framework, clientState, condition, gameGui);
-        this.addonBattleTalkManager = new AddonBattleTalkManager(framework, clientState, condition, gameGui);
-        this.addonTalkHandler = new AddonTalkHandler(this.addonTalkManager, framework, objectTable, this.Configuration, this.Log);
-        this.addonBattleTalkHandler = new AddonBattleTalkHandler(this.addonBattleTalkManager, framework, objectTable, this.Configuration, this.Log);
+        this.addonTalkHandler = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration, this.Log);
+        this.addonBattleTalkHandler = new AddonBattleTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration, this.Log);
+        this.ungenderedOverrides = new UngenderedOverrideManager();
+        this.soundHelper =
+            new SoundHelper(this.addonTalkHandler, this.addonBattleTalkHandler, sigScanner, gameInterop, log);
 
         WindowSystem.AddWindow(ConfigWindow);
 
@@ -97,50 +103,17 @@ public partial class Echokraut : IDalamudPlugin
         // This adds a button to the plugin installer entry of this plugin which allows
         // to toggle the display status of the configuration ui
         PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUI;
-
-        var handleTextCancel = HandleTextCancel();
-        var handleTextEmit = HandleTextEmit();
-
-        this.unsubscribeAll = Disposable.Combine(handleTextCancel, handleTextEmit);
     }
 
-    private IDisposable HandleTextCancel()
+    public void Cancel()
     {
-        return OnTextSourceCancel()
-            .Where(this, static (_, p) => p.Configuration is { Enabled: true, CancelSpeechOnTextAdvance: true })
-            .Do(LogTextEvent)
-            .SubscribeOnThreadPool()
-            .Subscribe(
-                ev => FunctionalUtils.RunSafely(
-                    () => this.BackendHelper.OnCancel(),
-                    ex => Log.Error(ex, "Failed to handle text cancel event")),
-                ex => Log.Error(ex, "Text cancel event sequence has faulted"),
-                _ => { });
+        Log.Info($"Stopping Inference");
+        this.BackendHelper.OnCancel();
     }
 
-    private IDisposable HandleTextEmit()
+    public void Say(GameObject? speaker, SeString speakerName, string textValue, TextSource source)
     {
-        return OnTextEmit()
-            .Where(this, static (_, p) => p.Configuration.Enabled)
-            .Do(LogTextEvent)
-            .SubscribeOnThreadPool()
-            .Subscribe(
-                ev => FunctionalUtils.RunSafely(
-                    () => Say(ev.Speaker, ev.SpeakerName, ev.GetChatType(), ev.Text.TextValue, ev.Source),
-                    ex => Log.Error(ex, "Failed to handle text emit event")),
-                ex => Log.Error(ex, "Text emit event sequence has faulted"),
-                _ => { });
-    }
-
-    private void LogTextEvent(TextEvent ev)
-    {
-        FunctionalUtils.RunSafely(
-            () => this.Log.Debug(ev.ToLogEntry().ToString()),
-            ex => Log.Error(ex, "Failed to log text emit event"));
-    }
-
-    private void Say(GameObject? speaker, SeString speakerName, XivChatType? chatType, string textValue, TextSource source)
-    {
+        Log.Info($"Preparing for Inference: {speakerName} - {textValue} - {source}");
         // Run a preprocessing pipeline to clean the text for the speech synthesizer
         var cleanText = FunctionalUtils.Pipe(
             textValue,
@@ -148,8 +121,9 @@ public partial class Echokraut : IDalamudPlugin
             TalkUtils.ReplaceSsmlTokens,
             TalkUtils.NormalizePunctuation,
             t => this.Configuration.RemoveStutters ? TalkUtils.RemoveStutters(t) : t,
-            x => x.Trim());
+            x => x.Trim()).Replace("/", "Schrägstrich ");
 
+        Log.Info($"Cleantext: {cleanText}");
         // Ensure that the result is clean; ignore it otherwise
         if (!cleanText.Any() || !TalkUtils.IsSpeakable(cleanText))
         {
@@ -168,27 +142,32 @@ public partial class Echokraut : IDalamudPlugin
         // as hyphens for the sake of the plugin.
         var cleanSpeakerName = TalkUtils.NormalizePunctuation(speakerName.TextValue);
 
-        // Attempt to get the speaker's ID, if they're an NPC
-        var npcId = speaker?.GetNpcId();
-
+        NpcMapData npcData = new NpcMapData();
         // Get the speaker's race if it exists.
-        var race = GetSpeakerRace(speaker);
+        npcData.race = GetSpeakerRace(speaker);
+        npcData.gender = CharacterGenderUtils.GetCharacterGender(speaker, this.ungenderedOverrides, this.Log);
+        npcData.name = DataHelper.cleanUpName(cleanSpeakerName);
 
-        // Get the speaker's age if it exists.
-        var bodyType = GetSpeakerBodyType(speaker);
+        var resNpcData = DataHelper.getNpcMapData(Configuration.MappedNpcs, npcData);
+        if (resNpcData == null)
+        {
+            Configuration.MappedNpcs.Add(npcData);
+            Configuration.Save();
+        }
+        else
+            npcData = resNpcData;
 
+        Log.Info($"NpcData: {npcData}");
         // Say the thing
-        BackendSay(new VoiceMessage
+        var voiceMessage = new VoiceMessage
         {
             Source = source.ToString(),
-            Speaker = cleanSpeakerName,
+            Speaker = npcData,
             Text = cleanText,
             TextTemplate = textTemplate,
-            ChatType = Convert.ToInt32(chatType),
-            Language = this.ClientState.ClientLanguage.ToString(),
-            NpcId = Convert.ToInt32(npcId),
-            Race = race
-        });
+            Language = this.ClientState.ClientLanguage.ToString()
+        };
+        this.BackendHelper.OnSay(voiceMessage);
     }
 
     private unsafe NpcRaces GetSpeakerRace(GameObject? speaker)
@@ -203,14 +182,35 @@ public partial class Echokraut : IDalamudPlugin
         var speakerRace = charaStruct->DrawData.CustomizeData.Race;
         var row = race.GetRow(speakerRace);
 
-        if (row is null)
+        object raceEnum = NpcRaces.Default;
+        if (!(row is null))
         {
-            return NpcRaces.Default;
+            Log.Info($"Found Race: {row.Masculine.RawString}");
+            if(!Enum.TryParse(typeof(NpcRaces), row.Masculine.RawString, out raceEnum))
+            {
+                var modelData = charaStruct->CharacterData.ModelSkeletonId;
+                var modelData2 = charaStruct->CharacterData.ModelSkeletonId_2;
+
+                var activeData = modelData;
+                if (activeData == -1)
+                    activeData = modelData2;
+
+                try
+                {
+                    if (!Enum.TryParse(typeof(NpcRaces), activeData.ToString(), out raceEnum))
+                    {
+                        raceEnum = NpcRaces.Default;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    raceEnum = NpcRaces.Default;
+                }
+            }   
         }
 
-        Log.Debug($"Found Race: {row.Masculine.RawString}");
-
-        return (NpcRaces)Enum.Parse(typeof(NpcRaces), row.Masculine.RawString);
+        Log.Info($"Determined Race: {raceEnum}");
+        return (NpcRaces)raceEnum;
     }
 
     private unsafe BodyType GetSpeakerBodyType(GameObject? speaker)
@@ -226,16 +226,11 @@ public partial class Echokraut : IDalamudPlugin
         return (BodyType)speakerBodyType;
     }
 
-    private void BackendSay(VoiceMessage request)
-    {
-        this.BackendHelper.OnSay(request);
-    }
-
     public void Dispose()
     {
         this.addonTalkHandler.Dispose();
-        this.addonBattleTalkManager.Dispose();
-        this.unsubscribeAll.Dispose();
+        this.addonBattleTalkHandler.Dispose();
+        this.soundHelper.Dispose();
         this.Configuration.Save();
         WindowSystem.RemoveAllWindows();
 

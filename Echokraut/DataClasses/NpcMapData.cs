@@ -1,3 +1,4 @@
+using Echokraut.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,8 +16,13 @@ namespace Echokraut.DataClasses
 
         public string name { get; set; }
         public decimal patchVersion { get; set; }
-        public string race { get; set; }
-        public string gender { get; set; }
+        public NpcRaces race { get; set; }
+        public Gender gender { get; set; }
         public BackendVoiceItem voiceItem { get; set; }
+
+        public override string ToString()
+        {
+            return $"{gender} - {race} - {name}";
+        }
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace Echokraut.TextToTalk.Enums
+﻿namespace Echokraut.Enums
 {
     public enum Gender : sbyte
     {

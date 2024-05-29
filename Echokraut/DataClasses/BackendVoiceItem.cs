@@ -1,17 +1,22 @@
+using Echokraut.Enums;
+
 namespace Echokraut.DataClasses
 {
     public class BackendVoiceItem
     {
         public string voiceName { get; set; }
         public string voice { get; set; }
-        public string gender { get; set; }
-        public string race { get; set; }
+        public Gender gender { get; set; }
+        public NpcRaces race { get; set; }
 
         public decimal patchVersion { get; set; }
 
         public override string ToString()
         {
-            return gender + "/" + race + "/" + voiceName + "@" + patchVersion.ToString().Replace(",", ".");
+            if (voiceName == "Remove")
+                return voiceName;
+
+            return $"{gender} - {race} - {voiceName}@{patchVersion.ToString().Replace(",", ".")}";
         }
         public override bool Equals(object obj)
         {
