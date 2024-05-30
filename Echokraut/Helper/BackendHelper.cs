@@ -30,6 +30,7 @@ namespace Echokraut.Helper
         ITTSBackend backend;
         Random rand = new Random(Guid.NewGuid().GetHashCode());
         Configuration configuration;
+        bool stillTalking = false;
 
         internal BackendHelper(Configuration configuration, IPluginLog log)
         {
@@ -71,6 +72,8 @@ namespace Echokraut.Helper
                     activePlayer.Stop();
                 }
                 backend.StopGenerating(Log);
+                voiceQueue.Clear();
+                stillTalking = false;
                 playing = false;
             }
         }
@@ -100,6 +103,7 @@ namespace Echokraut.Helper
             Log.Info("Loading and mapping voices");
             mappedVoices = backend.GetAvailableVoices(Log);
             mappedVoices.Sort((x, y) => x.ToString().CompareTo(y.ToString()));
+            mappedVoices.Insert(0, new BackendVoiceItem() { voiceName = "Remove", race = NpcRaces.Default, gender = Gender.None });
 
             Log.Info("Success");
         }
@@ -115,6 +119,7 @@ namespace Echokraut.Helper
 
                 foreach (var textLine in splitText)
                 {
+                    stillTalking = true;
 
                     var ready = "";
 
@@ -130,8 +135,11 @@ namespace Echokraut.Helper
                     {
                         var responseStream = await backend.GenerateAudioStreamFromVoice(Log, textLine, voice, language);
 
-                        var s = new RawSourceWaveStream(responseStream, new WaveFormat(24000, 16, 1));
-                        voiceQueue.Add(s);
+                        if (stillTalking)
+                        {
+                            var s = new RawSourceWaveStream(responseStream, new WaveFormat(24000, 16, 1));
+                            voiceQueue.Add(s);
+                        }
                     }
                     else
                         Log.Error("Backend did not respond in time, not ready");

@@ -21,7 +21,6 @@ public class ConfigWindow : Window, IDisposable
     private Echokraut plugin;
     private IPluginLog log;
     private string testConnectionRes = "";
-    private BackendVoiceItem removeVoiceItem = new BackendVoiceItem() { voiceName = "Remove", race = NpcRaces.Default, gender = Gender.None };
 
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
@@ -180,7 +179,6 @@ public class ConfigWindow : Window, IDisposable
     private void DrawNpcs()
     {
         var voices = plugin.BackendHelper.mappedVoices;
-        voices.Insert(0, removeVoiceItem);
         var voicesDisplay = voices.Select(b => b.ToString()).ToArray();
         NpcMapData toBeRemoved = null;
         foreach (NpcMapData mapData in Configuration.MappedNpcs)
@@ -190,14 +188,14 @@ public class ConfigWindow : Window, IDisposable
             {
                 var newVoiceItem = voices[presetIndex];
 
-                if (newVoiceItem != null)
+                if (newVoiceItem != null && newVoiceItem.voiceName != "Remove")
                 {
                     log.Info($"Updated Voice for Character: {mapData} from: {mapData.voiceItem} to: {newVoiceItem}");
 
                     mapData.voiceItem = newVoiceItem;
                     this.Configuration.Save();
                 }
-                else if (newVoiceItem == removeVoiceItem)
+                else if (newVoiceItem.voiceName == "Remove")
                 {
                     log.Info($"Removing Configuration for Character: {mapData}");
                     toBeRemoved = mapData;

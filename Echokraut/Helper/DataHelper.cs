@@ -1,8 +1,13 @@
+using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Microsoft.VisualBasic.Logging;
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
@@ -10,6 +15,21 @@ namespace Echokraut.Helper
 {
     public static class DataHelper
     {
+        static public Dictionary<string, string> npcRacesMap = new Dictionary<string, string>()
+        {
+            { "Hyuran", "Hyur" }
+        };
+
+        static public string getRaceEng(string nationalRace, IPluginLog Log)
+        {
+            string engRace = nationalRace.Replace("'", "");
+
+            if (npcRacesMap.ContainsKey(engRace))
+                engRace = npcRacesMap[engRace];
+
+            return engRace;
+        }
+
         static public NpcMapData getNpcMapData(List<NpcMapData> datas, NpcMapData data)
         {
             NpcMapData result = null;

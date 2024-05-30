@@ -108,7 +108,9 @@ public partial class Echokraut : IDalamudPlugin
     public void Cancel()
     {
         Log.Info($"Stopping Inference");
-        this.BackendHelper.OnCancel();
+
+        if (Configuration.CancelSpeechOnTextAdvance)
+            this.BackendHelper.OnCancel();
     }
 
     public void Say(GameObject? speaker, SeString speakerName, string textValue, TextSource source)
@@ -185,8 +187,9 @@ public partial class Echokraut : IDalamudPlugin
         object raceEnum = NpcRaces.Default;
         if (!(row is null))
         {
-            Log.Info($"Found Race: {row.Masculine.RawString}");
-            if(!Enum.TryParse(typeof(NpcRaces), row.Masculine.RawString, out raceEnum))
+            string raceStr = DataHelper.getRaceEng(row.Masculine.RawString, Log);
+            Log.Info($"Found Race: {raceStr}");
+            if (!Enum.TryParse(typeof(NpcRaces), raceStr, out raceEnum))
             {
                 var modelData = charaStruct->CharacterData.ModelSkeletonId;
                 var modelData2 = charaStruct->CharacterData.ModelSkeletonId_2;

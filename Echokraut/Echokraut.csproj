@@ -3,7 +3,7 @@
   <Import Project="Dalamud.Plugin.Bootstrap.targets" />
 
   <PropertyGroup>
-    <Version>0.0.0.3</Version>
+    <Version>0.8.0.0</Version>
     <Description>A TTS Dalamud Plugin that breaks the silence! For self hosted TTS Services.</Description>
     <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
@@ -11,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Utils\NpcRacesMap.json" />
     <None Remove="Utils\overridenModelIds.txt" />
   </ItemGroup>
 
@@ -23,6 +24,25 @@
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="R3" Version="1.1.11" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Utils\NpcRacesMap.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Properties\Resources.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Update="Properties\Resources.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>
