@@ -1,76 +1,29 @@
-> ⚠️ **Don't click Fork!**
-> 
-> This is a GitHub Template repo. If you want to use this for a plugin, just [use this template][new-repo] to make a new repo!
->
-> ![image](https://github.com/goatcorp/SamplePlugin/assets/16760685/d9732094-e1ed-4769-a70b-58ed2b92580c)
+# Echokraut
+Breaking the silence! That is the goal of this plugin for [Dalamud](https://github.com/goatcorp/Dalamud). Unlike the official Dalamud Plugin [TextToTalk](https://github.com/karashiiro/TextToTalk) this plugin is meant for local/self hosted high quality TTS for those wanting a rich experience without paying an arm and a leg for it.
 
-# SamplePlugin
+## Dislaimer: 
+* Since this plugin is dependent on [AllTalk_TTS](https://github.com/erew123/alltalk_tts) it is important to note that at the moment on Windows only Nvidia GPUs are supported. On Linux AMD should work as well. In the future this will expand.
+* Some parts of the code are taken from/inspired by [TextToTalk](https://github.com/karashiiro/TextToTalk) hence I included their License as well.
+* The plugin is only tested in german, but should work in every client language. (Report an issue if not 😘)
 
-[![Use This Template badge](https://img.shields.io/badge/Use%20This%20Template-0?logo=github&labelColor=grey)][new-repo]
+## Commands
+* `/eksettings`: Opens the configuration window.
 
+## Features
+* Ingame volume: This plugin uses the ingame volume for all generated TTS, meaning the infered(generated) audio should be close or equal to normal voiced cutscenes
+* Auto advance: You have the option to have text auto advance after the infered text is done speaking.
+* Auto voice matching: The plugin tries to match an NPC via his name to a existing voice in your TTS ([AllTalk_TTS](https://github.com/erew123/alltalk_tts) has the option to inform you of all available voices).
+* NPC voice selection: You can change the voice of every npc you met.
 
-Simple example plugin for Dalamud.
+## Planned Features
+* Chat TTS: At the moment only npc dialogues are getting voiced, I'm planning to expand into chat as well.
+* I'm currently looking in getting emotions to work for TTS meaning 
+  
+## Supported TTS providers
+* At the moment it only supports [AllTalk_TTS](https://github.com/erew123/alltalk_tts) which uses CoquiTTS for streaming inference. The developer of said TTS is working hard to make it an 'one service many TTS engines' project. Please refer to his GitHub regarding setting it up. (NVIDIA GPU Only at the moment)
 
-This is not designed to be the simplest possible example, but it is also not designed to cover everything you might want to do. For more detailed questions, come ask in [the Discord](https://discord.gg/holdshift).
+## Setup/Install
+Add the following path to the experimental paths of [Dalamud](https://github.com/goatcorp/Dalamud): `https://raw.githubusercontent.com/RenNagasaki/MyDalamudPlugins/master/pluginmaster.json`
 
-## Main Points
-
-* Simple functional plugin
-  * Slash command
-  * Main UI
-  * Settings UI
-  * Image loading
-  * Plugin json
-* Simple, slightly-improved plugin configuration handling
-* Project organization
-  * Copies all necessary plugin files to the output directory
-    * Does not copy dependencies that are provided by dalamud
-    * Output directory can be zipped directly and have exactly what is required
-  * Hides data files from visual studio to reduce clutter
-    * Also allows having data files in different paths than VS would usually allow if done in the IDE directly
-
-
-The intention is less that any of this is used directly in other projects, and more to show how similar things can be done.
-
-## How To Use
-
-### Getting Started
-
-To begin, [clone this template repository][new-repo] to your own GitHub account. This will automatically bring in everything you need to get a jumpstart on development. You do not need to fork this repository unless you intend to contribute modifications to it.
-
-Be sure to also check out the [Dalamud Developer Docs][dalamud-docs] for helpful information about building your own plugin. The Developer Docs includes helpful information about all sorts of things, including [how to submit][submit] your newly-created plugin to the official repository. Assuming you use this template repository, the provided project build configuration and license are already chosen to make everything a breeze.
-
-[new-repo]: https://github.com/new?template_name=SamplePlugin&template_owner=goatcorp
-[dalamud-docs]: https://dalamud.dev
-[submit]: https://dalamud.dev/plugin-development/plugin-submission
-
-### Prerequisites
-
-SamplePlugin assumes all the following prerequisites are met:
-
-* XIVLauncher, FINAL FANTASY XIV, and Dalamud have all been installed and the game has been run with Dalamud at least once.
-* XIVLauncher is installed to its default directories and configurations.
-  * If a custom path is required for Dalamud's dev directory, it must be set with the `DALAMUD_HOME` environment variable.
-* A .NET Core 8 SDK has been installed and configured, or is otherwise available. (In most cases, the IDE will take care of this.)
-
-### Building
-
-1. Open up `SamplePlugin.sln` in your C# editor of choice (likely [Visual Studio 2022](https://visualstudio.microsoft.com) or [JetBrains Rider](https://www.jetbrains.com/rider/)).
-2. Build the solution. By default, this will build a `Debug` build, but you can switch to `Release` in your IDE.
-3. The resulting plugin can be found at `SamplePlugin/bin/x64/Debug/SamplePlugin.dll` (or `Release` if appropriate.)
-
-### Activating in-game
-
-1. Launch the game and use `/xlsettings` in chat or `xlsettings` in the Dalamud Console to open up the Dalamud settings.
-    * In here, go to `Experimental`, and add the full path to the `SamplePlugin.dll` to the list of Dev Plugin Locations.
-2. Next, use `/xlplugins` (chat) or `xlplugins` (console) to open up the Plugin Installer.
-    * In here, go to `Dev Tools > Installed Dev Plugins`, and the `SamplePlugin` should be visible. Enable it.
-3. You should now be able to use `/pmycommand` (chat) or `pmycommand` (console)!
-
-Note that you only need to add it to the Dev Plugin Locations once (Step 1); it is preserved afterwards. You can disable, enable, or load your plugin on startup through the Plugin Installer.
-
-### Reconfiguring for your own uses
-
-Basically, just replace all references to `SamplePlugin` in all of the files and filenames with your desired name, then start building the plugin of your dreams. You'll figure it out 😁
-
-Dalamud will load the JSON file (by default, `SamplePlugin/SamplePlugin.json`) next to your DLL and use it for metadata, including the description for your plugin in the Plugin Installer. Make sure to update this with information relevant to _your_ plugin!
+## Just starting
+I started this whole project as a way for me to enjoy replaying the game without having to read all of 2.0 again. It evolved from there so please bear with many features still missing. You can always request more. 😊
