@@ -33,7 +33,7 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 * (IMPORTANT) The naming scheme of the voices should be like this: `GENDER_RACE_NAME.wav`.
     For example: `Male_Hyur_Thancred.wav` for a named NPC
     and `Male_Hyur_NPC1.wav` for a random Hyur NPC. If more than one NPC voice exists then the plugin selects one randomly the first time you meet a new NPC.
-    There is one exception, the so called narrator voice. It gets used for all dialogues without a speaker and should be named `Narrator.wav`. 
+    There is one exception, the so called narrator voice. It gets used for all dialogues without a speaker and all NPCs where no other voice could be found (last fallback) and should be named `Narrator.wav`. 
 
 ## Just starting
 I started this whole project as a way for me to enjoy replaying the game without having to read all of 2.0 again. It evolved from there so please bear with many features still missing. You can always request more. 😊
