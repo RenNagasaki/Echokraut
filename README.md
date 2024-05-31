@@ -19,7 +19,7 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 * NPC voice selection: You can change the voice of every npc you met.
 
 ## Planned Features
-* Chat TTS: At the moment only npc dialogues are getting voiced, I'm planning to expand into chat as well.
+* Chat TTS: At the moment only dialogues are getting voiced, I'm planning to expand into chat as well.
 * I'm currently looking in getting emotions to work for TTS meaning 
   
 ## Supported TTS providers
