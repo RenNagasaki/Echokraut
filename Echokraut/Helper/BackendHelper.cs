@@ -24,12 +24,13 @@ namespace Echokraut.Helper
         static private WasapiOut activePlayer = null;
         static private bool playing = false;
         static private IPluginLog Log;
+        static Configuration Configuration;
+        static int volume = 100;
         public List<BackendVoiceItem> mappedVoices = null;
         public bool queueText = false;
         public Thread queueThread = new Thread(workQueue);
         ITTSBackend backend;
         Random rand = new Random(Guid.NewGuid().GetHashCode());
-        static Configuration Configuration;
         bool stillTalking = false;
 
         internal BackendHelper(Configuration configuration, IPluginLog log)
@@ -50,8 +51,9 @@ namespace Echokraut.Helper
             }
         }
 
-        public void OnSay(VoiceMessage voiceMessage)
+        public void OnSay(VoiceMessage voiceMessage, int volume)
         {
+            BackendHelper.volume = volume;
             Log.Info("Starting voice inference: ");
             Log.Info(voiceMessage.ToString());
             if (voiceMessage.Source == "Chat")
@@ -88,6 +90,7 @@ namespace Echokraut.Helper
                     voiceQueue.RemoveAt(0);
                     Log.Info("Playing next Queue Item");
                     activePlayer = new WasapiOut(AudioClientShareMode.Shared, 0);
+                    activePlayer.Volume = volume;
                     activePlayer.PlaybackStopped += SoundOut_PlaybackStopped;
                     activePlayer.Init(queueItem);
                     activePlayer.Play();

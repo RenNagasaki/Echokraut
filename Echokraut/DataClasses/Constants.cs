@@ -9,6 +9,7 @@ namespace Echokraut.DataClasses
 {
     public static class Constants
     {
+        public const int VOICEOFFSET = 47740;
         public static readonly char[] SENTENCESEPARATORS = { '.', '!', '?' };
         public static readonly string[] BACKENDS = { "Alltalk", "Custom Webservice" };
         public static readonly List<NpcRaces> RACESFORRANDOMNPC = new List<NpcRaces>() { NpcRaces.Hyur, NpcRaces.Roegadyn, NpcRaces.Viera, NpcRaces.AuRa, NpcRaces.Miqote, NpcRaces.Hrothgar };

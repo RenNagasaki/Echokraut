@@ -49,6 +49,7 @@ public partial class Echokraut : IDalamudPlugin
     #region TextToTalk Base
     private readonly AddonTalkHelper addonTalkHandler;
     private readonly AddonBattleTalkHelper addonBattleTalkHandler;
+    private readonly VolumeHelper volumeHelper;
     private readonly UngenderedOverrideManager ungenderedOverrides;
     private readonly SoundHelper soundHelper;
     #endregion
@@ -87,6 +88,7 @@ public partial class Echokraut : IDalamudPlugin
 
         this.addonTalkHandler = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration, this.Log);
         this.addonBattleTalkHandler = new AddonBattleTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration, this.Log);
+        this.volumeHelper = new VolumeHelper(sigScanner, gameInterop, log);
         this.ungenderedOverrides = new UngenderedOverrideManager();
         this.soundHelper =
             new SoundHelper(this.addonTalkHandler, this.addonBattleTalkHandler, sigScanner, gameInterop, log);
@@ -169,7 +171,8 @@ public partial class Echokraut : IDalamudPlugin
             TextTemplate = textTemplate,
             Language = this.ClientState.ClientLanguage.ToString()
         };
-        this.BackendHelper.OnSay(voiceMessage);
+        var volume = volumeHelper.GetVoiceVolume();
+        this.BackendHelper.OnSay(voiceMessage, volume);
     }
 
     private unsafe NpcRaces GetSpeakerRace(GameObject? speaker)
