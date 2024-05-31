@@ -3,7 +3,6 @@ using Dalamud.Plugin.Services;
 using Echokraut.Backend;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
-using ECommons.Configuration;
 using FFXIVClientStructs.FFXIV.Client.Graphics;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
