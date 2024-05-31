@@ -12,7 +12,7 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 ## Features
 * Ingame volume: This plugin uses the ingame volume for all generated TTS, meaning the infered(generated) audio should be close or equal to normal voiced cutscenes
 * Auto advance: You have the option to have text auto advance after the infered text is done speaking.
-* Auto voice matching: The plugin tries to match an NPC via his name to a existing voice in your TTS ([AllTalk_TTS](https://github.com/erew123/alltalk_tts) has the option to inform you of all available voices).
+* Auto voice matching: The plugin tries to match an NPC via his name to a existing voice in your TTS [AllTalk_TTS](https://github.com/erew123/alltalk_tts) has the option to inform you of all available voices).
 * NPC voice selection: You can change the voice of every npc you met.
 
 ## Planned Features
