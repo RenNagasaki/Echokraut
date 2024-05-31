@@ -20,7 +20,7 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 
 ## Planned Features
 * Chat TTS: At the moment only dialogues are getting voiced, I'm planning to expand into chat as well.
-* I'm currently looking in getting emotions to work for TTS meaning 
+* I'm currently looking in getting emotions to work for TTS meaning that people could use [angry] in their chats and the voice would sound angry. The raw dialogue text for story or quests sometimes contains stuff like <pant> for when a npc is exhausted and more. I aim to use that for more detailed voicing.
   
 ## Supported TTS providers
 * At the moment it only supports [AllTalk_TTS](https://github.com/erew123/alltalk_tts) which uses CoquiTTS for streaming inference. The developer of said TTS is working hard to make it an 'one service many TTS engines' project. Please refer to his GitHub regarding setting it up. (NVIDIA GPU Only at the moment)
