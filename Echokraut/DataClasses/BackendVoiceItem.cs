@@ -25,7 +25,7 @@ namespace Echokraut.DataClasses
                 return false;
             }
 
-            return this.ToString().ToLower().Equals(item.ToString());
+            return this.ToString().Equals(item.ToString(), System.StringComparison.OrdinalIgnoreCase);
         }
     }
 }
