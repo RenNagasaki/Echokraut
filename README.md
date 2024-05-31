@@ -23,14 +23,14 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 * At the moment it only supports [AllTalk_TTS](https://github.com/erew123/alltalk_tts) which uses CoquiTTS for streaming inference. The developer of said TTS is working hard to make it an 'one service many TTS engines' project. Please refer to his GitHub regarding setting it up. (NVIDIA GPU Only at the moment)
 
 ## Setup/Install
-* 1. Setup [AllTalk_TTS](https://github.com/erew123/alltalk_tts) -> Refer to this site on how to install.
-* 1.1.(Optional) Finetune the xtts2 model to your own voices. Will sound better than simple voice cloning.
-* 2. Add the following path to the experimental paths of [Dalamud](https://github.com/goatcorp/Dalamud): `https://raw.githubusercontent.com/RenNagasaki/MyDalamudPlugins/master/pluginmaster.json`
-* 3. Search for 'Echokraut' in Dalamud and install the plugin
-* 4. Open the settings window either via the button or by typing `/eksettings`
-* 5. In the 'Backend' Tab enter the url of your [AllTalk_TTS](https://github.com/erew123/alltalk_tts) instance. (127.0.0.1:7851 should be default)
-* 6. If clicking 'Test Connection' results in `ready`, click on Load Voices and you're set.
-* 7. (IMPORTANT) The naming scheme of the voices should be like this: `GENDER_RACE_NAME.wav`.
+* Setup [AllTalk_TTS](https://github.com/erew123/alltalk_tts) -> Refer to this site on how to install.
+* (Optional) Finetune the xtts2 model to your own voices. Will sound better than simple voice cloning.
+* Add the following path to the experimental paths of [Dalamud](https://github.com/goatcorp/Dalamud): `https://raw.githubusercontent.com/RenNagasaki/MyDalamudPlugins/master/pluginmaster.json`
+* Search for 'Echokraut' in Dalamud and install the plugin
+* Open the settings window either via the button or by typing `/eksettings`
+* In the 'Backend' Tab enter the url of your [AllTalk_TTS](https://github.com/erew123/alltalk_tts) instance. (127.0.0.1:7851 should be default)
+* If clicking 'Test Connection' results in `ready`, click on Load Voices and you're set.
+* (IMPORTANT) The naming scheme of the voices should be like this: `GENDER_RACE_NAME.wav`.
 *    For example: `Male_Hyur_Thancred.wav` for a named NPC
 *    and `Male_Hyur_NPC1.wav` for a random Hyur NPC. If more than one NPC voice exists then the plugin selects one randomly the first time you meet a new NPC.
 *    There is one exception, the so called narrator voice. It gets used for all dialogues without a speaker and should be named `Narrator.wav`. 
