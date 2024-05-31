@@ -1,5 +1,6 @@
 using Dalamud.Game;
 using Dalamud.Hooking;
+using Dalamud.Interface.Utility.Table;
 using Dalamud.Logging;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
@@ -42,11 +43,12 @@ namespace Echokraut.Helper
                 this.getVolumeHook = gameInterop.HookFromAddress<GetVolumeDelegate>(setConfigurationPtr,
                     (baseAddress, kind, value, unk1, unk2, unk3) =>
                     {
-                        BaseAddress = baseAddress;
+                        if (BaseAddress != baseAddress)
+                        {
+                            Log.Info($"Updated Volume BaseAdress: {baseAddress}");
+                            BaseAddress = baseAddress;
+                        }
 
-#if DEBUG
-                        Log.Debug($"Volume BaseAdress: {baseAddress}");
-#endif
                         return this.getVolumeHook!.Original(baseAddress, kind, value, unk1, unk2, unk3);
                     });
                 this.getVolumeHook.Enable();
@@ -57,14 +59,19 @@ namespace Echokraut.Helper
             }
         }
 
-        public int GetVoiceVolume()
+        public float GetVoiceVolume()
         {
-            var volume = 100;
+            var voiceVolume = 100;
+            var masterVolume = 100;
             if (BaseAddress != IntPtr.Zero)
-                volume = Marshal.ReadByte(BaseAddress, Constants.VOICEOFFSET);
+            {
+                masterVolume = Marshal.ReadByte(BaseAddress, Constants.MASTERVOLUMEOFFSET);
+                voiceVolume = Marshal.ReadByte(BaseAddress, Constants.VOICEVOLUMEOFFSET);
+            }
 
-            Log.Info($"Voice Volume = {volume}");
-            return volume;
+            var volumeFloat = (masterVolume / 100f) * (voiceVolume / 100f);
+            Log.Info($"Voice Volume = {volumeFloat}");
+            return volumeFloat;
         }
 
         public void Dispose()

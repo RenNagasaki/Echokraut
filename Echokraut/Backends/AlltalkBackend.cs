@@ -115,11 +115,6 @@ namespace Echokraut.Backend
                         else
                             gender = Gender.Male;
 
-                        voiceItem.patchVersion = 1.0m;
-                        var splitVoicePatch = voiceName.Split("@");
-                        voiceItem.voiceName = splitVoicePatch[0];
-                        if (splitVoicePatch.Length > 1)
-                            voiceItem.patchVersion = Convert.ToDecimal(splitVoicePatch[1], new CultureInfo("en-US"));
                         mappedVoices.Add(voiceItem);
 
                         if (voice.Contains("NPC") && Constants.RACESFORRANDOMNPC.Contains((NpcRaces)race))

@@ -136,15 +136,16 @@ public class ConfigWindow : Window, IDisposable
                 if (ImGui.InputText($"Base Url##EKBaseUrl", ref this.Configuration.Alltalk.BaseUrl, 40))
                     this.Configuration.Save();
 
-                if (ImGui.Button($"Load Voices##EKLoadVoices"))
-                {
-                    BackendGetVoices();
-                }
             }
 
             if (ImGui.Button($"Test Connection##EKTestConnection"))
             {
                 BackendCheckReady();
+            }
+
+            if (ImGui.Button($"Load Voices##EKLoadVoices"))
+            {
+                BackendGetVoices();
             }
 
             if (!string.IsNullOrWhiteSpace(testConnectionRes))

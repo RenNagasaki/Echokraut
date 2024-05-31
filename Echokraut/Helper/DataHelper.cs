@@ -59,7 +59,6 @@ namespace Echokraut.Helper
         {
             name = name.Replace("[a]", "");
             name = Regex.Replace(name, "[^a-zA-Z0-9-' ]+", "");
-            name = name.Replace(" ", "+").Replace("'", "=");
 
             return name;
         }

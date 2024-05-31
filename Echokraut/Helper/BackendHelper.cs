@@ -6,6 +6,7 @@ using Echokraut.Enums;
 using FFXIVClientStructs.FFXIV.Client.Graphics;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
+using NAudio.Wave.SampleProviders;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -25,7 +26,7 @@ namespace Echokraut.Helper
         static private bool playing = false;
         static private IPluginLog Log;
         static Configuration Configuration;
-        static int volume = 100;
+        static float volume = 1f;
         public List<BackendVoiceItem> mappedVoices = null;
         public bool queueText = false;
         public Thread queueThread = new Thread(workQueue);
@@ -51,7 +52,7 @@ namespace Echokraut.Helper
             }
         }
 
-        public void OnSay(VoiceMessage voiceMessage, int volume)
+        public void OnSay(VoiceMessage voiceMessage, float volume)
         {
             BackendHelper.volume = volume;
             Log.Info("Starting voice inference: ");
@@ -89,10 +90,13 @@ namespace Echokraut.Helper
                     var queueItem = voiceQueue[0];
                     voiceQueue.RemoveAt(0);
                     Log.Info("Playing next Queue Item");
+                    var volumeSampleProvider = new VolumeSampleProvider(queueItem.ToSampleProvider());
+                    volumeSampleProvider.Volume = volume; // double the amplitude of every sample - may go above 0dB
+
                     activePlayer = new WasapiOut(AudioClientShareMode.Shared, 0);
-                    activePlayer.Volume = volume;
+                    //activePlayer.Volume = volume;
                     activePlayer.PlaybackStopped += SoundOut_PlaybackStopped;
-                    activePlayer.Init(queueItem);
+                    activePlayer.Init(volumeSampleProvider);
                     activePlayer.Play();
                     playing = true;
                 }
@@ -198,19 +202,18 @@ namespace Echokraut.Helper
 
             if (voiceItem == null)
             {
-                var voiceItems = mappedVoices.FindAll(p => p.voiceName == npcData.name && npcData.patchVersion >= p.patchVersion);
+                var voiceItems = mappedVoices.FindAll(p => p.voiceName.ToLower() == npcData.name.ToLower());
                 if (voiceItems.Count > 0)
                 {
-                    voiceItems.Sort((a, b) => b.patchVersion.CompareTo(a.patchVersion));
                     voiceItem = voiceItems[0];
                 }
 
                 if (voiceItem == null)
                 {
-                    voiceItems = mappedVoices.FindAll(p => p.gender == npcData.gender && p.race == npcData.race && p.voiceName.Contains("NPC"));
+                    voiceItems = mappedVoices.FindAll(p => p.gender == npcData.gender && p.race == npcData.race && p.voiceName.ToLower().Contains("npc"));
 
                     if (voiceItems.Count == 0)
-                        voiceItems = mappedVoices.FindAll(p => p.gender == npcData.gender && p.race == NpcRaces.Default && p.voiceName.Contains("NPC"));
+                        voiceItems = mappedVoices.FindAll(p => p.gender == npcData.gender && p.race == NpcRaces.Default && p.voiceName.ToLower().Contains("npc"));
 
                     mappedVoices.ForEach((voiceItem) => { Log.Info(voiceItem.ToString()); });
                     if (voiceItems.Count > 0)

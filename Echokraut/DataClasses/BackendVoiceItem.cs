@@ -9,14 +9,12 @@ namespace Echokraut.DataClasses
         public Gender gender { get; set; }
         public NpcRaces race { get; set; }
 
-        public decimal patchVersion { get; set; }
-
         public override string ToString()
         {
             if (voiceName == "Remove")
                 return voiceName;
 
-            return $"{gender} - {race} - {voiceName}@{patchVersion.ToString().Replace(",", ".")}";
+            return $"{gender} - {race} - {voiceName}";
         }
         public override bool Equals(object obj)
         {
@@ -27,7 +25,7 @@ namespace Echokraut.DataClasses
                 return false;
             }
 
-            return this.ToString().Equals(item.ToString());
+            return this.ToString().ToLower().Equals(item.ToString());
         }
     }
 }
