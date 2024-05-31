@@ -77,7 +77,7 @@ namespace Echokraut.Backend
 
                 foreach (string voice in voices.voices)
                 {
-                    if (voice == Constants.NARRATORVOICE)
+                    if (voice.Equals(Constants.NARRATORVOICE, StringComparison.OrdinalIgnoreCase))
                     {
                         var voiceItem = new BackendVoiceItem()
                         {
@@ -99,6 +99,7 @@ namespace Echokraut.Backend
                         {
                             gender = (Gender)gender,
                             race = (NpcRaces)race,
+                            voiceName = voiceName,
                             voice = voice
                         };
 
@@ -117,7 +118,7 @@ namespace Echokraut.Backend
 
                         mappedVoices.Add(voiceItem);
 
-                        if (voice.Contains("NPC") && Constants.RACESFORRANDOMNPC.Contains((NpcRaces)race))
+                        if (voice.Contains("npc", StringComparison.OrdinalIgnoreCase) && Constants.RACESFORRANDOMNPC.Contains((NpcRaces)race))
                         {
                             voiceItem = new BackendVoiceItem()
                             {
