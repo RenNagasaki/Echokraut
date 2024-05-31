@@ -12,7 +12,7 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 ## Features
 * Ingame volume: This plugin uses the ingame volume for all generated TTS, meaning the infered(generated) audio should be close or equal to normal voiced cutscenes
 * Auto advance: You have the option to have text auto advance after the infered text is done speaking.
-* Auto voice matching: The plugin tries to match an NPC via his name to a existing voice in your TTS [AllTalk_TTS](https://github.com/erew123/alltalk_tts) has the option to inform you of all available voices).
+* Auto voice matching: The plugin tries to match an NPC via his name to a existing voice in your TTS of none are found it tries to match to specified 'NPC' voices per race of NPC or lastly the narrator voice. [AllTalk_TTS](https://github.com/erew123/alltalk_tts) has the option to inform you of all available voices.
 * NPC voice selection: You can change the voice of every npc you met.
 
 ## Planned Features
@@ -23,7 +23,17 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 * At the moment it only supports [AllTalk_TTS](https://github.com/erew123/alltalk_tts) which uses CoquiTTS for streaming inference. The developer of said TTS is working hard to make it an 'one service many TTS engines' project. Please refer to his GitHub regarding setting it up. (NVIDIA GPU Only at the moment)
 
 ## Setup/Install
-Add the following path to the experimental paths of [Dalamud](https://github.com/goatcorp/Dalamud): `https://raw.githubusercontent.com/RenNagasaki/MyDalamudPlugins/master/pluginmaster.json`
+* 1. Setup [AllTalk_TTS](https://github.com/erew123/alltalk_tts) -> Refer to this site on how to install.
+* 1.1.(Optional) Finetune the xtts2 model to your own voices. Will sound better than simple voice cloning.
+* 2. Add the following path to the experimental paths of [Dalamud](https://github.com/goatcorp/Dalamud): `https://raw.githubusercontent.com/RenNagasaki/MyDalamudPlugins/master/pluginmaster.json`
+* 3. Search for 'Echokraut' in Dalamud and install the plugin
+* 4. Open the settings window either via the button or by typing `/eksettings`
+* 5. In the 'Backend' Tab enter the url of your [AllTalk_TTS](https://github.com/erew123/alltalk_tts) instance. (127.0.0.1:7851 should be default)
+* 6. If clicking 'Test Connection' results in `ready`, click on Load Voices and you're set.
+* 7. (IMPORTANT) The naming scheme of the voices should be like this: `GENDER_RACE_NAME.wav`.
+*    For example: `Male_Hyur_Thancred.wav` for a named NPC
+*    and `Male_Hyur_NPC1.wav` for a random Hyur NPC. If more than one NPC voice exists then the plugin selects one randomly the first time you meet a new NPC.
+*    There is one exception, the so called narrator voice. It gets used for all dialogues without a speaker and should be named `Narrator.wav`. 
 
 ## Just starting
 I started this whole project as a way for me to enjoy replaying the game without having to read all of 2.0 again. It evolved from there so please bear with many features still missing. You can always request more. 😊
