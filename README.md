@@ -1,12 +1,13 @@
-[![Discord](https://img.shields.io/badge/Discord-5gesjDfDBr-blue)](https://discord.gg/5gesjDfDBr)
+[![Discord](https://img.shields.io/badge/Join-Discord-blue)](https://discord.gg/5gesjDfDBr)
 
 # Echokraut
-Breaking the silence! That is the goal of this plugin for [Dalamud](https://github.com/goatcorp/Dalamud). Unlike the official Dalamud Plugin [TextToTalk](https://github.com/karashiiro/TextToTalk) this plugin is meant for local/self hosted high quality TTS for those wanting a rich experience without paying an arm and a leg for it.
+Breaking the silence! That is the goal of this plugin for [Dalamud](https://github.com/goatcorp/Dalamud). Unlike the official Dalamud Plugin [TextToTalk](https://github.com/karashiiro/TextToTalk), this plugin is meant for local/self hosted high quality TTS for those wanting a rich experience without paying an arm and a leg for it.
 
 ## Dislaimer: 
 * Since this plugin is dependent on [AllTalk_TTS](https://github.com/erew123/alltalk_tts) it is important to note that at the moment on Windows only Nvidia GPUs are supported. On Linux AMD should work as well. In the future this will expand.
 * Some parts of the code are taken from/inspired by [TextToTalk](https://github.com/karashiiro/TextToTalk) hence I included their License as well.
 * The plugin is only tested in german, but should work in every client language. (Report an issue if not 😘)
+* Self hosted TTS is currently heavily dependent on a strong GPU. It's recommended to have at least a RTX 3060 (or AMD equivalent on Linux) with 6+GB VRAM built into the system hosting [AllTalk_TTS](https://github.com/erew123/alltalk_tts) for inference. For training I'd recommend at least 12 GB of VRAM but the more the better.
 
 ## Commands
 * `/eksettings`: Opens the configuration window.
@@ -18,8 +19,8 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 * NPC voice selection: You can change the voice of every npc you met.
 
 ## Planned Features
-* Chat TTS: At the moment only npc dialogues are getting voiced, I'm planning to expand into chat as well.
-* I'm currently looking in getting emotions to work for TTS meaning 
+* Chat TTS: At the moment only dialogues are getting voiced, I'm planning to expand into chat as well.
+* I'm currently looking in getting emotions to work for TTS meaning that people could use [angry] in their chats and the voice would sound angry. The raw dialogue text for story or quests sometimes contains stuff like <pant> for when a npc is exhausted and more. I aim to use that for more detailed voicing.
   
 ## Supported TTS providers
 * At the moment it only supports [AllTalk_TTS](https://github.com/erew123/alltalk_tts) which uses CoquiTTS for streaming inference. The developer of said TTS is working hard to make it an 'one service many TTS engines' project. Please refer to his GitHub regarding setting it up. (NVIDIA GPU Only at the moment)
