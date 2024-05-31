@@ -19,6 +19,7 @@ public class Configuration : IPluginConfiguration
     public bool VoiceBattleDialog { get; set; } = false;
     public bool VoiceDialog { get; set; } = false;
     public bool CancelSpeechOnTextAdvance { get; set; } = true;
+    public bool AutoAdvanceTextAfterSpeechCompleted { get; set; } = false;
     public bool RemoveStutters { get; set; } = true;
 
     // the below exist just to make saving less cumbersome

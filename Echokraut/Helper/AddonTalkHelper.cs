@@ -29,7 +29,7 @@ public class AddonTalkHelper
 
     private readonly string name;
 
-    protected nint Address { get; set; }
+    public static nint Address { get; set; }
 
     // Most recent speaker/text specific to this addon
     private string? lastAddonSpeaker;

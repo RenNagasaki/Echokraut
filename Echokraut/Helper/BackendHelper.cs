@@ -3,6 +3,7 @@ using Dalamud.Plugin.Services;
 using Echokraut.Backend;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
+using ECommons.Configuration;
 using FFXIVClientStructs.FFXIV.Client.Graphics;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
@@ -29,13 +30,13 @@ namespace Echokraut.Helper
         public Thread queueThread = new Thread(workQueue);
         ITTSBackend backend;
         Random rand = new Random(Guid.NewGuid().GetHashCode());
-        Configuration configuration;
+        static Configuration Configuration;
         bool stillTalking = false;
 
         internal BackendHelper(Configuration configuration, IPluginLog log)
         {
             Log = log;
-            this.configuration = configuration;
+            Configuration = configuration;
             queueThread.Start();
 
         }
@@ -45,7 +46,7 @@ namespace Echokraut.Helper
             if (backendType == TTSBackends.Alltalk)
             {
                 Log.Info($"Creating backend instance: {backendType}");
-                backend = new AlltalkBackend(configuration.Alltalk);
+                backend = new AlltalkBackend(Configuration.Alltalk);
                 getAndMapVoices();
             }
         }
@@ -181,6 +182,12 @@ namespace Echokraut.Helper
             var soundOut = sender as WasapiOut;
             soundOut.Dispose();
             playing = false;
+
+
+            if (Configuration.AutoAdvanceTextAfterSpeechCompleted)
+            {
+                ClickHelper.Click();
+            }
         }
 
         void getVoiceOrRandom(NpcMapData npcData)
@@ -216,10 +223,10 @@ namespace Echokraut.Helper
 
                 if (voiceItem != npcData.voiceItem)
                 {
-                    configuration.MappedNpcs.Remove(npcData);
+                    Configuration.MappedNpcs.Remove(npcData);
                     npcData.voiceItem = voiceItem;
-                    configuration.MappedNpcs.Add(npcData);
-                    configuration.Save();
+                    Configuration.MappedNpcs.Add(npcData);
+                    Configuration.Save();
                 }
             }
         }

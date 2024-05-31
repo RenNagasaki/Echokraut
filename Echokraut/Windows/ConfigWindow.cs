@@ -101,6 +101,12 @@ public class ConfigWindow : Window, IDisposable
                 this.Configuration.CancelSpeechOnTextAdvance = cancelAdvance;
                 this.Configuration.Save();
             }
+            var autoAdvanceOnSpeechCompletion = this.Configuration.AutoAdvanceTextAfterSpeechCompleted;
+            if (ImGui.Checkbox("Auto advance text on speech completion", ref autoAdvanceOnSpeechCompletion))
+            {
+                this.Configuration.AutoAdvanceTextAfterSpeechCompleted = autoAdvanceOnSpeechCompletion;
+                this.Configuration.Save();
+            }
             var removeStutters = this.Configuration.RemoveStutters;
             if (ImGui.Checkbox("Remove stutters", ref removeStutters))
             {
