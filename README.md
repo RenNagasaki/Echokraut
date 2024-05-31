@@ -1,3 +1,5 @@
+[![Discord](https://img.shields.io/endpoint?url=https://discord.gg/5gesjDfDBr)](https://discord.gg/5gesjDfDBr)
+
 # Echokraut
 Breaking the silence! That is the goal of this plugin for [Dalamud](https://github.com/goatcorp/Dalamud). Unlike the official Dalamud Plugin [TextToTalk](https://github.com/karashiiro/TextToTalk) this plugin is meant for local/self hosted high quality TTS for those wanting a rich experience without paying an arm and a leg for it.
 
