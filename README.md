@@ -31,9 +31,9 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 * In the 'Backend' Tab enter the url of your [AllTalk_TTS](https://github.com/erew123/alltalk_tts) instance. (127.0.0.1:7851 should be default)
 * If clicking 'Test Connection' results in `ready`, click on Load Voices and you're set.
 * (IMPORTANT) The naming scheme of the voices should be like this: `GENDER_RACE_NAME.wav`.
-*    For example: `Male_Hyur_Thancred.wav` for a named NPC
-*    and `Male_Hyur_NPC1.wav` for a random Hyur NPC. If more than one NPC voice exists then the plugin selects one randomly the first time you meet a new NPC.
-*    There is one exception, the so called narrator voice. It gets used for all dialogues without a speaker and should be named `Narrator.wav`. 
+    For example: `Male_Hyur_Thancred.wav` for a named NPC
+    and `Male_Hyur_NPC1.wav` for a random Hyur NPC. If more than one NPC voice exists then the plugin selects one randomly the first time you meet a new NPC.
+    There is one exception, the so called narrator voice. It gets used for all dialogues without a speaker and should be named `Narrator.wav`. 
 
 ## Just starting
 I started this whole project as a way for me to enjoy replaying the game without having to read all of 2.0 again. It evolved from there so please bear with many features still missing. You can always request more. 😊
