@@ -173,6 +173,11 @@ public partial class Echokraut : IDalamudPlugin
         };
         var volume = volumeHelper.GetVoiceVolume();
         this.BackendHelper.OnSay(voiceMessage, volume);
+
+        char[] delimiters = new char[] {' '};
+        var count = cleanText.Split(delimiters, StringSplitOptions.RemoveEmptyEntries).Length;
+        var estimatedLength = count / 2.1;
+        addonTalkHandler.TriggerLipSync(voiceMessage.Speaker.name, estimatedLength.ToString());
     }
 
     private unsafe NpcRaces GetSpeakerRace(GameObject? speaker)
