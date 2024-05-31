@@ -186,7 +186,7 @@ namespace Echokraut.Helper
         private static void SoundOut_PlaybackStopped(object? sender, StoppedEventArgs e)
         {
             var soundOut = sender as WasapiOut;
-            soundOut.Dispose();
+            soundOut?.Dispose();
             playing = false;
 
 
@@ -202,7 +202,7 @@ namespace Echokraut.Helper
 
             if (voiceItem == null)
             {
-                var voiceItems = mappedVoices.FindAll(p => p.voiceName.ToLower() == npcData.name.ToLower());
+                var voiceItems = mappedVoices.FindAll(p => p.voiceName.Equals(npcData.name, StringComparison.OrdinalIgnoreCase));
                 if (voiceItems.Count > 0)
                 {
                     voiceItem = voiceItems[0];
@@ -210,10 +210,10 @@ namespace Echokraut.Helper
 
                 if (voiceItem == null)
                 {
-                    voiceItems = mappedVoices.FindAll(p => p.gender == npcData.gender && p.race == npcData.race && p.voiceName.ToLower().Contains("npc"));
+                    voiceItems = mappedVoices.FindAll(p => p.gender == npcData.gender && p.race == npcData.race && p.voiceName.Contains("npc", StringComparison.OrdinalIgnoreCase));
 
                     if (voiceItems.Count == 0)
-                        voiceItems = mappedVoices.FindAll(p => p.gender == npcData.gender && p.race == NpcRaces.Default && p.voiceName.ToLower().Contains("npc"));
+                        voiceItems = mappedVoices.FindAll(p => p.gender == npcData.gender && p.race == NpcRaces.Default && p.voiceName.Contains("npc", StringComparison.OrdinalIgnoreCase));
 
                     mappedVoices.ForEach((voiceItem) => { Log.Info(voiceItem.ToString()); });
                     if (voiceItems.Count > 0)
