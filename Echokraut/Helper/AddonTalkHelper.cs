@@ -470,6 +470,7 @@ public class AddonTalkHelper
         if (!config.Enabled) return;
         if (currentLipsync == null) return;
 
+        log.Info($"Stopping Lipsync for {currentLipsync.Name}");
         if (taskCancellations.TryGetValue(currentLipsync, out var cts))
         {
             //log.Info("Cancellation " + character.Name);

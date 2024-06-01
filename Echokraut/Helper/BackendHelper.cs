@@ -26,6 +26,7 @@ namespace Echokraut.Helper
         static private bool playing = false;
         static private IPluginLog Log;
         static Configuration Configuration;
+        static Echokraut Plugin;
         static float volume = 1f;
         public List<BackendVoiceItem> mappedVoices = null;
         public bool queueText = false;
@@ -34,10 +35,11 @@ namespace Echokraut.Helper
         Random rand = new Random(Guid.NewGuid().GetHashCode());
         bool stillTalking = false;
 
-        internal BackendHelper(Configuration configuration, IPluginLog log)
+        internal BackendHelper(Configuration configuration, Echokraut plugin, IPluginLog log)
         {
             Log = log;
             Configuration = configuration;
+            Plugin = plugin;
             queueThread.Start();
 
         }
@@ -188,6 +190,7 @@ namespace Echokraut.Helper
             var soundOut = sender as WasapiOut;
             soundOut?.Dispose();
             playing = false;
+            Plugin.StopLipSync();
 
 
             if (Configuration.AutoAdvanceTextAfterSpeechCompleted)

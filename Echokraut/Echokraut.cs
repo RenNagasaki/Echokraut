@@ -82,7 +82,7 @@ public partial class Echokraut : IDalamudPlugin
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Configuration.Initialize(PluginInterface);
 
-        this.BackendHelper = new BackendHelper(Configuration, this.Log);
+        this.BackendHelper = new BackendHelper(Configuration, this, this.Log);
         this.BackendHelper.SetBackendType(Configuration.BackendSelection);
         this.ConfigWindow = new ConfigWindow(this, this.Log, Configuration);
 
@@ -113,6 +113,11 @@ public partial class Echokraut : IDalamudPlugin
 
         if (Configuration.CancelSpeechOnTextAdvance)
             this.BackendHelper.OnCancel();
+    }
+
+    public void StopLipSync()
+    {
+        addonTalkHandler.StopLipSync();
     }
 
     public void Say(GameObject? speaker, SeString speakerName, string textValue, TextSource source)
