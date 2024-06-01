@@ -181,8 +181,8 @@ public partial class Echokraut : IDalamudPlugin
 
         char[] delimiters = new char[] {' '};
         var count = cleanText.Split(delimiters, StringSplitOptions.RemoveEmptyEntries).Length;
-        var estimatedLength = count / 2.1;
-        addonTalkHandler.TriggerLipSync(voiceMessage.Speaker.name, estimatedLength.ToString());
+        var estimatedLength = count / 2.1f;
+        addonTalkHandler.TriggerLipSync(voiceMessage.Speaker.name, estimatedLength);
     }
 
     private unsafe NpcRaces GetSpeakerRace(GameObject? speaker)

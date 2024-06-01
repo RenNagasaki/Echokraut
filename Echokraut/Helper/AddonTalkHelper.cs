@@ -254,7 +254,7 @@ public class AddonTalkHelper
         return (AddonTalk*)Address.ToPointer();
     }
 
-    public async void TriggerLipSync(string npcName, string length)
+    public async void TriggerLipSync(string npcName, float length)
     {
         if (Conditions.IsBoundByDuty && !Conditions.IsWatchingCutscene) return;
         if (!config.Enabled) return;
@@ -271,7 +271,7 @@ public class AddonTalkHelper
             animationMemory = actorMemory.Animation;
 
             // Determine the duration based on the message size
-            float duration = float.Parse(length, CultureInfo.InvariantCulture);
+            float duration = length;
 
             Dictionary<int, int> mouthMovement = new Dictionary<int, int>();
 

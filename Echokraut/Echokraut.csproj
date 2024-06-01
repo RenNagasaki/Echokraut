@@ -11,11 +11,21 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Remove="Anamnesis\Data\Equipment.json" />
+    <None Remove="Anamnesis\Data\Images.json" />
+    <None Remove="Anamnesis\Data\ItemCategories.json" />
+    <None Remove="Anamnesis\Data\NpcNames.json" />
+    <None Remove="Anamnesis\Data\Tips.json" />
     <None Remove="Utils\NpcRacesMap.json" />
     <None Remove="Utils\overridenModelIds.txt" />
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Anamnesis\Data\Equipment.json" />
+    <EmbeddedResource Include="Anamnesis\Data\Images.json" />
+    <EmbeddedResource Include="Anamnesis\Data\ItemCategories.json" />
+    <EmbeddedResource Include="Anamnesis\Data\NpcNames.json" />
+    <EmbeddedResource Include="Anamnesis\Data\Tips.json" />
     <EmbeddedResource Include="Utils\overridenModelIds.txt">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
