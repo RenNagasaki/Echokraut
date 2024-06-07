@@ -255,7 +255,8 @@ public partial class Echokraut : IDalamudPlugin
 
         ConfigWindow.Dispose();
 
-        CommandManager.RemoveHandler(CommandName);
+        CommandManager.RemoveHandler("/eksettings");
+        CommandManager.RemoveHandler("/ek");
     }
 
     private void OnCommand(string command, string args)
