@@ -28,7 +28,6 @@ namespace Echokraut;
 
 public partial class Echokraut : IDalamudPlugin
 {
-    private const string CommandName = "/eksettings";
 
     private DalamudPluginInterface PluginInterface { get; init; }
     private IPluginLog Log { get; init; }
@@ -95,9 +94,13 @@ public partial class Echokraut : IDalamudPlugin
 
         WindowSystem.AddWindow(ConfigWindow);
 
-        CommandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
+        CommandManager.AddHandler("/eksettings", new CommandInfo(OnCommand)
         {
-            HelpMessage = "Opens the configuration windows"
+            HelpMessage = "Opens the configuration window"
+        });
+        CommandManager.AddHandler("/ek", new CommandInfo(OnCommand)
+        {
+            HelpMessage = "Opens the configuration window"
         });
 
         PluginInterface.UiBuilder.Draw += DrawUI;
