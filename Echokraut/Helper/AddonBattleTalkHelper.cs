@@ -10,6 +10,7 @@ using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Echokraut.Enums;
 using Echokraut.Utils;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace Echokraut.Helper;
 
@@ -77,6 +78,7 @@ public class AddonBattleTalkHelper
 
     private void UpdateAddonAddress()
     {
+        log.Info($"AddonBattleTalk address update");
         if (!clientState.IsLoggedIn || condition[ConditionFlag.CreatingCharacter])
         {
             Address = nint.Zero;
@@ -104,7 +106,9 @@ public class AddonBattleTalkHelper
 
     public void PollAddon(AddonPollSource pollSource)
     {
+        log.Info($"AddonBattleTalk polling ({pollSource})");
         var state = GetTalkAddonState(pollSource);
+        log.Info($"AddonBattleTalk got state ({pollSource}): {state.Text}");
         Mutate(state);
     }
 
