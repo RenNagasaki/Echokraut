@@ -78,7 +78,6 @@ public class AddonBattleTalkHelper
 
     private void UpdateAddonAddress()
     {
-        log.Info($"AddonBattleTalk address update");
         if (!clientState.IsLoggedIn || condition[ConditionFlag.CreatingCharacter])
         {
             Address = nint.Zero;
@@ -87,7 +86,8 @@ public class AddonBattleTalkHelper
 
         if (Address == nint.Zero)
         {
-            Address = gui.GetAddonByName("BattleTalk");
+            Address = gui.GetAddonByName("_BattleTalk");
+            log.Info($"AddonBattleTalk address found: {Address}");
         }
     }
 
@@ -106,20 +106,18 @@ public class AddonBattleTalkHelper
 
     public void PollAddon(AddonPollSource pollSource)
     {
-        log.Info($"AddonBattleTalk polling ({pollSource})");
         var state = GetTalkAddonState(pollSource);
-        log.Info($"AddonBattleTalk got state ({pollSource}): {state.Text}");
         Mutate(state);
     }
 
     private void HandleChange(AddonBattleTalkState state)
     {
         var (speaker, text, pollSource) = state;
+        log.Info($"AddonBattleTalk ({pollSource}): \"{state}\"");
 
         if (state == default)
         {
             // The addon was closed
-            plugin.Cancel();
             lastAddonSpeaker = "";
             lastAddonText = "";
             return;
@@ -166,17 +164,16 @@ public class AddonBattleTalkHelper
 
     public unsafe AddonTalkText? ReadText()
     {
-        var addonTalk = GetAddonTalk();
+        var addonTalk = GetAddonTalkBattle();
         return addonTalk == null ? null : TalkUtils.ReadTalkAddon(addonTalk);
     }
 
     public unsafe bool IsVisible()
     {
-        var addonTalk = GetAddonTalk();
+        var addonTalk = GetAddonTalkBattle();
         return addonTalk != null && addonTalk->AtkUnitBase.IsVisible;
     }
-
-    private unsafe AddonBattleTalk* GetAddonTalk()
+    private unsafe AddonBattleTalk* GetAddonTalkBattle()
     {
         return (AddonBattleTalk*)Address.ToPointer();
     }
