@@ -260,7 +260,7 @@ public class ConfigWindow : Window, IDisposable
                     logMessage.Value.Substring(0, 3) == "DBG" ? new Vector4(0.0f, 1.0f, 0.0f, 1f) :
                         logMessage.Value.Substring(0, 3) == "ERR" ? new Vector4(1.0f, 0.0f, 0.0f, 1f) : new Vector4(1.0f, 1.0f, 1.0f, 1f);
 
-                ImGui.TextColored(col, $"{logMessage.Key.ToShortTimeString}: {logMessage.Value.Substring(3)}");
+                ImGui.TextColored(col, $"{logMessage.Key.ToShortTimeString()}: {logMessage.Value.Substring(3)}");
             }
         }
     }
