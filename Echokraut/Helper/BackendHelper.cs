@@ -102,8 +102,6 @@ namespace Echokraut.Helper
                     activePlayer.Play();
                     playing = true;
                 }
-
-                Thread.Sleep(100);
             }
         }
 
@@ -136,7 +134,6 @@ namespace Echokraut.Helper
                     while (ready != "Ready" && i < 50)
                     {
                         i++;
-                        Thread.Sleep(100);
                         ready = await CheckReady();
                     }
 

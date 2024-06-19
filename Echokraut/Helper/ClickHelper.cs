@@ -8,7 +8,7 @@ namespace Echokraut.Helper
 
         public static void Click()
         {
-            ClickTalk.Using(AddonTalkHelper.Address).Click();
+            ClickTalk.Using(default).Click();
         }
     }
 }
