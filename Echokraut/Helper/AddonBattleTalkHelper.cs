@@ -24,7 +24,6 @@ public class AddonBattleTalkHelper
     private readonly IGameGui gui;
     private readonly IFramework framework;
     private readonly Configuration config;
-    private readonly IPluginLog log;
     private readonly Echokraut plugin;
     private OnUpdateDelegate updateHandler;
 
@@ -37,7 +36,7 @@ public class AddonBattleTalkHelper
     private string? lastAddonText;
     private AddonBattleTalkState lastValue;
 
-    public AddonBattleTalkHelper(Echokraut plugin, IClientState clientState, ICondition condition, IGameGui gui, IFramework framework, IObjectTable objects, Configuration config, IPluginLog log)
+    public AddonBattleTalkHelper(Echokraut plugin, IClientState clientState, ICondition condition, IGameGui gui, IFramework framework, IObjectTable objects, Configuration config)
     {
         this.plugin = plugin;
         this.clientState = clientState;
@@ -46,7 +45,6 @@ public class AddonBattleTalkHelper
         this.framework = framework;
         this.config = config;
         this.objects = objects;
-        this.log = log;
 
         HookIntoFrameworkUpdate();
     }
@@ -87,7 +85,7 @@ public class AddonBattleTalkHelper
         if (Address == nint.Zero)
         {
             Address = gui.GetAddonByName("_BattleTalk");
-            log.Info($"AddonBattleTalk address found: {Address}");
+            LogHelper.Info($"AddonBattleTalk address found: {Address}");
         }
     }
 
@@ -113,7 +111,7 @@ public class AddonBattleTalkHelper
     private void HandleChange(AddonBattleTalkState state)
     {
         var (speaker, text, pollSource) = state;
-        log.Info($"AddonBattleTalk ({pollSource}): \"{state}\"");
+        LogHelper.Info($"AddonBattleTalk ({pollSource}): \"{state}\"");
 
         if (state == default)
         {
@@ -128,14 +126,14 @@ public class AddonBattleTalkHelper
 
         text = TalkUtils.NormalizePunctuation(text);
 
-        log.Info($"AddonBattleTalk ({pollSource}): \"{text}\"");
+        LogHelper.Info($"AddonBattleTalk ({pollSource}): \"{text}\"");
 
         {
             // This entire callback executes twice in a row - once for the voice line, and then again immediately
             // afterwards for the framework update itself. This prevents the second invocation from being spoken.
             if (lastAddonSpeaker == speaker && lastAddonText == text)
             {
-                log.Info($"Skipping duplicate line: {text}");
+                LogHelper.Info($"Skipping duplicate line: {text}");
                 return;
             }
 
@@ -145,7 +143,7 @@ public class AddonBattleTalkHelper
 
         if (pollSource == AddonPollSource.VoiceLinePlayback)
         {
-            log.Info($"Skipping voice-acted line: {text}");
+            LogHelper.Info($"Skipping voice-acted line: {text}");
             return;
         }
 

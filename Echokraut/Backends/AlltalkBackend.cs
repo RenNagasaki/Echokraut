@@ -10,6 +10,7 @@ using Echokraut.DataClasses;
 using Echokraut.Exceptions;
 using Echokraut.Enums;
 using Dalamud.Plugin.Services;
+using Echokraut.Helper;
 
 namespace Echokraut.Backend
 {
@@ -21,9 +22,9 @@ namespace Echokraut.Backend
             this.data = data;
         }
 
-        public async Task<Stream> GenerateAudioStreamFromVoice(IPluginLog log, string voiceLine, string voice, string language)
+        public async Task<Stream> GenerateAudioStreamFromVoice(string voiceLine, string voice, string language)
         {
-            log.Info("Generating Alltalk Audio");
+            LogHelper.Info("Generating Alltalk Audio");
             HttpClient httpClient = new HttpClient();
             httpClient.BaseAddress = new Uri(data.BaseUrl);
             httpClient.Timeout = TimeSpan.FromSeconds(5);
@@ -39,30 +40,30 @@ namespace Echokraut.Backend
                 query["language"] = getAlltalkLanguage(language);
                 query["output_file"] = "ignoreme.wav";
                 uriBuilder.Query = query.ToString();
-                log.Info("Requesting...");
+                LogHelper.Info("Requesting...");
                 using var req = new HttpRequestMessage(HttpMethod.Get, uriBuilder.Uri);
 
                 res = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
                 EnsureSuccessStatusCode(res);
 
                 // Copy the sound to a new buffer and enqueue it
-                log.Info("Getting response...");
+                LogHelper.Info("Getting response...");
                 var responseStream = await res.Content.ReadAsStreamAsync().ConfigureAwait(false);
-                log.Info("Done");
+                LogHelper.Info("Done");
 
                 return responseStream;
             }
             catch (Exception ex)
             {
-                log.Error(ex.ToString());
+                LogHelper.Error(ex.ToString());
             }
 
             return null;
         }
 
-        public List<BackendVoiceItem> GetAvailableVoices(IPluginLog log)
+        public List<BackendVoiceItem> GetAvailableVoices()
         {
-            log.Info("Loading Alltalk Voices");
+            LogHelper.Info("Loading Alltalk Voices");
             var mappedVoices = new List<BackendVoiceItem>();
             try
             {
@@ -131,22 +132,22 @@ namespace Echokraut.Backend
                         }
                     }
                 }
-                log.Info("Done");
+                LogHelper.Info("Done");
             }
             catch (Exception ex)
             {
-                log.Error(ex.ToString());
+                LogHelper.Error(ex.ToString());
             }
 
             return mappedVoices;
         }
 
-        public async void StopGenerating(IPluginLog log)
+        public async void StopGenerating()
         {
             HttpClient httpClient = new HttpClient();
             httpClient.BaseAddress = new Uri(data.BaseUrl);
             httpClient.Timeout = TimeSpan.FromSeconds(5);
-            log.Info("Stopping Alltalk Generation");
+            LogHelper.Info("Stopping Alltalk Generation");
             HttpResponseMessage res = null;
             try
             {
@@ -154,30 +155,31 @@ namespace Echokraut.Backend
                 res = await httpClient.PutAsync(data.StopPath, content).ConfigureAwait(false);
             } catch (Exception ex)
             {
-                log.Error(ex.ToString());
+                LogHelper.Error(ex.ToString());
             }
         }
 
-        public async Task<string> CheckReady(IPluginLog log)
+        public async Task<string> CheckReady()
         {
             HttpClient httpClient = new HttpClient();
             httpClient.BaseAddress = new Uri(data.BaseUrl);
             httpClient.Timeout = TimeSpan.FromSeconds(5);
-            log.Info("Checking if Alltalk is ready");
+            LogHelper.Info("Checking if Alltalk is ready");
             try
             {
                 var res = await httpClient.GetAsync(data.ReadyPath).ConfigureAwait(false);
 
                 var responseString = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
 
+                LogHelper.Debug("Ready");
                 return responseString;
-                log.Info("Ready");
             }
             catch (Exception ex)
             {
-                log.Error(ex.ToString());
+                LogHelper.Error(ex.ToString());
             }
 
+            LogHelper.Debug("Not ready");
             return "NotReady";
         }
 

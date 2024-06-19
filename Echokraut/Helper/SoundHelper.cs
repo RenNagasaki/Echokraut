@@ -39,12 +39,10 @@ public class SoundHelper : IDisposable
 
     private readonly AddonTalkHelper addonTalkHandler;
     private readonly AddonBattleTalkHelper addonBattleTalkHandler;
-    private readonly IPluginLog log;
 
     public SoundHelper(AddonTalkHelper addonTalkHandler, AddonBattleTalkHelper addonBattleTalkHandler,
-        ISigScanner sigScanner, IGameInteropProvider gameInterop, IPluginLog log)
+        ISigScanner sigScanner, IGameInteropProvider gameInterop)
     {
-        this.log = log;
         this.addonTalkHandler = addonTalkHandler;
         this.addonBattleTalkHandler = addonBattleTalkHandler;
 
@@ -53,11 +51,11 @@ public class SoundHelper : IDisposable
             this.loadSoundFileHook =
                 gameInterop.HookFromAddress<LoadSoundFileDelegate>(loadSoundFilePtr, LoadSoundFileDetour);
             this.loadSoundFileHook.Enable();
-            log.Debug("Hooked into LoadSoundFile");
+            LogHelper.Debug("Hooked into LoadSoundFile");
         }
         else
         {
-            log.Error("Failed to hook into LoadSoundFile");
+            LogHelper.Error("Failed to hook into LoadSoundFile");
         }
 
         if (sigScanner.TryScanText(PlaySpecificSoundSig, out var playSpecificSoundPtr))
@@ -65,11 +63,11 @@ public class SoundHelper : IDisposable
             this.playSpecificSoundHook =
                 gameInterop.HookFromAddress<PlaySpecificSoundDelegate>(playSpecificSoundPtr, PlaySpecificSoundDetour);
             this.playSpecificSoundHook.Enable();
-            log.Debug("Hooked into PlaySpecificSound");
+            LogHelper.Debug("Hooked into PlaySpecificSound");
         }
         else
         {
-            log.Error("Failed to hook into PlaySpecificSound");
+            LogHelper.Error("Failed to hook into PlaySpecificSound");
         }
     }
 
@@ -100,7 +98,7 @@ public class SoundHelper : IDisposable
 
                     if (!IgnoredSoundFileNameRegex.IsMatch(fileName))
                     {
-                        log.Debug($"Loaded sound: {fileName}");
+                        LogHelper.Debug($"Loaded sound: {fileName}");
 
                         if (VoiceLineFileNameRegex.IsMatch(fileName))
                         {
@@ -110,7 +108,7 @@ public class SoundHelper : IDisposable
 
                     if (isVoiceLine)
                     {
-                        log.Debug($"Discovered voice line at address {resourceDataPtr:x}");
+                        LogHelper.Debug($"Discovered voice line at address {resourceDataPtr:x}");
                         this.knownVoiceLinePtrs.Add(resourceDataPtr);
                     }
                     else
@@ -119,7 +117,7 @@ public class SoundHelper : IDisposable
                         // occupied by a voice line.
                         if (this.knownVoiceLinePtrs.Remove(resourceDataPtr))
                         {
-                            log.Debug(
+                            LogHelper.Debug(
                                 $"Cleared voice line from address {resourceDataPtr:x} (address reused by: {fileName})");
                         }
                     }
@@ -128,7 +126,7 @@ public class SoundHelper : IDisposable
         }
         catch (Exception exc)
         {
-            log.Error(exc, "Error in LoadSoundFile detour");
+            LogHelper.Error($"Error in LoadSoundFile detour: {exc}");
         }
 
         return result;
@@ -145,14 +143,14 @@ public class SoundHelper : IDisposable
             // lines are played.
             if (this.knownVoiceLinePtrs.Remove(soundDataPtr))
             {
-                log.Debug($"Caught playback of known voice line at address {soundDataPtr:x}");
+                LogHelper.Debug($"Caught playback of known voice line at address {soundDataPtr:x}");
                 this.addonTalkHandler.PollAddon(AddonPollSource.VoiceLinePlayback);
                 this.addonBattleTalkHandler.PollAddon(AddonPollSource.VoiceLinePlayback);
             }
         }
         catch (Exception exc)
         {
-            log.Error(exc, "Error in PlaySpecificSound detour");
+            LogHelper.Error($"Error in PlaySpecificSound detour: {exc}");
         }
 
         return result;

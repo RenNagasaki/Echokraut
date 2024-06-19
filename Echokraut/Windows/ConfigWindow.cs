@@ -12,6 +12,7 @@ using Echokraut.Enums;
 using System.Linq;
 using Dalamud.Interface;
 using Echokraut.Backend;
+using Echokraut.Helper;
 
 namespace Echokraut.Windows;
 
@@ -19,16 +20,14 @@ public class ConfigWindow : Window, IDisposable
 {
     private Configuration Configuration;
     private Echokraut plugin;
-    private IPluginLog log;
     private string testConnectionRes = "";
 
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
     // and the window ID will always be "###XYZ counter window" for ImGui
-    public ConfigWindow(Echokraut plugin, IPluginLog log, Configuration configuration) : base("Echokraut configuration###EKSettings")
+    public ConfigWindow(Echokraut plugin, Configuration configuration) : base("Echokraut configuration###EKSettings")
     {
         this.plugin = plugin;
-        this.log = log;
         Flags = ImGuiWindowFlags.NoResize;
 
         Size = new Vector2(540, 480);
@@ -65,6 +64,12 @@ public class ConfigWindow : Window, IDisposable
             if (ImGui.BeginTabItem("NPCs"))
             {
                 DrawNpcs();
+                ImGui.EndTabItem();
+            }
+
+            if (ImGui.BeginTabItem("Log"))
+            {
+                DrawErrors();
                 ImGui.EndTabItem();
             }
         }
@@ -127,7 +132,7 @@ public class ConfigWindow : Window, IDisposable
                 this.Configuration.Save();
                 this.plugin.BackendHelper.SetBackendType(backendSelection);
 
-                log.Info($"Updated backendselection to: {Constants.BACKENDS[presetIndex]}");
+                LogHelper.Info($"Updated backendselection to: {Constants.BACKENDS[presetIndex]}");
             }
 
             if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
@@ -160,12 +165,12 @@ public class ConfigWindow : Window, IDisposable
                 testConnectionRes = await plugin.BackendHelper.CheckReady();
             else
                 testConnectionRes = "No backend selected";
-            log.Error($"Connection test result: {testConnectionRes}");
+            LogHelper.Error($"Connection test result: {testConnectionRes}");
         }
         catch (Exception ex)
         {
             testConnectionRes = ex.ToString();
-            log.Error(ex.ToString());
+            LogHelper.Error(ex.ToString());
         }
     }
 
@@ -178,7 +183,7 @@ public class ConfigWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            log.Error(ex.ToString());
+            LogHelper.Error(ex.ToString());
         }
     }
 
@@ -196,18 +201,18 @@ public class ConfigWindow : Window, IDisposable
 
                 if (newVoiceItem != null && newVoiceItem.voiceName != "Remove")
                 {
-                    log.Info($"Updated Voice for Character: {mapData} from: {mapData.voiceItem} to: {newVoiceItem}");
+                    LogHelper.Info($"Updated Voice for Character: {mapData} from: {mapData.voiceItem} to: {newVoiceItem}");
 
                     mapData.voiceItem = newVoiceItem;
                     this.Configuration.Save();
                 }
                 else if (newVoiceItem.voiceName == "Remove")
                 {
-                    log.Info($"Removing Configuration for Character: {mapData}");
+                    LogHelper.Info($"Removing Configuration for Character: {mapData}");
                     toBeRemoved = mapData;
                 }
                 else
-                    log.Error($"Couldnt update Voice for Character: {mapData}");
+                    LogHelper.Error($"Couldnt update Voice for Character: {mapData}");
             }
 
         }
@@ -216,6 +221,47 @@ public class ConfigWindow : Window, IDisposable
         {
             Configuration.MappedNpcs.Remove(toBeRemoved);
             Configuration.Save();
+        }
+    }
+
+    private void DrawErrors()
+    {
+        if (ImGui.CollapsingHeader("Options"))
+        {
+            var showInfoLog = this.Configuration.ShowInfoLog;
+            if (ImGui.Checkbox("Show info logs", ref showInfoLog))
+            {
+                LogHelper.RecreateLogList();
+                this.Configuration.ShowInfoLog = showInfoLog;
+                this.Configuration.Save();
+            }
+            var showDebugLog = this.Configuration.ShowDebugLog;
+            if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
+            {
+                LogHelper.RecreateLogList();
+                this.Configuration.ShowDebugLog = showDebugLog;
+                this.Configuration.Save();
+            }
+            var showErrorLog = this.Configuration.ShowErrorLog;
+            if (ImGui.Checkbox("Show error logs", ref showErrorLog))
+            {
+                LogHelper.RecreateLogList();
+                this.Configuration.ShowErrorLog = showErrorLog;
+                this.Configuration.Save();
+            }
+        }
+        if (ImGui.CollapsingHeader("Log:"))
+        {
+            Dictionary<DateTime, string> logMessages = LogHelper.logList;
+
+            foreach (var logMessage in logMessages)
+            {
+                Vector4 col = logMessage.Value.Substring(0, 3) == "INF" ? new Vector4(0.0f, 0.0f, 1.0f, 1f) :
+                    logMessage.Value.Substring(0, 3) == "DBG" ? new Vector4(0.0f, 1.0f, 0.0f, 1f) :
+                        logMessage.Value.Substring(0, 3) == "ERR" ? new Vector4(1.0f, 0.0f, 0.0f, 1f) : new Vector4(1.0f, 1.0f, 1.0f, 1f);
+
+                ImGui.TextColored(col, $"{logMessage.Key.ToShortTimeString}: {logMessage.Value.Substring(3)}");
+            }
         }
     }
 }

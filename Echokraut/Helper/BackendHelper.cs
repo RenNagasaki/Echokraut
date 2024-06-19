@@ -24,7 +24,6 @@ namespace Echokraut.Helper
         static private List<RawSourceWaveStream> voiceQueue = new List<RawSourceWaveStream>();
         static private WasapiOut activePlayer = null;
         static private bool playing = false;
-        static private IPluginLog Log;
         static Configuration Configuration;
         static Echokraut Plugin;
         static float volume = 1f;
@@ -35,9 +34,8 @@ namespace Echokraut.Helper
         Random rand = new Random(Guid.NewGuid().GetHashCode());
         bool stillTalking = false;
 
-        internal BackendHelper(Configuration configuration, Echokraut plugin, IPluginLog log)
+        internal BackendHelper(Configuration configuration, Echokraut plugin)
         {
-            Log = log;
             Configuration = configuration;
             Plugin = plugin;
             queueThread.Start();
@@ -48,7 +46,7 @@ namespace Echokraut.Helper
         {
             if (backendType == TTSBackends.Alltalk)
             {
-                Log.Info($"Creating backend instance: {backendType}");
+                LogHelper.Info($"Creating backend instance: {backendType}");
                 backend = new AlltalkBackend(Configuration.Alltalk);
                 getAndMapVoices();
             }
@@ -57,8 +55,8 @@ namespace Echokraut.Helper
         public void OnSay(VoiceMessage voiceMessage, float volume)
         {
             BackendHelper.volume = volume;
-            Log.Info("Starting voice inference: ");
-            Log.Info(voiceMessage.ToString());
+            LogHelper.Info("Starting voice inference: ");
+            LogHelper.Info(voiceMessage.ToString());
             if (voiceMessage.Source == "Chat")
             {
 
@@ -69,17 +67,17 @@ namespace Echokraut.Helper
 
         public void OnCancel()
         {
-            Log.Info("Stopping voice inference");
+            LogHelper.Info("Stopping voice inference");
+            stillTalking = false;
+            playing = false;
             if (playing)
             {
                 if (activePlayer != null)
                 {
                     activePlayer.Stop();
                 }
-                backend.StopGenerating(Log);
+                backend.StopGenerating();
                 voiceQueue.Clear();
-                stillTalking = false;
-                playing = false;
             }
         }
 
@@ -89,35 +87,45 @@ namespace Echokraut.Helper
             {
                 if (!playing && voiceQueue.Count > 0)
                 {
+                    LogHelper.Info("Playing next Queue Item");
                     var queueItem = voiceQueue[0];
                     voiceQueue.RemoveAt(0);
-                    Log.Info("Playing next Queue Item");
-                    var volumeSampleProvider = new VolumeSampleProvider(queueItem.ToSampleProvider());
-                    volumeSampleProvider.Volume = volume; // double the amplitude of every sample - may go above 0dB
+                    try
+                    {
+                        var volumeSampleProvider = new VolumeSampleProvider(queueItem.ToSampleProvider());
+                        volumeSampleProvider.Volume = volume; // double the amplitude of every sample - may go above 0dB
 
-                    activePlayer = new WasapiOut(AudioClientShareMode.Shared, 0);
-                    //activePlayer.Volume = volume;
-                    activePlayer.PlaybackStopped += SoundOut_PlaybackStopped;
-                    activePlayer.Init(volumeSampleProvider);
-                    activePlayer.Play();
-                    playing = true;
+                        activePlayer = new WasapiOut(AudioClientShareMode.Shared, 0);
+                        //activePlayer.Volume = volume;
+                        activePlayer.PlaybackStopped += SoundOut_PlaybackStopped;
+                        activePlayer.Init(volumeSampleProvider);
+                        activePlayer.Play();
+                        playing = true;
+                    }
+                    catch (Exception ex)
+                    {
+                        LogHelper.Error($"Error while working queue: {ex}");
+
+                        if (activePlayer != null)
+                            activePlayer.Stop();
+                    }
                 }
             }
         }
 
         void getAndMapVoices()
         {
-            Log.Info("Loading and mapping voices");
-            mappedVoices = backend.GetAvailableVoices(Log);
+            LogHelper.Info("Loading and mapping voices");
+            mappedVoices = backend.GetAvailableVoices();
             mappedVoices.Sort((x, y) => x.ToString().CompareTo(y.ToString()));
             mappedVoices.Insert(0, new BackendVoiceItem() { voiceName = "Remove", race = NpcRaces.Default, gender = Gender.None });
 
-            Log.Info("Success");
+            LogHelper.Info("Success");
         }
 
         public async void generateVoice(string text, string voice, string language)
         {
-            Log.Info("Generating Audio");
+            LogHelper.Info("Generating Audio");
 
             try
             {
@@ -139,7 +147,7 @@ namespace Echokraut.Helper
 
                     if (ready == "Ready")
                     {
-                        var responseStream = await backend.GenerateAudioStreamFromVoice(Log, textLine, voice, language);
+                        var responseStream = await backend.GenerateAudioStreamFromVoice(textLine, voice, language);
 
                         if (stillTalking)
                         {
@@ -148,20 +156,20 @@ namespace Echokraut.Helper
                         }
                     }
                     else
-                        Log.Error("Backend did not respond in time, not ready");
+                        LogHelper.Error("Backend did not respond in time, not ready");
                 }
             }
             catch (Exception ex)
             {
-                Log.Info(ex.ToString());
+                LogHelper.Info(ex.ToString());
             }
 
-            Log.Info("Done");
+            LogHelper.Info("Done");
         }
 
         public async Task<string> CheckReady()
         {
-            return await backend.CheckReady(Log);
+            return await backend.CheckReady();
         }
 
         //private string[] prepareAndSentenceSplit(string text)
@@ -192,7 +200,14 @@ namespace Echokraut.Helper
 
             if (Configuration.AutoAdvanceTextAfterSpeechCompleted)
             {
-                ClickHelper.Click();
+                try
+                {
+                    ClickHelper.Click();
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.Error($"Error while 'auto advance text after speech completed': {ex}");
+                }
             }
         }
 
@@ -215,7 +230,7 @@ namespace Echokraut.Helper
                     if (voiceItems.Count == 0)
                         voiceItems = mappedVoices.FindAll(p => p.gender == npcData.gender && p.race == NpcRaces.Default && p.voiceName.Contains("npc", StringComparison.OrdinalIgnoreCase));
 
-                    mappedVoices.ForEach((voiceItem) => { Log.Info(voiceItem.ToString()); });
+                    mappedVoices.ForEach((voiceItem) => { LogHelper.Info(voiceItem.ToString()); });
                     if (voiceItems.Count > 0)
                     {
                         var randomVoice = voiceItems[rand.Next(0, voiceItems.Count)];
@@ -240,7 +255,7 @@ namespace Echokraut.Helper
         {
             getVoiceOrRandom(npcData);
 
-            Log.Info(string.Format("Loaded voice: {0} for NPC: {1}", npcData.voiceItem.voice, npcData.name));
+            LogHelper.Info(string.Format("Loaded voice: {0} for NPC: {1}", npcData.voiceItem.voice, npcData.name));
             return npcData.voiceItem.voice;
         }
     }

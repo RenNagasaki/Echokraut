@@ -21,15 +21,13 @@ namespace Echokraut.Helper
 {
     internal class VolumeHelper
     {
-        IPluginLog Log;
         public nint BaseAddress { get; private set; }
         [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
         public delegate nint GetVolumeDelegate(nint baseAddress, ulong kind, ulong value, ulong unk1, ulong unk2, ulong unk3);
         private readonly Hook<GetVolumeDelegate>? getVolumeHook;
 
-        public VolumeHelper(ISigScanner scanner, IGameInteropProvider gameInterop, IPluginLog log)
+        public VolumeHelper(ISigScanner scanner, IGameInteropProvider gameInterop)
         {
-            this.Log = log;
             try
             {
                 // I thought I'd need the user to change the settings manually once to get the the base address,
@@ -45,7 +43,7 @@ namespace Echokraut.Helper
                     {
                         if (BaseAddress != baseAddress)
                         {
-                            Log.Info($"Updated Volume BaseAdress: {baseAddress}");
+                            LogHelper.Info($"Updated Volume BaseAdress: {baseAddress}");
                             BaseAddress = baseAddress;
                         }
 
@@ -55,7 +53,7 @@ namespace Echokraut.Helper
             }
             catch (Exception e)
             {
-                Log.Error($"Failed to hook configuration set method! Full error:\n{e}");
+                LogHelper.Error($"Failed to hook configuration set method! Full error:\n{e}");
             }
         }
 
@@ -70,7 +68,7 @@ namespace Echokraut.Helper
             }
 
             var volumeFloat = (masterVolume / 100f) * (voiceVolume / 100f);
-            Log.Info($"Voice Volume = {volumeFloat}");
+            LogHelper.Info($"Voice Volume = {volumeFloat}");
             return volumeFloat;
         }
 

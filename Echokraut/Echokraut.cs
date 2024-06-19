@@ -81,16 +81,17 @@ public partial class Echokraut : IDalamudPlugin
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Configuration.Initialize(PluginInterface);
 
-        this.BackendHelper = new BackendHelper(Configuration, this, this.Log);
+        LogHelper.Setup(log, Configuration);
+        this.BackendHelper = new BackendHelper(Configuration, this);
         this.BackendHelper.SetBackendType(Configuration.BackendSelection);
-        this.ConfigWindow = new ConfigWindow(this, this.Log, Configuration);
+        this.ConfigWindow = new ConfigWindow(this, Configuration);
 
-        this.addonTalkHandler = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration, this.Log);
-        this.addonBattleTalkHandler = new AddonBattleTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration, this.Log);
-        this.volumeHelper = new VolumeHelper(sigScanner, gameInterop, log);
+        this.addonTalkHandler = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
+        this.addonBattleTalkHandler = new AddonBattleTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
+        this.volumeHelper = new VolumeHelper(sigScanner, gameInterop);
         this.ungenderedOverrides = new UngenderedOverrideManager();
         this.soundHelper =
-            new SoundHelper(this.addonTalkHandler, this.addonBattleTalkHandler, sigScanner, gameInterop, log);
+            new SoundHelper(this.addonTalkHandler, this.addonBattleTalkHandler, sigScanner, gameInterop);
 
         WindowSystem.AddWindow(ConfigWindow);
 

@@ -21,6 +21,9 @@ public class Configuration : IPluginConfiguration
     public bool CancelSpeechOnTextAdvance { get; set; } = true;
     public bool AutoAdvanceTextAfterSpeechCompleted { get; set; } = false;
     public bool RemoveStutters { get; set; } = true;
+    public bool ShowInfoLog { get; set; } = true;
+    public bool ShowDebugLog { get; set; } = true;
+    public bool ShowErrorLog { get; set; } = true;
 
     // the below exist just to make saving less cumbersome
     [NonSerialized]
