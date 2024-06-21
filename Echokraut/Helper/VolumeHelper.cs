@@ -12,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Dynamic;
 using System.Linq;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
@@ -43,7 +44,7 @@ namespace Echokraut.Helper
                     {
                         if (BaseAddress != baseAddress)
                         {
-                            LogHelper.Info($"Updated Volume BaseAdress: {baseAddress}");
+                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Volume BaseAdress: {baseAddress}");
                             BaseAddress = baseAddress;
                         }
 
@@ -53,7 +54,7 @@ namespace Echokraut.Helper
             }
             catch (Exception e)
             {
-                LogHelper.Error($"Failed to hook configuration set method! Full error:\n{e}");
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Failed to hook configuration set method! Full error:\n{e}");
             }
         }
 
@@ -68,7 +69,7 @@ namespace Echokraut.Helper
             }
 
             var volumeFloat = (masterVolume / 100f) * (voiceVolume / 100f);
-            LogHelper.Info($"Voice Volume = {volumeFloat}");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Voice Volume = {volumeFloat}");
             return volumeFloat;
         }
 

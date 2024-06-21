@@ -11,6 +11,7 @@ using FFXIVClientStructs.FFXIV.Client.UI;
 using Echokraut.Enums;
 using Echokraut.Utils;
 using static System.Net.Mime.MediaTypeNames;
+using System.Reflection;
 
 namespace Echokraut.Helper;
 
@@ -85,7 +86,7 @@ public class AddonBattleTalkHelper
         if (Address == nint.Zero)
         {
             Address = gui.GetAddonByName("_BattleTalk");
-            LogHelper.Info($"AddonBattleTalk address found: {Address}");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk address found: {Address}");
         }
     }
 
@@ -111,7 +112,7 @@ public class AddonBattleTalkHelper
     private void HandleChange(AddonBattleTalkState state)
     {
         var (speaker, text, pollSource) = state;
-        LogHelper.Info($"AddonBattleTalk ({pollSource}): \"{state}\"");
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk ({pollSource}): \"{state}\"");
 
         if (state == default)
         {
@@ -126,14 +127,14 @@ public class AddonBattleTalkHelper
 
         text = TalkUtils.NormalizePunctuation(text);
 
-        LogHelper.Info($"AddonBattleTalk ({pollSource}): \"{text}\"");
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk ({pollSource}): \"{text}\"");
 
         {
             // This entire callback executes twice in a row - once for the voice line, and then again immediately
             // afterwards for the framework update itself. This prevents the second invocation from being spoken.
             if (lastAddonSpeaker == speaker && lastAddonText == text)
             {
-                LogHelper.Info($"Skipping duplicate line: {text}");
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping duplicate line: {text}");
                 return;
             }
 
@@ -143,7 +144,7 @@ public class AddonBattleTalkHelper
 
         if (pollSource == AddonPollSource.VoiceLinePlayback)
         {
-            LogHelper.Info($"Skipping voice-acted line: {text}");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}");
             return;
         }
 

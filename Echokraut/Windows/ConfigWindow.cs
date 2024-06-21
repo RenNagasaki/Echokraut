@@ -13,6 +13,7 @@ using System.Linq;
 using Dalamud.Interface;
 using Echokraut.Backend;
 using Echokraut.Helper;
+using System.Reflection;
 
 namespace Echokraut.Windows;
 
@@ -28,10 +29,10 @@ public class ConfigWindow : Window, IDisposable
     public ConfigWindow(Echokraut plugin, Configuration configuration) : base("Echokraut configuration###EKSettings")
     {
         this.plugin = plugin;
-        Flags = ImGuiWindowFlags.NoResize;
+        Flags = ImGuiWindowFlags.AlwaysVerticalScrollbar & ImGuiWindowFlags.AlwaysHorizontalScrollbar;
 
         Size = new Vector2(540, 480);
-        SizeCondition = ImGuiCond.Always;
+        SizeCondition = ImGuiCond.FirstUseEver;
 
         Configuration = configuration;
     }
@@ -69,7 +70,7 @@ public class ConfigWindow : Window, IDisposable
 
             if (ImGui.BeginTabItem("Log"))
             {
-                DrawErrors();
+                DrawLogs();
                 ImGui.EndTabItem();
             }
         }
@@ -132,7 +133,7 @@ public class ConfigWindow : Window, IDisposable
                 this.Configuration.Save();
                 this.plugin.BackendHelper.SetBackendType(backendSelection);
 
-                LogHelper.Info($"Updated backendselection to: {Constants.BACKENDS[presetIndex]}");
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated backendselection to: {Constants.BACKENDS[presetIndex]}");
             }
 
             if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
@@ -165,12 +166,12 @@ public class ConfigWindow : Window, IDisposable
                 testConnectionRes = await plugin.BackendHelper.CheckReady();
             else
                 testConnectionRes = "No backend selected";
-            LogHelper.Error($"Connection test result: {testConnectionRes}");
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Connection test result: {testConnectionRes}");
         }
         catch (Exception ex)
         {
             testConnectionRes = ex.ToString();
-            LogHelper.Error(ex.ToString());
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString());
         }
     }
 
@@ -183,7 +184,7 @@ public class ConfigWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            LogHelper.Error(ex.ToString());
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString());
         }
     }
 
@@ -201,18 +202,18 @@ public class ConfigWindow : Window, IDisposable
 
                 if (newVoiceItem != null && newVoiceItem.voiceName != "Remove")
                 {
-                    LogHelper.Info($"Updated Voice for Character: {mapData} from: {mapData.voiceItem} to: {newVoiceItem}");
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for Character: {mapData} from: {mapData.voiceItem} to: {newVoiceItem}");
 
                     mapData.voiceItem = newVoiceItem;
                     this.Configuration.Save();
                 }
                 else if (newVoiceItem.voiceName == "Remove")
                 {
-                    LogHelper.Info($"Removing Configuration for Character: {mapData}");
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Removing Configuration for Character: {mapData}");
                     toBeRemoved = mapData;
                 }
                 else
-                    LogHelper.Error($"Couldnt update Voice for Character: {mapData}");
+                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Voice for Character: {mapData}");
             }
 
         }
@@ -224,7 +225,7 @@ public class ConfigWindow : Window, IDisposable
         }
     }
 
-    private void DrawErrors()
+    private void DrawLogs()
     {
         if (ImGui.CollapsingHeader("Options"))
         {
@@ -249,18 +250,30 @@ public class ConfigWindow : Window, IDisposable
                 this.Configuration.ShowErrorLog = showErrorLog;
                 this.Configuration.Save();
             }
+            var jumpToBottom = this.Configuration.JumpToBottom;
+            if (ImGui.Checkbox("Show error logs", ref jumpToBottom))
+            {
+                this.Configuration.JumpToBottom = jumpToBottom;
+                this.Configuration.Save();
+            }
         }
         if (ImGui.CollapsingHeader("Log:"))
         {
             Dictionary<DateTime, string> logMessages = LogHelper.logList;
 
-            foreach (var logMessage in logMessages)
+            if (ImGui.BeginChild("LogsChild"))
             {
-                Vector4 col = logMessage.Value.Substring(0, 3) == "INF" ? new Vector4(0.0f, 0.0f, 1.0f, 1f) :
-                    logMessage.Value.Substring(0, 3) == "DBG" ? new Vector4(0.0f, 1.0f, 0.0f, 1f) :
-                        logMessage.Value.Substring(0, 3) == "ERR" ? new Vector4(1.0f, 0.0f, 0.0f, 1f) : new Vector4(1.0f, 1.0f, 1.0f, 1f);
+                foreach (var logMessage in logMessages)
+                {
+                    Vector4 col = logMessage.Value.Substring(0, 3) == "INF" ? new Vector4(0.01f, 0.8f, 1.0f, 1f) :
+                        logMessage.Value.Substring(0, 3) == "DBG" ? new Vector4(0.0f, 1.0f, 0.0f, 1f) :
+                            logMessage.Value.Substring(0, 3) == "ERR" ? new Vector4(1.0f, 0.0f, 0.0f, 1f) : new Vector4(1.0f, 1.0f, 1.0f, 1f);
 
-                ImGui.TextColored(col, $"{logMessage.Key.ToShortTimeString()}: {logMessage.Value.Substring(3)}");
+                    ImGui.TextColored(col, $"{logMessage.Key.ToShortTimeString()}: {logMessage.Value.Substring(3)}");
+                }
+
+                if (Configuration.JumpToBottom)
+                    ImGui.SetScrollHereY();
             }
         }
     }

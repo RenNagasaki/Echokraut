@@ -27,6 +27,7 @@ using Dalamud.Game.ClientState.Objects.Enums;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Render;
 using static Dalamud.Interface.Utility.Raii.ImRaii;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.Tab;
+using System.Reflection;
 
 namespace Echokraut.Helper;
 
@@ -72,15 +73,15 @@ public class AddonTalkHelper
         HookIntoFrameworkUpdate();
         InitializeAsync().ContinueWith(t => {
             if (t.Exception != null)
-                LogHelper.Error("Initialization failed: " + t.Exception);
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Initialization failed: " + t.Exception);
         });
     }
 
     private async Task InitializeAsync()
     {
-        LogHelper.Info("InitializeAsync --> Waiting for Game Process Stability");
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, "InitializeAsync --> Waiting for Game Process Stability");
         await WaitForGameProcessStability();
-        LogHelper.Info("InitializeAsync --> Done waiting");
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, "InitializeAsync --> Done waiting");
         InitializeServices();
     }
 
@@ -105,10 +106,10 @@ public class AddonTalkHelper
     private async void StartServices()
     {
         await _memoryService.Initialize();
-        LogHelper.Info("StartServices --> Waiting for Process Response");
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StartServices --> Waiting for Process Response");
         while (!Process.GetCurrentProcess().Responding)
             await Task.Delay(100);
-        LogHelper.Info("StartServices --> Done waiting");
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StartServices --> Done waiting");
         await _memoryService.OpenProcess(Process.GetCurrentProcess());
         await _gameDataService.Initialize();
 
@@ -201,14 +202,14 @@ public class AddonTalkHelper
 
         text = TalkUtils.NormalizePunctuation(text);
 
-        LogHelper.Info($"AddonTalk ({pollSource}): \"{text}\"");
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonTalk ({pollSource}): \"{text}\"");
 
         {
             // This entire callback executes twice in a row - once for the voice line, and then again immediately
             // afterwards for the framework update itself. This prevents the second invocation from being spoken.
             if (lastAddonSpeaker == speaker && lastAddonText == text)
             {
-                LogHelper.Info($"Skipping duplicate line: {text}");
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping duplicate line: {text}");
                 return;
             }
 
@@ -218,7 +219,7 @@ public class AddonTalkHelper
 
         if (pollSource == AddonPollSource.VoiceLinePlayback)
         {
-            LogHelper.Info($"Skipping voice-acted line: {text}");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}");
             return;
         }
 
@@ -288,7 +289,7 @@ public class AddonTalkHelper
             remaining = remaining % 2;
             mouthMovement[4] = remaining / 1;
             remaining = remaining % 1;
-            LogHelper.Info($"durationMs[{durationMs}] durationRounded[{durationRounded}] fours[{mouthMovement[6]}] twos[{mouthMovement[5]}] ones[{mouthMovement[4]}]");
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"durationMs[{durationMs}] durationRounded[{durationRounded}] fours[{mouthMovement[6]}] twos[{mouthMovement[5]}] ones[{mouthMovement[4]}]");
 
             // Decide on the Mode
             ActorMemory.CharacterModes intialState = actorMemory.CharacterMode;
@@ -314,14 +315,14 @@ public class AddonTalkHelper
 
                             int adjustedDelay = CalculateAdjustedDelay(mouthMovement[6] * 4000, 6);
 
-                            LogHelper.Info($"Task was started mouthMovement[6] durationMs[{mouthMovement[6] * 4}] delay [{adjustedDelay}]");
+                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[6] durationMs[{mouthMovement[6] * 4}] delay [{adjustedDelay}]");
 
                             await Task.Delay(adjustedDelay, token);
 
                             if (!token.IsCancellationRequested && character != null && actorMemory != null)
                             {
 
-                                LogHelper.Info($"Task mouthMovement[6] was finished");
+                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[6] was finished");
 
                                 animationMemory.LipsOverride = 0;
                                 MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
@@ -337,13 +338,13 @@ public class AddonTalkHelper
                             MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), LipSyncTypes[5].Timeline.AnimationId, "Lipsync");
                             int adjustedDelay = CalculateAdjustedDelay(mouthMovement[5] * 2000, 5);
 
-                            LogHelper.Info($"Task was started mouthMovement[5] durationMs[{mouthMovement[5] * 2}] delay [{adjustedDelay}]");
+                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[5] durationMs[{mouthMovement[5] * 2}] delay [{adjustedDelay}]");
 
                             await Task.Delay(adjustedDelay, token);
                             if (!token.IsCancellationRequested && character != null && actorMemory != null)
                             {
 
-                                LogHelper.Info($"Task mouthMovement[5] was finished");
+                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[5] was finished");
 
                                 animationMemory.LipsOverride = 0;
                                 MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
@@ -359,13 +360,13 @@ public class AddonTalkHelper
                             MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), LipSyncTypes[4].Timeline.AnimationId, "Lipsync");
                             int adjustedDelay = CalculateAdjustedDelay(mouthMovement[4] * 1000, 4);
 
-                            LogHelper.Info($"Task was started mouthMovement[4] durationMs[{mouthMovement[4]}] delay [{adjustedDelay}]");
+                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[4] durationMs[{mouthMovement[4]}] delay [{adjustedDelay}]");
 
                             await Task.Delay(adjustedDelay, token);
                             if (!token.IsCancellationRequested && character != null && actorMemory != null)
                             {
 
-                                LogHelper.Info($"Task mouthMovement[4] was finished");
+                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[4] was finished");
 
                                 animationMemory.LipsOverride = 0;
                                 MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
@@ -376,7 +377,7 @@ public class AddonTalkHelper
                         if (!token.IsCancellationRequested)
                         {
 
-                            LogHelper.Info($"Task was Completed");
+                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was Completed");
 
                             cts.Dispose();
                             taskCancellations.Remove(character);
@@ -386,7 +387,7 @@ public class AddonTalkHelper
                     {
 
 
-                        LogHelper.Info($"Task was canceled.");
+                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was canceled.");
 
                         animationMemory.LipsOverride = 0;
                         MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
@@ -468,24 +469,24 @@ public class AddonTalkHelper
         if (!config.Enabled) return;
         if (currentLipsync == null) return;
 
-        LogHelper.Info($"Stopping Lipsync for {currentLipsync.Name}");
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Stopping Lipsync for {currentLipsync.Name}");
         if (taskCancellations.TryGetValue(currentLipsync, out var cts))
         {
-            //LogHelper.Info("Cancellation " + character.Name);
+            //LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Cancellation " + character.Name);
             try
             {
                 cts.Cancel();
             }
             catch (ObjectDisposedException)
             {
-                LogHelper.Error($"CTS for {currentLipsync.Name} was called to be disposed even though it was disposed already.");
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"CTS for {currentLipsync.Name} was called to be disposed even though it was disposed already.");
             }
             return;
         }
 
         try
         {
-            //LogHelper.Info("StopLipSync " + character.Name);
+            //LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StopLipSync " + character.Name);
             var actorMemory = new ActorMemory();
             actorMemory.SetAddress(currentLipsync.Address);
             var animationMemory = actorMemory.Animation;
@@ -494,7 +495,7 @@ public class AddonTalkHelper
         }
         catch (Exception ex)
         {
-            LogHelper.Error($"{ex}");
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"{ex}");
         }
     }
 

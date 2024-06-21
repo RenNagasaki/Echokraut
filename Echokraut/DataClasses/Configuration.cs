@@ -24,6 +24,7 @@ public class Configuration : IPluginConfiguration
     public bool ShowInfoLog { get; set; } = true;
     public bool ShowDebugLog { get; set; } = true;
     public bool ShowErrorLog { get; set; } = true;
+    public bool JumpToBottom { get; set; } = true;
 
     // the below exist just to make saving less cumbersome
     [NonSerialized]

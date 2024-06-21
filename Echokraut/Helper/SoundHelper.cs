@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Dalamud.Game;
@@ -51,11 +52,11 @@ public class SoundHelper : IDisposable
             this.loadSoundFileHook =
                 gameInterop.HookFromAddress<LoadSoundFileDelegate>(loadSoundFilePtr, LoadSoundFileDetour);
             this.loadSoundFileHook.Enable();
-            LogHelper.Debug("Hooked into LoadSoundFile");
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Hooked into LoadSoundFile");
         }
         else
         {
-            LogHelper.Error("Failed to hook into LoadSoundFile");
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Failed to hook into LoadSoundFile");
         }
 
         if (sigScanner.TryScanText(PlaySpecificSoundSig, out var playSpecificSoundPtr))
@@ -63,11 +64,11 @@ public class SoundHelper : IDisposable
             this.playSpecificSoundHook =
                 gameInterop.HookFromAddress<PlaySpecificSoundDelegate>(playSpecificSoundPtr, PlaySpecificSoundDetour);
             this.playSpecificSoundHook.Enable();
-            LogHelper.Debug("Hooked into PlaySpecificSound");
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Hooked into PlaySpecificSound");
         }
         else
         {
-            LogHelper.Error("Failed to hook into PlaySpecificSound");
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Failed to hook into PlaySpecificSound");
         }
     }
 
@@ -98,7 +99,7 @@ public class SoundHelper : IDisposable
 
                     if (!IgnoredSoundFileNameRegex.IsMatch(fileName))
                     {
-                        LogHelper.Debug($"Loaded sound: {fileName}");
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Loaded sound: {fileName}");
 
                         if (VoiceLineFileNameRegex.IsMatch(fileName))
                         {
@@ -108,7 +109,7 @@ public class SoundHelper : IDisposable
 
                     if (isVoiceLine)
                     {
-                        LogHelper.Debug($"Discovered voice line at address {resourceDataPtr:x}");
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Discovered voice line at address {resourceDataPtr:x}");
                         this.knownVoiceLinePtrs.Add(resourceDataPtr);
                     }
                     else
@@ -117,7 +118,7 @@ public class SoundHelper : IDisposable
                         // occupied by a voice line.
                         if (this.knownVoiceLinePtrs.Remove(resourceDataPtr))
                         {
-                            LogHelper.Debug(
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, 
                                 $"Cleared voice line from address {resourceDataPtr:x} (address reused by: {fileName})");
                         }
                     }
@@ -126,7 +127,7 @@ public class SoundHelper : IDisposable
         }
         catch (Exception exc)
         {
-            LogHelper.Error($"Error in LoadSoundFile detour: {exc}");
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error in LoadSoundFile detour: {exc}");
         }
 
         return result;
@@ -143,14 +144,14 @@ public class SoundHelper : IDisposable
             // lines are played.
             if (this.knownVoiceLinePtrs.Remove(soundDataPtr))
             {
-                LogHelper.Debug($"Caught playback of known voice line at address {soundDataPtr:x}");
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Caught playback of known voice line at address {soundDataPtr:x}");
                 this.addonTalkHandler.PollAddon(AddonPollSource.VoiceLinePlayback);
                 this.addonBattleTalkHandler.PollAddon(AddonPollSource.VoiceLinePlayback);
             }
         }
         catch (Exception exc)
         {
-            LogHelper.Error($"Error in PlaySpecificSound detour: {exc}");
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error in PlaySpecificSound detour: {exc}");
         }
 
         return result;

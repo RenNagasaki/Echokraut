@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -46,7 +47,7 @@ namespace Echokraut.Helper
         {
             if (backendType == TTSBackends.Alltalk)
             {
-                LogHelper.Info($"Creating backend instance: {backendType}");
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Creating backend instance: {backendType}");
                 backend = new AlltalkBackend(Configuration.Alltalk);
                 getAndMapVoices();
             }
@@ -55,8 +56,8 @@ namespace Echokraut.Helper
         public void OnSay(VoiceMessage voiceMessage, float volume)
         {
             BackendHelper.volume = volume;
-            LogHelper.Info("Starting voice inference: ");
-            LogHelper.Info(voiceMessage.ToString());
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Starting voice inference: ");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, voiceMessage.ToString());
             if (voiceMessage.Source == "Chat")
             {
 
@@ -67,11 +68,11 @@ namespace Echokraut.Helper
 
         public void OnCancel()
         {
-            LogHelper.Info("Stopping voice inference");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping voice inference");
             stillTalking = false;
-            playing = false;
             if (playing)
             {
+                playing = false;
                 if (activePlayer != null)
                 {
                     activePlayer.Stop();
@@ -87,7 +88,7 @@ namespace Echokraut.Helper
             {
                 if (!playing && voiceQueue.Count > 0)
                 {
-                    LogHelper.Info("Playing next Queue Item");
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Playing next Queue Item");
                     var queueItem = voiceQueue[0];
                     voiceQueue.RemoveAt(0);
                     try
@@ -104,7 +105,7 @@ namespace Echokraut.Helper
                     }
                     catch (Exception ex)
                     {
-                        LogHelper.Error($"Error while working queue: {ex}");
+                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while working queue: {ex}");
 
                         if (activePlayer != null)
                             activePlayer.Stop();
@@ -115,17 +116,17 @@ namespace Echokraut.Helper
 
         void getAndMapVoices()
         {
-            LogHelper.Info("Loading and mapping voices");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Loading and mapping voices");
             mappedVoices = backend.GetAvailableVoices();
             mappedVoices.Sort((x, y) => x.ToString().CompareTo(y.ToString()));
             mappedVoices.Insert(0, new BackendVoiceItem() { voiceName = "Remove", race = NpcRaces.Default, gender = Gender.None });
 
-            LogHelper.Info("Success");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Success");
         }
 
         public async void generateVoice(string text, string voice, string language)
         {
-            LogHelper.Info("Generating Audio");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating Audio");
 
             try
             {
@@ -145,26 +146,21 @@ namespace Echokraut.Helper
                         ready = await CheckReady();
                     }
 
-                    if (ready == "Ready")
-                    {
-                        var responseStream = await backend.GenerateAudioStreamFromVoice(textLine, voice, language);
+                    var responseStream = await backend.GenerateAudioStreamFromVoice(textLine, voice, language);
 
-                        if (stillTalking)
-                        {
-                            var s = new RawSourceWaveStream(responseStream, new WaveFormat(24000, 16, 1));
-                            voiceQueue.Add(s);
-                        }
+                    if (stillTalking)
+                    {
+                        var s = new RawSourceWaveStream(responseStream, new WaveFormat(24000, 16, 1));
+                        voiceQueue.Add(s);
                     }
-                    else
-                        LogHelper.Error("Backend did not respond in time, not ready");
                 }
             }
             catch (Exception ex)
             {
-                LogHelper.Info(ex.ToString());
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, ex.ToString());
             }
 
-            LogHelper.Info("Done");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Done");
         }
 
         public async Task<string> CheckReady()
@@ -206,7 +202,7 @@ namespace Echokraut.Helper
                 }
                 catch (Exception ex)
                 {
-                    LogHelper.Error($"Error while 'auto advance text after speech completed': {ex}");
+                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while 'auto advance text after speech completed': {ex}");
                 }
             }
         }
@@ -230,7 +226,7 @@ namespace Echokraut.Helper
                     if (voiceItems.Count == 0)
                         voiceItems = mappedVoices.FindAll(p => p.gender == npcData.gender && p.race == NpcRaces.Default && p.voiceName.Contains("npc", StringComparison.OrdinalIgnoreCase));
 
-                    mappedVoices.ForEach((voiceItem) => { LogHelper.Info(voiceItem.ToString()); });
+                    mappedVoices.ForEach((voiceItem) => { LogHelper.Info(MethodBase.GetCurrentMethod().Name, voiceItem.ToString()); });
                     if (voiceItems.Count > 0)
                     {
                         var randomVoice = voiceItems[rand.Next(0, voiceItems.Count)];
@@ -255,7 +251,7 @@ namespace Echokraut.Helper
         {
             getVoiceOrRandom(npcData);
 
-            LogHelper.Info(string.Format("Loaded voice: {0} for NPC: {1}", npcData.voiceItem.voice, npcData.name));
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, string.Format("Loaded voice: {0} for NPC: {1}", npcData.voiceItem.voice, npcData.name));
             return npcData.voiceItem.voice;
         }
     }
