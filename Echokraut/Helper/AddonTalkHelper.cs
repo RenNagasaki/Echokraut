@@ -188,6 +188,7 @@ public class AddonTalkHelper
     {
         var (speaker, text, pollSource) = state;
 
+        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonTalk ({state})");
         if (state == default)
         {
             // The addon was closed

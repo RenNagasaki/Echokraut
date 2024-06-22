@@ -23,6 +23,7 @@ using Echokraut.Helper;
 using Echokraut.Extensions;
 using Echokraut.Utils;
 using NAudio.Wave;
+using System.Reflection;
 
 namespace Echokraut;
 
@@ -40,17 +41,16 @@ public partial class Echokraut : IDalamudPlugin
     private IDataManager DataManager { get; init; }
     private IChatGui ChatGui { get; init; }
     private Configuration Configuration { get; init; }
-    public BackendHelper BackendHelper { get; init; }
 
     public readonly WindowSystem WindowSystem = new("Echokraut");
     private ConfigWindow ConfigWindow { get; init; }
 
     #region TextToTalk Base
-    private readonly AddonTalkHelper addonTalkHandler;
-    private readonly AddonBattleTalkHelper addonBattleTalkHandler;
-    private readonly VolumeHelper volumeHelper;
-    private readonly UngenderedOverrideManager ungenderedOverrides;
-    private readonly SoundHelper soundHelper;
+    internal readonly AddonTalkHelper addonTalkHelper;
+    internal readonly AddonBattleTalkHelper addonBattleTalkHelper;
+    internal readonly VolumeHelper volumeHelper;
+    internal readonly UngenderedOverrideManager ungenderedOverrides;
+    internal readonly SoundHelper soundHelper;
     #endregion
 
     public Echokraut(
@@ -82,16 +82,15 @@ public partial class Echokraut : IDalamudPlugin
         Configuration.Initialize(PluginInterface);
 
         LogHelper.Setup(log, Configuration);
-        this.BackendHelper = new BackendHelper(Configuration, this);
-        this.BackendHelper.SetBackendType(Configuration.BackendSelection);
+        BackendHelper.Setup(Configuration, this, Configuration.BackendSelection);
         this.ConfigWindow = new ConfigWindow(this, Configuration);
 
-        this.addonTalkHandler = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
-        this.addonBattleTalkHandler = new AddonBattleTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
+        this.addonTalkHelper = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
+        this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.volumeHelper = new VolumeHelper(sigScanner, gameInterop);
         this.ungenderedOverrides = new UngenderedOverrideManager();
         this.soundHelper =
-            new SoundHelper(this.addonTalkHandler, this.addonBattleTalkHandler, sigScanner, gameInterop);
+            new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, sigScanner, gameInterop);
 
         WindowSystem.AddWindow(ConfigWindow);
 
@@ -113,20 +112,21 @@ public partial class Echokraut : IDalamudPlugin
 
     public void Cancel()
     {
-        Log.Info($"Stopping Inference");
-
         if (Configuration.CancelSpeechOnTextAdvance)
-            this.BackendHelper.OnCancel();
+        {
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Stopping Inference");
+            BackendHelper.OnCancel();
+        }
     }
 
     public void StopLipSync()
     {
-        addonTalkHandler.StopLipSync();
+        addonTalkHelper.StopLipSync();
     }
 
     public void Say(GameObject? speaker, SeString speakerName, string textValue, TextSource source)
     {
-        Log.Info($"Preparing for Inference: {speakerName} - {textValue} - {source}");
+        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Preparing for Inference: {speakerName} - {textValue} - {source}");
         // Run a preprocessing pipeline to clean the text for the speech synthesizer
         var cleanText = FunctionalUtils.Pipe(
             textValue,
@@ -136,7 +136,7 @@ public partial class Echokraut : IDalamudPlugin
             t => this.Configuration.RemoveStutters ? TalkUtils.RemoveStutters(t) : t,
             x => x.Trim()).Replace("/", "Schrägstrich ");
 
-        Log.Info($"Cleantext: {cleanText}");
+        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleantext: {cleanText}");
         // Ensure that the result is clean; ignore it otherwise
         if (!cleanText.Any() || !TalkUtils.IsSpeakable(cleanText))
         {
@@ -170,7 +170,7 @@ public partial class Echokraut : IDalamudPlugin
         else
             npcData = resNpcData;
 
-        Log.Info($"NpcData: {npcData}");
+        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"NpcData: {npcData}");
         // Say the thing
         var voiceMessage = new VoiceMessage
         {
@@ -181,12 +181,7 @@ public partial class Echokraut : IDalamudPlugin
             Language = this.ClientState.ClientLanguage.ToString()
         };
         var volume = volumeHelper.GetVoiceVolume();
-        this.BackendHelper.OnSay(voiceMessage, volume);
-
-        char[] delimiters = new char[] {' '};
-        var count = cleanText.Split(delimiters, StringSplitOptions.RemoveEmptyEntries).Length;
-        var estimatedLength = count / 2.1f;
-        addonTalkHandler.TriggerLipSync(voiceMessage.Speaker.name, estimatedLength);
+        BackendHelper.OnSay(voiceMessage, volume);
     }
 
     private unsafe NpcRaces GetSpeakerRace(GameObject? speaker)
@@ -205,7 +200,7 @@ public partial class Echokraut : IDalamudPlugin
         if (!(row is null))
         {
             string raceStr = DataHelper.getRaceEng(row.Masculine.RawString, Log);
-            Log.Info($"Found Race: {raceStr}");
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found Race: {raceStr}");
             if (!Enum.TryParse(typeof(NpcRaces), raceStr, out raceEnum))
             {
                 var modelData = charaStruct->CharacterData.ModelSkeletonId;
@@ -229,7 +224,7 @@ public partial class Echokraut : IDalamudPlugin
             }   
         }
 
-        Log.Info($"Determined Race: {raceEnum}");
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Determined Race: {raceEnum}");
         return (NpcRaces)raceEnum;
     }
 
@@ -248,8 +243,9 @@ public partial class Echokraut : IDalamudPlugin
 
     public void Dispose()
     {
-        this.addonTalkHandler.Dispose();
-        this.addonBattleTalkHandler.Dispose();
+        BackendHelper.Dispose();
+        this.addonTalkHelper.Dispose();
+        this.addonBattleTalkHelper.Dispose();
         this.soundHelper.Dispose();
         this.Configuration.Save();
         WindowSystem.RemoveAllWindows();

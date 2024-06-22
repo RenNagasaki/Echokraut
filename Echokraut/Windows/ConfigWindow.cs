@@ -29,8 +29,8 @@ public class ConfigWindow : Window, IDisposable
     public ConfigWindow(Echokraut plugin, Configuration configuration) : base("Echokraut configuration###EKSettings")
     {
         this.plugin = plugin;
-        Flags = ImGuiWindowFlags.AlwaysVerticalScrollbar & ImGuiWindowFlags.AlwaysHorizontalScrollbar;
 
+        Flags = ImGuiWindowFlags.AlwaysVerticalScrollbar & ImGuiWindowFlags.HorizontalScrollbar & ImGuiWindowFlags.AlwaysHorizontalScrollbar;
         Size = new Vector2(540, 480);
         SizeCondition = ImGuiCond.FirstUseEver;
 
@@ -131,7 +131,7 @@ public class ConfigWindow : Window, IDisposable
                 var backendSelection = backends[presetIndex];
                 this.Configuration.BackendSelection = backendSelection; 
                 this.Configuration.Save();
-                this.plugin.BackendHelper.SetBackendType(backendSelection);
+                BackendHelper.SetBackendType(backendSelection);
 
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated backendselection to: {Constants.BACKENDS[presetIndex]}");
             }
@@ -163,7 +163,7 @@ public class ConfigWindow : Window, IDisposable
         try
         {
             if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
-                testConnectionRes = await plugin.BackendHelper.CheckReady();
+                testConnectionRes = await BackendHelper.CheckReady();
             else
                 testConnectionRes = "No backend selected";
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Connection test result: {testConnectionRes}");
@@ -180,7 +180,7 @@ public class ConfigWindow : Window, IDisposable
         try
         {
             if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
-              plugin.BackendHelper.SetBackendType(this.Configuration.BackendSelection);
+              BackendHelper.SetBackendType(this.Configuration.BackendSelection);
         }
         catch (Exception ex)
         {
@@ -190,7 +190,7 @@ public class ConfigWindow : Window, IDisposable
 
     private void DrawNpcs()
     {
-        var voices = plugin.BackendHelper.mappedVoices;
+        var voices = BackendHelper.mappedVoices;
         var voicesDisplay = voices.Select(b => b.ToString()).ToArray();
         NpcMapData toBeRemoved = null;
         foreach (NpcMapData mapData in Configuration.MappedNpcs)
@@ -251,7 +251,7 @@ public class ConfigWindow : Window, IDisposable
                 this.Configuration.Save();
             }
             var jumpToBottom = this.Configuration.JumpToBottom;
-            if (ImGui.Checkbox("Show error logs", ref jumpToBottom))
+            if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
             {
                 this.Configuration.JumpToBottom = jumpToBottom;
                 this.Configuration.Save();
@@ -259,21 +259,20 @@ public class ConfigWindow : Window, IDisposable
         }
         if (ImGui.CollapsingHeader("Log:"))
         {
-            Dictionary<DateTime, string> logMessages = LogHelper.logList;
+            Dictionary<DateTime, LogMessage> logMessages = LogHelper.logList;
 
             if (ImGui.BeginChild("LogsChild"))
             {
                 foreach (var logMessage in logMessages)
                 {
-                    Vector4 col = logMessage.Value.Substring(0, 3) == "INF" ? new Vector4(0.01f, 0.8f, 1.0f, 1f) :
-                        logMessage.Value.Substring(0, 3) == "DBG" ? new Vector4(0.0f, 1.0f, 0.0f, 1f) :
-                            logMessage.Value.Substring(0, 3) == "ERR" ? new Vector4(1.0f, 0.0f, 0.0f, 1f) : new Vector4(1.0f, 1.0f, 1.0f, 1f);
-
-                    ImGui.TextColored(col, $"{logMessage.Key.ToShortTimeString()}: {logMessage.Value.Substring(3)}");
+                    var text = $"{logMessage.Key.ToString("HH:mm:ss.fff")}: {logMessage.Value.message}";
+                    ImGui.TextColored(logMessage.Value.color, text);
                 }
 
                 if (Configuration.JumpToBottom)
+                {
                     ImGui.SetScrollHereY();
+                }
             }
         }
     }

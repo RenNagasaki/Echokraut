@@ -12,10 +12,10 @@ namespace Echokraut.Helper
     {
         private static IPluginLog Log;
         private static Configuration Config;
-        private static Dictionary<DateTime, string> InfoLogs = new Dictionary<DateTime, string>();
-        private static Dictionary<DateTime, string> DebugLogs = new Dictionary<DateTime, string>();
-        private static Dictionary<DateTime, string> ErrorLogs = new Dictionary<DateTime, string>();
-        public static Dictionary<DateTime, string> logList = new Dictionary<DateTime, string>();
+        private static Dictionary<DateTime, LogMessage> InfoLogs = new Dictionary<DateTime, LogMessage>();
+        private static Dictionary<DateTime, LogMessage> DebugLogs = new Dictionary<DateTime, LogMessage>();
+        private static Dictionary<DateTime, LogMessage> ErrorLogs = new Dictionary<DateTime, LogMessage>();
+        public static Dictionary<DateTime, LogMessage> logList = new Dictionary<DateTime, LogMessage>();
 
         public static void Setup(IPluginLog log, Configuration config)
         {
@@ -26,10 +26,10 @@ namespace Echokraut.Helper
         public static void Info(string method, string text)
         {
             text = $"{method} - {text}";
-            InfoLogs.Add(DateTime.Now, $"INF{text}");
+            InfoLogs.Add(DateTime.Now, new LogMessage() { message = $"{text}", color = Constants.INFOLOGCOLOR });
 
             if (Config.ShowInfoLog)
-                logList.Add(DateTime.Now, $"INF{text}");
+                logList.Add(DateTime.Now, new LogMessage() { message = $"{text}", color = Constants.INFOLOGCOLOR });
 
             Log.Info(text);
         }
@@ -37,10 +37,10 @@ namespace Echokraut.Helper
         public static void Debug(string method, string text)
         {
             text = $"{method} - {text}";
-            DebugLogs.Add(DateTime.Now, $"DBG{text}");
+            DebugLogs.Add(DateTime.Now, new LogMessage() { message = $"{text}", color = Constants.DEBUGLOGCOLOR });
 
             if (Config.ShowDebugLog)
-                logList.Add(DateTime.Now, $"DBG{text}");
+                logList.Add(DateTime.Now, new LogMessage() { message = $"{text}", color = Constants.DEBUGLOGCOLOR });
 
             Log.Debug(text);
         }
@@ -48,10 +48,10 @@ namespace Echokraut.Helper
         public static void Error(string method, string text)
         {
             text = $"{method} - {text}";
-            ErrorLogs.Add(DateTime.Now, $"ERR{text}");
+            ErrorLogs.Add(DateTime.Now, new LogMessage() { message = $"{text}", color = Constants.ERRORLOGCOLOR });
 
             if (Config.ShowErrorLog)
-                logList.Add(DateTime.Now, $"ERR{text}");
+                logList.Add(DateTime.Now, new LogMessage() { message = $"{text}", color = Constants.ERRORLOGCOLOR });
 
             Log.Error(text);
         }
@@ -59,7 +59,7 @@ namespace Echokraut.Helper
         public static void RecreateLogList()
         {
             List<DateTime> logListKeys = new List<DateTime>();
-            logList = new Dictionary<DateTime, string>();
+            logList = new Dictionary<DateTime, LogMessage>();
 
             if (Config.ShowInfoLog)
                 logListKeys.AddRange(LogHelper.InfoLogs.Keys.ToList());
@@ -69,10 +69,10 @@ namespace Echokraut.Helper
                 logListKeys.AddRange(LogHelper.ErrorLogs.Keys.ToList());
 
             logListKeys.Sort();
-            logListKeys.ForEach(key => logList.Add(key, 
-                InfoLogs.ContainsKey(key) && Config.ShowInfoLog ? InfoLogs[key] : 
-                    DebugLogs.ContainsKey(key) && Config.ShowDebugLog ? DebugLogs[key] : 
-                        ErrorLogs.ContainsKey(key) && Config.ShowErrorLog ? ErrorLogs[key] : ""));
+            logListKeys.ForEach(key => logList.Add(key,
+                InfoLogs.ContainsKey(key) && Config.ShowInfoLog ? InfoLogs[key] :
+                    DebugLogs.ContainsKey(key) && Config.ShowDebugLog ? DebugLogs[key] :
+                        ErrorLogs.ContainsKey(key) && Config.ShowErrorLog ? ErrorLogs[key] : new LogMessage() { message = "", color = new System.Numerics.Vector4(0, 0, 0, 0) }));
         }
     }
 }
