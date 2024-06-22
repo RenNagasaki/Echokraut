@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text.RegularExpressions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
@@ -20,11 +21,15 @@ namespace Echokraut.TextToTalk.Utils
         [GeneratedRegex(@"(?<=\s|^)(\p{L}{1,2})-(?=\1)", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
         private static partial Regex StutterRegex();
 
+        [GeneratedRegex(@"(?<=[ ]+)([XILMV]+)(?=[\.]+)", RegexOptions.Compiled)]
+        private static partial Regex RomanNumeralsRegex();
+
         [GeneratedRegex("<[^<]*>", RegexOptions.Compiled)]
         private static partial Regex BracketedRegex();
 
         private static readonly Regex Speakable = SpeakableRegex();
         private static readonly Regex Stutter = StutterRegex();
+        private static readonly Regex RomanNumerals = StutterRegex();
         private static readonly Regex Bracketed = BracketedRegex();
 
         public static unsafe AddonTalkText ReadTalkAddon(AddonTalk* talkAddon)
@@ -158,6 +163,27 @@ namespace Echokraut.TextToTalk.Utils
             if (startsCapitalized && !isCapitalized)
             {
                 text = char.ToUpper(text[0]) + text[1..];
+            }
+
+            return text;
+        }
+
+        public static string ReplaceRomanNumbers(string text)
+        {
+            try
+            {
+                var romanNumerals = RomanNumerals.Match(text);
+                if (romanNumerals.Success)
+                {
+                    var romanNumeralsText = romanNumerals.Value;
+                    var value = RomanNumeralsHelper.RomanNumeralsToInt(romanNumeralsText);
+
+                    text = text.Replace(romanNumeralsText, value.ToString());
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}");
             }
 
             return text;

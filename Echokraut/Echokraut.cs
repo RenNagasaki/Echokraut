@@ -136,6 +136,8 @@ public partial class Echokraut : IDalamudPlugin
             t => this.Configuration.RemoveStutters ? TalkUtils.RemoveStutters(t) : t,
             x => x.Trim()).Replace("/", "Schrägstrich ");
 
+        cleanText = TalkUtils.ReplaceRomanNumbers(cleanText);
+
         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleantext: {cleanText}");
         // Ensure that the result is clean; ignore it otherwise
         if (!cleanText.Any() || !TalkUtils.IsSpeakable(cleanText))
