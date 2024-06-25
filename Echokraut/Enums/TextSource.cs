@@ -6,5 +6,7 @@ namespace Echokraut.Enums
         Chat,
         AddonTalk,
         AddonBattleTalk,
+        AddonSelectString,
+        AddonCutSceneSelectString
     }
 }

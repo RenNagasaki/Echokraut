@@ -15,11 +15,12 @@ public class Configuration : IPluginConfiguration
     public TTSBackends BackendSelection { get; set; } = TTSBackends.Alltalk;
     public AlltalkData Alltalk { get; set; } = new AlltalkData();
     public List<NpcMapData> MappedNpcs { get; set; } = new List<NpcMapData>();
-    public bool Enabled { get; set; } = false;
-    public bool VoiceBattleDialog { get; set; } = false;
-    public bool VoiceDialog { get; set; } = false;
+    public bool Enabled { get; set; } = true;
+    public bool VoiceBattleDialog { get; set; } = true;
+    public bool VoiceDialog { get; set; } = true;
+    public bool VoicePlayerDialog { get; set; } = true;
     public bool CancelSpeechOnTextAdvance { get; set; } = true;
-    public bool AutoAdvanceTextAfterSpeechCompleted { get; set; } = false;
+    public bool AutoAdvanceTextAfterSpeechCompleted { get; set; } = true;
     public bool RemoveStutters { get; set; } = true;
     public bool ShowInfoLog { get; set; } = true;
     public bool ShowDebugLog { get; set; } = true;

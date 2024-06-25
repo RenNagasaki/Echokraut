@@ -137,7 +137,7 @@ namespace Echokraut.Helper
                         char[] delimiters = new char[] { ' ' };
                         var count = queueItemText.Text.Split(delimiters, StringSplitOptions.RemoveEmptyEntries).Length;
                         var estimatedLength = count / 2.1f;
-                        Plugin.addonTalkHelper.TriggerLipSync(queueItemText.Speaker.name, estimatedLength);
+                        Plugin.lipSyncHelper.TriggerLipSync(queueItemText.Speaker.name, estimatedLength);
                         playing = true;
                     }
                     catch (Exception ex)

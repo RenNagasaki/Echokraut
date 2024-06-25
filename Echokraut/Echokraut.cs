@@ -48,9 +48,12 @@ public partial class Echokraut : IDalamudPlugin
     #region TextToTalk Base
     internal readonly AddonTalkHelper addonTalkHelper;
     internal readonly AddonBattleTalkHelper addonBattleTalkHelper;
+    internal readonly AddonSelectStringHelper addonSelectStringHelper;
+    internal readonly AddonCutSceneSelectStringHelper addonCutSceneSelectStringHelper;
     internal readonly VolumeHelper volumeHelper;
     internal readonly UngenderedOverrideManager ungenderedOverrides;
     internal readonly SoundHelper soundHelper;
+    internal readonly LipSyncHelper lipSyncHelper;
     #endregion
 
     public Echokraut(
@@ -87,10 +90,12 @@ public partial class Echokraut : IDalamudPlugin
 
         this.addonTalkHelper = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
+        this.addonSelectStringHelper = new AddonSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
+        this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.volumeHelper = new VolumeHelper(sigScanner, gameInterop);
         this.ungenderedOverrides = new UngenderedOverrideManager();
-        this.soundHelper =
-            new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, sigScanner, gameInterop);
+        this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, sigScanner, gameInterop);
+        this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration);
 
         WindowSystem.AddWindow(ConfigWindow);
 
@@ -121,7 +126,7 @@ public partial class Echokraut : IDalamudPlugin
 
     public void StopLipSync()
     {
-        addonTalkHelper.StopLipSync();
+        lipSyncHelper.StopLipSync();
     }
 
     public void Say(GameObject? speaker, SeString speakerName, string textValue, TextSource source)

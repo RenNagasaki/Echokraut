@@ -10,6 +10,9 @@ using Echokraut.Helper;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using Lumina.Data.Parsing;
+using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentHousingPlant;
+using static System.Windows.Forms.Design.AxImporter;
 
 namespace Echokraut.TextToTalk.Utils
 {
@@ -47,6 +50,42 @@ namespace Echokraut.TextToTalk.Utils
             {
                 Speaker = ReadTextNode(talkAddon->AtkTextNode220),
                 Text = ReadTextNode(talkAddon->AtkTextNode228),
+            };
+        }
+
+        public static unsafe AddonTalkText ReadSelectStringAddon(AddonSelectString* selectStringAddon)
+        {
+            var list = selectStringAddon->PopupMenu.PopupMenu.List;
+            if (list is null) return null;
+            var selectedItemIndex = list->SelectedItemIndex;
+            if (selectedItemIndex < 0 || selectedItemIndex >= list->GetItemCount()) return null;
+            var listItemRenderer = list->ItemRendererList[selectedItemIndex].AtkComponentListItemRenderer;
+            if (listItemRenderer is null) return null;
+            var buttonTextNode = listItemRenderer->AtkComponentButton.ButtonTextNode;
+            if (buttonTextNode is null) return null;
+            var text = ReadStringNode(buttonTextNode->NodeText);
+            return new AddonTalkText
+            {
+                Speaker = "PLAYER",
+                Text = text,
+            };
+        }
+
+        public static unsafe AddonTalkText ReadCutSceneSelectStringAddon(AddonCutSceneSelectString* cutSceneSelectStringAddon)
+        {
+            var list = cutSceneSelectStringAddon->OptionList;
+            if (list is null) return null;
+            var selectedItemIndex = list->SelectedItemIndex;
+            if (selectedItemIndex < 0 || selectedItemIndex >= list->GetItemCount()) return null;
+            var listItemRenderer = list->ItemRendererList[selectedItemIndex].AtkComponentListItemRenderer;
+            if (listItemRenderer is null) return null;
+            var buttonTextNode = listItemRenderer->AtkComponentButton.ButtonTextNode;
+            if (buttonTextNode is null) return null;
+            var text = ReadStringNode(buttonTextNode->NodeText);
+            return new AddonTalkText
+            {
+                Speaker = "PLAYER",
+                Text = text,
             };
         }
 
