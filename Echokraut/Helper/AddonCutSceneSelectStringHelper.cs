@@ -79,7 +79,9 @@ public class AddonCutSceneSelectStringHelper
         if (Address == nint.Zero)
         {
             Address = gui.GetAddonByName("CutSceneSelectString");
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonCutSceneSelectString address found: {Address}");
+
+            if (Address != nint.Zero)
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonCutSceneSelectString address found: {Address}");
         }
     }
 

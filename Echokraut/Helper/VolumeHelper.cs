@@ -5,6 +5,7 @@ using Dalamud.Logging;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
+using FFXIVClientStructs.FFXIV.Client.Sound;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using Lumina.Data.Parsing;
 using NAudio.Wave;
@@ -17,67 +18,29 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using static Dalamud.Plugin.Services.IFramework;
+using static Dalamud.Plugin.Services.IFramework;
+using static Echokraut.Helper.ClickHelper;
 
 namespace Echokraut.Helper
 {
-    internal class VolumeHelper
+    internal static class VolumeHelper
     {
-        public nint BaseAddress { get; private set; }
-        [UnmanagedFunctionPointer(CallingConvention.ThisCall)]
-        public delegate nint GetVolumeDelegate(nint baseAddress, ulong kind, ulong value, ulong unk1, ulong unk2, ulong unk3);
-        private readonly Hook<GetVolumeDelegate>? getVolumeHook;
 
-        public VolumeHelper(ISigScanner scanner, IGameInteropProvider gameInterop)
+        public static unsafe float GetVoiceVolume()
         {
-            try
+            var voiceVolume = .5f;
+            var masterVolume = .5f;
+            if (Framework.Instance() != null && Framework.Instance()->SoundManager != null)
             {
-                // I thought I'd need the user to change the settings manually once to get the the base address,
-                // but the function is automatically called once when the player is initialized, so I'll settle for that.
-                // Note to self: Cheat Engine's "Select current function" tool is unreliable, don't waste time with it.
-                // This signature is probably stable, but the option struct offsets need to be updated after some patches.
-                var setConfigurationPtr =
-                    scanner.ScanText(
-                        "89 54 24 10 53 55 57 41 54 41 55 41 56 48 83 EC 48 8B C2 45 8B E0 44 8B D2 45 32 F6 44 8B C2 45 32 ED");
-                var getVolume = Marshal.GetDelegateForFunctionPointer<GetVolumeDelegate>(setConfigurationPtr);
-                this.getVolumeHook = gameInterop.HookFromAddress<GetVolumeDelegate>(setConfigurationPtr,
-                    (baseAddress, kind, value, unk1, unk2, unk3) =>
-                    {
-                        if (BaseAddress != baseAddress)
-                        {
-                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Volume BaseAdress: {baseAddress}");
-                            BaseAddress = baseAddress;
-                        }
-
-                        return this.getVolumeHook!.Original(baseAddress, kind, value, unk1, unk2, unk3);
-                    });
-                this.getVolumeHook.Enable();
-            }
-            catch (Exception e)
-            {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Failed to hook configuration set method! Full error:\n{e}");
-            }
-        }
-
-        public float GetVoiceVolume()
-        {
-            var voiceVolume = 100;
-            var masterVolume = 100;
-            if (BaseAddress != IntPtr.Zero)
-            {
-                masterVolume = Marshal.ReadByte(BaseAddress, Constants.MASTERVOLUMEOFFSET);
-                voiceVolume = Marshal.ReadByte(BaseAddress, Constants.VOICEVOLUMEOFFSET);
+                masterVolume = Framework.Instance()->SoundManager->MasterVolume;
+                voiceVolume = Framework.Instance()->SoundManager->GetEffectiveVolume(SoundManager.SoundChannel.Voice);
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Master volume = {masterVolume}");
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Voice volume = {voiceVolume}");
             }
 
-            var volumeFloat = (masterVolume / 100f) * (voiceVolume / 100f);
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Voice Volume = {volumeFloat}");
+            var volumeFloat = masterVolume * voiceVolume;
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Real voice volume = {volumeFloat}");
             return volumeFloat;
-        }
-
-        public void Dispose()
-        {
-            this.getVolumeHook?.Disable();
-            this.getVolumeHook?.Dispose();
-            GC.SuppressFinalize(this);
         }
     }
 }

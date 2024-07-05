@@ -28,6 +28,10 @@ using FFXIVClientStructs.FFXIV.Client.Graphics.Render;
 using static Dalamud.Interface.Utility.Raii.ImRaii;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.Tab;
 using System.Reflection;
+using ClickLib.Enums;
+using ClickLib.Structures;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using System.Runtime.InteropServices;
 
 namespace Echokraut.Helper;
 
@@ -170,6 +174,8 @@ public class AddonTalkHelper
         var speakerObj = speaker != null ? ObjectTableUtils.GetGameObjectByName(objects, speaker) : null;
 
         BackendHelper.inDialog = true;
+        LogHelper.Debug("TalkHelper.HandleChange", "Setting inDialog true");
+
         if (speakerObj != null)
         {
             plugin.Say(speakerObj, speakerObj.Name, text, TextSource.AddonTalk);
@@ -195,6 +201,11 @@ public class AddonTalkHelper
     private unsafe AddonTalk* GetAddonTalk()
     {
         return (AddonTalk*)Address.ToPointer();
+    }
+
+    public void Click()
+    {
+        ClickHelper.Click(Address);
     }
 
     public void Dispose()

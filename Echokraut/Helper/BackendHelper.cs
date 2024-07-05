@@ -253,13 +253,17 @@ namespace Echokraut.Helper
                 try
                 {
                     if (BackendHelper.inDialog)
-                        ClickHelper.Click();
+                        Plugin.addonTalkHelper.Click();
+                    else
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Not inDialog");
                 }
                 catch (Exception ex)
                 {
                     LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while 'auto advance text after speech completed': {ex}");
                 }
             }
+            else
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"No auto advance");
         }
 
         static void getVoiceOrRandom(NpcMapData npcData)

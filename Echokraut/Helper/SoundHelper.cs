@@ -7,6 +7,7 @@ using Dalamud.Game;
 using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
 using Echokraut.Enums;
+using FFXIVClientStructs.FFXIV.Client.Sound;
 using FFXIVClientStructs.FFXIV.Client.System.Resource.Handle;
 
 namespace Echokraut.Helper;
@@ -44,6 +45,7 @@ public class SoundHelper : IDisposable
     public SoundHelper(AddonTalkHelper addonTalkHandler, AddonBattleTalkHelper addonBattleTalkHandler,
         ISigScanner sigScanner, IGameInteropProvider gameInterop)
     {
+
         this.addonTalkHandler = addonTalkHandler;
         this.addonBattleTalkHandler = addonBattleTalkHandler;
 

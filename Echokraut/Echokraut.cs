@@ -50,7 +50,6 @@ public partial class Echokraut : IDalamudPlugin
     internal readonly AddonBattleTalkHelper addonBattleTalkHelper;
     internal readonly AddonSelectStringHelper addonSelectStringHelper;
     internal readonly AddonCutSceneSelectStringHelper addonCutSceneSelectStringHelper;
-    internal readonly VolumeHelper volumeHelper;
     internal readonly UngenderedOverrideManager ungenderedOverrides;
     internal readonly SoundHelper soundHelper;
     internal readonly LipSyncHelper lipSyncHelper;
@@ -92,7 +91,6 @@ public partial class Echokraut : IDalamudPlugin
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonSelectStringHelper = new AddonSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
-        this.volumeHelper = new VolumeHelper(sigScanner, gameInterop);
         this.ungenderedOverrides = new UngenderedOverrideManager();
         this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, sigScanner, gameInterop);
         this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration);
@@ -187,7 +185,7 @@ public partial class Echokraut : IDalamudPlugin
             TextTemplate = textTemplate,
             Language = this.ClientState.ClientLanguage.ToString()
         };
-        var volume = volumeHelper.GetVoiceVolume();
+        var volume = VolumeHelper.GetVoiceVolume();
         BackendHelper.OnSay(voiceMessage, volume);
     }
 
