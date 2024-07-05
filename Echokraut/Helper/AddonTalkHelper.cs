@@ -16,7 +16,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Threading;
 using Anamnesis.Memory;
-using Character = Dalamud.Game.ClientState.Objects.Types.Character;
+using Character = Dalamud.Game.ClientState.Objects.Types.ICharacter;
 using Dalamud.Game.ClientState.Objects.Types;
 using Anamnesis.Services;
 using Anamnesis.GameData.Excel;
@@ -132,6 +132,7 @@ public class AddonTalkHelper
         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonTalk ({state})");
         if (state == default)
         {
+            BackendHelper.inDialog = false;
             // The addon was closed
             plugin.Cancel();
             lastAddonSpeaker = "";
@@ -168,6 +169,7 @@ public class AddonTalkHelper
         // Find the game object this speaker is representing
         var speakerObj = speaker != null ? ObjectTableUtils.GetGameObjectByName(objects, speaker) : null;
 
+        BackendHelper.inDialog = true;
         if (speakerObj != null)
         {
             plugin.Say(speakerObj, speakerObj.Name, text, TextSource.AddonTalk);

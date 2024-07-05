@@ -11,7 +11,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using Task = System.Threading.Tasks.Task;
-using Character = Dalamud.Game.ClientState.Objects.Types.Character;
+using Character = Dalamud.Game.ClientState.Objects.Types.ICharacter;
 using Anamnesis.GameData.Excel;
 using Echokraut.DataClasses;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
@@ -27,8 +27,8 @@ namespace Echokraut.Helper
         private MemoryService _memoryService;
         private AnimationService _animationService;
         private GameDataService _gameDataService;
-        private Character currentLipsync;
-        Dictionary<Character, CancellationTokenSource> taskCancellations = new Dictionary<Character, CancellationTokenSource>();
+        private ICharacter currentLipsync;
+        Dictionary<ICharacter, CancellationTokenSource> taskCancellations = new Dictionary<ICharacter, CancellationTokenSource>();
         public List<ActionTimeline> LipSyncTypes { get; private set; }
 
         public LipSyncHelper(IClientState clientState, IObjectTable objects, Configuration config)
@@ -45,15 +45,16 @@ namespace Echokraut.Helper
 
         public async void TriggerLipSync(string npcName, float length)
         {
+            if (true) return;
             if (Conditions.IsBoundByDuty && !Conditions.IsWatchingCutscene) return;
             if (!config.Enabled) return;
 
-            GameObject npcObject = DiscoverNpc(npcName);
+            IGameObject npcObject = DiscoverNpc(npcName);
             ActorMemory actorMemory = null;
             AnimationMemory animationMemory = null;
             if (npcObject != null)
             {
-                var character = (Character)npcObject;
+                var character = (ICharacter)npcObject;
                 currentLipsync = character;
                 actorMemory = new ActorMemory();
                 actorMemory.SetAddress(character.Address);
@@ -192,6 +193,7 @@ namespace Echokraut.Helper
 
         public async void StopLipSync()
         {
+            if (true) return;
             if (Conditions.IsBoundByDuty && !Conditions.IsWatchingCutscene) return;
             if (!config.Enabled) return;
             if (currentLipsync == null) return;
@@ -236,6 +238,7 @@ namespace Echokraut.Helper
 
         private void InitializeServices()
         {
+            if (true) return;
             // Initialize all services that depend on the game process
             _memoryService = new MemoryService();
             _gameDataService = new GameDataService();
@@ -310,7 +313,7 @@ namespace Echokraut.Helper
             return 404;
         }
 
-        private GameObject DiscoverNpc(string npcName)
+        private IGameObject DiscoverNpc(string npcName)
         {
             if (npcName == "???")
             {

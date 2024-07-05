@@ -1,4 +1,4 @@
-﻿// © Anamnesis.
+// © Anamnesis.
 // Licensed under the MIT license.
 
 namespace Anamnesis.Core.Memory;
@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using Anamnesis.Memory;
+using Echokraut.Helper;
 
 #pragma warning disable SA1027, SA1025
 public class AddressService : ServiceBase<AddressService>
@@ -180,7 +181,7 @@ public class AddressService : ServiceBase<AddressService>
 			}
 			catch (Exception ex)
 			{
-				Dalamud.Logging.PluginLog.Error(ex, $"Failed to scan memory for signature: {name} (Have you tried restarting FFXIV?)");
+				LogHelper.Error("Anamnesis.AdressService.GetAddressFromSignature", $"Failed to scan memory for signature: {name} (Have you tried restarting FFXIV?) Ex: {ex}");
 			}
 		});
 	}

@@ -17,7 +17,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Text.SeStringHandling;
-using GameObject = Dalamud.Game.ClientState.Objects.Types.GameObject;
+using GameObject = Dalamud.Game.ClientState.Objects.Types.IGameObject;
 using Lumina.Excel.GeneratedSheets;
 using Echokraut.Helper;
 using Echokraut.Extensions;
@@ -30,7 +30,7 @@ namespace Echokraut;
 public partial class Echokraut : IDalamudPlugin
 {
 
-    private DalamudPluginInterface PluginInterface { get; init; }
+    private IDalamudPluginInterface PluginInterface { get; init; }
     private IPluginLog Log { get; init; }
     private ICommandManager CommandManager { get; init; }
     private IFramework Framework { get; init; }
@@ -57,18 +57,18 @@ public partial class Echokraut : IDalamudPlugin
     #endregion
 
     public Echokraut(
-        [RequiredVersion("1.0")] DalamudPluginInterface pluginInterface,
-        [RequiredVersion("1.0")] IPluginLog log,
-        [RequiredVersion("1.0")] ICommandManager commandManager,
-        [RequiredVersion("1.0")] IFramework framework,
-        [RequiredVersion("1.0")] IClientState clientState,
-        [RequiredVersion("1.0")] ICondition condition,
-        [RequiredVersion("1.0")] IObjectTable objectTable,
-        [RequiredVersion("1.0")] IDataManager dataManager,
-        [RequiredVersion("1.0")] IChatGui chatGui,
-        [RequiredVersion("1.0")] IGameGui gameGui,
-        [RequiredVersion("1.0")] ISigScanner sigScanner,
-        [RequiredVersion("1.0")] IGameInteropProvider gameInterop)
+        IDalamudPluginInterface pluginInterface,
+        IPluginLog log,
+        ICommandManager commandManager,
+        IFramework framework,
+        IClientState clientState,
+        ICondition condition,
+        IObjectTable objectTable,
+        IDataManager dataManager,
+        IChatGui chatGui,
+        IGameGui gameGui,
+        ISigScanner sigScanner,
+        IGameInteropProvider gameInterop)
     {
         PluginInterface = pluginInterface;
         CommandManager = commandManager;

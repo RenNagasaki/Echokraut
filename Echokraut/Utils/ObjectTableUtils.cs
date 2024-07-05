@@ -8,7 +8,7 @@ namespace Echokraut.Utils;
 
 public static class ObjectTableUtils
 {
-    public static GameObject? GetGameObjectByName(IObjectTable objects, SeString? name)
+    public static IGameObject? GetGameObjectByName(IObjectTable objects, SeString? name)
     {
         // Names are complicated; the name SeString can come from chat, meaning it can
         // include the cross-world icon or friend group icons or whatever else.

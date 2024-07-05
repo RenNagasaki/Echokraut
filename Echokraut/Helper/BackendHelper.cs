@@ -23,22 +23,23 @@ namespace Echokraut.Helper
 {
     public static class BackendHelper
     {
-        static private bool stopThread = false;
-        static private WasapiOut activePlayer = null;
-        static private bool playing = false;
-        static Configuration Configuration;
-        static Echokraut Plugin;
-        static float volume = 1f;
-        static public List<BackendVoiceItem> mappedVoices = null;
-        static public bool queueText = false;
-        static public Thread playingQueueThread = new Thread(workPlayingQueue);
-        static private List<RawSourceWaveStream> playingQueue = new List<RawSourceWaveStream>();
-        static private List<VoiceMessage> playingQueueText = new List<VoiceMessage>();
-        static public Thread requestingQueueThread = new Thread(workRequestingQueue);
-        static private List<VoiceMessage> requestingQueue = new List<VoiceMessage>();
-        static ITTSBackend backend;
+        public static Thread requestingQueueThread = new Thread(workRequestingQueue);
+        public static Thread playingQueueThread = new Thread(workPlayingQueue);
+        public static List<BackendVoiceItem> mappedVoices = null;
+        public static bool queueText = false;
+        public static bool inDialog = false;
+        private static List<RawSourceWaveStream> playingQueue = new List<RawSourceWaveStream>();
+        private static List<VoiceMessage> playingQueueText = new List<VoiceMessage>();
+        private static List<VoiceMessage> requestingQueue = new List<VoiceMessage>();
+        private static WasapiOut activePlayer = null;
+        private static bool stopThread = false;
+        private static bool playing = false;
         static Random rand = new Random(Guid.NewGuid().GetHashCode());
+        static Configuration Configuration;
         static bool stillTalking = false;
+        static ITTSBackend backend;
+        static float volume = 1f;
+        static Echokraut Plugin;
 
         public static void Setup(Configuration configuration, Echokraut plugin, TTSBackends backendType)
         {
@@ -251,7 +252,8 @@ namespace Echokraut.Helper
             {
                 try
                 {
-                    ClickHelper.Click();
+                    if (BackendHelper.inDialog)
+                        ClickHelper.Click();
                 }
                 catch (Exception ex)
                 {

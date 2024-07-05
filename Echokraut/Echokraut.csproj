@@ -3,7 +3,7 @@
   <Import Project="Dalamud.Plugin.Bootstrap.targets" />
 
   <PropertyGroup>
-    <Version>0.8.7.0</Version>
+    <Version>0.8.8.0</Version>
     <Description>A TTS Dalamud Plugin that breaks the silence! For self hosted TTS Services.</Description>
     <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
@@ -33,7 +33,7 @@
 
   <ItemGroup>
     <PackageReference Include="NAudio" Version="2.2.1" />
-    <PackageReference Include="R3" Version="1.1.11" />
+    <PackageReference Include="R3" Version="1.1.13" />
   </ItemGroup>
 
   <ItemGroup>
@@ -63,5 +63,9 @@
     <None Update="Resources\Echokraut.png">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="DalamudPackager" Version="2.1.13" />
   </ItemGroup>
 </Project>

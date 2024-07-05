@@ -8,7 +8,7 @@ namespace Echokraut.Utils;
 public static class CharacterGenderUtils
 {
     // TODO: Use NPC ID instead of reading the model information :(
-    public static unsafe Gender GetCharacterGender(GameObject? gObj, UngenderedOverrideManager overrides, IPluginLog log)
+    public static unsafe Gender GetCharacterGender(IGameObject? gObj, UngenderedOverrideManager overrides, IPluginLog log)
     {
         if (gObj == null || gObj.Address == nint.Zero)
         {
