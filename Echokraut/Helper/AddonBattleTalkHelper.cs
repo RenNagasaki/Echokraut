@@ -83,13 +83,10 @@ public class AddonBattleTalkHelper
             return;
         }
 
-        if (Address == nint.Zero)
-        {
             Address = gui.GetAddonByName("_BattleTalk");
 
-            if (Address != nint.Zero)
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk address found: {Address}");
-        }
+        if (Address != nint.Zero)
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk address found: {Address}");
     }
 
     private AddonBattleTalkState GetTalkAddonState(AddonPollSource pollSource)

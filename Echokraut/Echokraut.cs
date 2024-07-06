@@ -206,7 +206,7 @@ public partial class Echokraut : IDalamudPlugin
         {
             string raceStr = DataHelper.getRaceEng(row.Masculine.RawString, Log);
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found Race: {raceStr}");
-            if (!Enum.TryParse(typeof(NpcRaces), raceStr, out raceEnum))
+            if (!Enum.TryParse(typeof(NpcRaces), raceStr.Replace(" ", ""), out raceEnum))
             {
                 var modelData = charaStruct->CharacterData.ModelSkeletonId;
                 var modelData2 = charaStruct->CharacterData.ModelSkeletonId_2;

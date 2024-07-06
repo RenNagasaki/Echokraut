@@ -29,32 +29,36 @@ namespace Echokraut.Helper
         private static void ClickAddonStage(EventType type = EventType.MOUSE_CLICK)
         {
             var unitBase = (AtkUnitBase*)Address;
-            var target = AtkStage.Instance();
+            if (unitBase == null) return;
 
+            var target = AtkStage.Instance();
             var eventData = EventData.ForNormalTarget(target, unitBase);
             var inputData = InputData.Empty();
 
+            LogHelper.Debug("Clickhelper.ClickAddonStage", "Invoking receiveevent.");
             InvokeReceiveEvent(&unitBase->AtkEventListener, type, 0, eventData, inputData);
         }
 
-        /// <summary>
-        /// Invoke the receive event delegate.
-        /// </summary>
-        /// <param name="eventListener">Type receiving the event.</param>
-        /// <param name="type">Event type.</param>
-        /// <param name="which">Internal routing number.</param>
-        /// <param name="eventData">Event data.</param>
-        /// <param name="inputData">Keyboard and mouse data.</param>
         private static unsafe void InvokeReceiveEvent(AtkEventListener* eventListener, EventType type, uint which, EventData eventData, InputData inputData)
         {
             var receiveEvent = GetReceiveEvent(eventListener);
+            
+            if (receiveEvent == null) return;
+
+            LogHelper.Debug("Clickhelper.InvokeReceiveEvent", "calling receiveevent.");
             receiveEvent(eventListener, type, which, eventData.Data, inputData.Data);
         }
 
         private static unsafe ReceiveEventDelegate GetReceiveEvent(AtkEventListener* listener)
         {
-            var receiveEventAddress = new IntPtr(listener->VirtualTable->ReceiveGlobalEvent);
-            return Marshal.GetDelegateForFunctionPointer<ReceiveEventDelegate>(receiveEventAddress)!;
+            if (listener != null && listener->VirtualTable != null)
+            {
+                var receiveEventAddress = new IntPtr(listener->VirtualTable->ReceiveGlobalEvent);
+                LogHelper.Debug("Clickhelper.GetReceiveEvent", $"getting receiveevent: {receiveEventAddress}");
+                return Marshal.GetDelegateForFunctionPointer<ReceiveEventDelegate>(receiveEventAddress)!;
+            }
+
+            return null;
         }
     }
 }

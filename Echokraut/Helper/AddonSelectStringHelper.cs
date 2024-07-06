@@ -76,14 +76,9 @@ public class AddonSelectStringHelper
             return;
         }
 
-        if (Address == nint.Zero)
-        {
-            Address = gui.GetAddonByName("SelectString");
-            if (Address != nint.Zero)
-            {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonSelectString address found: {Address}");
-            }
-        }
+        Address = gui.GetAddonByName("SelectString");
+        if (Address != nint.Zero)
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonSelectString address found: {Address}");
     }
 
     private AddonSelectStringState GetSelectStringAddonState(AddonPollSource pollSource)

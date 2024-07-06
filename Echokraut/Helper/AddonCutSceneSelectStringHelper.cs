@@ -76,13 +76,10 @@ public class AddonCutSceneSelectStringHelper
             return;
         }
 
-        if (Address == nint.Zero)
-        {
-            Address = gui.GetAddonByName("CutSceneSelectString");
+        Address = gui.GetAddonByName("CutSceneSelectString");
 
-            if (Address != nint.Zero)
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonCutSceneSelectString address found: {Address}");
-        }
+        if (Address != nint.Zero)
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonCutSceneSelectString address found: {Address}");
     }
 
     private AddonCutSceneSelectStringState GetCutSceneSelectStringAddonState(AddonPollSource pollSource)

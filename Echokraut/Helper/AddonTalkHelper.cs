@@ -28,8 +28,6 @@ using FFXIVClientStructs.FFXIV.Client.Graphics.Render;
 using static Dalamud.Interface.Utility.Raii.ImRaii;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.Tab;
 using System.Reflection;
-using ClickLib.Enums;
-using ClickLib.Structures;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using System.Runtime.InteropServices;
 
@@ -103,11 +101,9 @@ public class AddonTalkHelper
             return;
         }
 
-        if (Address == nint.Zero)
-        {
-            Address = gui.GetAddonByName("Talk");
+        Address = gui.GetAddonByName("Talk");
+        if (Address != nint.Zero)
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonTalk address found: {Address}");
-        }
     }
 
     private AddonTalkState GetTalkAddonState(AddonPollSource pollSource)

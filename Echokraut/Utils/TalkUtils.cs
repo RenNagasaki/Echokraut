@@ -6,13 +6,13 @@ using System.Text.RegularExpressions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Echokraut.DataClasses;
-using Echokraut.Helper;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Lumina.Data.Parsing;
 using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentHousingPlant;
 using static System.Windows.Forms.Design.AxImporter;
+using Echokraut.Helper;
 
 namespace Echokraut.TextToTalk.Utils
 {
@@ -37,6 +37,7 @@ namespace Echokraut.TextToTalk.Utils
 
         public static unsafe AddonTalkText ReadTalkAddon(AddonTalk* talkAddon)
         {
+            if (talkAddon is null) return null;
             return new AddonTalkText
             {
                 Speaker = ReadTextNode(talkAddon->AtkTextNode220),
@@ -46,6 +47,7 @@ namespace Echokraut.TextToTalk.Utils
 
         public static unsafe AddonTalkText ReadTalkAddon(AddonBattleTalk* talkAddon)
         {
+            if (talkAddon is null) return null;
             return new AddonTalkText
             {
                 Speaker = ReadTextNode(talkAddon->AtkTextNode220),
@@ -55,6 +57,7 @@ namespace Echokraut.TextToTalk.Utils
 
         public static unsafe AddonTalkText ReadSelectStringAddon(AddonSelectString* selectStringAddon)
         {
+            if (selectStringAddon is null) return null;
             var list = selectStringAddon->PopupMenu.PopupMenu.List;
             if (list is null) return null;
             var selectedItemIndex = list->SelectedItemIndex;
@@ -73,6 +76,7 @@ namespace Echokraut.TextToTalk.Utils
 
         public static unsafe AddonTalkText ReadCutSceneSelectStringAddon(AddonCutSceneSelectString* cutSceneSelectStringAddon)
         {
+            if (cutSceneSelectStringAddon is null) return null;
             var list = cutSceneSelectStringAddon->OptionList;
             if (list is null) return null;
             var selectedItemIndex = list->SelectedItemIndex;
