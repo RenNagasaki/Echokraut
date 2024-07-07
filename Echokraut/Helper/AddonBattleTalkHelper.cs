@@ -127,6 +127,8 @@ public class AddonBattleTalkHelper
         // Notify observers that the addon state was advanced
         plugin.Cancel();
 
+
+
         text = TalkUtils.NormalizePunctuation(text);
 
         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk ({pollSource}): \"{text}\"");
