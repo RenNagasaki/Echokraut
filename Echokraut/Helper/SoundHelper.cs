@@ -37,17 +37,18 @@ public class SoundHelper : IDisposable
         @"^(bgcommon|music|sound/(battle|foot|instruments|strm|vfx|voice/Vo_Emote|zingle))/");
 
     private static readonly Regex VoiceLineFileNameRegex = new(@"^cut/.*/(vo_|voice)");
+    private static readonly Regex BattleVoiceLineFileNameRegex = new(@"^sound/.*/(Vo_Line)");
     private readonly HashSet<nint> knownVoiceLinePtrs = new();
 
-    private readonly AddonTalkHelper addonTalkHandler;
-    private readonly AddonBattleTalkHelper addonBattleTalkHandler;
+    private readonly AddonTalkHelper addonTalkHelper;
+    private readonly AddonBattleTalkHelper addonBattleTalkHelper;
 
-    public SoundHelper(AddonTalkHelper addonTalkHandler, AddonBattleTalkHelper addonBattleTalkHandler,
+    public SoundHelper(AddonTalkHelper addonTalkHelper, AddonBattleTalkHelper addonBattleTalkHelper,
         ISigScanner sigScanner, IGameInteropProvider gameInterop)
     {
 
-        this.addonTalkHandler = addonTalkHandler;
-        this.addonBattleTalkHandler = addonBattleTalkHandler;
+        this.addonTalkHelper = addonTalkHelper;
+        this.addonBattleTalkHelper = addonBattleTalkHelper;
 
         if (sigScanner.TryScanText(LoadSoundFileSig, out var loadSoundFilePtr))
         {
@@ -103,7 +104,7 @@ public class SoundHelper : IDisposable
                     {
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Loaded sound: {fileName}");
 
-                        if (VoiceLineFileNameRegex.IsMatch(fileName))
+                        if (VoiceLineFileNameRegex.IsMatch(fileName) || BattleVoiceLineFileNameRegex.IsMatch(fileName))
                         {
                             isVoiceLine = true;
                         }
@@ -147,8 +148,8 @@ public class SoundHelper : IDisposable
             if (this.knownVoiceLinePtrs.Remove(soundDataPtr))
             {
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Caught playback of known voice line at address {soundDataPtr:x}");
-                this.addonTalkHandler.PollAddon(AddonPollSource.VoiceLinePlayback);
-                this.addonBattleTalkHandler.PollAddon(AddonPollSource.VoiceLinePlayback);
+                this.addonTalkHelper.PollAddon(AddonPollSource.VoiceLinePlayback);
+                this.addonBattleTalkHelper.PollAddon(AddonPollSource.VoiceLinePlayback);
             }
         }
         catch (Exception exc)
