@@ -45,7 +45,6 @@ namespace Echokraut.Helper
 
         public async void TriggerLipSync(string npcName, float length)
         {
-            if (true) return;
             if (Conditions.IsBoundByDuty && !Conditions.IsWatchingCutscene) return;
             if (!config.Enabled) return;
 
@@ -193,7 +192,6 @@ namespace Echokraut.Helper
 
         public async void StopLipSync()
         {
-            if (true) return;
             if (Conditions.IsBoundByDuty && !Conditions.IsWatchingCutscene) return;
             if (!config.Enabled) return;
             if (currentLipsync == null) return;
@@ -238,7 +236,6 @@ namespace Echokraut.Helper
 
         private void InitializeServices()
         {
-            if (true) return;
             // Initialize all services that depend on the game process
             _memoryService = new MemoryService();
             _gameDataService = new GameDataService();
