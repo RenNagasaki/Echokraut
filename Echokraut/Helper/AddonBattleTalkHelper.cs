@@ -31,6 +31,7 @@ public class AddonBattleTalkHelper
     private readonly string name;
 
     protected nint Address { get; set; }
+    private static nint oldAddress { get; set; }
 
     // Most recent speaker/text specific to this addon
     private string? lastAddonSpeaker;
@@ -83,10 +84,12 @@ public class AddonBattleTalkHelper
             return;
         }
 
-            Address = gui.GetAddonByName("_BattleTalk");
-
-        if (Address != nint.Zero)
+        Address = gui.GetAddonByName("_BattleTalk");
+        if (Address != nint.Zero && oldAddress != Address)
+        {
+            oldAddress = Address;
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk address found: {Address}");
+        }
     }
 
     private AddonBattleTalkState GetTalkAddonState(AddonPollSource pollSource)

@@ -49,6 +49,7 @@ public class AddonTalkHelper
     private readonly string name;
 
     public static nint Address { get; set; }
+    private static nint oldAddress {  get; set; }
 
     // Most recent speaker/text specific to this addon
     private string? lastAddonSpeaker;
@@ -102,8 +103,11 @@ public class AddonTalkHelper
         }
 
         Address = gui.GetAddonByName("Talk");
-        if (Address != nint.Zero)
+        if (Address != nint.Zero && oldAddress != Address)
+        {
+            oldAddress = Address;
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonTalk address found: {Address}");
+        }
     }
 
     private AddonTalkState GetTalkAddonState(AddonPollSource pollSource)

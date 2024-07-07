@@ -28,6 +28,7 @@ public class AddonCutSceneSelectStringHelper
     private OnUpdateDelegate updateHandler;
 
     public static nint Address { get; set; }
+    private static nint oldAddress { get; set; }
     private AddonCutSceneSelectStringState lastValue;
 
     public AddonCutSceneSelectStringHelper(Echokraut plugin, IClientState clientState, ICondition condition, IGameGui gui, IFramework framework, IObjectTable objects, Configuration config)
@@ -77,9 +78,11 @@ public class AddonCutSceneSelectStringHelper
         }
 
         Address = gui.GetAddonByName("CutSceneSelectString");
-
-        if (Address != nint.Zero)
+        if (Address != nint.Zero && oldAddress != Address)
+        {
+            oldAddress = Address;
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonCutSceneSelectString address found: {Address}");
+        }
     }
 
     private AddonCutSceneSelectStringState GetCutSceneSelectStringAddonState(AddonPollSource pollSource)

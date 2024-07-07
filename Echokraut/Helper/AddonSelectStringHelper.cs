@@ -28,6 +28,7 @@ public class AddonSelectStringHelper
     private OnUpdateDelegate updateHandler;
 
     public static nint Address { get; set; }
+    private static nint oldAddress { get; set; }
     private AddonSelectStringState lastValue;
 
     public AddonSelectStringHelper(Echokraut plugin, IClientState clientState, ICondition condition, IGameGui gui, IFramework framework, IObjectTable objects, Configuration config)
@@ -77,8 +78,11 @@ public class AddonSelectStringHelper
         }
 
         Address = gui.GetAddonByName("SelectString");
-        if (Address != nint.Zero)
+        if (Address != nint.Zero && oldAddress != Address)
+        {
+            oldAddress = Address;
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonSelectString address found: {Address}");
+        }
     }
 
     private AddonSelectStringState GetSelectStringAddonState(AddonPollSource pollSource)
