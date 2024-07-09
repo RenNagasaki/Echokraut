@@ -14,6 +14,7 @@ using Dalamud.Interface;
 using Echokraut.Backend;
 using Echokraut.Helper;
 using System.Reflection;
+using System.IO;
 
 namespace Echokraut.Windows;
 
@@ -155,6 +156,36 @@ public class ConfigWindow : Window, IDisposable
 
             if (!string.IsNullOrWhiteSpace(testConnectionRes))
                 ImGui.TextColored(new(1.0f, 1.0f, 1.0f, 0.6f), $"Connection test result: {testConnectionRes}");
+        }
+
+
+        if (ImGui.CollapsingHeader("Save locally"))
+        {
+            var saveLocally = this.Configuration.SaveToLocal;
+            if (ImGui.Checkbox("Save generated audio locally", ref saveLocally))
+            {
+                this.Configuration.SaveToLocal = saveLocally;
+                this.Configuration.Save();
+            }
+            var loadLocalFirst = this.Configuration.LoadFromLocalFirst;
+            if (ImGui.Checkbox("Search audio locally first before generating", ref loadLocalFirst))
+            {
+                this.Configuration.LoadFromLocalFirst = loadLocalFirst;
+                this.Configuration.Save();
+            }
+            var createMissingLocalSave = this.Configuration.CreateMissingLocalSaveLocation;
+            if (ImGui.Checkbox("Create directory if not existing", ref createMissingLocalSave))
+            {
+                this.Configuration.CreateMissingLocalSaveLocation = createMissingLocalSave;
+                this.Configuration.Save();
+            }
+
+            string localSaveLocation = this.Configuration.LocalSaveLocation;
+            if (ImGui.InputText($"Local save path##EKSavePath", ref localSaveLocation, 40))
+            {
+                this.Configuration.LocalSaveLocation = localSaveLocation;
+                this.Configuration.Save();
+            }
         }
     }
 

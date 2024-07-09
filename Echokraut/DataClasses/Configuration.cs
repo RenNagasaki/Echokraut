@@ -26,6 +26,10 @@ public class Configuration : IPluginConfiguration
     public bool ShowDebugLog { get; set; } = true;
     public bool ShowErrorLog { get; set; } = true;
     public bool JumpToBottom { get; set; } = true;
+    public bool SaveToLocal { get; set; } = false;
+    public bool LoadFromLocalFirst { get; set; } = false;
+    public string LocalSaveLocation { get; set; } = "";
+    public bool CreateMissingLocalSaveLocation { get; set; } = false;
 
     // the below exist just to make saving less cumbersome
     [NonSerialized]

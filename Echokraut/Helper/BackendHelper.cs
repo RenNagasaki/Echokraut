@@ -4,6 +4,7 @@ using Echokraut.Backend;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
 using FFXIVClientStructs.FFXIV.Client.Graphics;
+using FFXIVClientStructs.STD.Helper;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
@@ -16,6 +17,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using static FFXIVClientStructs.FFXIV.Common.Component.BGCollision.Resource.Delegates;
 using static System.Net.Mime.MediaTypeNames;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 
@@ -28,9 +30,12 @@ namespace Echokraut.Helper
         public static List<BackendVoiceItem> mappedVoices = null;
         public static bool queueText = false;
         public static bool inDialog = false;
-        private static List<RawSourceWaveStream> playingQueue = new List<RawSourceWaveStream>();
+        private static List<Stream> playingQueue = new List<Stream>();
         private static List<VoiceMessage> playingQueueText = new List<VoiceMessage>();
         private static List<VoiceMessage> requestingQueue = new List<VoiceMessage>();
+        private static List<VoiceMessage> requestedQueue = new List<VoiceMessage>();
+        private static Stream currentlyPlayingStream = null;
+        private static VoiceMessage currentlyPlayingStreamText = null;
         private static WasapiOut activePlayer = null;
         private static bool stopThread = false;
         private static bool playing = false;
@@ -65,6 +70,17 @@ namespace Echokraut.Helper
             BackendHelper.volume = volume;
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Starting voice inference: ");
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, voiceMessage.Text.ToString());
+
+            if (Configuration.LoadFromLocalFirst && Directory.Exists(Configuration.LocalSaveLocation))
+            {
+                var result = LoadLocalAudio(voiceMessage);
+
+                if (result)
+                    return;
+            }
+            else if (!Directory.Exists(Configuration.LocalSaveLocation))
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. Save location doesn't exists: {Configuration.LocalSaveLocation}");
+
             if (voiceMessage.Source == "Chat")
             {
 
@@ -78,6 +94,7 @@ namespace Echokraut.Helper
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping voice inference");
             stillTalking = false;
             ClearRequestingQueue();
+            ClearRequestedQueue();
             ClearPlayingQueue();
             //stopGeneratingThread.Start();
             if (playing)
@@ -85,6 +102,66 @@ namespace Echokraut.Helper
                 playing = false;
                 var thread = new Thread(stopPlaying);
                 thread.Start();
+            }
+        }
+
+        public static bool LoadLocalAudio(VoiceMessage voiceMessage)
+        {
+            string filePath = GetLocalAudioPath(voiceMessage);
+
+            if (File.Exists(filePath))
+            {
+                WaveStream mainOutputStream = new WaveFileReader(filePath);
+                playingQueue.Add(mainOutputStream);
+                playingQueueText.Add(new VoiceMessage { Text = "", Speaker = new NpcMapData { name = Path.GetFileName(Path.GetFileName(Path.GetDirectoryName(filePath))) } });
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Local file found. Location: {filePath}");
+
+                return true;
+            }
+            else
+            {
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"No local file found. Location searched: {filePath}");
+            }
+
+            return false;
+        }
+
+        public static string GetLocalAudioPath(VoiceMessage voiceMessage)
+        {
+            string filePath = Configuration.LocalSaveLocation;
+            filePath += $"\\{voiceMessage.Speaker.name}\\{voiceMessage.Speaker.voiceItem.voiceName}\\{DataHelper.VoiceMessageToFileName(voiceMessage.Text)}.wav";
+
+            return filePath;
+        }
+
+        public static void WriteStreamToFile(string filePath, Stream stream)
+        {
+            try
+            {
+                stream.Position = 0;
+                var rawStream = new RawSourceWaveStream(stream, new WaveFormat(24000, 16, 1));
+
+                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                WaveFileWriter.CreateWaveFile(filePath, rawStream);
+                //using (MemoryStream memoryStream = new MemoryStream())
+                //{
+                //    using (
+                //        WaveFileWriter writer = new WaveFileWriter(memoryStream, rawStream.WaveFormat))
+                //    {
+                //        stream.CopyTo(writer);
+                //        memoryStream.Position = 0;
+
+                //        //When I try to write the memoryStream to a local file on my hard drive, the file is not readable by VLC or other audio players. 
+                //        using (FileStream filetest = new FileStream(filePath, FileMode.Create, FileAccess.Write))
+                //        {
+                //            memoryStream.WriteTo(filetest);
+                //        }
+                //    }
+                //}
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while saving audio locally: {ex.ToString()}");
             }
         }
 
@@ -104,12 +181,21 @@ namespace Echokraut.Helper
             requestingQueue.Add(voiceMessage);
         }
 
+        public static void ClearRequestedQueue()
+        {
+            requestedQueue.Clear();
+        }
+
+        public static void AddRequestedToQueue(VoiceMessage voiceMessage)
+        {
+            requestedQueue.Add(voiceMessage);
+        }
+
         static void stopPlaying()
         {
             if (activePlayer != null)
             {
                 activePlayer.PlaybackStopped -= SoundOut_PlaybackStopped;
-                activePlayer.PlaybackStopped += SoundOut_PlaybackManuallyStopped;
                 activePlayer.Stop();
             }
         }
@@ -118,16 +204,19 @@ namespace Echokraut.Helper
         {
             while (!stopThread)
             {
-                if (!playing && playingQueue.Count > 0)
+                if ((activePlayer == null || activePlayer.PlaybackState != PlaybackState.Playing) && playingQueue.Count > 0)
                 {
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Playing next queue item");
-                    var queueItem = playingQueue[0];
-                    var queueItemText = playingQueueText[0];
-                    playingQueue.RemoveAt(0);
-                    playingQueueText.RemoveAt(0);
                     try
                     {
-                        var volumeSampleProvider = new VolumeSampleProvider(queueItem.ToSampleProvider());
+                        var queueItem = playingQueue[0];
+                        var queueItemText = playingQueueText[0];
+                        playingQueueText.RemoveAt(0);
+                        playingQueue.RemoveAt(0);
+                        currentlyPlayingStream = queueItem;
+                        currentlyPlayingStreamText = queueItemText;
+                        var stream = new RawSourceWaveStream(queueItem, new WaveFormat(24000, 16, 1));
+                        var volumeSampleProvider = new VolumeSampleProvider(stream.ToSampleProvider());
                         volumeSampleProvider.Volume = volume; // double the amplitude of every sample - may go above 0dB
 
                         activePlayer = new WasapiOut(AudioClientShareMode.Shared, 0);
@@ -136,8 +225,13 @@ namespace Echokraut.Helper
                         activePlayer.Init(volumeSampleProvider);
                         activePlayer.Play();
                         char[] delimiters = new char[] { ' ' };
-                        var count = queueItemText.Text.Split(delimiters, StringSplitOptions.RemoveEmptyEntries).Length;
-                        var estimatedLength = count / 2.1f;
+
+                        var estimatedLength = 3f;
+                        if (!string.IsNullOrEmpty(queueItemText.Text))
+                        {
+                            var count = queueItemText.Text.Split(delimiters, StringSplitOptions.RemoveEmptyEntries).Length;
+                            estimatedLength = count / 1.5f;
+                        }
                         Plugin.lipSyncHelper.TriggerLipSync(queueItemText.Speaker.name, estimatedLength);
                         playing = true;
                     }
@@ -161,6 +255,7 @@ namespace Echokraut.Helper
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating next queued audio");
                     var queueItem = requestingQueue[0];
                     requestingQueue.RemoveAt(0);
+                    AddRequestedToQueue(queueItem);
 
                     generateVoice(queueItem);
                 }
@@ -193,21 +288,38 @@ namespace Echokraut.Helper
                 foreach (var textLine in splitText)
                 {
                     stillTalking = true;
-                    var ready = await CheckReady();
+
+                    var ready = "";
+                    int i = 0;
+                    while (ready != "Ready" && i < 5)
+                    {
+                        try
+                        {
+                            ready = await CheckReady();
+                        }
+                        catch (Exception ex)
+                        {
+                            LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString());
+                        }
+
+                        i++;
+                    }
+
+                    if (ready != "Ready")
+                        return;
 
                     var responseStream = await backend.GenerateAudioStreamFromVoice(textLine, voice, language);
 
-                    if (stillTalking)
+                    if (stillTalking && requestedQueue.Contains(message))
                     {
-                        var s = new RawSourceWaveStream(responseStream, new WaveFormat(24000, 16, 1));
-                        playingQueue.Add(s);
+                        playingQueue.Add(responseStream);
                         playingQueueText.Add(message);
                     }
                 }
             }
             catch (Exception ex)
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, ex.ToString());
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString());
             }
         }
 
@@ -233,20 +345,36 @@ namespace Echokraut.Helper
 
         //    return splitText;
         //}
-
-        private static void SoundOut_PlaybackManuallyStopped(object? sender, StoppedEventArgs e)
-        {
-            var soundOut = sender as WasapiOut;
-            soundOut?.Dispose();
-            playing = false;
-            Plugin.StopLipSync();
-        }
         private static void SoundOut_PlaybackStopped(object? sender, StoppedEventArgs e)
         {
+            if (currentlyPlayingStream != null)
+            {
+                if (Configuration.CreateMissingLocalSaveLocation && !Directory.Exists(Configuration.LocalSaveLocation))
+                    Directory.CreateDirectory(Configuration.LocalSaveLocation);
+
+                if (Configuration.SaveToLocal && Directory.Exists(Configuration.LocalSaveLocation))
+                {
+                    var playedText = currentlyPlayingStreamText;
+
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}");
+                    if (!string.IsNullOrWhiteSpace(playedText.Text))
+                    {
+                        var filePath = GetLocalAudioPath(playedText);
+                        var stream = currentlyPlayingStream;
+                        WriteStreamToFile(filePath, stream);
+                    }
+                }
+                else
+                {
+                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't save file locally. Save location doesn't exists: {Configuration.LocalSaveLocation}");
+                }
+            }
+
             var soundOut = sender as WasapiOut;
             soundOut?.Dispose();
             playing = false;
             Plugin.StopLipSync();
+
 
             if (Configuration.AutoAdvanceTextAfterSpeechCompleted)
             {

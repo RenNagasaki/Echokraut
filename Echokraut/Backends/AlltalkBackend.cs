@@ -50,9 +50,12 @@ namespace Echokraut.Backend
                 // Copy the sound to a new buffer and enqueue it
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Getting response...");
                 var responseStream = await res.Content.ReadAsStreamAsync().ConfigureAwait(false);
+                var saveStream = new MemoryStream();
+                await responseStream.CopyToAsync(saveStream).ConfigureAwait(false);
+                saveStream.Position = 0;
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Done");
 
-                return responseStream;
+                return saveStream;
             }
             catch (Exception ex)
             {
