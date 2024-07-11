@@ -136,6 +136,7 @@ namespace Echokraut.Helper
 
         public static void WriteStreamToFile(string filePath, Stream stream)
         {
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Saving audio locally: {filePath}");
             try
             {
                 stream.Position = 0;

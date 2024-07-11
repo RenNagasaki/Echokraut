@@ -30,10 +30,17 @@ namespace Echokraut.Helper
         {
             var voiceVolume = .5f;
             var masterVolume = .5f;
-            if (Framework.Instance() != null && Framework.Instance()->SoundManager != null)
+            var instance = Framework.Instance();
+            if (instance != null && instance->SoundManager != null)
             {
-                masterVolume = Framework.Instance()->SoundManager->MasterVolume;
-                voiceVolume = Framework.Instance()->SoundManager->GetEffectiveVolume(SoundManager.SoundChannel.Voice);
+                var soundManager = instance->SoundManager;
+                masterVolume = soundManager->MasterVolume;
+                voiceVolume = soundManager->GetEffectiveVolume(SoundManager.SoundChannel.Voice);
+                var masterEnabled = soundManager->MasterEnabled;
+                //var voiceMute = soundManager->;
+                if (!masterEnabled)
+                    return 0f;
+
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Master volume = {masterVolume}");
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Voice volume = {voiceVolume}");
             }

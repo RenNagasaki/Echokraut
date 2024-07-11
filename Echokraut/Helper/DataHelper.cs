@@ -74,7 +74,7 @@ namespace Echokraut.Helper
         {
             string fileName = voiceMessage;
             string[] temp = fileName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries);
-            fileName = String.Join("", temp).ToLower().Replace(" ", "").Replace("!", "").Replace(",", "");
+            fileName = String.Join("", temp).ToLower().Replace(" ", "").Replace("!", "").Replace(",", "").Replace("-", "").Replace("_", "");
             if (fileName.Length > 120)
                 fileName = fileName.Substring(0, 120);
 
