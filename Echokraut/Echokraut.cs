@@ -145,6 +145,7 @@ public partial class Echokraut : IDalamudPlugin
         // Ensure that the result is clean; ignore it otherwise
         if (!cleanText.Any() || !TalkUtils.IsSpeakable(cleanText))
         {
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Text not speakable: {cleanText}");
             return;
         }
 
