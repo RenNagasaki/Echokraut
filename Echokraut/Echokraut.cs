@@ -129,112 +129,135 @@ public partial class Echokraut : IDalamudPlugin
 
     public void Say(GameObject? speaker, SeString speakerName, string textValue, TextSource source)
     {
-        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Preparing for Inference: {speakerName} - {textValue} - {source}");
-        // Run a preprocessing pipeline to clean the text for the speech synthesizer
-        var cleanText = FunctionalUtils.Pipe(
-            textValue,
-            TalkUtils.StripAngleBracketedText,
-            TalkUtils.ReplaceSsmlTokens,
-            TalkUtils.NormalizePunctuation,
-            t => this.Configuration.RemoveStutters ? TalkUtils.RemoveStutters(t) : t,
-            x => x.Trim()).Replace("/", "Schrägstrich ").Replace("C'mi", "Kami");
-
-        cleanText = TalkUtils.ReplaceRomanNumbers(cleanText);
-
-        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleantext: {cleanText}");
-        // Ensure that the result is clean; ignore it otherwise
-        if (!cleanText.Any() || !TalkUtils.IsSpeakable(cleanText))
+        try
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Text not speakable: {cleanText}");
-            return;
-        }
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Preparing for Inference: {speakerName} - {textValue} - {source}");
+            // Run a preprocessing pipeline to clean the text for the speech synthesizer
+            var cleanText = FunctionalUtils.Pipe(
+                textValue,
+                TalkUtils.StripAngleBracketedText,
+                TalkUtils.ReplaceSsmlTokens,
+                TalkUtils.NormalizePunctuation,
+                t => this.Configuration.RemoveStutters ? TalkUtils.RemoveStutters(t) : t,
+                x => x.Trim()).Replace("/", "Schrägstrich ").Replace("C'mi", "Kami");
 
-        // Build a template for the text payload
-        var textTemplate = TalkUtils.ExtractTokens(cleanText, new Dictionary<string, string?>
+            cleanText = TalkUtils.ReplaceRomanNumbers(cleanText);
+
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleantext: {cleanText}");
+            // Ensure that the result is clean; ignore it otherwise
+            if (!cleanText.Any() || !TalkUtils.IsSpeakable(cleanText))
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Text not speakable: {cleanText}");
+                return;
+            }
+
+            // Build a template for the text payload
+            var textTemplate = TalkUtils.ExtractTokens(cleanText, new Dictionary<string, string?>
             {
                 { "{{FULL_NAME}}", this.ClientState.LocalPlayer?.GetFullName() },
                 { "{{FIRST_NAME}}", this.ClientState.LocalPlayer?.GetFirstName() },
                 { "{{LAST_NAME}}", this.ClientState.LocalPlayer?.GetLastName() },
             });
 
-        // Some characters have emdashes in their names, which should be treated
-        // as hyphens for the sake of the plugin.
-        var cleanSpeakerName = TalkUtils.NormalizePunctuation(speakerName.TextValue);
+            // Some characters have emdashes in their names, which should be treated
+            // as hyphens for the sake of the plugin.
+            var cleanSpeakerName = TalkUtils.NormalizePunctuation(speakerName.TextValue);
 
-        NpcMapData npcData = new NpcMapData();
-        // Get the speaker's race if it exists.
-        npcData.race = GetSpeakerRace(speaker);
-        npcData.gender = CharacterGenderUtils.GetCharacterGender(speaker, this.ungenderedOverrides, this.Log);
-        npcData.name = DataHelper.cleanUpName(cleanSpeakerName);
+            NpcMapData npcData = new NpcMapData();
+            // Get the speaker's race if it exists.
+            npcData.race = GetSpeakerRace(speaker);
+            npcData.gender = CharacterGenderUtils.GetCharacterGender(speaker, this.ungenderedOverrides, this.Log);
+            npcData.name = DataHelper.cleanUpName(cleanSpeakerName);
 
-        var resNpcData = DataHelper.getNpcMapData(Configuration.MappedNpcs, npcData);
-        if (resNpcData == null)
-        {
-            Configuration.MappedNpcs.Add(npcData);
-            Configuration.Save();
+            var resNpcData = DataHelper.getNpcMapData(Configuration.MappedNpcs, npcData);
+            if (resNpcData != null && resNpcData.race == NpcRaces.Default && npcData.race != NpcRaces.Default)
+            {
+                resNpcData.race = npcData.race;
+                Configuration.Save();
+            }
+
+            if (resNpcData == null)
+            {
+                Configuration.MappedNpcs.Add(npcData);
+                Configuration.MappedNpcs = Configuration.MappedNpcs.OrderBy(p => p.ToString(true)).ToList();
+                Configuration.Save();
+            }
+            else
+                npcData = resNpcData;
+
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"NpcData: {npcData}");
+            // Say the thing
+            var voiceMessage = new VoiceMessage
+            {
+                Source = source.ToString(),
+                Speaker = npcData,
+                Text = cleanText,
+                TextTemplate = textTemplate,
+                Language = this.ClientState.ClientLanguage.ToString()
+            };
+            var volume = VolumeHelper.GetVoiceVolume();
+
+            if (volume > 0)
+                BackendHelper.OnSay(voiceMessage, volume);
+            else
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0");
         }
-        else
-            npcData = resNpcData;
-
-        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"NpcData: {npcData}");
-        // Say the thing
-        var voiceMessage = new VoiceMessage
+        catch (Exception ex)
         {
-            Source = source.ToString(),
-            Speaker = npcData,
-            Text = cleanText,
-            TextTemplate = textTemplate,
-            Language = this.ClientState.ClientLanguage.ToString()
-        };
-        var volume = VolumeHelper.GetVoiceVolume();
-
-        if (volume > 0)
-            BackendHelper.OnSay(voiceMessage, volume);
-        else
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0");
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while starting voice inference: {ex}");
+        }
     }
 
     private unsafe NpcRaces GetSpeakerRace(GameObject? speaker)
     {
         var race = this.DataManager.GetExcelSheet<Race>();
-        if (race is null || speaker is null || speaker.Address == nint.Zero)
-        {
-            return NpcRaces.Default;
-        }
-
-        var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker.Address;
-        var speakerRace = charaStruct->DrawData.CustomizeData.Race;
-        var row = race.GetRow(speakerRace);
-
         object raceEnum = NpcRaces.Default;
-        if (!(row is null))
+
+        try
         {
-            string raceStr = DataHelper.getRaceEng(row.Masculine.RawString, Log);
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found Race: {raceStr}");
-            if (!Enum.TryParse(typeof(NpcRaces), raceStr.Replace(" ", ""), out raceEnum))
+            if (race is null || speaker is null || speaker.Address == nint.Zero)
             {
-                var modelData = charaStruct->CharacterData.ModelSkeletonId;
-                var modelData2 = charaStruct->CharacterData.ModelSkeletonId_2;
+                return NpcRaces.Default;
+            }
 
-                var activeData = modelData;
-                if (activeData == -1)
-                    activeData = modelData2;
+            var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker.Address;
+            var speakerRace = charaStruct->DrawData.CustomizeData.Race;
+            var row = race.GetRow(speakerRace);
 
-                try
+            if (!(row is null))
+            {
+                string raceStr = DataHelper.getRaceEng(row.Masculine.RawString, Log);
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found Race: {raceStr}");
+                if (!Enum.TryParse(typeof(NpcRaces), raceStr.Replace(" ", ""), out raceEnum))
                 {
-                    if (!Enum.TryParse(typeof(NpcRaces), activeData.ToString(), out raceEnum))
+                    var modelData = charaStruct->CharacterData.ModelSkeletonId;
+                    var modelData2 = charaStruct->CharacterData.ModelSkeletonId_2;
+
+                    var activeData = modelData;
+                    if (activeData == -1)
+                        activeData = modelData2;
+
+                    try
+                    {
+                        if (!Enum.TryParse(typeof(NpcRaces), activeData.ToString(), out raceEnum))
+                        {
+                            raceEnum = NpcRaces.Default;
+                        }
+                    }
+                    catch (Exception ex)
                     {
                         raceEnum = NpcRaces.Default;
                     }
                 }
-                catch (Exception ex)
-                {
-                    raceEnum = NpcRaces.Default;
-                }
-            }   
+            }
+
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Determined Race: {raceEnum}");
+        }
+        catch (Exception ex)
+        {
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while determining race: {ex}");
         }
 
-        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Determined Race: {raceEnum}");
         return (NpcRaces)raceEnum;
     }
 
@@ -246,6 +269,7 @@ public partial class Echokraut : IDalamudPlugin
         }
 
         var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker.Address;
+        if (charaStruct == null) return BodyType.Unknown;
         var speakerBodyType = charaStruct->DrawData.CustomizeData.BodyType;
         var speakerModel = charaStruct->DrawData.CustomizeData;
         return (BodyType)speakerBodyType;

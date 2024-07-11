@@ -227,7 +227,7 @@ public class ConfigWindow : Window, IDisposable
         foreach (NpcMapData mapData in Configuration.MappedNpcs)
         {
             var presetIndex = voices.IndexOf(mapData.voiceItem);
-            if (ImGui.Combo($"{mapData}##EKCBoxNPC{mapData}", ref presetIndex, voicesDisplay, voicesDisplay.Length))
+            if (ImGui.Combo($"{mapData.ToString(true)}##EKCBoxNPC{mapData}", ref presetIndex, voicesDisplay, voicesDisplay.Length))
             {
                 var newVoiceItem = voices[presetIndex];
 

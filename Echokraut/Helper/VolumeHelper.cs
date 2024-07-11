@@ -36,17 +36,27 @@ namespace Echokraut.Helper
                 var soundManager = instance->SoundManager;
                 masterVolume = soundManager->MasterVolume;
                 voiceVolume = soundManager->GetEffectiveVolume(SoundManager.SoundChannel.Voice);
-                //var masterEnabled = soundManager->MasterEnabled;
-                //var voiceMute = soundManager->;
-                //if (!masterEnabled)
+                var channelMuted = soundManager->ChannelMuted;
+                //LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Channelmuted: {channelMuted.Length}");
+                //var masterMuted = channelMuted[0];
+                //var voiceMuted = channelMuted[(int)SoundManager.SoundChannel.Voice];
+
+                //var i = 0;
+                //foreach (var channel in channelMuted)
+                //{
+                //    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"{i} muted: {channel}");
+                //    i++;
+                //}
+
+                //if (masterMuted || voiceMuted)
                 //    return 0f;
 
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Master volume = {masterVolume}");
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Voice volume = {voiceVolume}");
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Master volume: {masterVolume}");
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Voice volume: {voiceVolume}");
             }
 
             var volumeFloat = masterVolume * voiceVolume;
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Real voice volume = {volumeFloat}");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Real voice volume: {volumeFloat}");
             return volumeFloat;
         }
     }

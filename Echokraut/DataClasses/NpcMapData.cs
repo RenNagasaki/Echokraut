@@ -14,9 +14,12 @@ namespace Echokraut.DataClasses
         public Gender gender { get; set; }
         public BackendVoiceItem voiceItem { get; set; }
 
-        public override string ToString()
+        public string ToString(bool showRace = false)
         {
-            return $"{gender} - {race} - {name}";
+            if (showRace)
+                return $"{gender} - {race} - {name}";
+
+            return $"{gender} - {name}";
         }
     }
 }

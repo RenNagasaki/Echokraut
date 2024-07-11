@@ -71,7 +71,7 @@ namespace Echokraut.Helper
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Starting voice inference: ");
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, voiceMessage.Text.ToString());
 
-            if (Configuration.LoadFromLocalFirst && Directory.Exists(Configuration.LocalSaveLocation))
+            if (Configuration.LoadFromLocalFirst && Directory.Exists(Configuration.LocalSaveLocation) && voiceMessage.Speaker.voiceItem != null)
             {
                 var result = LoadLocalAudio(voiceMessage);
 
@@ -107,20 +107,27 @@ namespace Echokraut.Helper
 
         public static bool LoadLocalAudio(VoiceMessage voiceMessage)
         {
-            string filePath = GetLocalAudioPath(voiceMessage);
-
-            if (File.Exists(filePath))
+            try
             {
-                WaveStream mainOutputStream = new WaveFileReader(filePath);
-                playingQueue.Add(mainOutputStream);
-                playingQueueText.Add(new VoiceMessage { Text = "", Speaker = new NpcMapData { name = Path.GetFileName(Path.GetFileName(Path.GetDirectoryName(filePath))) } });
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Local file found. Location: {filePath}");
+                string filePath = GetLocalAudioPath(voiceMessage);
 
-                return true;
+                if (File.Exists(filePath))
+                {
+                    WaveStream mainOutputStream = new WaveFileReader(filePath);
+                    playingQueue.Add(mainOutputStream);
+                    playingQueueText.Add(new VoiceMessage { Text = "", Speaker = new NpcMapData { name = Path.GetFileName(Path.GetFileName(Path.GetDirectoryName(filePath))) } });
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Local file found. Location: {filePath}");
+
+                    return true;
+                }
+                else
+                {
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"No local file found. Location searched: {filePath}");
+                }
             }
-            else
+            catch (Exception ex)
             {
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"No local file found. Location searched: {filePath}");
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while loading local audio: {ex}");
             }
 
             return false;
@@ -129,7 +136,9 @@ namespace Echokraut.Helper
         public static string GetLocalAudioPath(VoiceMessage voiceMessage)
         {
             string filePath = Configuration.LocalSaveLocation;
-            filePath += $"\\{voiceMessage.Speaker.name}\\{voiceMessage.Speaker.voiceItem.voiceName}\\{DataHelper.VoiceMessageToFileName(voiceMessage.Text)}.wav";
+            if (!filePath.EndsWith(@"\"))
+                filePath += @"\";
+            filePath += $"{voiceMessage.Speaker.name}\\{voiceMessage.Speaker.race.ToString()}-{voiceMessage.Speaker.voiceItem?.voiceName}\\{DataHelper.VoiceMessageToFileName(voiceMessage.Text)}.wav";
 
             return filePath;
         }
@@ -227,11 +236,11 @@ namespace Echokraut.Helper
                         activePlayer.Play();
                         char[] delimiters = new char[] { ' ' };
 
-                        var estimatedLength = 3f;
+                        var estimatedLength = .5f;
                         if (!string.IsNullOrEmpty(queueItemText.Text))
                         {
                             var count = queueItemText.Text.Split(delimiters, StringSplitOptions.RemoveEmptyEntries).Length;
-                            estimatedLength = count / 1.5f;
+                            estimatedLength = count / 2.1f;
                         }
                         Plugin.lipSyncHelper.TriggerLipSync(queueItemText.Speaker.name, estimatedLength);
                         playing = true;
