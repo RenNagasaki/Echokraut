@@ -41,7 +41,7 @@ namespace Echokraut.Backend
                 query["language"] = getAlltalkLanguage(language);
                 query["output_file"] = "ignoreme.wav";
                 uriBuilder.Query = query.ToString();
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Requesting...");
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Requesting... {uriBuilder.Uri}");
                 using var req = new HttpRequestMessage(HttpMethod.Get, uriBuilder.Uri);
 
                 res = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);

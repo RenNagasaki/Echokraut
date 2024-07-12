@@ -205,6 +205,7 @@ public class AddonTalkHelper
 
     public void Click()
     {
+        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Auto advancing...");
         ClickHelper.Click(Address);
     }
 

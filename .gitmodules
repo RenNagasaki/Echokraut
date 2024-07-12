@@ -1,4 +1,6 @@
 [submodule "ClickLib"]
 	path = ClickLib
-	url = https://github.com/Limiana/ClickLib.git
-	
+	url = https://github.com/Limiana/ClickLib
+[submodule "ECommons"]
+	path = ECommons
+	url = https://github.com/NightmareXIV/ECommons

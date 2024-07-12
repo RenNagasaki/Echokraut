@@ -237,12 +237,13 @@ public partial class Echokraut : IDalamudPlugin
                     if (activeData == -1)
                         activeData = modelData2;
 
+                    var activeNpcRace = NpcRaces.Default;
                     try
                     {
-                        if (!Enum.TryParse(typeof(NpcRaces), activeData.ToString(), out raceEnum))
-                        {
+                        if (NpcRacesHelper.ModelsToRaceMap.TryGetValue(activeData, out activeNpcRace))
+                            raceEnum = activeNpcRace;
+                        else
                             raceEnum = NpcRaces.Default;
-                        }
                     }
                     catch (Exception ex)
                     {

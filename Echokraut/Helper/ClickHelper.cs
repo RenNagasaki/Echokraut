@@ -7,58 +7,21 @@ using System;
 using static FFXIVClientStructs.FFXIV.Client.Game.UI.PublicInstance;
 using Echokraut.Enums;
 using Echokraut.Utils;
+using Dalamud.Game.Addon.Lifecycle;
+using ECommons.DalamudServices;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using ECommons.UIHelpers.AddonMasterImplementations;
 
 namespace Echokraut.Helper
 {
     public unsafe static class ClickHelper
     {
-        internal unsafe delegate IntPtr ReceiveEventDelegate(AtkEventListener* eventListener, EventType evt, uint which, void* eventData, void* inputData);
-        private static nint Address = nint.Zero;
-
-        public static void Click(nint talkAddress)
+        public static void Click(nint addon)
         {
-            Address = talkAddress;
-
-            if (Address != nint.Zero)
+            if (((AtkUnitBase*)addon)->IsVisible)
             {
-                ClickAddonStage();
-
-                LogHelper.Debug("Clickhelper.Click", "Clicking dialog.");
+                new AddonMaster.Talk(addon).Click();
             }
-        }
-        private static void ClickAddonStage(EventType type = EventType.MOUSE_CLICK)
-        {
-            var unitBase = (AtkUnitBase*)Address;
-            if (unitBase == null) return;
-
-            var target = AtkStage.Instance();
-            var eventData = EventData.ForNormalTarget(target, unitBase);
-            var inputData = InputData.Empty();
-
-            LogHelper.Debug("Clickhelper.ClickAddonStage", "Invoking receiveevent.");
-            InvokeReceiveEvent(&unitBase->AtkEventListener, type, 0, eventData, inputData);
-        }
-
-        private static unsafe void InvokeReceiveEvent(AtkEventListener* eventListener, EventType type, uint which, EventData eventData, InputData inputData)
-        {
-            var receiveEvent = GetReceiveEvent(eventListener);
-            
-            if (receiveEvent == null) return;
-
-            LogHelper.Debug("Clickhelper.InvokeReceiveEvent", "calling receiveevent.");
-            receiveEvent(eventListener, type, which, eventData.Data, inputData.Data);
-        }
-
-        private static unsafe ReceiveEventDelegate GetReceiveEvent(AtkEventListener* listener)
-        {
-            if (listener != null && listener->VirtualTable != null)
-            {
-                var receiveEventAddress = new IntPtr(listener->VirtualTable->ReceiveGlobalEvent);
-                LogHelper.Debug("Clickhelper.GetReceiveEvent", $"getting receiveevent: {receiveEventAddress}");
-                return Marshal.GetDelegateForFunctionPointer<ReceiveEventDelegate>(receiveEventAddress)!;
-            }
-
-            return null;
         }
     }
 }

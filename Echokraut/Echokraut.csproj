@@ -38,6 +38,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\ECommons\ECommons\ECommons.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Resource Include="Utils\NpcRacesMap.json" />
   </ItemGroup>
 

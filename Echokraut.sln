@@ -5,6 +5,8 @@ VisualStudioVersion = 17.9.34728.123
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Echokraut", "Echokraut\Echokraut.csproj", "{13C812E9-0D42-4B95-8646-40EEBF30636F}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ECommons", "ECommons\ECommons\ECommons.csproj", "{8C2CBCA1-A2CF-4CB9-AE87-F036C9823E55}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|x64 = Debug|x64
@@ -21,6 +23,14 @@ Global
 		{13C812E9-0D42-4B95-8646-40EEBF30636F}.Release|x64.Build.0 = Release|x64
 		{13C812E9-0D42-4B95-8646-40EEBF30636F}.ReleaseForms|x64.ActiveCfg = Release|x64
 		{13C812E9-0D42-4B95-8646-40EEBF30636F}.ReleaseForms|x64.Build.0 = Release|x64
+		{8C2CBCA1-A2CF-4CB9-AE87-F036C9823E55}.Debug|x64.ActiveCfg = Debug|x64
+		{8C2CBCA1-A2CF-4CB9-AE87-F036C9823E55}.Debug|x64.Build.0 = Debug|x64
+		{8C2CBCA1-A2CF-4CB9-AE87-F036C9823E55}.DebugForms|x64.ActiveCfg = DebugForms|x64
+		{8C2CBCA1-A2CF-4CB9-AE87-F036C9823E55}.DebugForms|x64.Build.0 = DebugForms|x64
+		{8C2CBCA1-A2CF-4CB9-AE87-F036C9823E55}.Release|x64.ActiveCfg = Release|x64
+		{8C2CBCA1-A2CF-4CB9-AE87-F036C9823E55}.Release|x64.Build.0 = Release|x64
+		{8C2CBCA1-A2CF-4CB9-AE87-F036C9823E55}.ReleaseForms|x64.ActiveCfg = ReleaseForms|x64
+		{8C2CBCA1-A2CF-4CB9-AE87-F036C9823E55}.ReleaseForms|x64.Build.0 = ReleaseForms|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
