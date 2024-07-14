@@ -53,30 +53,11 @@ namespace Echokraut.Backend
 
                 // Copy the sound to a new buffer and enqueue it
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Getting response...");
-                MemoryStream wavBuffered = new MemoryStream();
                 var responseStream = await res.Content.ReadAsStreamAsync().ConfigureAwait(false);
-                if (configuration.SaveToLocal)
-                {
-                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Duplicating stream...");
-                    byte[] buffer = new byte[65536];
-                    int bytesRead = responseStream.Read(buffer, 0, buffer.Length);
-                    while (bytesRead > 0)
-                    {
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Read bytes: {bytesRead}");
-                        wavBuffered.Write(buffer, 0, bytesRead);
-                        bytesRead = responseStream.Read(buffer, 0, buffer.Length);
-                    }
-                }
+                var readSeekableStream = new ReadSeekableStream(responseStream, 2146435071);
 
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Done");
-                if (configuration.SaveToLocal)
-                {
-                    wavBuffered.Seek(0, SeekOrigin.Begin);
-
-                    return wavBuffered;
-                }
-                else
-                    return responseStream;
+                return readSeekableStream;
             }
             catch (Exception ex)
             {
