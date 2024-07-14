@@ -16,9 +16,12 @@ public class Configuration : IPluginConfiguration
     public AlltalkData Alltalk { get; set; } = new AlltalkData();
     public List<NpcMapData> MappedNpcs { get; set; } = new List<NpcMapData>();
     public bool Enabled { get; set; } = true;
-    public bool VoiceBattleDialog { get; set; } = true;
     public bool VoiceDialog { get; set; } = true;
+    public bool VoiceBattleDialog { get; set; } = true;
+    public bool VoiceBattleDialogQueued { get; set; } = true;
     public bool VoicePlayerDialog { get; set; } = true;
+    public bool VoicePlayerChoicesCutscene { get; set; } = true;
+    public bool VoicePlayerChoices { get; set; } = true;
     public bool CancelSpeechOnTextAdvance { get; set; } = true;
     public bool AutoAdvanceTextAfterSpeechCompleted { get; set; } = true;
     public bool RemoveStutters { get; set; } = true;

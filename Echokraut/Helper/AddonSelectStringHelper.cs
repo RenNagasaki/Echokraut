@@ -54,7 +54,7 @@ public class AddonSelectStringHelper
     {
         UpdateAddonAddress();
         if (!config.Enabled) return;
-        if (!config.VoicePlayerDialog) return;
+        if (!config.VoicePlayerChoices) return;
         PollAddon(AddonPollSource.FrameworkUpdate);
     }
 

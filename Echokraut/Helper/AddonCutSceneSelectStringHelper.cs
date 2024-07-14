@@ -54,7 +54,7 @@ public class AddonCutSceneSelectStringHelper
     {
         UpdateAddonAddress();
         if (!config.Enabled) return;
-        if (!config.VoicePlayerDialog) return;
+        if (!config.VoicePlayerChoicesCutscene) return;
         PollAddon(AddonPollSource.FrameworkUpdate);
     }
 

@@ -12,15 +12,19 @@ using Echokraut.Enums;
 using Dalamud.Plugin.Services;
 using Echokraut.Helper;
 using System.Reflection;
+using System.Threading;
+using NAudio.Wave;
 
 namespace Echokraut.Backend
 {
     public class AlltalkBackend : ITTSBackend
     {
         AlltalkData data;
-        public AlltalkBackend(AlltalkData data)
+        Configuration configuration;
+        public AlltalkBackend(AlltalkData data, Configuration config)
         {
             this.data = data;
+            this.configuration = config;
         }
 
         public async Task<Stream> GenerateAudioStreamFromVoice(string voiceLine, string voice, string language)
@@ -49,13 +53,30 @@ namespace Echokraut.Backend
 
                 // Copy the sound to a new buffer and enqueue it
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Getting response...");
+                MemoryStream wavBuffered = new MemoryStream();
                 var responseStream = await res.Content.ReadAsStreamAsync().ConfigureAwait(false);
-                var saveStream = new MemoryStream();
-                await responseStream.CopyToAsync(saveStream).ConfigureAwait(false);
-                saveStream.Position = 0;
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Done");
+                if (configuration.SaveToLocal)
+                {
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Duplicating stream...");
+                    byte[] buffer = new byte[65536];
+                    int bytesRead = responseStream.Read(buffer, 0, buffer.Length);
+                    while (bytesRead > 0)
+                    {
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Read bytes: {bytesRead}");
+                        wavBuffered.Write(buffer, 0, bytesRead);
+                        bytesRead = responseStream.Read(buffer, 0, buffer.Length);
+                    }
+                }
 
-                return saveStream;
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Done");
+                if (configuration.SaveToLocal)
+                {
+                    wavBuffered.Seek(0, SeekOrigin.Begin);
+
+                    return wavBuffered;
+                }
+                else
+                    return responseStream;
             }
             catch (Exception ex)
             {

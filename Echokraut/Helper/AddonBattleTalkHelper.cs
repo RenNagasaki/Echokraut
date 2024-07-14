@@ -125,9 +125,8 @@ public class AddonBattleTalkHelper
         }
 
         // Notify observers that the addon state was advanced
-        plugin.Cancel();
-
-
+        if (!config.VoiceBattleDialogQueued)
+            plugin.Cancel();
 
         text = TalkUtils.NormalizePunctuation(text);
 

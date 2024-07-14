@@ -101,6 +101,24 @@ public class ConfigWindow : Window, IDisposable
                 this.Configuration.VoiceBattleDialog = voiceBattleDialog;
                 this.Configuration.Save();
             }
+            var voiceBattleDialogQueued = this.Configuration.VoiceBattleDialogQueued;
+            if (ImGui.Checkbox("Voice battle dialog in a queue", ref voiceBattleDialogQueued))
+            {
+                this.Configuration.VoiceBattleDialogQueued = voiceBattleDialogQueued;
+                this.Configuration.Save();
+            }
+            var voicePlayerChoicesCutscene = this.Configuration.VoicePlayerChoicesCutscene;
+            if (ImGui.Checkbox("Voice player choices in cutscene", ref voicePlayerChoicesCutscene))
+            {
+                this.Configuration.VoicePlayerChoicesCutscene = voicePlayerChoicesCutscene;
+                this.Configuration.Save();
+            }
+            var voicePlayerChoices = this.Configuration.VoicePlayerChoices;
+            if (ImGui.Checkbox("Voice player choices outside of cutscene", ref voicePlayerChoices))
+            {
+                this.Configuration.VoicePlayerChoices = voicePlayerChoices;
+                this.Configuration.Save();
+            }
             var cancelAdvance = this.Configuration.CancelSpeechOnTextAdvance;
             if (ImGui.Checkbox("Cancel voice on text advance", ref cancelAdvance))
             {

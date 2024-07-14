@@ -60,7 +60,7 @@ namespace Echokraut.Helper
             if (backendType == TTSBackends.Alltalk)
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Creating backend instance: {backendType}");
-                backend = new AlltalkBackend(Configuration.Alltalk);
+                backend = new AlltalkBackend(Configuration.Alltalk, Configuration);
                 getAndMapVoices();
             }
         }
