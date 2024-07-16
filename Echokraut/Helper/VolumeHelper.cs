@@ -26,7 +26,7 @@ namespace Echokraut.Helper
     internal static class VolumeHelper
     {
 
-        public static unsafe float GetVoiceVolume()
+        public static unsafe float GetVoiceVolume(IGameConfig gameConfig)
         {
             var voiceVolume = .5f;
             var masterVolume = .5f;
@@ -36,23 +36,18 @@ namespace Echokraut.Helper
                 var soundManager = instance->SoundManager;
                 masterVolume = soundManager->MasterVolume;
                 voiceVolume = soundManager->GetEffectiveVolume(SoundManager.SoundChannel.Voice);
-                var channelMuted = soundManager->ChannelMuted;
-                //LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Channelmuted: {channelMuted.Length}");
-                //var masterMuted = channelMuted[0];
-                //var voiceMuted = channelMuted[(int)SoundManager.SoundChannel.Voice];
+                var isMasterMuted = false;
+                var isVoiceMuted = false;
 
-                //var i = 0;
-                //foreach (var channel in channelMuted)
-                //{
-                //    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"{i} muted: {channel}");
-                //    i++;
-                //}
+                gameConfig.System.TryGetBool("IsSndMaster", out isMasterMuted);
+                gameConfig.System.TryGetBool("IsSndVoice", out isVoiceMuted);
 
-                //if (masterMuted || voiceMuted)
-                //    return 0f;
 
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Master volume: {masterVolume}");
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Voice volume: {voiceVolume}");
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Master volume: {(isMasterMuted ? 0f : masterVolume)}");
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Voice volume: {(isVoiceMuted ? 0f : voiceVolume)}");
+
+                if (isMasterMuted || isVoiceMuted)
+                    return 0f;
             }
 
             var volumeFloat = masterVolume * voiceVolume;

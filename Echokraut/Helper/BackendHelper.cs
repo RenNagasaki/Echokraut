@@ -5,6 +5,7 @@ using Echokraut.DataClasses;
 using Echokraut.Enums;
 using FFXIVClientStructs.FFXIV.Client.Graphics;
 using FFXIVClientStructs.STD.Helper;
+using MiniAudioEx;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
@@ -16,24 +17,28 @@ using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
+using System.Threading.Channels;
 using System.Threading.Tasks;
-using static FFXIVClientStructs.FFXIV.Common.Component.BGCollision.Resource.Delegates;
-using static System.Net.Mime.MediaTypeNames;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Echokraut.Helper
 {
     public static class BackendHelper
     {
         public static Thread requestingQueueThread = new Thread(workRequestingQueue);
+        public static Thread requestingBubbleQueueThread = new Thread(workRequestingBubbleQueue);
         public static Thread playingQueueThread = new Thread(workPlayingQueue);
+        public static Thread playingBubbleQueueThread = new Thread(workPlayingBubbleQueue);
         public static List<BackendVoiceItem> mappedVoices = null;
         public static bool queueText = false;
         public static bool inDialog = false;
         private static List<Stream> playingQueue = new List<Stream>();
         private static List<VoiceMessage> playingQueueText = new List<VoiceMessage>();
+        private static List<Stream> playingBubbleQueue = new List<Stream>();
+        private static List<VoiceMessage> playingBubbleQueueText = new List<VoiceMessage>();
         private static List<VoiceMessage> requestingQueue = new List<VoiceMessage>();
         private static List<VoiceMessage> requestedQueue = new List<VoiceMessage>();
+        private static List<VoiceMessage> requestingBubbleQueue = new List<VoiceMessage>();
+        private static List<VoiceMessage> requestedBubbleQueue = new List<VoiceMessage>();
         private static Stream currentlyPlayingStream = null;
         private static VoiceMessage currentlyPlayingStreamText = null;
         private static WasapiOut activePlayer = null;
@@ -41,17 +46,21 @@ namespace Echokraut.Helper
         private static bool playing = false;
         static Random rand = new Random(Guid.NewGuid().GetHashCode());
         static Configuration Configuration;
+        static IClientState ClientState;
         static bool stillTalking = false;
         static ITTSBackend backend;
         static float volume = 1f;
         static Echokraut Plugin;
 
-        public static void Setup(Configuration configuration, Echokraut plugin, TTSBackends backendType)
+        public static void Setup(Configuration configuration, IClientState clientState, Echokraut plugin, TTSBackends backendType)
         {
             Configuration = configuration;
+            ClientState = clientState;
             Plugin = plugin;
             playingQueueThread.Start();
+            playingBubbleQueueThread.Start();
             requestingQueueThread.Start();
+            requestingBubbleQueueThread.Start();
             SetBackendType(backendType);
         }
 
@@ -71,22 +80,20 @@ namespace Echokraut.Helper
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Starting voice inference: ");
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, voiceMessage.Text.ToString());
 
-            if (Configuration.LoadFromLocalFirst && Directory.Exists(Configuration.LocalSaveLocation) && voiceMessage.Speaker.voiceItem != null)
+            switch (voiceMessage.Source)
             {
-                var result = LoadLocalAudio(voiceMessage);
-
-                if (result)
-                    return;
+                case TextSource.Chat:
+                    break;
+                case TextSource.AddonBubble:
+                    AddRequestBubbleToQueue(voiceMessage);
+                    break;
+                case TextSource.AddonTalk:
+                case TextSource.AddonBattleTalk:
+                case TextSource.AddonCutSceneSelectString:
+                case TextSource.AddonSelectString:
+                    AddRequestToQueue(voiceMessage);
+                    break;
             }
-            else if (!Directory.Exists(Configuration.LocalSaveLocation))
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. Save location doesn't exists: {Configuration.LocalSaveLocation}");
-
-            if (voiceMessage.Source == "Chat")
-            {
-
-            }
-            else
-                AddRequestToQueue(voiceMessage);
         }
 
         public static void OnCancel()
@@ -133,6 +140,34 @@ namespace Echokraut.Helper
             return false;
         }
 
+        public static bool LoadLocalBubbleAudio(VoiceMessage voiceMessage)
+        {
+            try
+            {
+                string filePath = GetLocalAudioPath(voiceMessage);
+
+                if (File.Exists(filePath))
+                {
+                    WaveStream mainOutputStream = new WaveFileReader(filePath);
+                    playingBubbleQueue.Add(mainOutputStream);
+                    playingBubbleQueueText.Add(new VoiceMessage { pActor = voiceMessage.pActor, Text = "", Speaker = new NpcMapData { name = Path.GetFileName(Path.GetFileName(Path.GetDirectoryName(filePath))) } });
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Local file found. Location: {filePath}");
+
+                    return true;
+                }
+                else
+                {
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"No local file found. Location searched: {filePath}");
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while loading local audio: {ex}");
+            }
+
+            return false;
+        }
+
         public static string GetLocalAudioPath(VoiceMessage voiceMessage)
         {
             string filePath = Configuration.LocalSaveLocation;
@@ -149,56 +184,15 @@ namespace Echokraut.Helper
             try
             {
                 stream.Seek(0, SeekOrigin.Begin);
-                var rawStream = new RawSourceWaveStream(stream, new WaveFormat(24000, 16, 1));
+                var rawStream = new RawSourceWaveStream(stream, new NAudio.Wave.WaveFormat(24000, 16, 1));
 
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                 WaveFileWriter.CreateWaveFile(filePath, rawStream);
-                //using (MemoryStream memoryStream = new MemoryStream())
-                //{
-                //    using (
-                //        WaveFileWriter writer = new WaveFileWriter(memoryStream, rawStream.WaveFormat))
-                //    {
-                //        stream.CopyTo(writer);
-                //        memoryStream.Position = 0;
-
-                //        //When I try to write the memoryStream to a local file on my hard drive, the file is not readable by VLC or other audio players. 
-                //        using (FileStream filetest = new FileStream(filePath, FileMode.Create, FileAccess.Write))
-                //        {
-                //            memoryStream.WriteTo(filetest);
-                //        }
-                //    }
-                //}
             }
             catch (Exception ex)
             {
                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while saving audio locally: {ex.ToString()}");
             }
-        }
-
-        public static void ClearPlayingQueue()
-        {
-            playingQueue.Clear();
-            playingQueueText.Clear();
-        }
-
-        public static void ClearRequestingQueue()
-        {
-            requestingQueue.Clear();
-        }
-
-        public static void AddRequestToQueue(VoiceMessage voiceMessage)
-        {
-            requestingQueue.Add(voiceMessage);
-        }
-
-        public static void ClearRequestedQueue()
-        {
-            requestedQueue.Clear();
-        }
-
-        public static void AddRequestedToQueue(VoiceMessage voiceMessage)
-        {
-            requestedQueue.Add(voiceMessage);
         }
 
         static void stopPlaying()
@@ -225,7 +219,7 @@ namespace Echokraut.Helper
                         playingQueue.RemoveAt(0);
                         currentlyPlayingStream = queueItem;
                         currentlyPlayingStreamText = queueItemText;
-                        var stream = new RawSourceWaveStream(queueItem, new WaveFormat(24000, 16, 1));
+                        var stream = new RawSourceWaveStream(queueItem, new NAudio.Wave.WaveFormat(24000, 16, 1));
                         var volumeSampleProvider = new VolumeSampleProvider(stream.ToSampleProvider());
                         volumeSampleProvider.Volume = volume; // double the amplitude of every sample - may go above 0dB
 
@@ -256,6 +250,77 @@ namespace Echokraut.Helper
             }
         }
 
+        static void workPlayingBubbleQueue()
+        {
+            //while (!stopThread)
+            //{
+            //    if (playingBubbleQueue.Count > 0)
+            //    {
+            //        LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Playing next queue item");
+            //        try
+            //        {
+            //            var queueItem = playingBubbleQueue[0];
+            //            var queueItemText = playingBubbleQueueText[0];
+            //            playingBubbleQueueText.RemoveAt(0);
+            //            playingBubbleQueue.RemoveAt(0);
+
+            //            var pActor = queueItemText.pActor;
+            //            if (pActor != null)
+            //            {
+            //                currentlyPlayingStream = queueItem;
+            //                currentlyPlayingStreamText = queueItemText;
+            //                var stream = new RawSourceWaveStream(queueItem, new NAudio.Wave.WaveFormat(24000, 16, 1));
+
+
+            //                AudioApp audioApp = new AudioApp(24000, 1);
+            //                audioApp.Loaded += (() =>
+            //                {
+            //                    AudioSource source = new AudioSource();
+            //                    source.DopplerFactor = 0.1f;
+            //                    source.Position = new Vector3f(pActor.Position.X, pActor.Position.Y, pActor.Position.Z);
+            //                    source.MinDistance = 0.0f;
+            //                    source.MaxDistance = 200.0f;
+            //                    source.Spatial = true;
+            //                    source.AttenuationModel = AttenuationModel.Exponential;
+            //                    source.
+
+            //                    source.Play();
+            //                });
+
+            //                audioApp.Closing += (() =>
+            //                {
+            //                    if (Configuration.SaveToLocal && Directory.Exists(Configuration.LocalSaveLocation))
+            //                    {
+            //                        var playedText = currentlyPlayingStreamText;
+
+            //                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}");
+            //                        if (!string.IsNullOrWhiteSpace(playedText.Text))
+            //                        {
+            //                            var filePath = GetLocalAudioPath(playedText);
+            //                            var stream = currentlyPlayingStream;
+            //                            WriteStreamToFile(filePath, stream as ReadSeekableStream);
+            //                        }
+            //                    }
+            //                    else
+            //                    {
+            //                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't save file locally. Save location doesn't exists: {Configuration.LocalSaveLocation}");
+            //                    }
+            //                });
+
+            //                audioApp.Run();
+            //            }
+            //        }
+            //        catch (Exception ex)
+            //        {
+            //            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while working queue: {ex}");
+
+            //            if (activePlayer != null)
+            //                activePlayer.Stop();
+            //        }
+            //    }
+            //}
+        }
+
         static void workRequestingQueue()
         {
             while (!stopThread)
@@ -268,6 +333,43 @@ namespace Echokraut.Helper
                     AddRequestedToQueue(queueItem);
 
                     generateVoice(queueItem);
+                }
+            }
+        }
+
+        static void workRequestingBubbleQueue()
+        {
+            while (!stopThread) 
+            { 
+                if (requestedBubbleQueue.Count > 0)
+                {
+                    var voiceMessage = requestedBubbleQueue[0];
+                    if (Configuration.LoadFromLocalFirst) {
+                        if (Directory.Exists(Configuration.LocalSaveLocation))
+                        {
+                            if (voiceMessage.Speaker.voiceItem != null)
+                            {
+                                var result = LoadLocalBubbleAudio(voiceMessage);
+
+                                if (result)
+                                {
+                                    requestedBubbleQueue.RemoveAt(0);
+                                    continue;
+                                }
+                            }
+                            else
+                                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. No voice set.");
+                        }
+                        else if (!Directory.Exists(Configuration.LocalSaveLocation))
+                            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. Save location doesn't exists: {Configuration.LocalSaveLocation}");
+                    }
+
+                    if (!inDialog)
+                    {
+                        generateVoice(voiceMessage);
+                        requestedBubbleQueue.RemoveAt(0);
+                        Thread.Sleep(10000);
+                    }
                 }
             }
         }
@@ -289,36 +391,37 @@ namespace Echokraut.Helper
                 var text = DataHelper.analyzeAndImproveText(message.Text);
                 var voice = getVoice(message.Speaker);
                 var language = message.Language;
-                var splitText = new List<string>() { text };
-                
-                //prepareAndSentenceSplit(text).ToList();
-                //splitText.RemoveAt(splitText.Count - 1);
 
-                foreach (var textLine in splitText)
+                stillTalking = true;
+
+                var ready = "";
+                int i = 0;
+                while (ready != "Ready" && i < 5)
                 {
-                    stillTalking = true;
-
-                    var ready = "";
-                    int i = 0;
-                    while (ready != "Ready" && i < 5)
+                    try
                     {
-                        try
-                        {
-                            ready = await CheckReady();
-                        }
-                        catch (Exception ex)
-                        {
-                            LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString());
-                        }
-
-                        i++;
+                        ready = await CheckReady();
+                    }
+                    catch (Exception ex)
+                    {
+                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString());
                     }
 
-                    if (ready != "Ready")
-                        return;
+                    i++;
+                }
 
-                    var responseStream = await backend.GenerateAudioStreamFromVoice(textLine, voice, language);
+                if (ready != "Ready")
+                    return;
 
+                var responseStream = await backend.GenerateAudioStreamFromVoice(text, voice, language);
+
+                if (message.Source == TextSource.AddonBubble)
+                {
+                    playingBubbleQueue.Add(responseStream);
+                    playingBubbleQueueText.Add(message);
+                }
+                else
+                {
                     if (stillTalking && requestedQueue.Contains(message))
                     {
                         playingQueue.Add(responseStream);
@@ -336,24 +439,6 @@ namespace Echokraut.Helper
         {
             return await backend.CheckReady();
         }
-
-        //private string[] prepareAndSentenceSplit(string text)
-        //{
-        //    text = text.Replace("...", ",,,");
-        //    text = text.Replace("..", ",,");
-        //    text = text.Replace(".", "D0T.");
-        //    text = text.Replace("!", "EXC!");
-        //    text = text.Replace("?", "QUEST?");
-
-        //    var splitText = text.Split(Constants.SENTENCESEPARATORS);
-
-        //    for (var i = 0; i < splitText.Length; i++)
-        //    {
-        //        splitText[i] = splitText[i].Replace(",,,", "...").Replace(",,", "..").Replace("D0T", ".").Replace("EXC", "!").Replace("QUEST", "?").Trim();
-        //    }
-
-        //    return splitText;
-        //}
         private static void SoundOut_PlaybackStopped(object? sender, StoppedEventArgs e)
         {
             if (currentlyPlayingStream != null)
@@ -453,6 +538,47 @@ namespace Echokraut.Helper
 
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, string.Format("Loaded voice: {0} for NPC: {1}", npcData.voiceItem.voice, npcData.name));
             return npcData.voiceItem.voice;
+        }
+
+        public static void AddRequestToQueue(VoiceMessage voiceMessage)
+        {
+            if (Configuration.LoadFromLocalFirst && Directory.Exists(Configuration.LocalSaveLocation) && voiceMessage.Speaker.voiceItem != null)
+            {
+                var result = LoadLocalAudio(voiceMessage);
+
+                if (result)
+                    return;
+            }
+            else if (!Directory.Exists(Configuration.LocalSaveLocation))
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. Save location doesn't exists: {Configuration.LocalSaveLocation}");
+
+            requestingQueue.Add(voiceMessage);
+        }
+
+        public static void AddRequestedToQueue(VoiceMessage voiceMessage)
+        {
+            requestedQueue.Add(voiceMessage);
+        }
+
+        public static void AddRequestBubbleToQueue(VoiceMessage voiceMessage)
+        {
+            requestedBubbleQueue.Add(voiceMessage);
+        }
+
+        public static void ClearPlayingQueue()
+        {
+            playingQueue.Clear();
+            playingQueueText.Clear();
+        }
+
+        public static void ClearRequestingQueue()
+        {
+            requestingQueue.Clear();
+        }
+
+        public static void ClearRequestedQueue()
+        {
+            requestedQueue.Clear();
         }
 
         public static void Dispose()

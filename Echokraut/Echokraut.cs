@@ -24,6 +24,7 @@ using Echokraut.Extensions;
 using Echokraut.Utils;
 using NAudio.Wave;
 using System.Reflection;
+using MiniAudioEx;
 
 namespace Echokraut;
 
@@ -38,6 +39,7 @@ public partial class Echokraut : IDalamudPlugin
     private ICondition Condition { get; init; }
     private IObjectTable ObjectTable { get; init; }
     private IGameGui GameGui { get; init; }
+    private IGameConfig GameConfig { get; init; }
     private IDataManager DataManager { get; init; }
     private IChatGui ChatGui { get; init; }
     private Configuration Configuration { get; init; }
@@ -50,6 +52,7 @@ public partial class Echokraut : IDalamudPlugin
     internal readonly AddonBattleTalkHelper addonBattleTalkHelper;
     internal readonly AddonSelectStringHelper addonSelectStringHelper;
     internal readonly AddonCutSceneSelectStringHelper addonCutSceneSelectStringHelper;
+    internal readonly AddonBubbleHelper addonBubbleHelper;
     internal readonly UngenderedOverrideManager ungenderedOverrides;
     internal readonly SoundHelper soundHelper;
     internal readonly LipSyncHelper lipSyncHelper;
@@ -67,7 +70,8 @@ public partial class Echokraut : IDalamudPlugin
         IChatGui chatGui,
         IGameGui gameGui,
         ISigScanner sigScanner,
-        IGameInteropProvider gameInterop)
+        IGameInteropProvider gameInterop,
+        IGameConfig gameConfig)
     {
         PluginInterface = pluginInterface;
         CommandManager = commandManager;
@@ -78,19 +82,21 @@ public partial class Echokraut : IDalamudPlugin
         DataManager = dataManager;
         ChatGui = chatGui;
         GameGui = gameGui;
+        GameConfig = gameConfig;
         this.Log = log;
 
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Configuration.Initialize(PluginInterface);
 
         LogHelper.Setup(log, Configuration);
-        BackendHelper.Setup(Configuration, this, Configuration.BackendSelection);
+        BackendHelper.Setup(Configuration, clientState, this, Configuration.BackendSelection);
         this.ConfigWindow = new ConfigWindow(this, Configuration);
 
         this.addonTalkHelper = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonSelectStringHelper = new AddonSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
+        this.addonBubbleHelper = new AddonBubbleHelper(this, this.Framework, this.ObjectTable,sigScanner, gameInterop, this.ClientState, this.Configuration);
         this.ungenderedOverrides = new UngenderedOverrideManager();
         this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, sigScanner, gameInterop);
         this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration);
@@ -192,13 +198,14 @@ public partial class Echokraut : IDalamudPlugin
             // Say the thing
             var voiceMessage = new VoiceMessage
             {
-                Source = source.ToString(),
+                pActor = speaker,
+                Source = source,
                 Speaker = npcData,
                 Text = cleanText,
                 TextTemplate = textTemplate,
                 Language = this.ClientState.ClientLanguage.ToString()
             };
-            var volume = VolumeHelper.GetVoiceVolume();
+            var volume = VolumeHelper.GetVoiceVolume(GameConfig);
 
             if (volume > 0)
                 BackendHelper.OnSay(voiceMessage, volume);
@@ -272,6 +279,7 @@ public partial class Echokraut : IDalamudPlugin
         this.addonBattleTalkHelper.Dispose();
         this.soundHelper.Dispose();
         this.Configuration.Save();
+        this.addonBubbleHelper.Dispose();
         WindowSystem.RemoveAllWindows();
 
         ConfigWindow.Dispose();

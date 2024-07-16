@@ -43,12 +43,13 @@ namespace Echokraut.Helper
             });
         }
 
-        public async void TriggerLipSync(string npcName, float length)
+        public async void TriggerLipSync(string npcName, float length, IGameObject npc = null)
         {
             if (Conditions.IsBoundByDuty && !Conditions.IsWatchingCutscene) return;
             if (!config.Enabled) return;
 
-            IGameObject npcObject = DiscoverNpc(npcName);
+            
+            IGameObject npcObject = npc ?? DiscoverNpc(npcName);
             ActorMemory actorMemory = null;
             AnimationMemory animationMemory = null;
             if (npcObject != null)

@@ -1,4 +1,6 @@
+using Dalamud.Game.ClientState.Objects.Types;
 using Echokraut.Enums;
+using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -11,8 +13,10 @@ namespace Echokraut.DataClasses
     {
         public string Text { get; set; }
         public string TextTemplate { get; set; }
+
+        public IGameObject pActor {  get; set; }
         public NpcMapData Speaker { get; set; }
-        public string Source { get; set; }
+        public TextSource Source { get; set; }
         public int? ChatType { get; set; }
         public string Language { get; set; }
 
