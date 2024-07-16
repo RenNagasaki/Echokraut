@@ -50,7 +50,7 @@ namespace Echokraut.Helper
         {
             var resultText = text;
 
-            resultText = Regex.Replace(resultText, "(?<=^|[^/.\\w])[a-zA-Z]+[\\.\\,\\!\\?](?=[a-zA-ZäöüÄÖÜ])", "$& ");
+            resultText = Regex.Replace(resultText, "(?<=^|[^/.\\w])[a-zA-ZäöüÄÖÜ]+[\\.\\,\\!\\?](?=[a-zA-ZäöüÄÖÜ])", "$& ");
 
             return resultText;
         }
@@ -58,7 +58,7 @@ namespace Echokraut.Helper
         static public string cleanUpName(string name)
         {
             name = name.Replace("[a]", "");
-            name = Regex.Replace(name, "[^a-zA-Z0-9-' ]+", "");
+            name = Regex.Replace(name, "[^a-zA-Z0-9-äöüÄÖÜ' ]+", "");
 
             return name;
         }

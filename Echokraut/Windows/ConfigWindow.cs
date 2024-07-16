@@ -23,11 +23,12 @@ public class ConfigWindow : Window, IDisposable
     private Configuration Configuration;
     private Echokraut plugin;
     private string testConnectionRes = "";
+    private List<BackendVoiceItem> voices;
 
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
     // and the window ID will always be "###XYZ counter window" for ImGui
-    public ConfigWindow(Echokraut plugin, Configuration configuration) : base("Echokraut configuration###EKSettings")
+    public ConfigWindow(Echokraut plugin, Configuration configuration) : base($"Echokraut configuration###EKSettings")
     {
         this.plugin = plugin;
 
@@ -239,44 +240,93 @@ public class ConfigWindow : Window, IDisposable
 
     private void DrawNpcs()
     {
-        var voices = BackendHelper.mappedVoices;
-        var voicesDisplay = voices.Select(b => b.ToString()).ToArray();
-        NpcMapData toBeRemoved = null;
-        foreach (NpcMapData mapData in Configuration.MappedNpcs)
+        if (ImGui.CollapsingHeader("Options:"))
         {
-            var presetIndex = voices.IndexOf(mapData.voiceItem);
-            if (ImGui.Combo($"{mapData.ToString(true)}##EKCBoxNPC{mapData}", ref presetIndex, voicesDisplay, voicesDisplay.Length))
+            var voicesAllOriginals = this.Configuration.VoicesAllOriginals;
+            if (ImGui.Checkbox("Show all original voices as option", ref voicesAllOriginals))
             {
-                var newVoiceItem = voices[presetIndex];
+                this.Configuration.VoicesAllOriginals = voicesAllOriginals;
+                this.Configuration.Save();
 
-                if (newVoiceItem != null && newVoiceItem.voiceName != "Remove")
-                {
-                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for Character: {mapData} from: {mapData.voiceItem} to: {newVoiceItem}");
-
-                    mapData.voiceItem = newVoiceItem;
-                    this.Configuration.Save();
-                }
-                else if (newVoiceItem.voiceName == "Remove")
-                {
-                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Removing Configuration for Character: {mapData}");
-                    toBeRemoved = mapData;
-                }
-                else
-                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Voice for Character: {mapData}");
+                voices = BackendHelper.mappedVoices;
+                if (!voicesAllOriginals)
+                    voices = voices.FindAll(b => b.voiceName.Contains("NPC"));
             }
-
+            var voicesAllGenders = this.Configuration.VoicesAllGenders;
+            if (ImGui.Checkbox("Show both genders as option", ref voicesAllGenders))
+            {
+                this.Configuration.VoicesAllGenders = voicesAllGenders;
+                this.Configuration.Save();
+            }
+            var voicesAllRaces = this.Configuration.VoicesAllRaces;
+            if (ImGui.Checkbox("Show all races as option", ref voicesAllRaces))
+            {
+                this.Configuration.VoicesAllRaces = voicesAllRaces;
+                this.Configuration.Save();
+            }
         }
 
-        if (toBeRemoved != null)
+        if (ImGui.CollapsingHeader("NPCs:"))
         {
-            Configuration.MappedNpcs.Remove(toBeRemoved);
-            Configuration.Save();
+
+            if (voices == null)
+            {
+                voices = BackendHelper.mappedVoices;
+                if (!this.Configuration.VoicesAllOriginals)
+                    voices = voices.FindAll(b => b.voiceName.Contains("NPC"));
+            }
+
+            NpcMapData toBeRemoved = null;
+            foreach (NpcMapData mapData in Configuration.MappedNpcs)
+            {
+                if (!this.Configuration.VoicesAllOriginals && mapData.voiceItem.voiceName.ToLower().Contains(mapData.name.ToLower()))
+                    continue;
+
+                var localVoices = new List<BackendVoiceItem>(voices);
+
+                if (!this.Configuration.VoicesAllGenders)
+                    localVoices = localVoices.FindAll(b => b.gender == mapData.gender || (mapData.gender == Gender.None));
+
+                if (!this.Configuration.VoicesAllRaces)
+                    localVoices = localVoices.FindAll(b => b.race == mapData.race);
+
+                localVoices = localVoices.OrderBy(p => p.ToString()).ToList();
+                localVoices.Insert(0, new BackendVoiceItem() { voiceName = "Remove", race = NpcRaces.Default, gender = Gender.None });
+                var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
+                var presetIndex = localVoices.FindIndex(p => p.ToString() == mapData.voiceItem.ToString());
+                if (ImGui.Combo($"{mapData.ToString(true)}##EKCBoxNPC{mapData.ToString(Configuration.VoicesAllRaces)}", ref presetIndex, voicesDisplay, voicesDisplay.Length))
+                {
+                    var newVoiceItem = localVoices[presetIndex];
+
+                    if (newVoiceItem != null && newVoiceItem.voiceName != "Remove")
+                    {
+                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for Character: {mapData.ToString(true)} from: {mapData.voiceItem} to: {newVoiceItem}");
+
+                        mapData.voiceItem = newVoiceItem;
+                        this.Configuration.Save();
+                    }
+                    else if (newVoiceItem.voiceName == "Remove")
+                    {
+                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Removing Configuration for Character: {mapData}");
+                        toBeRemoved = mapData;
+                    }
+                    else
+                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Voice for Character: {mapData}");
+                }
+
+            }
+
+            if (toBeRemoved != null)
+            {
+                Configuration.MappedNpcs.Remove(toBeRemoved);
+                Configuration.Save();
+            }
         }
     }
 
     private void DrawLogs()
     {
-        if (ImGui.CollapsingHeader("Options"))
+        if (ImGui.CollapsingHeader("Options:"))
         {
             var showInfoLog = this.Configuration.ShowInfoLog;
             if (ImGui.Checkbox("Show info logs", ref showInfoLog))

@@ -10,7 +10,7 @@ namespace Echokraut.DataClasses
     public class ReadSeekableStream : Stream
     {
         private long _underlyingPosition;
-        private readonly byte[] _seekBackBuffer;
+        public readonly byte[] _seekBackBuffer;
         private int _seekBackBufferCount;
         private int _seekBackBufferIndex;
         private readonly Stream _underlyingStream;
@@ -49,8 +49,8 @@ namespace Echokraut.DataClasses
                     var copyToBufferOffset = Math.Min(_seekBackBufferCount, _seekBackBuffer.Length - copyToBufferCount);
                     var bufferBytesToMove = Math.Min(_seekBackBufferCount - 1, copyToBufferOffset);
 
-                    if (bufferBytesToMove > 0)
-                        Buffer.BlockCopy(_seekBackBuffer, _seekBackBufferCount - bufferBytesToMove, _seekBackBuffer, 0, bufferBytesToMove);
+                    //if (bufferBytesToMove > 0)
+                        //Buffer.BlockCopy(_seekBackBuffer, _seekBackBufferCount - bufferBytesToMove, _seekBackBuffer, 0, bufferBytesToMove);
                     Buffer.BlockCopy(buffer, offset, _seekBackBuffer, copyToBufferOffset, copyToBufferCount);
                     _seekBackBufferCount = Math.Min(_seekBackBuffer.Length, _seekBackBufferCount + copyToBufferCount);
                     _seekBackBufferIndex = _seekBackBufferCount;
@@ -224,7 +224,7 @@ namespace Echokraut.DataClasses
 
         public override bool CanTimeout { get { return _underlyingStream.CanTimeout; } }
         public override bool CanWrite { get { return _underlyingStream.CanWrite; } }
-        public override long Length { get { return _underlyingStream.Length; } }
+        public override long Length { get { return _seekBackBuffer.Length; } }
         public override void SetLength(long value) { _underlyingStream.SetLength(value); }
         public override void Write(byte[] buffer, int offset, int count) { _underlyingStream.Write(buffer, offset, count); }
         public override void Flush() { _underlyingStream.Flush(); }

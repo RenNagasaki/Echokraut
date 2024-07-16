@@ -20,6 +20,7 @@ namespace Echokraut.Helper
             { 11013, NpcRaces.Moogle },
             { 11007, NpcRaces.Sahagin },
             { 11008, NpcRaces.MamoolJa },
+            { 11071, NpcRaces.MamoolJa },
             { 11012, NpcRaces.Qiqirn },
             { 61001, NpcRaces.VanuVanu },
             { 11020, NpcRaces.Gnath },
@@ -33,7 +34,10 @@ namespace Echokraut.Helper
             { 11052, NpcRaces.Loporrit },
             { 21051, NpcRaces.Omicron },
             { 10188, NpcRaces.Frog },
-            { 10706, NpcRaces.Ea }
+            { 89, NpcRaces.Frog },
+            { 10706, NpcRaces.Ea },
+            { 11070, NpcRaces.YokHuy },
+            { 61007, NpcRaces.Endless }
         };
     }
 }

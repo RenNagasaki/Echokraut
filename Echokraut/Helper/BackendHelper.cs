@@ -143,12 +143,12 @@ namespace Echokraut.Helper
             return filePath;
         }
 
-        public static void WriteStreamToFile(string filePath, Stream stream)
+        public static void WriteStreamToFile(string filePath, ReadSeekableStream stream)
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Saving audio locally: {filePath}");
             try
             {
-                stream.Position = 0;
+                stream.Seek(0, SeekOrigin.Begin);
                 var rawStream = new RawSourceWaveStream(stream, new WaveFormat(24000, 16, 1));
 
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
@@ -277,7 +277,6 @@ namespace Echokraut.Helper
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Loading and mapping voices");
             mappedVoices = backend.GetAvailableVoices();
             mappedVoices.Sort((x, y) => x.ToString().CompareTo(y.ToString()));
-            mappedVoices.Insert(0, new BackendVoiceItem() { voiceName = "Remove", race = NpcRaces.Default, gender = Gender.None });
 
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Success");
         }
@@ -371,7 +370,7 @@ namespace Echokraut.Helper
                     {
                         var filePath = GetLocalAudioPath(playedText);
                         var stream = currentlyPlayingStream;
-                        WriteStreamToFile(filePath, stream);
+                        WriteStreamToFile(filePath, stream as ReadSeekableStream);
                     }
                 }
                 else
@@ -408,7 +407,7 @@ namespace Echokraut.Helper
         {
             var voiceItem = npcData.voiceItem;
 
-            if (voiceItem == null)
+            if (voiceItem == null || Configuration.MappedNpcs.Find(p => p.voiceItem == voiceItem) == null)
             {
                 var voiceItems = mappedVoices.FindAll(p => p.voiceName.Equals(npcData.name, StringComparison.OrdinalIgnoreCase));
                 if (voiceItems.Count > 0)
@@ -433,12 +432,16 @@ namespace Echokraut.Helper
                 if (voiceItem == null)
                     voiceItem = mappedVoices.Find(p => p.voice == Constants.NARRATORVOICE);
 
+                if (voiceItem == null)
+                    voiceItem = mappedVoices[0];
+
                 if (voiceItem != npcData.voiceItem)
                 {
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem.voiceName} for NPC: {npcData.name}");
                     Configuration.MappedNpcs.Remove(npcData);
                     npcData.voiceItem = voiceItem;
                     Configuration.MappedNpcs.Add(npcData);
+                    Configuration.MappedNpcs = Configuration.MappedNpcs.OrderBy(p => p.ToString(true)).ToList();
                     Configuration.Save();
                 }
             }

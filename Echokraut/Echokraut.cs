@@ -127,7 +127,7 @@ public partial class Echokraut : IDalamudPlugin
         lipSyncHelper.StopLipSync();
     }
 
-    public void Say(GameObject? speaker, SeString speakerName, string textValue, TextSource source)
+    public unsafe void Say(GameObject? speaker, SeString speakerName, string textValue, TextSource source)
     {
         try
         {
@@ -168,6 +168,9 @@ public partial class Echokraut : IDalamudPlugin
             npcData.race = GetSpeakerRace(speaker);
             npcData.gender = CharacterGenderUtils.GetCharacterGender(speaker, this.ungenderedOverrides, this.Log);
             npcData.name = DataHelper.cleanUpName(cleanSpeakerName);
+
+            if (speakerName.ToString() == "PLAYER")
+                speakerName = this.ClientState.LocalPlayer?.Name ?? "PLAYER";
 
             var resNpcData = DataHelper.getNpcMapData(Configuration.MappedNpcs, npcData);
             if (resNpcData != null && resNpcData.race == NpcRaces.Default && npcData.race != NpcRaces.Default)
@@ -211,7 +214,7 @@ public partial class Echokraut : IDalamudPlugin
     private unsafe NpcRaces GetSpeakerRace(GameObject? speaker)
     {
         var race = this.DataManager.GetExcelSheet<Race>();
-        object raceEnum = NpcRaces.Default;
+        var raceEnum = NpcRaces.Default;
 
         try
         {
@@ -228,7 +231,7 @@ public partial class Echokraut : IDalamudPlugin
             {
                 string raceStr = DataHelper.getRaceEng(row.Masculine.RawString, Log);
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found Race: {raceStr}");
-                if (!Enum.TryParse(typeof(NpcRaces), raceStr.Replace(" ", ""), out raceEnum))
+                if (!Enum.TryParse<NpcRaces>(raceStr.Replace(" ", ""), out raceEnum))
                 {
                     var modelData = charaStruct->CharacterData.ModelSkeletonId;
                     var modelData2 = charaStruct->CharacterData.ModelSkeletonId_2;
@@ -259,21 +262,7 @@ public partial class Echokraut : IDalamudPlugin
             LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while determining race: {ex}");
         }
 
-        return (NpcRaces)raceEnum;
-    }
-
-    private unsafe BodyType GetSpeakerBodyType(GameObject? speaker)
-    {
-        if (speaker is null || speaker.Address == nint.Zero)
-        {
-            return BodyType.Unknown;
-        }
-
-        var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker.Address;
-        if (charaStruct == null) return BodyType.Unknown;
-        var speakerBodyType = charaStruct->DrawData.CustomizeData.BodyType;
-        var speakerModel = charaStruct->DrawData.CustomizeData;
-        return (BodyType)speakerBodyType;
+        return raceEnum;
     }
 
     public void Dispose()

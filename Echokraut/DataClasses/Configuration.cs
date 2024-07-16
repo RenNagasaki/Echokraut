@@ -33,6 +33,9 @@ public class Configuration : IPluginConfiguration
     public bool LoadFromLocalFirst { get; set; } = false;
     public string LocalSaveLocation { get; set; } = "";
     public bool CreateMissingLocalSaveLocation { get; set; } = false;
+    public bool VoicesAllGenders { get; set; } = false;
+    public bool VoicesAllRaces { get; set; } = false;
+    public bool VoicesAllOriginals { get; set; } = false;
 
     // the below exist just to make saving less cumbersome
     [NonSerialized]
