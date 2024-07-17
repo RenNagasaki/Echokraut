@@ -3,7 +3,7 @@
   <Import Project="Dalamud.Plugin.Bootstrap.targets" />
 
   <PropertyGroup>
-    <Version>0.8.10.2</Version>
+    <Version>0.9.1.1</Version>
     <Description>A TTS Dalamud Plugin that breaks the silence! For self hosted TTS Services.</Description>
     <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
@@ -32,7 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="JAJ.Packages.MiniAudioEx" Version="1.7.1" />
+    <PackageReference Include="ManagedBass" Version="3.1.1" />
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="R3" Version="1.1.13" />
     <PackageReference Include="Reloaded.Memory" Version="7.1.0" />

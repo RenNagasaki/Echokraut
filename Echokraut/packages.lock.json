@@ -8,11 +8,11 @@
         "resolved": "2.1.13",
         "contentHash": "rMN1omGe8536f4xLMvx9NwfvpAc9YFFfeXJ1t4P4PE6Gu8WCIoFliR1sh07hM+bfODmesk/dvMbji7vNI+B/pQ=="
       },
-      "JAJ.Packages.MiniAudioEx": {
+      "ManagedBass": {
         "type": "Direct",
-        "requested": "[1.7.1, )",
-        "resolved": "1.7.1",
-        "contentHash": "sUNhgYABG234seUQWh8H/vargXzUINQ88sctZePnNLiHOZRz1yuvSLA0B9Z5bLqnvh4XfmAAm8CCX80gi1u/2Q=="
+        "requested": "[3.1.1, )",
+        "resolved": "3.1.1",
+        "contentHash": "qaIIM2VEmZ9DaNCIu306aXi5zS8LZQjo0SNkLb3AjkpxKXA9K/O/LndCogC+cJPb2IKeChJEEXR42JEe6UTq/A=="
       },
       "NAudio": {
         "type": "Direct",

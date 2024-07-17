@@ -1,30 +1,24 @@
 using Dalamud.Game.Command;
-using Dalamud.IoC;
 using Dalamud.Plugin;
-using System.IO;
 using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 using Echokraut.Windows;
 using Dalamud.Game;
 using Echokraut.Enums;
-using Echokraut.Backend;
 using System;
-using R3;
 using Echokraut.TextToTalk.Utils;
 using Echokraut.DataClasses;
-using Dalamud.Game.Text;
 using System.Collections.Generic;
 using System.Linq;
-using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Text.SeStringHandling;
 using GameObject = Dalamud.Game.ClientState.Objects.Types.IGameObject;
 using Lumina.Excel.GeneratedSheets;
 using Echokraut.Helper;
 using Echokraut.Extensions;
 using Echokraut.Utils;
-using NAudio.Wave;
 using System.Reflection;
-using MiniAudioEx;
+using System.Runtime.Loader;
+using System.Windows.Forms;
 
 namespace Echokraut;
 
@@ -83,12 +77,13 @@ public partial class Echokraut : IDalamudPlugin
         ChatGui = chatGui;
         GameGui = gameGui;
         GameConfig = gameConfig;
-        this.Log = log;
+        Log = log;
 
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Configuration.Initialize(PluginInterface);
 
         LogHelper.Setup(log, Configuration);
+        LogHelper.Info("", $"{Assembly.GetCallingAssembly().Location}");
         BackendHelper.Setup(Configuration, clientState, this, Configuration.BackendSelection);
         this.ConfigWindow = new ConfigWindow(this, Configuration);
 
@@ -96,7 +91,7 @@ public partial class Echokraut : IDalamudPlugin
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonSelectStringHelper = new AddonSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
-        this.addonBubbleHelper = new AddonBubbleHelper(this, this.Framework, this.ObjectTable,sigScanner, gameInterop, this.ClientState, this.Configuration);
+        this.addonBubbleHelper = new AddonBubbleHelper(this, this.DataManager, this.Framework, this.ObjectTable,sigScanner, gameInterop, this.ClientState, this.Configuration);
         this.ungenderedOverrides = new UngenderedOverrideManager();
         this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, sigScanner, gameInterop);
         this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration);
@@ -147,7 +142,8 @@ public partial class Echokraut : IDalamudPlugin
                 t => this.Configuration.RemoveStutters ? TalkUtils.RemoveStutters(t) : t,
                 x => x.Trim()).Replace("/", "Schrägstrich ").Replace("C'mi", "Kami");
 
-            cleanText = TalkUtils.ReplaceRomanNumbers(cleanText);
+            cleanText = TalkUtils.ReplaceRomanNumbers(cleanText); 
+            cleanText = DataHelper.analyzeAndImproveText(cleanText);
 
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleantext: {cleanText}");
             // Ensure that the result is clean; ignore it otherwise
@@ -175,8 +171,10 @@ public partial class Echokraut : IDalamudPlugin
             npcData.gender = CharacterGenderUtils.GetCharacterGender(speaker, this.ungenderedOverrides, this.Log);
             npcData.name = DataHelper.cleanUpName(cleanSpeakerName);
 
-            if (speakerName.ToString() == "PLAYER")
-                speakerName = this.ClientState.LocalPlayer?.Name ?? "PLAYER";
+            if (npcData.name == "PLAYER")
+                npcData.name = this.ClientState.LocalPlayer?.Name.ToString() ?? "PLAYER";
+            else if (string.IsNullOrWhiteSpace(npcData.name) && source == TextSource.AddonBubble)
+                npcData.name = GetBubbleName(speaker);
 
             var resNpcData = DataHelper.getNpcMapData(Configuration.MappedNpcs, npcData);
             if (resNpcData != null && resNpcData.race == NpcRaces.Default && npcData.race != NpcRaces.Default)
@@ -194,7 +192,7 @@ public partial class Echokraut : IDalamudPlugin
             else
                 npcData = resNpcData;
 
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"NpcData: {npcData}");
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"NpcData: {npcData.ToString(true)}");
             // Say the thing
             var voiceMessage = new VoiceMessage
             {
@@ -270,6 +268,19 @@ public partial class Echokraut : IDalamudPlugin
         }
 
         return raceEnum;
+    }
+
+    private unsafe string GetBubbleName(GameObject? speaker)
+    {
+        var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker.Address;
+        var modelData = charaStruct->CharacterData.ModelSkeletonId;
+        var modelData2 = charaStruct->CharacterData.ModelSkeletonId_2;
+
+        var activeData = modelData;
+        if (activeData == -1)
+            activeData = modelData2;
+
+        return "Bubble-" + activeData;
     }
 
     public void Dispose()

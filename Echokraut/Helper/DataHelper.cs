@@ -18,6 +18,7 @@ namespace Echokraut.Helper
         static public Dictionary<string, string> npcRacesMap = new Dictionary<string, string>()
         {
             { "Hyuran", "Hyur" }
+
         };
 
         static public string getRaceEng(string nationalRace, IPluginLog Log)
@@ -74,7 +75,7 @@ namespace Echokraut.Helper
         {
             string fileName = voiceMessage;
             string[] temp = fileName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries);
-            fileName = String.Join("", temp).ToLower().Replace(" ", "").Replace("!", "").Replace(",", "").Replace("-", "").Replace("_", "");
+            fileName = String.Join("", temp).ToLower().Replace(" ", "").Replace(".", "").Replace("!", "").Replace(",", "").Replace("-", "").Replace("_", "");
             if (fileName.Length > 120)
                 fileName = fileName.Substring(0, 120);
 

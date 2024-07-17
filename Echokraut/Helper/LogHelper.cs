@@ -12,10 +12,10 @@ namespace Echokraut.Helper
     {
         private static IPluginLog Log;
         private static Configuration Config;
-        private static Dictionary<DateTime, LogMessage> InfoLogs = new Dictionary<DateTime, LogMessage>();
-        private static Dictionary<DateTime, LogMessage> DebugLogs = new Dictionary<DateTime, LogMessage>();
-        private static Dictionary<DateTime, LogMessage> ErrorLogs = new Dictionary<DateTime, LogMessage>();
-        public static Dictionary<DateTime, LogMessage> logList = new Dictionary<DateTime, LogMessage>();
+        private static SortedDictionary<DateTime, LogMessage> InfoLogs = new SortedDictionary<DateTime, LogMessage>();
+        private static SortedDictionary<DateTime, LogMessage> DebugLogs = new SortedDictionary<DateTime, LogMessage>();
+        private static SortedDictionary<DateTime, LogMessage> ErrorLogs = new SortedDictionary<DateTime, LogMessage>();
+        public static SortedDictionary<DateTime, LogMessage> logList = new SortedDictionary<DateTime, LogMessage>();
 
         public static void Setup(IPluginLog log, Configuration config)
         {
@@ -58,21 +58,26 @@ namespace Echokraut.Helper
 
         public static void RecreateLogList()
         {
-            List<DateTime> logListKeys = new List<DateTime>();
-            logList = new Dictionary<DateTime, LogMessage>();
+            logList = new SortedDictionary<DateTime, LogMessage>();
 
             if (Config.ShowInfoLog)
+            {
+                var logListKeys = new List<DateTime>(); 
                 logListKeys.AddRange(LogHelper.InfoLogs.Keys.ToList());
+                logListKeys.ForEach(key => logList.Add(key, InfoLogs[key]));
+            }
             if (Config.ShowDebugLog)
+            {
+                var logListKeys = new List<DateTime>();
                 logListKeys.AddRange(LogHelper.DebugLogs.Keys.ToList());
+                logListKeys.ForEach(key => logList.Add(key, DebugLogs[key]));
+            }
             if (Config.ShowErrorLog)
+            {
+                var logListKeys = new List<DateTime>();
                 logListKeys.AddRange(LogHelper.ErrorLogs.Keys.ToList());
-
-            logListKeys.Sort();
-            logListKeys.ForEach(key => logList.Add(key,
-                InfoLogs.ContainsKey(key) && Config.ShowInfoLog ? InfoLogs[key] :
-                    DebugLogs.ContainsKey(key) && Config.ShowDebugLog ? DebugLogs[key] :
-                        ErrorLogs.ContainsKey(key) && Config.ShowErrorLog ? ErrorLogs[key] : new LogMessage() { message = "", color = new System.Numerics.Vector4(0, 0, 0, 0) }));
+                logListKeys.ForEach(key => logList.Add(key, ErrorLogs[key])); 
+            }
         }
     }
 }

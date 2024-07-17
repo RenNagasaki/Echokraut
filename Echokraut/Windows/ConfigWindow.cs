@@ -206,6 +206,23 @@ public class ConfigWindow : Window, IDisposable
                 this.Configuration.Save();
             }
         }
+
+
+        if (ImGui.CollapsingHeader("Bubbles"))
+        {
+            var voiceBubbles = this.Configuration.VoiceBubbles;
+            if (ImGui.Checkbox("Voice NPC Bubbles", ref voiceBubbles))
+            {
+                this.Configuration.VoiceBubbles = voiceBubbles;
+                this.Configuration.Save();
+            }
+            var voiceBubblesInCity = this.Configuration.VoiceBubblesInCity;
+            if (ImGui.Checkbox("Voice NPC Bubbles in City", ref voiceBubblesInCity))
+            {
+                this.Configuration.VoiceBubblesInCity = voiceBubblesInCity;
+                this.Configuration.Save();
+            }
+        }
     }
 
     private async void BackendCheckReady()
@@ -331,23 +348,23 @@ public class ConfigWindow : Window, IDisposable
             var showInfoLog = this.Configuration.ShowInfoLog;
             if (ImGui.Checkbox("Show info logs", ref showInfoLog))
             {
-                LogHelper.RecreateLogList();
                 this.Configuration.ShowInfoLog = showInfoLog;
                 this.Configuration.Save();
+                LogHelper.RecreateLogList();
             }
             var showDebugLog = this.Configuration.ShowDebugLog;
             if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
             {
-                LogHelper.RecreateLogList();
                 this.Configuration.ShowDebugLog = showDebugLog;
                 this.Configuration.Save();
+                LogHelper.RecreateLogList();
             }
             var showErrorLog = this.Configuration.ShowErrorLog;
             if (ImGui.Checkbox("Show error logs", ref showErrorLog))
             {
-                LogHelper.RecreateLogList();
                 this.Configuration.ShowErrorLog = showErrorLog;
                 this.Configuration.Save();
+                LogHelper.RecreateLogList();
             }
             var jumpToBottom = this.Configuration.JumpToBottom;
             if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
@@ -358,7 +375,7 @@ public class ConfigWindow : Window, IDisposable
         }
         if (ImGui.CollapsingHeader("Log:"))
         {
-            Dictionary<DateTime, LogMessage> logMessages = LogHelper.logList;
+            SortedDictionary<DateTime, LogMessage> logMessages = LogHelper.logList;
 
             if (ImGui.BeginChild("LogsChild"))
             {
