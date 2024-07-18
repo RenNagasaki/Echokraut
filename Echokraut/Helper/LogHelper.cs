@@ -37,10 +37,10 @@ namespace Echokraut.Helper
         public static void Debug(string method, string text)
         {
             text = $"{method} - {text}";
-            DebugLogs.Add(new LogMessage() { message = $"{text}", color = Constants.INFOLOGCOLOR, timeStamp = DateTime.Now });
+            DebugLogs.Add(new LogMessage() { message = $"{text}", color = Constants.DEBUGLOGCOLOR, timeStamp = DateTime.Now });
 
             if (Config.ShowDebugLog)
-                logList.Add(new LogMessage() { message = $"{text}", color = Constants.INFOLOGCOLOR, timeStamp = DateTime.Now });
+                logList.Add(new LogMessage() { message = $"{text}", color = Constants.DEBUGLOGCOLOR, timeStamp = DateTime.Now });
 
             Log.Debug(text);
         }
@@ -48,10 +48,10 @@ namespace Echokraut.Helper
         public static void Error(string method, string text)
         {
             text = $"{method} - {text}";
-            ErrorLogs.Add(new LogMessage() { message = $"{text}", color = Constants.INFOLOGCOLOR, timeStamp = DateTime.Now });
+            ErrorLogs.Add(new LogMessage() { message = $"{text}", color = Constants.ERRORLOGCOLOR, timeStamp = DateTime.Now });
 
             if (Config.ShowErrorLog)
-                logList.Add(new LogMessage() { message = $"{text}", color = Constants.INFOLOGCOLOR, timeStamp = DateTime.Now });
+                logList.Add(new LogMessage() { message = $"{text}", color = Constants.ERRORLOGCOLOR, timeStamp = DateTime.Now });
 
             Log.Error(text);
         }

@@ -222,6 +222,12 @@ public class ConfigWindow : Window, IDisposable
                 this.Configuration.VoiceBubblesInCity = voiceBubblesInCity;
                 this.Configuration.Save();
             }
+            var voiceSourceCam = this.Configuration.VoiceSourceCam;
+            if (ImGui.Checkbox("Voice Bubbles with camera as center", ref voiceSourceCam))
+            {
+                this.Configuration.VoiceSourceCam = voiceSourceCam;
+                this.Configuration.Save();
+            }
         }
     }
 

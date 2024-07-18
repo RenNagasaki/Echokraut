@@ -80,24 +80,40 @@ namespace Echokraut.Helper
 
         }
         unsafe void Handle(IFramework f)
-        {
-            
+        {            
             if (!configuration.VoiceBubbles) return;
 
             var territoryRow = clientState.TerritoryType;
             var territory = dataManager.GetExcelSheet<TerritoryType>()!.GetRow(territoryRow);
-            if (!configuration.VoiceBubblesInCity && !territory.Mount) return;
+            if (territory == null || (!configuration.VoiceBubblesInCity && !territory.Mount)) return;
             if (camera != null)
             {
-                var position = camera->CameraBase.SceneCamera.Position;
-                var rotation = camera->CameraBase.SceneCamera.LookAtVector;
+                var position = new Vector3();
+                if (configuration.VoiceSourceCam)
+                    position = camera->CameraBase.SceneCamera.Position;
+                else
+                    position = localPlayer.Position;
+                //var position = localPlayer.Position;
+                //var posDif = new Vector3(position.X - localPlayer.Position.X, position.Y - localPlayer.Position.Y, position.Z - localPlayer.Position.Z);
+                //var rotation = camera->CameraBase.SceneCamera.Rotation;
+                var matrix = camera->CameraBase.SceneCamera.ViewMatrix;
+                //LogHelper.Debug("", matrix[0].ToString());
+                //LogHelper.Debug("", matrix[1].ToString());
+                //LogHelper.Debug("", matrix[2].ToString());
+                //LogHelper.Debug("", matrix[8].ToString());
+                //LogHelper.Debug("", matrix[9].ToString());
+                //LogHelper.Debug("", matrix[10].ToString());
+                //LogHelper.Debug("", matrix[12].ToString());
+                //LogHelper.Debug("", matrix[13].ToString());
+                //LogHelper.Debug("", matrix[14].ToString());
+                //LogHelper.Debug("", "------------------------------------------------------------------------");
                 //LogHelper.Debug("", $"{position}");
                 //LogHelper.Debug("", $"{rotation}");
                 ManagedBass.Bass.Set3DPosition(
-                    new ManagedBass.Vector3D(position.X, position.Y, position.Z),
+                    new ManagedBass.Vector3D(position.X, position.Z, -position.Y),
                     new ManagedBass.Vector3D(),
-                    new ManagedBass.Vector3D(rotation.X, rotation.Y, rotation.Z),
-                    new ManagedBass.Vector3D(0, -1, 0));
+                    new ManagedBass.Vector3D(matrix[2], matrix[1], matrix[0]),
+                    new ManagedBass.Vector3D(0, 1, 0));
                 ManagedBass.Bass.Apply3D();
             }
             //echokraut.soundListener.Position = new RawVector3(player.Position.X, player.Position.Y, player.Position.Z);
@@ -129,6 +145,7 @@ namespace Echokraut.Helper
                         {
                             speakerName = MemoryHelper.ReadSeStringNullTerminated((IntPtr)pActor->GetName());
                         }
+
                         var text = MemoryHelper.ReadSeStringNullTerminated(pString);
                         var bubbleInfo = new SpeechBubbleInfo(text, currentTime_mSec, speakerName);
 

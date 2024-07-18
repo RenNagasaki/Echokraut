@@ -39,6 +39,7 @@ public class Configuration : IPluginConfiguration
     public bool VoicesAllBubbles { get; set; } = false;
     public bool VoiceBubbles { get; set; } = false;
     public bool VoiceBubblesInCity { get; set; } = false;
+    public bool VoiceSourceCam { get; set; } = false;
 
     // the below exist just to make saving less cumbersome
     [NonSerialized]
