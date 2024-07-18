@@ -248,6 +248,8 @@ namespace Echokraut.Helper
                     }
                 }
             }
+
+            Thread.Sleep(100);
         }
 
         static void workPlayingBubbleQueue()
@@ -299,6 +301,8 @@ namespace Echokraut.Helper
                     }
                 }
             }
+
+            Thread.Sleep(100);
         }
 
         static void workRequestingQueue()
@@ -314,6 +318,8 @@ namespace Echokraut.Helper
 
                     generateVoice(queueItem);
                 }
+
+                Thread.Sleep(100);
             }
         }
 
@@ -359,6 +365,8 @@ namespace Echokraut.Helper
                         LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while working bubble queue: {ex}");
                     }
                 }
+
+                Thread.Sleep(100);
             }
         }
 
