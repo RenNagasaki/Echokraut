@@ -136,7 +136,7 @@ public class AddonTalkHelper
         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonTalk ({state})");
         if (state == default)
         {
-            BackendHelper.inDialog = false;
+            PlayingHelper.InDialog = false;
             // The addon was closed
             plugin.Cancel();
             lastAddonSpeaker = "";
@@ -173,7 +173,7 @@ public class AddonTalkHelper
         // Find the game object this speaker is representing
         var speakerObj = speaker != null ? ObjectTableUtils.GetGameObjectByName(objects, speaker) : null;
 
-        BackendHelper.inDialog = true;
+        PlayingHelper.InDialog = true;
         LogHelper.Debug("TalkHelper.HandleChange", "Setting inDialog true");
 
         if (speakerObj != null)

@@ -18,7 +18,8 @@ namespace Echokraut.Helper
     {
         public static void Click(nint addon)
         {
-            if (((AtkUnitBase*)addon)->IsVisible)
+            var addonBase = (AtkUnitBase*) addon;
+            if (addonBase != null && addonBase->IsVisible)
             {
                 new AddonMaster.Talk(addon).Click();
             }

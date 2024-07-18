@@ -291,7 +291,7 @@ public partial class Echokraut : IDalamudPlugin
 
     public void Dispose()
     {
-        BackendHelper.Dispose();
+        PlayingHelper.Dispose();
         this.addonTalkHelper.Dispose();
         this.addonBattleTalkHelper.Dispose();
         this.soundHelper.Dispose();
