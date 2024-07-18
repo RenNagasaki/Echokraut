@@ -15,6 +15,8 @@ using Echokraut.Backend;
 using Echokraut.Helper;
 using System.Reflection;
 using System.IO;
+using Dalamud.Interface.ImGuiFileDialog;
+using OtterGui;
 
 namespace Echokraut.Windows;
 
@@ -205,6 +207,25 @@ public class ConfigWindow : Window, IDisposable
                 this.Configuration.LocalSaveLocation = localSaveLocation;
                 this.Configuration.Save();
             }
+
+            if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Folder.ToIconString()}##import", new Vector2(30, 30),
+                    "Select a directory via dialog.", false, true))
+            {
+                var startDir = this.Configuration.LocalSaveLocation.Length > 0 && Directory.Exists(this.Configuration.LocalSaveLocation)
+                ? this.Configuration.LocalSaveLocation
+                    : null;
+
+                var service = new FileDialogManager();
+                service.OpenFolderDialog("Choose audiofiles directory", (b, s) =>
+                {
+                    if (!b)
+                        return;
+
+                    this.Configuration.LocalSaveLocation = s;
+                    this.Configuration.Save();
+                }, startDir, false);
+            }
+
         }
 
 

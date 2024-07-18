@@ -40,6 +40,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\ECommons\ECommons\ECommons.csproj" />
+    <ProjectReference Include="..\OtterGui\OtterGui.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -70,4 +71,8 @@
   <ItemGroup>
     <PackageReference Update="DalamudPackager" Version="2.1.13" />
   </ItemGroup>
+
+  <Target Name="PostBuild" AfterTargets="PostBuildEvent">
+    <Exec Command="del  &quot;$(TargetDir)Echokraut.pdb&quot;&#xD;&#xA;del  &quot;$(TargetDir)ECommons.pdb&quot;&#xD;&#xA;del  &quot;$(TargetDir)OtterGui.pdb&quot;" />
+  </Target>
 </Project>

@@ -93,22 +93,8 @@ namespace Echokraut.Helper
                     position = camera->CameraBase.SceneCamera.Position;
                 else
                     position = localPlayer.Position;
-                //var position = localPlayer.Position;
-                //var posDif = new Vector3(position.X - localPlayer.Position.X, position.Y - localPlayer.Position.Y, position.Z - localPlayer.Position.Z);
-                //var rotation = camera->CameraBase.SceneCamera.Rotation;
+
                 var matrix = camera->CameraBase.SceneCamera.ViewMatrix;
-                //LogHelper.Debug("", matrix[0].ToString());
-                //LogHelper.Debug("", matrix[1].ToString());
-                //LogHelper.Debug("", matrix[2].ToString());
-                //LogHelper.Debug("", matrix[8].ToString());
-                //LogHelper.Debug("", matrix[9].ToString());
-                //LogHelper.Debug("", matrix[10].ToString());
-                //LogHelper.Debug("", matrix[12].ToString());
-                //LogHelper.Debug("", matrix[13].ToString());
-                //LogHelper.Debug("", matrix[14].ToString());
-                //LogHelper.Debug("", "------------------------------------------------------------------------");
-                //LogHelper.Debug("", $"{position}");
-                //LogHelper.Debug("", $"{rotation}");
                 ManagedBass.Bass.Set3DPosition(
                     new ManagedBass.Vector3D(position.X, position.Z, -position.Y),
                     new ManagedBass.Vector3D(),
@@ -116,8 +102,6 @@ namespace Echokraut.Helper
                     new ManagedBass.Vector3D(0, 1, 0));
                 ManagedBass.Bass.Apply3D();
             }
-            //echokraut.soundListener.Position = new RawVector3(player.Position.X, player.Position.Y, player.Position.Z);
-            //echokraut.soundListener.OrientFront = new SharpDX.Mathematics.Interop.RawVector3(0, 0, player.Rotation);
         }
 
         unsafe private IntPtr OpenChatBubbleDetour(IntPtr pThis, GameObject* pActor, IntPtr pString, bool param3)
