@@ -9,7 +9,10 @@ namespace Echokraut.DataClasses
 {
     public class LogMessage
     {
+        public DateTime timeStamp {  get; set; }
         public string message {  get; set; }
         public Vector4 color { get; set; }
+
+
     }
 }

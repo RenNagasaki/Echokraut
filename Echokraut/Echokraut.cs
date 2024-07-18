@@ -167,7 +167,9 @@ public partial class Echokraut : IDalamudPlugin
 
             NpcMapData npcData = new NpcMapData();
             // Get the speaker's race if it exists.
-            npcData.race = GetSpeakerRace(speaker);
+            var raceStr = "";
+            npcData.race = GetSpeakerRace(speaker, out raceStr);
+            npcData.raceStr = raceStr;
             npcData.gender = CharacterGenderUtils.GetCharacterGender(speaker, this.ungenderedOverrides, this.Log);
             npcData.name = DataHelper.cleanUpName(cleanSpeakerName);
 
@@ -177,7 +179,7 @@ public partial class Echokraut : IDalamudPlugin
                 npcData.name = GetBubbleName(speaker);
 
             var resNpcData = DataHelper.getNpcMapData(Configuration.MappedNpcs, npcData);
-            if (resNpcData != null && resNpcData.race == NpcRaces.Default && npcData.race != NpcRaces.Default)
+            if (resNpcData != null && resNpcData.race == NpcRaces.Default && npcData.raceStr != NpcRaces.Default.ToString())
             {
                 resNpcData.race = npcData.race;
                 Configuration.Save();
@@ -216,7 +218,7 @@ public partial class Echokraut : IDalamudPlugin
         }
     }
 
-    private unsafe NpcRaces GetSpeakerRace(GameObject? speaker)
+    private unsafe NpcRaces GetSpeakerRace(GameObject? speaker, out string raceStr)
     {
         var race = this.DataManager.GetExcelSheet<Race>();
         var raceEnum = NpcRaces.Default;
@@ -225,6 +227,7 @@ public partial class Echokraut : IDalamudPlugin
         {
             if (race is null || speaker is null || speaker.Address == nint.Zero)
             {
+                raceStr = raceEnum.ToString();
                 return NpcRaces.Default;
             }
 
@@ -234,7 +237,7 @@ public partial class Echokraut : IDalamudPlugin
 
             if (!(row is null))
             {
-                string raceStr = DataHelper.getRaceEng(row.Masculine.RawString, Log);
+                raceStr = DataHelper.getRaceEng(row.Masculine.RawString, Log);
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found Race: {raceStr}");
                 if (!Enum.TryParse<NpcRaces>(raceStr.Replace(" ", ""), out raceEnum))
                 {
@@ -251,7 +254,9 @@ public partial class Echokraut : IDalamudPlugin
                         if (NpcRacesHelper.ModelsToRaceMap.TryGetValue(activeData, out activeNpcRace))
                             raceEnum = activeNpcRace;
                         else
+                        {
                             raceEnum = NpcRaces.Default;
+                        }
                     }
                     catch (Exception ex)
                     {
@@ -267,6 +272,7 @@ public partial class Echokraut : IDalamudPlugin
             LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while determining race: {ex}");
         }
 
+        raceStr = raceEnum.ToString();
         return raceEnum;
     }
 

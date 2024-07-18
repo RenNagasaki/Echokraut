@@ -42,6 +42,12 @@ namespace Echokraut.Helper
                     result = item;
                     break;
                 }
+
+                if (item.name == data.name)
+                {
+                    result = item;
+                    break;
+                }
             }
 
             return result;

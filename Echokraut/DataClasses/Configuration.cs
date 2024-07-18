@@ -36,6 +36,7 @@ public class Configuration : IPluginConfiguration
     public bool VoicesAllGenders { get; set; } = false;
     public bool VoicesAllRaces { get; set; } = false;
     public bool VoicesAllOriginals { get; set; } = false;
+    public bool VoicesAllBubbles { get; set; } = false;
     public bool VoiceBubbles { get; set; } = false;
     public bool VoiceBubblesInCity { get; set; } = false;
 

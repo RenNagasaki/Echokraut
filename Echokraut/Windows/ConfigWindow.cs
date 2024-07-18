@@ -281,6 +281,12 @@ public class ConfigWindow : Window, IDisposable
                 this.Configuration.VoicesAllRaces = voicesAllRaces;
                 this.Configuration.Save();
             }
+            var voicesAllBubbles = this.Configuration.VoicesAllBubbles;
+            if (ImGui.Checkbox("Show all bubble npcs as option", ref voicesAllBubbles))
+            {
+                this.Configuration.VoicesAllBubbles = voicesAllBubbles;
+                this.Configuration.Save();
+            }
         }
 
         if (ImGui.CollapsingHeader("NPCs:"))
@@ -297,6 +303,9 @@ public class ConfigWindow : Window, IDisposable
             foreach (NpcMapData mapData in Configuration.MappedNpcs)
             {
                 if (!this.Configuration.VoicesAllOriginals && mapData.voiceItem.voiceName.ToLower().Contains(mapData.name.ToLower()))
+                    continue;
+
+                if (!this.Configuration.VoicesAllBubbles && mapData.name.StartsWith("Bubble"))
                     continue;
 
                 var localVoices = new List<BackendVoiceItem>(voices);
@@ -375,14 +384,14 @@ public class ConfigWindow : Window, IDisposable
         }
         if (ImGui.CollapsingHeader("Log:"))
         {
-            SortedDictionary<DateTime, LogMessage> logMessages = LogHelper.logList;
+            List<LogMessage> logMessages = LogHelper.logList;
 
             if (ImGui.BeginChild("LogsChild"))
             {
                 foreach (var logMessage in logMessages)
                 {
-                    var text = $"{logMessage.Key.ToString("HH:mm:ss.fff")}: {logMessage.Value.message}";
-                    ImGui.TextColored(logMessage.Value.color, text);
+                    var text = $"{logMessage.timeStamp.ToShortDateString()} - {logMessage.timeStamp.ToString("HH:mm:ss.fff")}: {logMessage.message}";
+                    ImGui.TextColored(logMessage.color, text);
                 }
 
                 if (Configuration.JumpToBottom)

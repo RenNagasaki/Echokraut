@@ -11,13 +11,17 @@ namespace Echokraut.DataClasses
     {
         public string name { get; set; }
         public NpcRaces race { get; set; }
+        public string raceStr { get; set; }
         public Gender gender { get; set; }
         public BackendVoiceItem voiceItem { get; set; }
 
         public string ToString(bool showRace = false)
         {
             if (showRace)
-                return $"{gender} - {race} - {name}";
+            {
+                var raceString = race == NpcRaces.Default ? raceStr : race.ToString();
+                return $"{gender} - {raceString} - {name}";
+            }
 
             return $"{gender} - {name}";
         }

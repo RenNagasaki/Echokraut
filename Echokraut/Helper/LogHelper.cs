@@ -12,10 +12,10 @@ namespace Echokraut.Helper
     {
         private static IPluginLog Log;
         private static Configuration Config;
-        private static SortedDictionary<DateTime, LogMessage> InfoLogs = new SortedDictionary<DateTime, LogMessage>();
-        private static SortedDictionary<DateTime, LogMessage> DebugLogs = new SortedDictionary<DateTime, LogMessage>();
-        private static SortedDictionary<DateTime, LogMessage> ErrorLogs = new SortedDictionary<DateTime, LogMessage>();
-        public static SortedDictionary<DateTime, LogMessage> logList = new SortedDictionary<DateTime, LogMessage>();
+        private static List<LogMessage> InfoLogs = new List<LogMessage>();
+        private static List<LogMessage> DebugLogs = new List<LogMessage>();
+        private static List<LogMessage> ErrorLogs = new List<LogMessage>();
+        public static List<LogMessage> logList = new List<LogMessage>();
 
         public static void Setup(IPluginLog log, Configuration config)
         {
@@ -26,10 +26,10 @@ namespace Echokraut.Helper
         public static void Info(string method, string text)
         {
             text = $"{method} - {text}";
-            InfoLogs.Add(DateTime.Now, new LogMessage() { message = $"{text}", color = Constants.INFOLOGCOLOR });
+            InfoLogs.Add(new LogMessage() { message = $"{text}", color = Constants.INFOLOGCOLOR, timeStamp = DateTime.Now });
 
             if (Config.ShowInfoLog)
-                logList.Add(DateTime.Now, new LogMessage() { message = $"{text}", color = Constants.INFOLOGCOLOR });
+                logList.Add(new LogMessage() { message = $"{text}", color = Constants.INFOLOGCOLOR, timeStamp = DateTime.Now });
 
             Log.Info(text);
         }
@@ -37,10 +37,10 @@ namespace Echokraut.Helper
         public static void Debug(string method, string text)
         {
             text = $"{method} - {text}";
-            DebugLogs.Add(DateTime.Now, new LogMessage() { message = $"{text}", color = Constants.DEBUGLOGCOLOR });
+            DebugLogs.Add(new LogMessage() { message = $"{text}", color = Constants.INFOLOGCOLOR, timeStamp = DateTime.Now });
 
             if (Config.ShowDebugLog)
-                logList.Add(DateTime.Now, new LogMessage() { message = $"{text}", color = Constants.DEBUGLOGCOLOR });
+                logList.Add(new LogMessage() { message = $"{text}", color = Constants.INFOLOGCOLOR, timeStamp = DateTime.Now });
 
             Log.Debug(text);
         }
@@ -48,36 +48,32 @@ namespace Echokraut.Helper
         public static void Error(string method, string text)
         {
             text = $"{method} - {text}";
-            ErrorLogs.Add(DateTime.Now, new LogMessage() { message = $"{text}", color = Constants.ERRORLOGCOLOR });
+            ErrorLogs.Add(new LogMessage() { message = $"{text}", color = Constants.INFOLOGCOLOR, timeStamp = DateTime.Now });
 
             if (Config.ShowErrorLog)
-                logList.Add(DateTime.Now, new LogMessage() { message = $"{text}", color = Constants.ERRORLOGCOLOR });
+                logList.Add(new LogMessage() { message = $"{text}", color = Constants.INFOLOGCOLOR, timeStamp = DateTime.Now });
 
             Log.Error(text);
         }
 
         public static void RecreateLogList()
         {
-            logList = new SortedDictionary<DateTime, LogMessage>();
+            logList = new List<LogMessage>();
 
             if (Config.ShowInfoLog)
             {
-                var logListKeys = new List<DateTime>(); 
-                logListKeys.AddRange(LogHelper.InfoLogs.Keys.ToList());
-                logListKeys.ForEach(key => logList.Add(key, InfoLogs[key]));
+                logList.AddRange(LogHelper.InfoLogs.ToList());
             }
             if (Config.ShowDebugLog)
             {
-                var logListKeys = new List<DateTime>();
-                logListKeys.AddRange(LogHelper.DebugLogs.Keys.ToList());
-                logListKeys.ForEach(key => logList.Add(key, DebugLogs[key]));
+                logList.AddRange(LogHelper.DebugLogs.ToList());
             }
             if (Config.ShowErrorLog)
             {
-                var logListKeys = new List<DateTime>();
-                logListKeys.AddRange(LogHelper.ErrorLogs.Keys.ToList());
-                logListKeys.ForEach(key => logList.Add(key, ErrorLogs[key])); 
+                logList.AddRange(LogHelper.ErrorLogs.ToList());
             }
+
+            logList.Sort((p, q) => p.timeStamp.CompareTo(q.timeStamp));
         }
     }
 }
