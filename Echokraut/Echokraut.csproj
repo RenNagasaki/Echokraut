@@ -28,7 +28,7 @@
     <EmbeddedResource Include="Anamnesis\Data\NpcNames.json" />
     <EmbeddedResource Include="Anamnesis\Data\Tips.json" />
     <EmbeddedResource Include="Resources\VoiceNames.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </EmbeddedResource>
   </ItemGroup>
 

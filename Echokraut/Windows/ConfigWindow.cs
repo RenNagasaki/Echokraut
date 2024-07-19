@@ -28,8 +28,14 @@ public class ConfigWindow : Window, IDisposable
     private string testConnectionRes = "";
     private List<BackendVoiceItem> voices;
     private FileDialogManager fileDialogManager;
-    private bool resetFilter = true;
+    private bool resetLogFilter = true;
     private string logFilter = "";
+    private bool resetPlayerFilter = true;
+    private string playerFilter = "";
+    private List<NpcMapData> filteredPlayers;
+    private bool resetNpcFilter = true;
+    private string npcFilter = "";
+    private List<NpcMapData> filteredNpcs;
 
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
@@ -337,10 +343,23 @@ public class ConfigWindow : Window, IDisposable
                     voices = voices.FindAll(b => b.voiceName.Contains("NPC"));
             }
 
+            if (filteredNpcs == null)
+                filteredNpcs = Configuration.MappedNpcs;
+
+            if (ImGui.InputText($"Filter by player name##EKFilterNpc", ref npcFilter, 40))
+            {
+                filteredNpcs = Configuration.MappedNpcs.FindAll(b => b.name.ToLower().Contains(npcFilter));
+                resetNpcFilter = false;
+            }
+            else if (!resetNpcFilter && npcFilter.Length == 0)
+            {
+                filteredNpcs = Configuration.MappedNpcs;
+            }
+
             if (ImGui.BeginChild("LogsChild"))
             {
                 NpcMapData toBeRemoved = null;
-                foreach (NpcMapData mapData in Configuration.MappedNpcs)
+                foreach (NpcMapData mapData in filteredNpcs)
                 {
                     if (!this.Configuration.VoicesAllOriginals && mapData.voiceItem.voiceName.ToLower().Contains(mapData.name.ToLower()))
                         continue;
@@ -400,10 +419,23 @@ public class ConfigWindow : Window, IDisposable
                     voices = voices.FindAll(b => b.voiceName.Contains("NPC"));
             }
 
+            if (filteredPlayers == null)
+                filteredPlayers = Configuration.MappedPlayers;
+
+            if (ImGui.InputText($"Filter by player name##EKFilterPlayer", ref playerFilter, 40))
+            {
+                filteredPlayers = Configuration.MappedPlayers.FindAll(b => b.name.ToLower().Contains(playerFilter));
+                resetPlayerFilter = false;
+            }
+            else if (!resetPlayerFilter && playerFilter.Length == 0)
+            {
+                filteredPlayers = Configuration.MappedPlayers;
+            }
+
             if (ImGui.BeginChild("LogsChild"))
             {
                 NpcMapData toBeRemoved = null;
-                foreach (NpcMapData mapData in Configuration.MappedPlayers)
+                foreach (NpcMapData mapData in filteredPlayers)
                 {
                     if (!this.Configuration.VoicesAllOriginals && mapData.voiceItem.voiceName.ToLower().Contains(mapData.name.ToLower()))
                         continue;
@@ -490,9 +522,9 @@ public class ConfigWindow : Window, IDisposable
             if (ImGui.InputText($"Filter by event-id##EKFilterNpcId", ref logFilter, 40))
             {
                 LogHelper.FilterLogList(logFilter);
-                resetFilter = false;
+                resetLogFilter = false;
             }
-            else if (!resetFilter && logFilter.Length == 0)
+            else if (!resetLogFilter && logFilter.Length == 0)
             {
                 LogHelper.RecreateLogList();
             }
