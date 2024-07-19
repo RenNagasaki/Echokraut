@@ -20,5 +20,7 @@ namespace Echokraut.DataClasses
         public int? ChatType { get; set; }
         public string Language { get; set; }
 
+        public int eventId { get; set; }
+
     }
 }

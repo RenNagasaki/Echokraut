@@ -1,5 +1,6 @@
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using Microsoft.VisualBasic.Logging;
 using System;
 using System.Collections.Generic;
@@ -15,7 +16,14 @@ namespace Echokraut.Helper
 {
     public static class DataHelper
     {
-        static public Dictionary<string, string> npcRacesMap = new Dictionary<string, string>()
+        public static int EventId(string methodName)
+        {
+            var eventId = new Random(Convert.ToInt32(DateTime.Now.TimeOfDay.TotalMilliseconds)).Next(1, 10000);
+            LogHelper.Start(methodName, eventId);
+            return eventId;
+        }
+
+        static public Dictionary<string, string> NpcRacesMap = new Dictionary<string, string>()
         {
             { "Hyuran", "Hyur" }
 
@@ -25,15 +33,16 @@ namespace Echokraut.Helper
         {
             string engRace = nationalRace.Replace("'", "");
 
-            if (npcRacesMap.ContainsKey(engRace))
-                engRace = npcRacesMap[engRace];
+            if (NpcRacesMap.ContainsKey(engRace))
+                engRace = NpcRacesMap[engRace];
 
             return engRace;
         }
 
-        static public NpcMapData getNpcMapData(List<NpcMapData> datas, NpcMapData data)
+        static public NpcMapData GetCharacterMapData(List<NpcMapData> npcDatas, List<NpcMapData> playerDatas, NpcMapData data)
         {
             NpcMapData result = null;
+            var datas = data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? playerDatas : npcDatas;
 
             foreach (var item in datas)
             {
@@ -53,7 +62,15 @@ namespace Echokraut.Helper
             return result;
         }
 
-        static public string analyzeAndImproveText(string text)
+        static public void AddCharacterMapData(List<NpcMapData> npcDatas, List<NpcMapData> playerDatas, NpcMapData data)
+        {
+            if (data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
+                playerDatas.Add(data);
+            else
+                npcDatas.Add(data);
+        }
+
+        static public string AnalyzeAndImproveText(string text)
         {
             var resultText = text;
 
@@ -62,17 +79,10 @@ namespace Echokraut.Helper
             return resultText;
         }
 
-        static public string cleanUpName(string name)
+        static public string CleanUpName(string name)
         {
             name = name.Replace("[a]", "");
             name = Regex.Replace(name, "[^a-zA-Z0-9-äöüÄÖÜ' ]+", "");
-
-            return name;
-        }
-
-        static public string unCleanUpName(string name)
-        {
-            name = name.Replace("+", " ").Replace("=", "'");
 
             return name;
         }

@@ -11,6 +11,8 @@ using Echokraut.Utils;
 using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Reflection;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
 namespace Echokraut.Helper;
 
@@ -81,7 +83,7 @@ public class AddonCutSceneSelectStringHelper
         if (Address != nint.Zero && oldAddress != Address)
         {
             oldAddress = Address;
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonCutSceneSelectString address found: {Address}");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonCutSceneSelectString address found: {Address}", 0);
         }
     }
 
@@ -108,18 +110,18 @@ public class AddonCutSceneSelectStringHelper
     {
         var (speaker, text, pollSource) = state;
 
-        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonCutSceneSelectString ({state})");
         if (state == default)
         {
             return;
         }
 
+        int eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name);
         // Notify observers that the addon state was advanced
-        plugin.Cancel();
+        plugin.Cancel(eventId);
 
         text = TalkUtils.NormalizePunctuation(text);
 
-        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonCutSceneSelectString ({pollSource}): \"{text}\"");
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonCutSceneSelectString ({pollSource}): \"{text}\"", eventId);
 
 
         // Find the game object this speaker is representing
@@ -127,13 +129,13 @@ public class AddonCutSceneSelectStringHelper
 
         if (speakerObj != null)
         {
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonSelectString for speakerobject: ({speakerObj.Name})");
-            plugin.Say(speakerObj, speakerObj.Name, text, TextSource.AddonCutSceneSelectString);
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonSelectString for speakerobject: ({speakerObj.Name})", eventId);
+            plugin.Say(eventId, speakerObj, speakerObj.Name, text, TextSource.AddonCutSceneSelectString);
         }
         else
         {
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonSelectString for object: ({state.Speaker})");
-            plugin.Say(null, state.Speaker ?? "PLAYER", text, TextSource.AddonCutSceneSelectString);
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonSelectString for object: ({state.Speaker})", eventId);
+            plugin.Say(eventId, null, state.Speaker ?? "PLAYER", text, TextSource.AddonCutSceneSelectString);
         }
     }
 

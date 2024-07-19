@@ -13,6 +13,7 @@ using Lumina.Data.Parsing;
 using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentHousingPlant;
 using static System.Windows.Forms.Design.AxImporter;
 using Echokraut.Helper;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
 
 namespace Echokraut.TextToTalk.Utils
 {
@@ -211,7 +212,7 @@ namespace Echokraut.TextToTalk.Utils
             return text;
         }
 
-        public static string ReplaceRomanNumbers(string text)
+        public static string ReplaceRomanNumbers(int eventId, string text)
         {
             try
             {
@@ -226,7 +227,7 @@ namespace Echokraut.TextToTalk.Utils
             }
             catch (Exception ex)
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}");
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", eventId);
             }
 
             return text;

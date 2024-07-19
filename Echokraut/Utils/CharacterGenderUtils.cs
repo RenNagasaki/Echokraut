@@ -2,17 +2,19 @@ using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin.Services;
 using Echokraut.Enums;
+using Echokraut.Helper;
+using System.Reflection;
 
 namespace Echokraut.Utils;
 
 public static class CharacterGenderUtils
 {
     // TODO: Use NPC ID instead of reading the model information :(
-    public static unsafe Gender GetCharacterGender(IGameObject? gObj, UngenderedOverrideManager overrides, IPluginLog log)
+    public static unsafe Gender GetCharacterGender(int eventId, IGameObject? gObj)
     {
         if (gObj == null || gObj.Address == nint.Zero)
         {
-            log.Info("GameObject is null; cannot check gender.");
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, "GameObject is null; cannot check gender.", eventId);
             return Gender.None;
         }
 
@@ -37,18 +39,7 @@ public static class CharacterGenderUtils
             modelId = charaStruct->CharacterData.ModelCharaId;
         }
 
-        // Get the override state and log the model ID so that we can add it to our overrides file if needed.
-        if (overrides.IsUngendered(modelId))
-        {
-            actorGender = Gender.None;
-            log.Info(
-                $"Got model ID {modelId} for {gObj.ObjectKind} \"{gObj.Name}\" (gender overriden to: {actorGender})");
-        }
-        else
-        {
-            log.Info(
-                $"Got model ID {modelId} for {gObj.ObjectKind} \"{gObj.Name}\" (gender read as: {actorGender})");
-        }
+        LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Got model ID {modelId} for {gObj.ObjectKind} \"{gObj.Name}\" (gender read as: {actorGender})", eventId);
 
         return actorGender;
     }

@@ -3,6 +3,8 @@ using Echokraut.Backend;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
 using ECommons.Configuration;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using ManagedBass;
 using NAudio.Wave;
 using System;
@@ -38,17 +40,18 @@ namespace Echokraut.Helper
         {
             if (backendType == TTSBackends.Alltalk)
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Creating backend instance: {backendType}");
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Creating backend instance: {backendType}", 0);
                 backend = new AlltalkBackend(Configuration.Alltalk, Configuration);
-                getAndMapVoices();
+                getAndMapVoices(0);
             }
         }
 
         public static void OnSay(VoiceMessage voiceMessage, float volume)
         {
+            var eventId = voiceMessage.eventId;
             PlayingHelper.Volume = volume;
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Starting voice inference: ");
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, voiceMessage.Text.ToString());
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Starting voice inference: ", eventId);
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, voiceMessage.Text.ToString(), eventId);
 
             switch (voiceMessage.Source)
             {
@@ -66,9 +69,9 @@ namespace Echokraut.Helper
             }
         }
 
-        public static void OnCancel()
+        public static void OnCancel(int eventId)
         {
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping voice inference");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping voice inference", eventId);
             PlayingHelper.ClearRequestingQueue();
             PlayingHelper.ClearRequestedQueue();
             PlayingHelper.ClearPlayingQueue();
@@ -81,22 +84,23 @@ namespace Echokraut.Helper
             }
         }
 
-        static void getAndMapVoices()
+        static void getAndMapVoices(int eventId)
         {
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Loading and mapping voices");
-            mappedVoices = backend.GetAvailableVoices();
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Loading and mapping voices", eventId);
+            mappedVoices = backend.GetAvailableVoices(eventId);
             mappedVoices.Sort((x, y) => x.ToString().CompareTo(y.ToString()));
 
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Success");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Success", eventId);
         }
 
         public static async void GenerateVoice(VoiceMessage message)
         {
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating...");
+            var eventId = message.eventId;
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating...", eventId);
             try
             {
                 var text = message.Text;
-                var voice = getVoice(message.Speaker);
+                var voice = getVoice(eventId, message.Speaker);
                 var language = message.Language;
 
                 var ready = "";
@@ -105,11 +109,11 @@ namespace Echokraut.Helper
                 {
                     try
                     {
-                        ready = await CheckReady();
+                        ready = await CheckReady(eventId);
                     }
                     catch (Exception ex)
                     {
-                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString());
+                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), eventId);
                     }
 
                     i++;
@@ -118,7 +122,7 @@ namespace Echokraut.Helper
                 if (ready != "Ready")
                     return;
 
-                var responseStream = await backend.GenerateAudioStreamFromVoice(text, voice, language);
+                var responseStream = await backend.GenerateAudioStreamFromVoice(eventId, text, voice, language);
 
                 if (message.Source == TextSource.AddonBubble)
                 {
@@ -126,19 +130,19 @@ namespace Echokraut.Helper
                     {
                         var playedText = message;
 
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}");
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}", eventId);
                         if (!string.IsNullOrWhiteSpace(playedText.Text))
                         {
                             var filePath = FileHelper.GetLocalAudioPath(Configuration.LocalSaveLocation, playedText);
                             var stream = responseStream;
-                            FileHelper.WriteStreamToFile(filePath, stream as ReadSeekableStream);
+                            FileHelper.WriteStreamToFile(eventId, filePath, stream as ReadSeekableStream);
                             PlayingHelper.PlayingBubbleQueue.Add(filePath);
                             PlayingHelper.PlayingBubbleQueueText.Add(message);
                         }
                     }
                     else
                     {
-                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't save file locally. Save location doesn't exists: {Configuration.LocalSaveLocation}");
+                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't save file locally. Save location doesn't exists: {Configuration.LocalSaveLocation}", eventId);
                     }
                 }
                 else
@@ -152,20 +156,21 @@ namespace Echokraut.Helper
             }
             catch (Exception ex)
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString());
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), eventId);
             }
         }
 
-        public static async Task<string> CheckReady()
+        public static async Task<string> CheckReady(int eventId)
         {
-            return await backend.CheckReady();
+            return await backend.CheckReady(eventId);
         }
 
-        static void getVoiceOrRandom(NpcMapData npcData)
+        static void getVoiceOrRandom(int eventId, NpcMapData npcData)
         {
             var voiceItem = npcData.voiceItem;
+            var mappedList = npcData.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? Configuration.MappedPlayers : Configuration.MappedNpcs;
 
-            if (voiceItem == null || Configuration.MappedNpcs.Find(p => p.voiceItem == voiceItem) == null)
+            if (voiceItem == null || mappedList.Find(p => p.voiceItem == voiceItem) == null)
             {
                 var voiceItems = mappedVoices.FindAll(p => p.voiceName.Equals(npcData.name, StringComparison.OrdinalIgnoreCase));
                 if (voiceItems.Count > 0)
@@ -195,21 +200,27 @@ namespace Echokraut.Helper
 
                 if (voiceItem != npcData.voiceItem)
                 {
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem.voiceName} for NPC: {npcData.name}");
-                    Configuration.MappedNpcs.Remove(npcData);
+                    if (npcData.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
+                    {
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem.voiceName} for Player: {npcData.name}", eventId);
+                        Configuration.MappedPlayers = Configuration.MappedPlayers.OrderBy(p => p.ToString(true)).ToList();
+                    }
+                    else
+                    {
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem.voiceName} for NPC: {npcData.name}", eventId);
+                        Configuration.MappedNpcs = Configuration.MappedNpcs.OrderBy(p => p.ToString(true)).ToList();
+                    }
                     npcData.voiceItem = voiceItem;
-                    Configuration.MappedNpcs.Add(npcData);
-                    Configuration.MappedNpcs = Configuration.MappedNpcs.OrderBy(p => p.ToString(true)).ToList();
                     Configuration.Save();
                 }
             }
         }
 
-        static string getVoice(NpcMapData npcData)
+        static string getVoice(int eventId, NpcMapData npcData)
         {
-            getVoiceOrRandom(npcData);
+            getVoiceOrRandom(eventId, npcData);
 
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, string.Format("Loaded voice: {0} for NPC: {1}", npcData.voiceItem.voice, npcData.name));
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, string.Format("Loaded voice: {0} for NPC: {1}", npcData.voiceItem.voice, npcData.name), eventId);
             return npcData.voiceItem.voice;
         }
     }

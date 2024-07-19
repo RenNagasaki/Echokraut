@@ -15,6 +15,7 @@ public class Configuration : IPluginConfiguration
     public TTSBackends BackendSelection { get; set; } = TTSBackends.Alltalk;
     public AlltalkData Alltalk { get; set; } = new AlltalkData();
     public List<NpcMapData> MappedNpcs { get; set; } = new List<NpcMapData>();
+    public List<NpcMapData> MappedPlayers { get; set; } = new List<NpcMapData>();
     public bool Enabled { get; set; } = true;
     public bool VoiceDialog { get; set; } = true;
     public bool VoiceBattleDialog { get; set; } = true;

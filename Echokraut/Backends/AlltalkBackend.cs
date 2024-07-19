@@ -14,6 +14,8 @@ using Echokraut.Helper;
 using System.Reflection;
 using System.Threading;
 using NAudio.Wave;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
 namespace Echokraut.Backend
 {
@@ -27,9 +29,9 @@ namespace Echokraut.Backend
             this.configuration = config;
         }
 
-        public async Task<Stream> GenerateAudioStreamFromVoice(string voiceLine, string voice, string language)
+        public async Task<Stream> GenerateAudioStreamFromVoice(int eventId, string voiceLine, string voice, string language)
         {
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating Alltalk Audio");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating Alltalk Audio", eventId);
             HttpClient httpClient = new HttpClient();
             httpClient.BaseAddress = new Uri(data.BaseUrl);
             httpClient.Timeout = TimeSpan.FromSeconds(5);
@@ -45,31 +47,31 @@ namespace Echokraut.Backend
                 query["language"] = getAlltalkLanguage(language);
                 query["output_file"] = "ignoreme.wav";
                 uriBuilder.Query = query.ToString();
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Requesting... {uriBuilder.Uri}");
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Requesting... {uriBuilder.Uri}", eventId);
                 using var req = new HttpRequestMessage(HttpMethod.Get, uriBuilder.Uri);
 
                 res = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
                 EnsureSuccessStatusCode(res);
 
                 // Copy the sound to a new buffer and enqueue it
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Getting response...");
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Getting response...", eventId);
                 var responseStream = await res.Content.ReadAsStreamAsync().ConfigureAwait(false);
                 var readSeekableStream = new ReadSeekableStream(responseStream, 2146435);
 
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Done");
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Done", eventId);
                 return readSeekableStream;
             }
             catch (Exception ex)
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString());
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), eventId);
             }
 
             return null;
         }
 
-        public List<BackendVoiceItem> GetAvailableVoices()
+        public List<BackendVoiceItem> GetAvailableVoices(int eventId)
         {
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Loading Alltalk Voices");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Loading Alltalk Voices", eventId);
             var mappedVoices = new List<BackendVoiceItem>();
             try
             {
@@ -138,22 +140,22 @@ namespace Echokraut.Backend
                         }
                     }
                 }
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Done");
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Done", eventId);
             }
             catch (Exception ex)
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString());
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), eventId);
             }
 
             return mappedVoices;
         }
 
-        public async void StopGenerating()
+        public async void StopGenerating(int eventId)
         {
             HttpClient httpClient = new HttpClient();
             httpClient.BaseAddress = new Uri(data.BaseUrl);
             httpClient.Timeout = TimeSpan.FromSeconds(5);
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping Alltalk Generation");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping Alltalk Generation", eventId);
             HttpResponseMessage res = null;
             try
             {
@@ -161,31 +163,31 @@ namespace Echokraut.Backend
                 res = await httpClient.PutAsync(data.StopPath, content).ConfigureAwait(false);
             } catch (Exception ex)
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString());
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), eventId);
             }
         }
 
-        public async Task<string> CheckReady()
+        public async Task<string> CheckReady(int eventId)
         {
             HttpClient httpClient = new HttpClient();
             httpClient.BaseAddress = new Uri(data.BaseUrl);
             httpClient.Timeout = TimeSpan.FromSeconds(5);
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Checking if Alltalk is ready");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Checking if Alltalk is ready", eventId);
             try
             {
                 var res = await httpClient.GetAsync(data.ReadyPath).ConfigureAwait(false);
 
                 var responseString = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
 
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Ready");
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Ready", eventId);
                 return responseString;
             }
             catch (Exception ex)
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString());
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), eventId);
             }
 
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Not ready");
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Not ready", eventId);
             return "NotReady";
         }
 
@@ -207,6 +209,8 @@ namespace Echokraut.Backend
                     return "en";
                 case "French":
                     return "fr";
+                case "Japanese":
+                    return "ja";
             }
 
             return "de";

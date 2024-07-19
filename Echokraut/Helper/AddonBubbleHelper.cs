@@ -16,6 +16,9 @@ using static System.Net.Mime.MediaTypeNames;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using ECommons.Configuration;
 using Lumina.Excel.GeneratedSheets;
+using System.Reflection;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
 namespace Echokraut.Helper
 {
@@ -51,22 +54,19 @@ namespace Echokraut.Helper
             ManagedBass.Bass.Init(Flags: ManagedBass.DeviceInitFlags.Device3D);
             //ManagedBass.Bass.CurrentDevice = 1;
             ManagedBass.Bass.Set3DFactors(0.9144f * 50, .2f, 1);
-            if (CameraManager.Instance() != null)
-                camera = CameraManager.Instance()->GetActiveCamera();
-            localPlayer = clientState.LocalPlayer;
 
             unsafe
             {
                 IntPtr fpOpenChatBubble = sigScanner.ScanText("E8 ?? ?? ?? FF 48 8B 7C 24 48 C7 46 0C 01 00 00 00");
                 if (fpOpenChatBubble != IntPtr.Zero)
                 {
-                    LogHelper.Info("AddonBubbleHelper", $"OpenChatBubble function signature found at 0x{fpOpenChatBubble:X}");
+                    LogHelper.Info("AddonBubbleHelper", $"OpenChatBubble function signature found at 0x{fpOpenChatBubble:X}", 0);
                     mOpenChatBubbleHook = gameInteropProvider.HookFromAddress<OpenChatBubbleDelegate>(fpOpenChatBubble, OpenChatBubbleDetour);
                     mOpenChatBubbleHook?.Enable();
                 }
                 else
                 {
-                    LogHelper.Error("AddonBubbleHelper", $"Unable to find the specified function signature for OpenChatBubble");
+                    LogHelper.Error("AddonBubbleHelper", $"Unable to find the specified function signature for OpenChatBubble", 0);
                 }
             }
 
@@ -80,32 +80,47 @@ namespace Echokraut.Helper
 
         }
         unsafe void Handle(IFramework f)
-        {            
-            if (!configuration.VoiceBubbles) return;
-
-            var territoryRow = clientState.TerritoryType;
-            var territory = dataManager.GetExcelSheet<TerritoryType>()!.GetRow(territoryRow);
-            if (territory == null || (!configuration.VoiceBubblesInCity && !territory.Mount)) return;
-            if (camera != null)
+        {
+            try
             {
-                var position = new Vector3();
-                if (configuration.VoiceSourceCam)
-                    position = camera->CameraBase.SceneCamera.Position;
-                else
-                    position = localPlayer.Position;
+                if (!configuration.VoiceBubbles) return;
 
-                var matrix = camera->CameraBase.SceneCamera.ViewMatrix;
-                ManagedBass.Bass.Set3DPosition(
-                    new ManagedBass.Vector3D(position.X, position.Z, -position.Y),
-                    new ManagedBass.Vector3D(),
-                    new ManagedBass.Vector3D(matrix[2], matrix[1], matrix[0]),
-                    new ManagedBass.Vector3D(0, 1, 0));
-                ManagedBass.Bass.Apply3D();
+                var territoryRow = clientState.TerritoryType;
+                var territory = dataManager.GetExcelSheet<TerritoryType>()!.GetRow(territoryRow);
+                if (territory == null || (!configuration.VoiceBubblesInCity && !territory.Mount)) return;
+
+                if (camera == null && CameraManager.Instance() != null)
+                    camera = CameraManager.Instance()->GetActiveCamera();
+
+                if (localPlayer == null)
+                    localPlayer = clientState.LocalPlayer;
+
+                if (camera != null &&localPlayer != null)
+                {
+                    var position = new Vector3();
+                    if (configuration.VoiceSourceCam)
+                        position = camera->CameraBase.SceneCamera.Position;
+                    else
+                        position = localPlayer.Position;
+
+                    var matrix = camera->CameraBase.SceneCamera.ViewMatrix;
+                    ManagedBass.Bass.Set3DPosition(
+                        new ManagedBass.Vector3D(position.X, position.Z, -position.Y),
+                        new ManagedBass.Vector3D(),
+                        new ManagedBass.Vector3D(matrix[2], matrix[1], matrix[0]),
+                        new ManagedBass.Vector3D(0, 1, 0));
+                    ManagedBass.Bass.Apply3D();
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", 0);
             }
         }
 
         unsafe private IntPtr OpenChatBubbleDetour(IntPtr pThis, GameObject* pActor, IntPtr pString, bool param3)
         {
+            int eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name);
             try
             {
                 if (!configuration.VoiceBubbles)
@@ -118,9 +133,9 @@ namespace Echokraut.Helper
 
                 if (pString != IntPtr.Zero && !clientState.IsPvPExcludingDen)
                 {
-                    LogHelper.Debug("OpenChatBubbleDetour", $"Found EntityId: {pActor->GetGameObjectId().ObjectId}");
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found EntityId: {pActor->GetGameObjectId().ObjectId}", eventId);
                     //	Idk if the actor can ever be null, but if it can, assume that we should print the bubble just in case.  Otherwise, only don't print if the actor is a player.
-                    if (pActor == null || (byte)pActor->ObjectKind != (byte)Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
+                    if (pActor == null || (byte)pActor->ObjectKind != (byte)Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Retainer)
                     {
                         long currentTime_mSec = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -139,14 +154,20 @@ namespace Echokraut.Helper
                             if (extantMatch != null)
                             {
                                 if (currentTime_mSec - extantMatch.TimeLastSeen_mSec > 5000)
-                                    Say(speakerName, text, pActor);
+                                {
+                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Found bubble: {speakerName} - {text}", eventId);
+                                    var actorObject = objects.CreateObjectReference((IntPtr)pActor);
+                                    echokraut.Say(eventId, actorObject, speakerName, text.ToString(), Enums.TextSource.AddonBubble);
+                                }
 
                                 extantMatch.TimeLastSeen_mSec = currentTime_mSec;
                             }
                             else
                             {
                                 mSpeechBubbleInfo.Add(bubbleInfo);
-                                Say(speakerName, text, pActor);
+                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Found bubble: {speakerName} - {text}", eventId);
+                                var actorObject = objects.CreateObjectReference((IntPtr)pActor);
+                                echokraut.Say(eventId, actorObject, speakerName, text.ToString(), Enums.TextSource.AddonBubble);
                             }
                         }
                     }
@@ -154,16 +175,10 @@ namespace Echokraut.Helper
             }
             catch (Exception ex)
             {
-                LogHelper.Error("OpenChatBubbleDetour", $"Error: {ex}");
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", eventId);
             }
 
             return mOpenChatBubbleHook.Original(pThis, pActor, pString, param3);
-        }
-        private unsafe void Say(SeString speakerName, SeString text, GameObject* pActor)
-        {
-            LogHelper.Info("OpenChatBubbleDetour", $"Found bubble: {speakerName} - {text}");
-            var actorObject = objects.CreateObjectReference((IntPtr)pActor);
-            echokraut.Say(actorObject, speakerName, text.ToString(), Enums.TextSource.AddonBubble);
         }
 
         public void Dispose()

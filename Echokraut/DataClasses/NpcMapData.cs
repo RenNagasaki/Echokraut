@@ -1,3 +1,4 @@
+using Dalamud.Game.ClientState.Objects.Enums;
 using Echokraut.Enums;
 using System;
 using System.Collections.Generic;
@@ -14,6 +15,12 @@ namespace Echokraut.DataClasses
         public string raceStr { get; set; }
         public Gender gender { get; set; }
         public BackendVoiceItem voiceItem { get; set; }
+
+        public ObjectKind objectKind { get; set; }
+
+        public NpcMapData(ObjectKind objectKind) {
+            this.objectKind = objectKind;
+        }
 
         public string ToString(bool showRace = false)
         {

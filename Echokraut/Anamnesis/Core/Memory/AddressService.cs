@@ -181,7 +181,7 @@ public class AddressService : ServiceBase<AddressService>
 			}
 			catch (Exception ex)
 			{
-				LogHelper.Error("Anamnesis.GetAddressFromSignature", $"Failed to scan memory for signature: {name} (Have you tried restarting FFXIV?) Ex: {ex}");
+				LogHelper.Error("Anamnesis.GetAddressFromSignature", $"Failed to scan memory for signature: {name} (Have you tried restarting FFXIV?) Ex: {ex}", 0);
 			}
 
         });

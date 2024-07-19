@@ -12,6 +12,8 @@ using Echokraut.Enums;
 using Echokraut.Utils;
 using static System.Net.Mime.MediaTypeNames;
 using System.Reflection;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
 namespace Echokraut.Helper;
 
@@ -88,7 +90,7 @@ public class AddonBattleTalkHelper
         if (Address != nint.Zero && oldAddress != Address)
         {
             oldAddress = Address;
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk address found: {Address}");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk address found: {Address}", 0);
         }
     }
 
@@ -114,7 +116,6 @@ public class AddonBattleTalkHelper
     private void HandleChange(AddonBattleTalkState state)
     {
         var (speaker, text, pollSource) = state;
-        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk ({pollSource}): \"{state}\"");
 
         if (state == default)
         {
@@ -123,21 +124,23 @@ public class AddonBattleTalkHelper
             lastAddonText = "";
             return;
         }
+        int eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name);
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk ({pollSource}): \"{state}\"", eventId);
 
         // Notify observers that the addon state was advanced
         if (!config.VoiceBattleDialogQueued)
-            plugin.Cancel();
+            plugin.Cancel(eventId);
 
         text = TalkUtils.NormalizePunctuation(text);
 
-        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk ({pollSource}): \"{text}\"");
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk ({pollSource}): \"{text}\"", eventId);
 
         {
             // This entire callback executes twice in a row - once for the voice line, and then again immediately
             // afterwards for the framework update itself. This prevents the second invocation from being spoken.
             if (lastAddonSpeaker == speaker && lastAddonText == text)
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping duplicate line: {text}");
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping duplicate line: {text}", eventId);
                 return;
             }
 
@@ -147,7 +150,7 @@ public class AddonBattleTalkHelper
 
         if (pollSource == AddonPollSource.VoiceLinePlayback)
         {
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}", eventId);
             return;
         }
 
@@ -156,11 +159,11 @@ public class AddonBattleTalkHelper
 
         if (speakerObj != null)
         {
-            plugin.Say(speakerObj, speakerObj.Name, text, TextSource.AddonTalk);
+            plugin.Say(eventId, speakerObj, speakerObj.Name, text, TextSource.AddonTalk);
         }
         else
         {
-            plugin.Say(null, state.Speaker ?? "", text, TextSource.AddonTalk);
+            plugin.Say(eventId, null, state.Speaker ?? "", text, TextSource.AddonTalk);
         }
     }
 

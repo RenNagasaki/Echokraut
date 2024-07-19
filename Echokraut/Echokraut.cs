@@ -19,6 +19,8 @@ using Echokraut.Utils;
 using System.Reflection;
 using System.Runtime.Loader;
 using System.Windows.Forms;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
 namespace Echokraut;
 
@@ -47,7 +49,6 @@ public partial class Echokraut : IDalamudPlugin
     internal readonly AddonSelectStringHelper addonSelectStringHelper;
     internal readonly AddonCutSceneSelectStringHelper addonCutSceneSelectStringHelper;
     internal readonly AddonBubbleHelper addonBubbleHelper;
-    internal readonly UngenderedOverrideManager ungenderedOverrides;
     internal readonly SoundHelper soundHelper;
     internal readonly LipSyncHelper lipSyncHelper;
     #endregion
@@ -83,8 +84,8 @@ public partial class Echokraut : IDalamudPlugin
         Configuration.Initialize(PluginInterface);
 
         LogHelper.Setup(log, Configuration);
-        LogHelper.Info("", $"{Assembly.GetCallingAssembly().Location}");
         BackendHelper.Setup(Configuration, clientState, this, Configuration.BackendSelection);
+        VoiceHelper.Setup();
         this.ConfigWindow = new ConfigWindow(this, Configuration);
 
         this.addonTalkHelper = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
@@ -92,7 +93,6 @@ public partial class Echokraut : IDalamudPlugin
         this.addonSelectStringHelper = new AddonSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonBubbleHelper = new AddonBubbleHelper(this, this.DataManager, this.Framework, this.ObjectTable,sigScanner, gameInterop, this.ClientState, this.Configuration);
-        this.ungenderedOverrides = new UngenderedOverrideManager();
         this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, sigScanner, gameInterop);
         this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration);
 
@@ -114,25 +114,25 @@ public partial class Echokraut : IDalamudPlugin
         PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUI;
     }
 
-    public void Cancel()
+    public void Cancel(int eventId)
     {
         if (Configuration.CancelSpeechOnTextAdvance)
         {
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Stopping Inference");
-            BackendHelper.OnCancel();
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Stopping Inference", eventId);
+            BackendHelper.OnCancel(eventId);
         }
     }
 
-    public void StopLipSync()
+    public void StopLipSync(int eventId)
     {
-        lipSyncHelper.StopLipSync();
+        lipSyncHelper.StopLipSync(eventId);
     }
 
-    public unsafe void Say(GameObject? speaker, SeString speakerName, string textValue, TextSource source)
+    public unsafe void Say(int eventId, GameObject? speaker, SeString speakerName, string textValue, TextSource source)
     {
         try
         {
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Preparing for Inference: {speakerName} - {textValue} - {source}");
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Preparing for Inference: {speakerName} - {textValue} - {source}", eventId);
             // Run a preprocessing pipeline to clean the text for the speech synthesizer
             var cleanText = FunctionalUtils.Pipe(
                 textValue,
@@ -142,14 +142,14 @@ public partial class Echokraut : IDalamudPlugin
                 t => this.Configuration.RemoveStutters ? TalkUtils.RemoveStutters(t) : t,
                 x => x.Trim()).Replace("/", "Schrägstrich ").Replace("C'mi", "Kami");
 
-            cleanText = TalkUtils.ReplaceRomanNumbers(cleanText); 
-            cleanText = DataHelper.analyzeAndImproveText(cleanText);
+            cleanText = TalkUtils.ReplaceRomanNumbers(eventId, cleanText); 
+            cleanText = DataHelper.AnalyzeAndImproveText(cleanText);
 
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleantext: {cleanText}");
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleantext: {cleanText}", eventId);
             // Ensure that the result is clean; ignore it otherwise
             if (!cleanText.Any() || !TalkUtils.IsSpeakable(cleanText))
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Text not speakable: {cleanText}");
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Text not speakable: {cleanText}", eventId);
                 return;
             }
 
@@ -165,36 +165,41 @@ public partial class Echokraut : IDalamudPlugin
             // as hyphens for the sake of the plugin.
             var cleanSpeakerName = TalkUtils.NormalizePunctuation(speakerName.TextValue);
 
-            NpcMapData npcData = new NpcMapData();
+            NpcMapData npcData = new NpcMapData(speaker.ObjectKind);
             // Get the speaker's race if it exists.
             var raceStr = "";
-            npcData.race = GetSpeakerRace(speaker, out raceStr);
+            npcData.race = GetSpeakerRace(eventId, speaker, out raceStr);
             npcData.raceStr = raceStr;
-            npcData.gender = CharacterGenderUtils.GetCharacterGender(speaker, this.ungenderedOverrides, this.Log);
-            npcData.name = DataHelper.cleanUpName(cleanSpeakerName);
+            npcData.gender = CharacterGenderUtils.GetCharacterGender(eventId, speaker);
+            npcData.name = DataHelper.CleanUpName(cleanSpeakerName);
 
             if (npcData.name == "PLAYER")
                 npcData.name = this.ClientState.LocalPlayer?.Name.ToString() ?? "PLAYER";
             else if (string.IsNullOrWhiteSpace(npcData.name) && source == TextSource.AddonBubble)
                 npcData.name = GetBubbleName(speaker);
 
-            var resNpcData = DataHelper.getNpcMapData(Configuration.MappedNpcs, npcData);
+            var resNpcData = DataHelper.GetCharacterMapData(Configuration.MappedNpcs, Configuration.MappedPlayers, npcData);
             if (resNpcData != null && resNpcData.race == NpcRaces.Default && npcData.raceStr != NpcRaces.Default.ToString())
             {
                 resNpcData.race = npcData.race;
                 Configuration.Save();
             }
-
-            if (resNpcData == null)
+            else if (resNpcData == null)
             {
-                Configuration.MappedNpcs.Add(npcData);
+                DataHelper.AddCharacterMapData(Configuration.MappedNpcs, Configuration.MappedPlayers, npcData);
                 Configuration.MappedNpcs = Configuration.MappedNpcs.OrderBy(p => p.ToString(true)).ToList();
                 Configuration.Save();
             }
             else
                 npcData = resNpcData;
 
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"NpcData: {npcData.ToString(true)}");
+            if (npcData.objectKind != speaker.ObjectKind)
+            {
+                npcData.objectKind = speaker.ObjectKind;
+                Configuration.Save();
+            }
+
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"NpcData: {npcData.ToString(true)}", eventId);
             // Say the thing
             var voiceMessage = new VoiceMessage
             {
@@ -203,22 +208,23 @@ public partial class Echokraut : IDalamudPlugin
                 Speaker = npcData,
                 Text = cleanText,
                 TextTemplate = textTemplate,
-                Language = this.ClientState.ClientLanguage.ToString()
+                Language = this.ClientState.ClientLanguage.ToString(),
+                eventId = eventId
             };
-            var volume = VolumeHelper.GetVoiceVolume(GameConfig);
+            var volume = VolumeHelper.GetVoiceVolume(eventId, GameConfig);
 
             if (volume > 0)
                 BackendHelper.OnSay(voiceMessage, volume);
             else
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0");
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while starting voice inference: {ex}");
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while starting voice inference: {ex}", eventId);
         }
     }
 
-    private unsafe NpcRaces GetSpeakerRace(GameObject? speaker, out string raceStr)
+    private unsafe NpcRaces GetSpeakerRace(int eventId, GameObject? speaker, out string raceStr)
     {
         var race = this.DataManager.GetExcelSheet<Race>();
         var raceEnum = NpcRaces.Default;
@@ -238,7 +244,7 @@ public partial class Echokraut : IDalamudPlugin
             if (!(row is null))
             {
                 raceStr = DataHelper.getRaceEng(row.Masculine.RawString, Log);
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found Race: {raceStr}");
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found Race: {raceStr}", eventId);
                 if (!Enum.TryParse<NpcRaces>(raceStr.Replace(" ", ""), out raceEnum))
                 {
                     var modelData = charaStruct->CharacterData.ModelSkeletonId;
@@ -265,11 +271,11 @@ public partial class Echokraut : IDalamudPlugin
                 }
             }
 
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Determined Race: {raceEnum}");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Determined Race: {raceEnum}", eventId);
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while determining race: {ex}");
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while determining race: {ex}", eventId);
         }
 
         raceStr = raceEnum.ToString();
@@ -294,6 +300,8 @@ public partial class Echokraut : IDalamudPlugin
         PlayingHelper.Dispose();
         this.addonTalkHelper.Dispose();
         this.addonBattleTalkHelper.Dispose();
+        this.addonCutSceneSelectStringHelper.Dispose();
+        this.addonSelectStringHelper.Dispose();
         this.soundHelper.Dispose();
         this.Configuration.Save();
         this.addonBubbleHelper.Dispose();

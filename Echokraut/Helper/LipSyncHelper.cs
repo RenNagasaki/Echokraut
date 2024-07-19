@@ -16,6 +16,8 @@ using Anamnesis.GameData.Excel;
 using Echokraut.DataClasses;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using System.Threading;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
 namespace Echokraut.Helper
 {
@@ -31,19 +33,19 @@ namespace Echokraut.Helper
         Dictionary<ICharacter, CancellationTokenSource> taskCancellations = new Dictionary<ICharacter, CancellationTokenSource>();
         public List<ActionTimeline> LipSyncTypes { get; private set; }
 
-        public LipSyncHelper(IClientState clientState, IObjectTable objects, Configuration config)
+        public LipSyncHelper(IClientState clientState, IObjectTable objects, Configuration config, int eventId = 0)
         {
             this.clientState = clientState;
             this.config = config;
             this.objects = objects;
 
-            InitializeAsync().ContinueWith(t => {
+            InitializeAsync(eventId).ContinueWith(t => {
                 if (t.Exception != null)
-                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Initialization failed: " + t.Exception);
+                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Initialization failed: " + t.Exception, eventId);
             });
         }
 
-        public async void TriggerLipSync(string npcName, float length, IGameObject npc = null)
+        public async void TriggerLipSync(int eventId, string npcName, float length, IGameObject npc = null)
         {
             if (Conditions.IsBoundByDuty && !Conditions.IsWatchingCutscene) return;
             if (!config.Enabled) return;
@@ -80,7 +82,7 @@ namespace Echokraut.Helper
                 remaining = remaining % 2;
                 mouthMovement[4] = remaining / 1;
                 remaining = remaining % 1;
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"durationMs[{durationMs}] durationRounded[{durationRounded}] fours[{mouthMovement[6]}] twos[{mouthMovement[5]}] ones[{mouthMovement[4]}]");
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"durationMs[{durationMs}] durationRounded[{durationRounded}] fours[{mouthMovement[6]}] twos[{mouthMovement[5]}] ones[{mouthMovement[4]}]", eventId);
 
                 // Decide on the Mode
                 ActorMemory.CharacterModes intialState = actorMemory.CharacterMode;
@@ -106,14 +108,14 @@ namespace Echokraut.Helper
 
                                 int adjustedDelay = CalculateAdjustedDelay(mouthMovement[6] * 4000, 6);
 
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[6] durationMs[{mouthMovement[6] * 4}] delay [{adjustedDelay}]");
+                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[6] durationMs[{mouthMovement[6] * 4}] delay [{adjustedDelay}]", eventId);
 
                                 await Task.Delay(adjustedDelay, token);
 
                                 if (!token.IsCancellationRequested && character != null && actorMemory != null)
                                 {
 
-                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[6] was finished");
+                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[6] was finished", eventId);
 
                                     animationMemory.LipsOverride = 0;
                                     MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
@@ -129,13 +131,13 @@ namespace Echokraut.Helper
                                 MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), LipSyncTypes[5].Timeline.AnimationId, "Lipsync");
                                 int adjustedDelay = CalculateAdjustedDelay(mouthMovement[5] * 2000, 5);
 
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[5] durationMs[{mouthMovement[5] * 2}] delay [{adjustedDelay}]");
+                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[5] durationMs[{mouthMovement[5] * 2}] delay [{adjustedDelay}]", eventId);
 
                                 await Task.Delay(adjustedDelay, token);
                                 if (!token.IsCancellationRequested && character != null && actorMemory != null)
                                 {
 
-                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[5] was finished");
+                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[5] was finished", eventId);
 
                                     animationMemory.LipsOverride = 0;
                                     MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
@@ -151,13 +153,13 @@ namespace Echokraut.Helper
                                 MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), LipSyncTypes[4].Timeline.AnimationId, "Lipsync");
                                 int adjustedDelay = CalculateAdjustedDelay(mouthMovement[4] * 1000, 4);
 
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[4] durationMs[{mouthMovement[4]}] delay [{adjustedDelay}]");
+                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[4] durationMs[{mouthMovement[4]}] delay [{adjustedDelay}]", eventId);
 
                                 await Task.Delay(adjustedDelay, token);
                                 if (!token.IsCancellationRequested && character != null && actorMemory != null)
                                 {
 
-                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[4] was finished");
+                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[4] was finished", eventId);
 
                                     animationMemory.LipsOverride = 0;
                                     MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
@@ -168,7 +170,7 @@ namespace Echokraut.Helper
                             if (!token.IsCancellationRequested)
                             {
 
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was Completed");
+                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was Completed", eventId);
 
                                 cts.Dispose();
                                 taskCancellations.Remove(character);
@@ -178,7 +180,7 @@ namespace Echokraut.Helper
                         {
 
 
-                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was canceled.");
+                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was canceled.", eventId);
 
                             animationMemory.LipsOverride = 0;
                             MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
@@ -191,13 +193,13 @@ namespace Echokraut.Helper
             }
         }
 
-        public async void StopLipSync()
+        public async void StopLipSync(int eventId)
         {
             if (Conditions.IsBoundByDuty && !Conditions.IsWatchingCutscene) return;
             if (!config.Enabled) return;
             if (currentLipsync == null) return;
 
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Stopping Lipsync for {currentLipsync.Name}");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Stopping Lipsync for {currentLipsync.Name}", eventId);
             if (taskCancellations.TryGetValue(currentLipsync, out var cts))
             {
                 //LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Cancellation " + character.Name);
@@ -207,7 +209,7 @@ namespace Echokraut.Helper
                 }
                 catch (ObjectDisposedException)
                 {
-                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"CTS for {currentLipsync.Name} was called to be disposed even though it was disposed already.");
+                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"CTS for {currentLipsync.Name} was called to be disposed even though it was disposed already.", eventId);
                 }
                 return;
             }
@@ -223,15 +225,15 @@ namespace Echokraut.Helper
             }
             catch (Exception ex)
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"{ex}");
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"{ex}", eventId);
             }
         }
 
-        private async Task InitializeAsync()
+        private async Task InitializeAsync(int eventId)
         {
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "InitializeAsync --> Waiting for Game Process Stability");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "InitializeAsync --> Waiting for Game Process Stability", eventId);
             await WaitForGameProcessStability();
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "InitializeAsync --> Done waiting");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "InitializeAsync --> Done waiting", eventId);
             InitializeServices();
         }
 
@@ -256,10 +258,10 @@ namespace Echokraut.Helper
         private async void StartServices()
         {
             await _memoryService.Initialize();
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StartServices --> Waiting for Process Response");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StartServices --> Waiting for Process Response", 0);
             while (!Process.GetCurrentProcess().Responding)
                 await Task.Delay(100);
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StartServices --> Done waiting");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StartServices --> Done waiting", 0);
             await _memoryService.OpenProcess(Process.GetCurrentProcess());
             await _gameDataService.Initialize();
 

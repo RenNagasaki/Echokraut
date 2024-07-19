@@ -3,7 +3,7 @@
   <Import Project="Dalamud.Plugin.Bootstrap.targets" />
 
   <PropertyGroup>
-    <Version>0.9.1.5</Version>
+    <Version>0.9.2.1</Version>
     <Description>A TTS Dalamud Plugin that breaks the silence! For self hosted TTS Services.</Description>
     <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
@@ -16,8 +16,9 @@
     <None Remove="Anamnesis\Data\ItemCategories.json" />
     <None Remove="Anamnesis\Data\NpcNames.json" />
     <None Remove="Anamnesis\Data\Tips.json" />
-    <None Remove="Utils\NpcRacesMap.json" />
+    <None Remove="Resources\VoiceNames.json" />
     <None Remove="Utils\overridenModelIds.txt" />
+    <None Remove="Utils\VoiceNames.json" />
   </ItemGroup>
 
   <ItemGroup>
@@ -26,8 +27,8 @@
     <EmbeddedResource Include="Anamnesis\Data\ItemCategories.json" />
     <EmbeddedResource Include="Anamnesis\Data\NpcNames.json" />
     <EmbeddedResource Include="Anamnesis\Data\Tips.json" />
-    <EmbeddedResource Include="Utils\overridenModelIds.txt">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    <EmbeddedResource Include="Resources\VoiceNames.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </EmbeddedResource>
   </ItemGroup>
 
@@ -41,10 +42,6 @@
   <ItemGroup>
     <ProjectReference Include="..\ECommons\ECommons\ECommons.csproj" />
     <ProjectReference Include="..\OtterGui\OtterGui.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Resource Include="Utils\NpcRacesMap.json" />
   </ItemGroup>
 
   <ItemGroup>

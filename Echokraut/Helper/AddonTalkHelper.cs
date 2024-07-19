@@ -30,6 +30,8 @@ using static System.Windows.Forms.VisualStyles.VisualStyleElement.Tab;
 using System.Reflection;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using System.Runtime.InteropServices;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 
 namespace Echokraut.Helper;
 
@@ -106,7 +108,7 @@ public class AddonTalkHelper
         if (Address != nint.Zero && oldAddress != Address)
         {
             oldAddress = Address;
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonTalk address found: {Address}");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonTalk address found: {Address}", 0);
         }
     }
 
@@ -133,30 +135,30 @@ public class AddonTalkHelper
     {
         var (speaker, text, pollSource) = state;
 
-        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonTalk ({state})");
         if (state == default)
         {
             PlayingHelper.InDialog = false;
             // The addon was closed
-            plugin.Cancel();
+            plugin.Cancel(0);
             lastAddonSpeaker = "";
             lastAddonText = "";
             return;
         }
+        var eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name);
 
         // Notify observers that the addon state was advanced
-        plugin.Cancel();
+        plugin.Cancel(eventId);
 
         text = TalkUtils.NormalizePunctuation(text);
 
-        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonTalk ({pollSource}): \"{text}\"");
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonTalk ({pollSource}): \"{text}\"", eventId);
 
         {
             // This entire callback executes twice in a row - once for the voice line, and then again immediately
             // afterwards for the framework update itself. This prevents the second invocation from being spoken.
             if (lastAddonSpeaker == speaker && lastAddonText == text)
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping duplicate line: {text}");
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping duplicate line: {text}", eventId);
                 return;
             }
 
@@ -166,7 +168,7 @@ public class AddonTalkHelper
 
         if (pollSource == AddonPollSource.VoiceLinePlayback)
         {
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}", eventId);
             return;
         }
 
@@ -174,15 +176,15 @@ public class AddonTalkHelper
         var speakerObj = speaker != null ? ObjectTableUtils.GetGameObjectByName(objects, speaker) : null;
 
         PlayingHelper.InDialog = true;
-        LogHelper.Debug("TalkHelper.HandleChange", "Setting inDialog true");
+        LogHelper.Debug("TalkHelper.HandleChange", "Setting inDialog true", eventId);
 
         if (speakerObj != null)
         {
-            plugin.Say(speakerObj, speakerObj.Name, text, TextSource.AddonTalk);
+            plugin.Say(eventId, speakerObj, speakerObj.Name, text, TextSource.AddonTalk);
         }
         else
         {
-            plugin.Say(null, state.Speaker ?? "", text, TextSource.AddonTalk);
+            plugin.Say(eventId, null, state.Speaker ?? "", text, TextSource.AddonTalk);
         }
     }
 
@@ -203,9 +205,9 @@ public class AddonTalkHelper
         return (AddonTalk*)Address.ToPointer();
     }
 
-    public void Click()
+    public void Click(int eventId)
     {
-        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Auto advancing...");
+        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Auto advancing...", eventId);
         ClickHelper.Click(Address);
     }
 
