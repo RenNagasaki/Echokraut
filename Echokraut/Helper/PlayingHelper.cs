@@ -1,4 +1,5 @@
 using Echokraut.DataClasses;
+using ECommons.DalamudServices;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using ManagedBass;
@@ -265,7 +266,7 @@ namespace Echokraut.Helper
                 try
                 {
                     if (InDialog)
-                        Echokraut.addonTalkHelper.Click(eventId);
+                        Svc.Framework.RunOnFrameworkThread(() => Echokraut.addonTalkHelper.Click(eventId));
                     else
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Not inDialog", eventId);
                 }

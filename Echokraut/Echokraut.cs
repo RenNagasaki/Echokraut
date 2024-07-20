@@ -22,6 +22,8 @@ using System.Windows.Forms;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Dalamud.Game.ClientState.Objects.Enums;
+using ECommons;
+using static Anamnesis.GUI.Views.FileBrowserView;
 
 namespace Echokraut;
 
@@ -86,7 +88,8 @@ public partial class Echokraut : IDalamudPlugin
 
         LogHelper.Setup(log, Configuration);
         BackendHelper.Setup(Configuration, clientState, this, Configuration.BackendSelection);
-        VoiceHelper.Setup();
+        VoiceHelper.Setup(); 
+        ECommonsMain.Init(pluginInterface, this, ECommons.Module.All);
         this.ConfigWindow = new ConfigWindow(this, Configuration);
 
         this.addonTalkHelper = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
@@ -301,7 +304,8 @@ public partial class Echokraut : IDalamudPlugin
 
     public void Dispose()
     {
-        PlayingHelper.Dispose();
+        PlayingHelper.Dispose(); 
+        ECommonsMain.Dispose();
         this.addonTalkHelper.Dispose();
         this.addonBattleTalkHelper.Dispose();
         this.addonCutSceneSelectStringHelper.Dispose();
