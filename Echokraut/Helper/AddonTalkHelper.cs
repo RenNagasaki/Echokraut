@@ -51,7 +51,6 @@ public class AddonTalkHelper
     private readonly string name;
 
     public static nint Address { get; set; }
-    private static nint oldAddress {  get; set; }
 
     // Most recent speaker/text specific to this addon
     private string? lastAddonSpeaker;
@@ -104,11 +103,16 @@ public class AddonTalkHelper
             return;
         }
 
-        Address = gui.GetAddonByName("Talk");
-        if (Address != nint.Zero && oldAddress != Address)
+        var address = gui.GetAddonByName("Talk");
+        if (address != nint.Zero && Address != address)
         {
-            oldAddress = Address;
+            Address = address;
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonTalk address found: {Address}", 0);
+        }
+        else if (address == nint.Zero && Address != address)
+        {
+            Address = address;
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonTalk done, address: {Address}", 0);
         }
     }
 
@@ -208,6 +212,7 @@ public class AddonTalkHelper
     public void Click(int eventId)
     {
         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Auto advancing...", eventId);
+        UpdateAddonAddress();
         ClickHelper.Click(Address);
     }
 

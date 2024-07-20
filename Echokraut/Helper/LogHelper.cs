@@ -71,12 +71,12 @@ namespace Echokraut.Helper
             Log.Debug(text);
         }
 
-        public static void Error(string method, string text, int eventId)
+        public static void Error(string method, string text, int eventId, bool internalLog = true)
         {
             text = $"{method} - {text}";
             ErrorLogs.Add(new LogMessage() { message = $"{text} - ID:{eventId}", color = Constants.ERRORLOGCOLOR, timeStamp = DateTime.Now });
 
-            if (Config.ShowErrorLog)
+            if (Config.ShowErrorLog && internalLog)
                 logList.Add(new LogMessage() { message = $"{text} - ID:{eventId}", color = Constants.ERRORLOGCOLOR, timeStamp = DateTime.Now });
 
             Log.Error(text);

@@ -20,9 +20,7 @@ namespace Echokraut.Helper
         {
             var addonBase = (AtkUnitBase*) addon;
             if (addonBase != null && addonBase->IsVisible)
-            {
                 new AddonMaster.Talk(addon).Click();
-            }
         }
     }
 }

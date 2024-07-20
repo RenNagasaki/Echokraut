@@ -21,6 +21,7 @@ using System.Runtime.Loader;
 using System.Windows.Forms;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using Dalamud.Game.ClientState.Objects.Enums;
 
 namespace Echokraut;
 
@@ -149,7 +150,8 @@ public partial class Echokraut : IDalamudPlugin
             // Ensure that the result is clean; ignore it otherwise
             if (!cleanText.Any() || !TalkUtils.IsSpeakable(cleanText))
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Text not speakable: {cleanText}", eventId);
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text not speakable: {cleanText}", eventId);
+                LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
                 return;
             }
 
@@ -165,7 +167,9 @@ public partial class Echokraut : IDalamudPlugin
             // as hyphens for the sake of the plugin.
             var cleanSpeakerName = TalkUtils.NormalizePunctuation(speakerName.TextValue);
 
-            NpcMapData npcData = new NpcMapData(speaker.ObjectKind);
+            var objectKind = speaker == null ? ObjectKind.None : speaker.ObjectKind;
+
+            NpcMapData npcData = new NpcMapData(objectKind);
             // Get the speaker's race if it exists.
             var raceStr = "";
             npcData.race = GetSpeakerRace(eventId, speaker, out raceStr);
@@ -193,9 +197,9 @@ public partial class Echokraut : IDalamudPlugin
             else
                 npcData = resNpcData;
 
-            if (npcData.objectKind != speaker.ObjectKind)
+            if (npcData.objectKind != objectKind)
             {
-                npcData.objectKind = speaker.ObjectKind;
+                npcData.objectKind = objectKind;
                 Configuration.Save();
             }
 
