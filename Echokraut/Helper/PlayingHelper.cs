@@ -124,7 +124,6 @@ namespace Echokraut.Helper
             var eventId = -1;
             while (PlayingBubbleQueue.Count > 0)
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Playing next bubble queue item", eventId);
                 try
                 {
                     var queueItem = PlayingBubbleQueue[0];
@@ -132,6 +131,7 @@ namespace Echokraut.Helper
                     PlayingBubbleQueueText.RemoveAt(0);
                     PlayingBubbleQueue.RemoveAt(0);
                     eventId = queueItemText.eventId;
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Playing next bubble queue item", eventId);
                     var volume10k = Volume * 15000;
                     Bass.GlobalSampleVolume = Convert.ToInt32(volume10k > 10000 ? 10000 : volume10k);
 

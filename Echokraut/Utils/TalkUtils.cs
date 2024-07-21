@@ -147,6 +147,15 @@ namespace Echokraut.TextToTalk.Utils
                    ""; // Hopefully, this one is only in Kan-E-Senna's name? Otherwise, I'm not sure how to parse this correctly.
         }
 
+        public static string ReplacePhonetics(string text, List<PhoneticCorrection> corrections)
+        {
+            foreach (var correction in corrections) {
+                text = text.Replace(correction.OriginalText, correction.CorrectedText, StringComparison.OrdinalIgnoreCase);
+            }
+
+            return text;
+        }
+
         public static string StripWorldFromNames(SeString message)
         {
             // Remove world from all names in message body

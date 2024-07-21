@@ -144,9 +144,10 @@ public partial class Echokraut : IDalamudPlugin
                 TalkUtils.ReplaceSsmlTokens,
                 TalkUtils.NormalizePunctuation,
                 t => this.Configuration.RemoveStutters ? TalkUtils.RemoveStutters(t) : t,
-                x => x.Trim()).Replace("/", "Schrägstrich ").Replace("C'mi", "Kami");
+                x => x.Trim());
 
-            cleanText = TalkUtils.ReplaceRomanNumbers(eventId, cleanText); 
+            cleanText = TalkUtils.ReplaceRomanNumbers(eventId, cleanText);
+            cleanText = TalkUtils.ReplacePhonetics(cleanText, Configuration.PhoneticCorrections);
             cleanText = DataHelper.AnalyzeAndImproveText(cleanText);
 
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleantext: {cleanText}", eventId);

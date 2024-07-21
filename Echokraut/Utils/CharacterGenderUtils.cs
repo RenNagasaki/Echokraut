@@ -33,10 +33,10 @@ public static class CharacterGenderUtils
         // Actors only have 0/1 genders regardless of their canonical genders, so this
         // needs to be specified by us. If an actor is canonically ungendered, their
         // gender seems to always be left at 0 (male).
-        var modelId = charaStruct->CharacterData.ModelCharaId_2;
+        var modelId = charaStruct->CharacterData.ModelSkeletonId_2;
         if (modelId == -1)
         {
-            modelId = charaStruct->CharacterData.ModelCharaId;
+            modelId = charaStruct->CharacterData.ModelSkeletonId;
         }
 
         LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Got model ID {modelId} for {gObj.ObjectKind} \"{gObj.Name}\" (gender read as: {actorGender})", eventId);

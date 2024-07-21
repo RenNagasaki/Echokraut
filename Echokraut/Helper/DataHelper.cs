@@ -16,9 +16,12 @@ namespace Echokraut.Helper
 {
     public static class DataHelper
     {
+        static int NextEventId = 1;
+
         public static int EventId(string methodName)
         {
-            var eventId = new Random(Convert.ToInt32(DateTime.Now.TimeOfDay.TotalMilliseconds)).Next(1, 10000);
+            var eventId = NextEventId;
+            NextEventId++;
             LogHelper.Start(methodName, eventId);
             return eventId;
         }
