@@ -402,6 +402,12 @@ public class ConfigWindow : Window, IDisposable
                         localVoices.Insert(0, new BackendVoiceItem() { voiceName = "Remove", race = NpcRaces.Default, gender = Gender.None });
                         var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
                         var presetIndex = localVoices.FindIndex(p => p.ToString().Contains(mapData.voiceItem?.ToString() ?? "Narrator"));
+
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Trash.ToIconString()}##delnpc{mapData.ToString()}", new Vector2(25, 25), "Remove NPC mapping", false, true))
+                        {
+                            toBeRemoved = mapData;
+                        }
+                        ImGui.SameLine();
                         if (ImGui.Combo($"{mapData.ToString(true)}##EKCBoxNPC{mapData.ToString(Configuration.VoicesAllRaces)}", ref presetIndex, voicesDisplay, voicesDisplay.Length))
                         {
                             var newVoiceItem = localVoices[presetIndex];
@@ -429,6 +435,8 @@ public class ConfigWindow : Window, IDisposable
                         Configuration.MappedNpcs.Remove(toBeRemoved);
                         Configuration.Save();
                     }
+
+                    ImGui.EndChild();
                 }
             }
 
@@ -475,6 +483,11 @@ public class ConfigWindow : Window, IDisposable
                         localVoices.Insert(0, new BackendVoiceItem() { voiceName = "Remove", race = NpcRaces.Default, gender = Gender.None });
                         var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
                         var presetIndex = localVoices.FindIndex(p => p.ToString().Contains(mapData.voiceItem?.ToString() ?? "Narrator"));
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Trash.ToIconString()}##delplayer{mapData.ToString()}", new Vector2(25, 25), "Remove player mapping", false, true))
+                        {
+                            toBeRemoved = mapData;
+                        }
+                        ImGui.SameLine();
                         if (ImGui.Combo($"{mapData.ToString(true)}##EKCBoxNPC{mapData.ToString(Configuration.VoicesAllRaces)}", ref presetIndex, voicesDisplay, voicesDisplay.Length))
                         {
                             var newVoiceItem = localVoices[presetIndex];
@@ -502,6 +515,8 @@ public class ConfigWindow : Window, IDisposable
                         Configuration.MappedPlayers.Remove(toBeRemoved);
                         Configuration.Save();
                     }
+
+                    ImGui.EndChild();
                 }
             }
         }
@@ -515,9 +530,22 @@ public class ConfigWindow : Window, IDisposable
     {
         try
         {
+            if (Configuration.PhoneticCorrections.Count == 0)
+            {
+                Configuration.PhoneticCorrections.Add(new PhoneticCorrection("C'mi", "Kami"));
+                Configuration.PhoneticCorrections.Add(new PhoneticCorrection("/", "Schrägstrich"));
+                Configuration.PhoneticCorrections.Sort();
+                Configuration.Save();
+            }
+
             PhoneticCorrection toBeRemoved = null;
             foreach (PhoneticCorrection phoneticCorrection in Configuration.PhoneticCorrections)
             {
+                if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Trash.ToIconString()}##delphoncorr{phoneticCorrection.ToString()}", new Vector2(25, 25), "Remove phonetic correction", false, true))
+                {
+                    toBeRemoved = phoneticCorrection;
+                }
+                ImGui.SameLine();
                 ImGui.InputTextWithHint("Original text", "The original text to be replaces in TTS", ref phoneticCorrection.OriginalText, 20);
                 ImGui.SameLine();
                 ImGui.InputTextWithHint("Corrected text", "The text which will be used in TTS", ref phoneticCorrection.CorrectedText, 20);
@@ -528,7 +556,7 @@ public class ConfigWindow : Window, IDisposable
                 if (!string.IsNullOrWhiteSpace(originalText) && !string.IsNullOrWhiteSpace(correctedText))
                 {
                     PhoneticCorrection newCorrection = new PhoneticCorrection(originalText, correctedText);
-                    if (Configuration.PhoneticCorrections.FindIndex(p => p.ToString() == newCorrection.ToString()) < 0)
+                    if (Configuration.PhoneticCorrections.Contains(newCorrection))
                     {
                         Configuration.PhoneticCorrections.Add(newCorrection);
                         Configuration.PhoneticCorrections.Sort();
@@ -538,6 +566,7 @@ public class ConfigWindow : Window, IDisposable
                     }
                 }
             }
+            ImGui.SameLine();
             ImGui.InputTextWithHint("Original text", "The original text to be replaces in TTS", ref originalText, 20);
             ImGui.SameLine();
             ImGui.InputTextWithHint("Corrected text", "The text which will be used in TTS", ref correctedText, 20);
@@ -617,6 +646,8 @@ public class ConfigWindow : Window, IDisposable
                     {
                         ImGui.SetScrollHereY();
                     }
+
+                    ImGui.EndChild();
                 }
             }
         }

@@ -16,5 +16,17 @@ namespace Echokraut.DataClasses
             this.OriginalText = originalText;
             this.CorrectedText = correctedText;
         }
+
+        public override string ToString() {
+            return $"{OriginalText} - {CorrectedText}";
+        }
+
+        public override bool Equals(object? obj)
+        {
+            if (((PhoneticCorrection)obj).ToString() == this.ToString())
+                return true ;
+
+            return false;
+        }
     }
 }

@@ -41,7 +41,7 @@ public class Configuration : IPluginConfiguration
     public bool VoiceBubbles { get; set; } = false;
     public bool VoiceBubblesInCity { get; set; } = false;
     public bool VoiceSourceCam { get; set; } = false;
-    public List<PhoneticCorrection> PhoneticCorrections { get; set; } = new List<PhoneticCorrection>() { new PhoneticCorrection("C'mi", "Kami"), new PhoneticCorrection("/", "Schrägstrich") };
+    public List<PhoneticCorrection> PhoneticCorrections { get; set; } = new List<PhoneticCorrection>();
 
     // the below exist just to make saving less cumbersome
     [NonSerialized]
