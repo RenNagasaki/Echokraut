@@ -75,7 +75,7 @@ namespace Echokraut.Helper
             return filePath;
         }
 
-        public static void WriteStreamToFile(int eventId, string filePath, ReadSeekableStream stream)
+        public static bool WriteStreamToFile(int eventId, string filePath, ReadSeekableStream stream)
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Saving audio locally: {filePath}", eventId);
             try
@@ -85,11 +85,15 @@ namespace Echokraut.Helper
 
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                 NAudio.Wave.WaveFileWriter.CreateWaveFile(filePath, rawStream);
+
+                return true;
             }
             catch (Exception ex)
             {
                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while saving audio locally: {ex.ToString()}", eventId);
             }
+
+            return false;
         }
     }
 }

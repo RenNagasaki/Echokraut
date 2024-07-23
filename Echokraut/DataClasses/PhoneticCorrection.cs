@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Echokraut.DataClasses
 {
-    public class PhoneticCorrection
+    public class PhoneticCorrection : IComparable
     {
         public string OriginalText = "";
         public string CorrectedText = "";
@@ -23,10 +23,16 @@ namespace Echokraut.DataClasses
 
         public override bool Equals(object? obj)
         {
-            if (((PhoneticCorrection)obj).ToString() == this.ToString())
+            if (((PhoneticCorrection)obj).ToString() == ToString())
                 return true ;
 
             return false;
+        }
+
+        public int CompareTo(object? obj)
+        {
+            var otherObj = ((PhoneticCorrection)obj);
+            return otherObj.ToString().CompareTo(ToString());
         }
     }
 }

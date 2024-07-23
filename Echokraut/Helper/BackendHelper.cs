@@ -56,7 +56,6 @@ namespace Echokraut.Helper
             switch (voiceMessage.Source)
             {
                 case TextSource.Chat:
-                    break;
                 case TextSource.AddonBubble:
                     PlayingHelper.AddRequestBubbleToQueue(voiceMessage);
                     break;
@@ -93,7 +92,7 @@ namespace Echokraut.Helper
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Success", eventId);
         }
 
-        public static async void GenerateVoice(VoiceMessage message)
+        public static async Task<bool> GenerateVoice(VoiceMessage message)
         {
             var eventId = message.eventId;
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating...", eventId);
@@ -120,11 +119,10 @@ namespace Echokraut.Helper
                 }
 
                 if (ready != "Ready")
-                    return;
+                    return false;
 
                 var responseStream = await backend.GenerateAudioStreamFromVoice(eventId, text, voice, language);
-
-                if (message.Source == TextSource.AddonBubble)
+                if (message.Source == TextSource.AddonBubble || message.Source == TextSource.Chat)
                 {
                     if (Configuration.SaveToLocal && Directory.Exists(Configuration.LocalSaveLocation))
                     {
@@ -134,10 +132,12 @@ namespace Echokraut.Helper
                         if (!string.IsNullOrWhiteSpace(playedText.Text))
                         {
                             var filePath = FileHelper.GetLocalAudioPath(Configuration.LocalSaveLocation, playedText);
-                            var stream = responseStream;
-                            FileHelper.WriteStreamToFile(eventId, filePath, stream as ReadSeekableStream);
-                            PlayingHelper.PlayingBubbleQueue.Add(filePath);
-                            PlayingHelper.PlayingBubbleQueueText.Add(message);
+                            if (FileHelper.WriteStreamToFile(eventId, filePath, responseStream as ReadSeekableStream))
+                            {
+                                PlayingHelper.PlayingBubbleQueue.Add(filePath);
+                                PlayingHelper.PlayingBubbleQueueText.Add(message);
+                            }
+                            return true;
                         }
                     }
                     else
@@ -151,6 +151,8 @@ namespace Echokraut.Helper
                     {
                         PlayingHelper.PlayingQueue.Add(responseStream);
                         PlayingHelper.PlayingQueueText.Add(message);
+
+                        return true;
                     }
                 }
             }
@@ -158,6 +160,8 @@ namespace Echokraut.Helper
             {
                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), eventId);
             }
+
+            return false;
         }
 
         public static async Task<string> CheckReady(int eventId)

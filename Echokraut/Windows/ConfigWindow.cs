@@ -1,23 +1,18 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
-using System.Xml.Linq;
 using Dalamud.Interface.Windowing;
 using Echokraut.DataClasses;
 using ImGuiNET;
-using static Dalamud.Interface.Utility.Raii.ImRaii;
-using Dalamud.Logging;
-using Dalamud.Plugin.Services;
 using Echokraut.Enums;
 using System.Linq;
 using Dalamud.Interface;
-using Echokraut.Backend;
 using Echokraut.Helper;
 using System.Reflection;
 using System.IO;
 using Dalamud.Interface.ImGuiFileDialog;
 using OtterGui;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using Dalamud.Interface.Utility.Raii;
 
 namespace Echokraut.Windows;
 
@@ -109,57 +104,88 @@ public class ConfigWindow : Window, IDisposable
 
     private void DrawSettings()
     {
-        try { 
-            if (ImGui.CollapsingHeader("General"))
+        try {
+            DrawGeneralSettings();
+
+            DrawBackendSettings();
+
+            DrawSaveSettings();
+
+            DrawBubbleSettings();
+
+            DrawChatSettings();
+        }
+        catch (Exception ex)
+        {
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", 0);
+        }
+    }
+
+    private void DrawGeneralSettings()
+    {
+        if (ImGui.CollapsingHeader("General"))
+        {
+            var enabled = this.Configuration.Enabled;
+            if (ImGui.Checkbox("Enabled", ref enabled))
             {
-                var enabled = this.Configuration.Enabled;
-                if (ImGui.Checkbox("Enabled", ref enabled))
-                {
-                    this.Configuration.Enabled = enabled;
-                    this.Configuration.Save();
-                }
+                this.Configuration.Enabled = enabled;
+                this.Configuration.Save();
+            }
+
+            using (var disabled = ImRaii.Disabled(!enabled))
+            {
                 var voiceDialog = this.Configuration.VoiceDialog;
                 if (ImGui.Checkbox("Voice dialog", ref voiceDialog))
                 {
                     this.Configuration.VoiceDialog = voiceDialog;
                     this.Configuration.Save();
                 }
+
                 var voiceBattleDialog = this.Configuration.VoiceBattleDialog;
                 if (ImGui.Checkbox("Voice battle dialog", ref voiceBattleDialog))
                 {
                     this.Configuration.VoiceBattleDialog = voiceBattleDialog;
                     this.Configuration.Save();
                 }
-                var voiceBattleDialogQueued = this.Configuration.VoiceBattleDialogQueued;
-                if (ImGui.Checkbox("Voice battle dialog in a queue", ref voiceBattleDialogQueued))
+
+                using (var disabled2 = ImRaii.Disabled(!voiceBattleDialog))
                 {
-                    this.Configuration.VoiceBattleDialogQueued = voiceBattleDialogQueued;
-                    this.Configuration.Save();
+                    var voiceBattleDialogQueued = this.Configuration.VoiceBattleDialogQueued;
+                    if (ImGui.Checkbox("Voice battle dialog in a queue", ref voiceBattleDialogQueued))
+                    {
+                        this.Configuration.VoiceBattleDialogQueued = voiceBattleDialogQueued;
+                        this.Configuration.Save();
+                    }
                 }
+
                 var voicePlayerChoicesCutscene = this.Configuration.VoicePlayerChoicesCutscene;
                 if (ImGui.Checkbox("Voice player choices in cutscene", ref voicePlayerChoicesCutscene))
                 {
                     this.Configuration.VoicePlayerChoicesCutscene = voicePlayerChoicesCutscene;
                     this.Configuration.Save();
                 }
+
                 var voicePlayerChoices = this.Configuration.VoicePlayerChoices;
                 if (ImGui.Checkbox("Voice player choices outside of cutscene", ref voicePlayerChoices))
                 {
                     this.Configuration.VoicePlayerChoices = voicePlayerChoices;
                     this.Configuration.Save();
                 }
+
                 var cancelAdvance = this.Configuration.CancelSpeechOnTextAdvance;
                 if (ImGui.Checkbox("Cancel voice on text advance", ref cancelAdvance))
                 {
                     this.Configuration.CancelSpeechOnTextAdvance = cancelAdvance;
                     this.Configuration.Save();
                 }
+
                 var autoAdvanceOnSpeechCompletion = this.Configuration.AutoAdvanceTextAfterSpeechCompleted;
-                if (ImGui.Checkbox("Auto advance text on speech completion", ref autoAdvanceOnSpeechCompletion))
+                if (ImGui.Checkbox("Click dialogue window after speech completion", ref autoAdvanceOnSpeechCompletion))
                 {
                     this.Configuration.AutoAdvanceTextAfterSpeechCompleted = autoAdvanceOnSpeechCompletion;
                     this.Configuration.Save();
                 }
+
                 var removeStutters = this.Configuration.RemoveStutters;
                 if (ImGui.Checkbox("Remove stutters", ref removeStutters))
                 {
@@ -167,66 +193,77 @@ public class ConfigWindow : Window, IDisposable
                     this.Configuration.Save();
                 }
             }
+        }
+    }
 
-
-            if (ImGui.CollapsingHeader("Backend"))
+    private void DrawBackendSettings()
+    {
+        if (ImGui.CollapsingHeader("Backend"))
+        {
+            var backends = Enum.GetValues<TTSBackends>().ToArray();
+            var backendsDisplay = backends.Select(b => b.ToString()).ToArray();
+            var presetIndex = Enum.GetValues<TTSBackends>().ToList().IndexOf(this.Configuration.BackendSelection);
+            if (ImGui.Combo($"Select Backend##EKCBoxBackend", ref presetIndex, backendsDisplay, backendsDisplay.Length))
             {
-                var backends = Enum.GetValues<TTSBackends>().ToArray();
-                var backendsDisplay = backends.Select(b => b.ToString()).ToArray();
-                var presetIndex = Enum.GetValues<TTSBackends>().ToList().IndexOf(this.Configuration.BackendSelection);
-                if (ImGui.Combo($"Select Backend##EKCBoxBackend", ref presetIndex, backendsDisplay, backendsDisplay.Length))
-                {
-                    var backendSelection = backends[presetIndex];
-                    this.Configuration.BackendSelection = backendSelection; 
-                    this.Configuration.Save();
-                    BackendHelper.SetBackendType(backendSelection);
+                var backendSelection = backends[presetIndex];
+                this.Configuration.BackendSelection = backendSelection;
+                this.Configuration.Save();
+                BackendHelper.SetBackendType(backendSelection);
 
-                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated backendselection to: {Constants.BACKENDS[presetIndex]}", 0);
-                }
-
-                if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
-                {
-                    if (ImGui.InputText($"Base Url##EKBaseUrl", ref this.Configuration.Alltalk.BaseUrl, 40))
-                        this.Configuration.Save();
-
-                }
-
-                if (ImGui.Button($"Test Connection##EKTestConnection"))
-                {
-                    BackendCheckReady(0);
-                }
-
-                if (ImGui.Button($"Load Voices##EKLoadVoices"))
-                {
-                    BackendGetVoices();
-                }
-
-                if (!string.IsNullOrWhiteSpace(testConnectionRes))
-                    ImGui.TextColored(new(1.0f, 1.0f, 1.0f, 0.6f), $"Connection test result: {testConnectionRes}");
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated backendselection to: {Constants.BACKENDS[presetIndex]}", 0);
             }
 
-
-            if (ImGui.CollapsingHeader("Save locally"))
+            if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
             {
-                var saveLocally = this.Configuration.SaveToLocal;
-                if (ImGui.Checkbox("Save generated audio locally", ref saveLocally))
-                {
-                    this.Configuration.SaveToLocal = saveLocally;
+                if (ImGui.InputText($"Base Url##EKBaseUrl", ref this.Configuration.Alltalk.BaseUrl, 40))
                     this.Configuration.Save();
-                }
-                var loadLocalFirst = this.Configuration.LoadFromLocalFirst;
-                if (ImGui.Checkbox("Search audio locally first before generating", ref loadLocalFirst))
-                {
-                    this.Configuration.LoadFromLocalFirst = loadLocalFirst;
-                    this.Configuration.Save();
-                }
+
+            }
+
+            if (ImGui.Button($"Test Connection##EKTestConnection"))
+            {
+                BackendCheckReady(0);
+            }
+
+            if (ImGui.Button($"Load Voices##EKLoadVoices"))
+            {
+                BackendGetVoices();
+            }
+
+            if (!string.IsNullOrWhiteSpace(testConnectionRes))
+                ImGui.TextColored(new(1.0f, 1.0f, 1.0f, 0.6f), $"Connection test result: {testConnectionRes}");
+        }
+    }
+
+    private void DrawSaveSettings()
+    {
+        if (ImGui.CollapsingHeader("Save locally"))
+        {
+            var loadLocalFirst = this.Configuration.LoadFromLocalFirst;
+            if (ImGui.Checkbox("Search audio locally first before generating", ref loadLocalFirst))
+            {
+                this.Configuration.LoadFromLocalFirst = loadLocalFirst;
+                this.Configuration.Save();
+            }
+            var saveLocally = this.Configuration.SaveToLocal;
+            if (ImGui.Checkbox("Save generated audio locally", ref saveLocally))
+            {
+                this.Configuration.SaveToLocal = saveLocally;
+                this.Configuration.Save();
+            }
+
+            using (var disabled = ImRaii.Disabled(!saveLocally))
+            {
                 var createMissingLocalSave = this.Configuration.CreateMissingLocalSaveLocation;
                 if (ImGui.Checkbox("Create directory if not existing", ref createMissingLocalSave))
                 {
                     this.Configuration.CreateMissingLocalSaveLocation = createMissingLocalSave;
                     this.Configuration.Save();
                 }
+            }
 
+            using (var disabled = ImRaii.Disabled(!saveLocally && !loadLocalFirst))
+            {
                 string localSaveLocation = this.Configuration.LocalSaveLocation;
                 if (ImGui.InputText($"##EKSavePath", ref localSaveLocation, 40))
                 {
@@ -258,24 +295,33 @@ public class ConfigWindow : Window, IDisposable
                 {
                     fileDialogManager.Draw();
                 }
+            }
+        }
+    }
 
+    private void DrawBubbleSettings()
+    {
+        if (ImGui.CollapsingHeader("Bubbles"))
+        {
+            var voiceBubbles = this.Configuration.VoiceBubbles;
+            if (ImGui.Checkbox("Voice NPC Bubbles", ref voiceBubbles))
+            {
+                this.Configuration.VoiceBubbles = voiceBubbles;
+                this.Configuration.Save();
             }
 
-
-            if (ImGui.CollapsingHeader("Bubbles"))
+            using (var disabled = ImRaii.Disabled(!voiceBubbles))
             {
-                var voiceBubbles = this.Configuration.VoiceBubbles;
-                if (ImGui.Checkbox("Voice NPC Bubbles", ref voiceBubbles))
-                {
-                    this.Configuration.VoiceBubbles = voiceBubbles;
-                    this.Configuration.Save();
-                }
                 var voiceBubblesInCity = this.Configuration.VoiceBubblesInCity;
                 if (ImGui.Checkbox("Voice NPC Bubbles in City", ref voiceBubblesInCity))
                 {
                     this.Configuration.VoiceBubblesInCity = voiceBubblesInCity;
                     this.Configuration.Save();
                 }
+            }
+
+            using (var disabled = ImRaii.Disabled(!voiceBubbles))
+            {
                 var voiceSourceCam = this.Configuration.VoiceSourceCam;
                 if (ImGui.Checkbox("Voice Bubbles with camera as center", ref voiceSourceCam))
                 {
@@ -284,9 +330,128 @@ public class ConfigWindow : Window, IDisposable
                 }
             }
         }
-        catch (Exception ex)
+    }
+
+    private void DrawChatSettings()
+    {
+        if (ImGui.CollapsingHeader("Chat"))
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", 0);
+            var voiceChat = this.Configuration.VoiceChat;
+            if (ImGui.Checkbox("Voice Chat", ref voiceChat))
+            {
+                this.Configuration.VoiceChat = voiceChat;
+                this.Configuration.Save();
+            }
+
+            using (var disabled = ImRaii.Disabled(!voiceChat))
+            {
+                var voiceChatPlayer = this.Configuration.VoiceChatPlayer;
+                if (ImGui.Checkbox("Voice your own Chat", ref voiceChatPlayer))
+                {
+                    this.Configuration.VoiceChatPlayer = voiceChatPlayer;
+                    this.Configuration.Save();
+                }
+            }
+
+            using (var disabled = ImRaii.Disabled(!voiceChat))
+            {
+                var voiceChatSay = this.Configuration.VoiceChatSay;
+                if (ImGui.Checkbox("Voice say Chat", ref voiceChatSay))
+                {
+                    this.Configuration.VoiceChatSay = voiceChatSay;
+                    this.Configuration.Save();
+                }
+            }
+
+            using (var disabled = ImRaii.Disabled(!voiceChat))
+            {
+                var voiceChatYell = this.Configuration.VoiceChatYell;
+                if (ImGui.Checkbox("Voice yell Chat", ref voiceChatYell))
+                {
+                    this.Configuration.VoiceChatYell = voiceChatYell;
+                    this.Configuration.Save();
+                }
+            }
+
+            using (var disabled = ImRaii.Disabled(!voiceChat))
+            {
+                var voiceChatShout = this.Configuration.VoiceChatShout;
+                if (ImGui.Checkbox("Voice shout Chat", ref voiceChatShout))
+                {
+                    this.Configuration.VoiceChatShout = voiceChatShout;
+                    this.Configuration.Save();
+                }
+            }
+
+            using (var disabled = ImRaii.Disabled(!voiceChat))
+            {
+                var voiceChatFreeCompany = this.Configuration.VoiceChatFreeCompany;
+                if (ImGui.Checkbox("Voice free company Chat", ref voiceChatFreeCompany))
+                {
+                    this.Configuration.VoiceChatFreeCompany = voiceChatFreeCompany;
+                    this.Configuration.Save();
+                }
+            }
+
+            using (var disabled = ImRaii.Disabled(!voiceChat))
+            {
+                var voiceChatTell = this.Configuration.VoiceChatTell;
+                if (ImGui.Checkbox("Voice tell Chat", ref voiceChatTell))
+                {
+                    this.Configuration.VoiceChatTell = voiceChatTell;
+                    this.Configuration.Save();
+                }
+            }
+
+            using (var disabled = ImRaii.Disabled(!voiceChat))
+            {
+                var voiceChatParty = this.Configuration.VoiceChatParty;
+                if (ImGui.Checkbox("Voice party Chat", ref voiceChatParty))
+                {
+                    this.Configuration.VoiceChatParty = voiceChatParty;
+                    this.Configuration.Save();
+                }
+            }
+
+            using (var disabled = ImRaii.Disabled(!voiceChat))
+            {
+                var voiceChatAlliance = this.Configuration.VoiceChatAlliance;
+                if (ImGui.Checkbox("Voice alliance Chat", ref voiceChatAlliance))
+                {
+                    this.Configuration.VoiceChatAlliance = voiceChatAlliance;
+                    this.Configuration.Save();
+                }
+            }
+
+            using (var disabled = ImRaii.Disabled(!voiceChat))
+            {
+                var voiceChatNoviceNetwork = this.Configuration.VoiceChatNoviceNetwork;
+                if (ImGui.Checkbox("Voice novice network Chat", ref voiceChatNoviceNetwork))
+                {
+                    this.Configuration.VoiceChatNoviceNetwork = voiceChatNoviceNetwork;
+                    this.Configuration.Save();
+                }
+            }
+
+            using (var disabled = ImRaii.Disabled(!voiceChat))
+            {
+                var voiceChatLinkshell = this.Configuration.VoiceChatLinkshell;
+                if (ImGui.Checkbox("Voice Linkshells", ref voiceChatLinkshell))
+                {
+                    this.Configuration.VoiceChatLinkshell = voiceChatLinkshell;
+                    this.Configuration.Save();
+                }
+            }
+
+            using (var disabled = ImRaii.Disabled(!voiceChat))
+            {
+                var voiceChatCrossLinkshell = this.Configuration.VoiceChatCrossLinkshell;
+                if (ImGui.Checkbox("Voice Cross Linkshells", ref voiceChatCrossLinkshell))
+                {
+                    this.Configuration.VoiceChatCrossLinkshell = voiceChatCrossLinkshell;
+                    this.Configuration.Save();
+                }
+            }
         }
     }
 
@@ -546,9 +711,9 @@ public class ConfigWindow : Window, IDisposable
                     toBeRemoved = phoneticCorrection;
                 }
                 ImGui.SameLine();
-                ImGui.InputTextWithHint("Original text", "The original text to be replaces in TTS", ref phoneticCorrection.OriginalText, 20);
+                ImGui.InputTextWithHint($"Original text##origText{phoneticCorrection.ToString()}", "The original text to be replaces in TTS", ref phoneticCorrection.OriginalText, 20);
                 ImGui.SameLine();
-                ImGui.InputTextWithHint("Corrected text", "The text which will be used in TTS", ref phoneticCorrection.CorrectedText, 20);
+                ImGui.InputTextWithHint($"Corrected text##correctText{phoneticCorrection.ToString()}", "The text which will be used in TTS", ref phoneticCorrection.CorrectedText, 20);
             }
 
             if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Plus.ToIconString()}##addphoncorr", new Vector2(25, 25), "Add phonetic correction", false, true))
@@ -567,9 +732,9 @@ public class ConfigWindow : Window, IDisposable
                 }
             }
             ImGui.SameLine();
-            ImGui.InputTextWithHint("Original text", "The original text to be replaces in TTS", ref originalText, 20);
+            ImGui.InputTextWithHint("Original text##origText", "The original text to be replaces in TTS", ref originalText, 20);
             ImGui.SameLine();
-            ImGui.InputTextWithHint("Corrected text", "The text which will be used in TTS", ref correctedText, 20);
+            ImGui.InputTextWithHint("Corrected text##correctText", "The text which will be used in TTS", ref correctedText, 20);
 
             if (toBeRemoved != null)
             {

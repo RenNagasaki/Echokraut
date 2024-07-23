@@ -41,6 +41,18 @@ public class Configuration : IPluginConfiguration
     public bool VoiceBubbles { get; set; } = false;
     public bool VoiceBubblesInCity { get; set; } = false;
     public bool VoiceSourceCam { get; set; } = false;
+    public bool VoiceChat { get; set; } = false;
+    public bool VoiceChatPlayer { get; set; } = false;
+    public bool VoiceChatSay { get; set; } = false;
+    public bool VoiceChatNoviceNetwork { get; set; } = false;
+    public bool VoiceChatTell { get; set; } = false;
+    public bool VoiceChatAlliance { get; set; } = false;
+    public bool VoiceChatCrossLinkshell { get; set; } = false;
+    public bool VoiceChatLinkshell { get; set; } = false;
+    public bool VoiceChatParty { get; set; } = false;
+    public bool VoiceChatYell { get; set; } = false;
+    public bool VoiceChatShout { get; set; } = false;
+    public bool VoiceChatFreeCompany { get; set; } = false;
     public List<PhoneticCorrection> PhoneticCorrections { get; set; } = new List<PhoneticCorrection>();
 
     // the below exist just to make saving less cumbersome

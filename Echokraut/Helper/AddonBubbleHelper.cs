@@ -83,6 +83,7 @@ namespace Echokraut.Helper
         {
             try
             {
+                if (!configuration.Enabled) return;
                 if (!configuration.VoiceBubbles) return;
 
                 var territoryRow = clientState.TerritoryType;
@@ -123,6 +124,8 @@ namespace Echokraut.Helper
             int eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name);
             try
             {
+                if (!configuration.Enabled)
+                    return mOpenChatBubbleHook.Original(pThis, pActor, pString, param3);
                 if (!configuration.VoiceBubbles)
                     return mOpenChatBubbleHook.Original(pThis, pActor, pString, param3);
 
@@ -135,7 +138,7 @@ namespace Echokraut.Helper
                 {
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found EntityId: {pActor->GetGameObjectId().ObjectId}", eventId);
                     //	Idk if the actor can ever be null, but if it can, assume that we should print the bubble just in case.  Otherwise, only don't print if the actor is a player.
-                    if (pActor == null || (byte)pActor->ObjectKind != (byte)Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Retainer)
+                    if (pActor == null || (byte)pActor->ObjectKind != (byte)Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
                     {
                         long currentTime_mSec = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 

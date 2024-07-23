@@ -47,13 +47,14 @@ public partial class Echokraut : IDalamudPlugin
     private ConfigWindow ConfigWindow { get; init; }
 
     #region TextToTalk Base
+    internal readonly LipSyncHelper lipSyncHelper;
+    internal readonly SoundHelper soundHelper;
     internal readonly AddonTalkHelper addonTalkHelper;
     internal readonly AddonBattleTalkHelper addonBattleTalkHelper;
     internal readonly AddonSelectStringHelper addonSelectStringHelper;
     internal readonly AddonCutSceneSelectStringHelper addonCutSceneSelectStringHelper;
     internal readonly AddonBubbleHelper addonBubbleHelper;
-    internal readonly SoundHelper soundHelper;
-    internal readonly LipSyncHelper lipSyncHelper;
+    internal readonly ChatTalkHelper chatTalkHelper;
     #endregion
 
     public Echokraut(
@@ -91,14 +92,14 @@ public partial class Echokraut : IDalamudPlugin
         VoiceHelper.Setup(); 
         ECommonsMain.Init(pluginInterface, this, ECommons.Module.All);
         this.ConfigWindow = new ConfigWindow(this, Configuration);
-
+        this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration);
+        this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, sigScanner, gameInterop);
         this.addonTalkHelper = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonSelectStringHelper = new AddonSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonBubbleHelper = new AddonBubbleHelper(this, this.DataManager, this.Framework, this.ObjectTable,sigScanner, gameInterop, this.ClientState, this.Configuration);
-        this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, sigScanner, gameInterop);
-        this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration);
+        this.chatTalkHelper = new ChatTalkHelper(this, this.Configuration, chatGui, objectTable, clientState);
 
         WindowSystem.AddWindow(ConfigWindow);
 
@@ -307,15 +308,16 @@ public partial class Echokraut : IDalamudPlugin
     {
         PlayingHelper.Dispose(); 
         ECommonsMain.Dispose();
+        this.soundHelper.Dispose();
         this.addonTalkHelper.Dispose();
         this.addonBattleTalkHelper.Dispose();
         this.addonCutSceneSelectStringHelper.Dispose();
         this.addonSelectStringHelper.Dispose();
-        this.soundHelper.Dispose();
-        this.Configuration.Save();
         this.addonBubbleHelper.Dispose();
-        WindowSystem.RemoveAllWindows();
+        this.chatTalkHelper.Dispose();
 
+        this.Configuration.Save();
+        WindowSystem.RemoveAllWindows();
         ConfigWindow.Dispose();
 
         CommandManager.RemoveHandler("/eksettings");

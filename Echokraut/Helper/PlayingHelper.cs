@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Reflection;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace Echokraut.Helper
 {
@@ -54,30 +55,38 @@ namespace Echokraut.Helper
             }
         }
 
-        static void WorkRequestingQueues()
+        static async void WorkRequestingQueues()
         {
-            while (!StopThread)
+            try
             {
-                WorkRequestingQueue();
-                WorkRequestingBubbleQueue();
-                Thread.Sleep(100);
+                while (!StopThread)
+                {
+                    await WorkRequestingQueue();
+                    await WorkRequestingBubbleQueue();
+                    Thread.Sleep(100);
+                }
             }
+            catch { }
         }
 
         static void WorkPlayingQueues()
         {
-            while (!StopThread)
+            try
             {
-                WorkPlayingQueue();
-                WorkPlayingBubbleQueue();
-                Thread.Sleep(100);
+                while (!StopThread)
+                {
+                    WorkPlayingQueue();
+                    WorkPlayingBubbleQueue();
+                    Thread.Sleep(100);
+                }
             }
+            catch { }
         }
 
         static void WorkPlayingQueue()
         {
             var eventId = -1;
-            while ((ActivePlayer == null || ActivePlayer.PlaybackState != NAudio.Wave.PlaybackState.Playing) && PlayingQueue.Count > 0)
+            if ((ActivePlayer == null || ActivePlayer.PlaybackState != NAudio.Wave.PlaybackState.Playing) && PlayingQueue.Count > 0)
             {
                 try
                 {
@@ -122,7 +131,7 @@ namespace Echokraut.Helper
         static void WorkPlayingBubbleQueue()
         {
             var eventId = -1;
-            while (PlayingBubbleQueue.Count > 0)
+            if (PlayingBubbleQueue.Count > 0)
             {
                 try
                 {
@@ -170,23 +179,26 @@ namespace Echokraut.Helper
             }
         }
 
-        static void WorkRequestingQueue()
+        static async Task<bool> WorkRequestingQueue()
         {
-            while (RequestingQueue.Count > 0)
+            if (RequestingQueue.Count > 0)
             {
                 var queueItem = RequestingQueue[0];
                 RequestingQueue.RemoveAt(0);
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating next queued audio", queueItem.eventId);
                 AddRequestedToQueue(queueItem);
 
-                BackendHelper.GenerateVoice(queueItem);
+                await BackendHelper.GenerateVoice(queueItem);
+
             }
+
+            return true;
         }
 
-        static void WorkRequestingBubbleQueue()
+        static async Task<bool> WorkRequestingBubbleQueue()
         {
             var eventId = -1;
-            while (RequestedBubbleQueue.Count > 0)
+            if (RequestedBubbleQueue.Count > 0)
             {
                 try
                 {
@@ -203,7 +215,7 @@ namespace Echokraut.Helper
                                 if (result)
                                 {
                                     RequestedBubbleQueue.RemoveAt(0);
-                                    continue;
+                                    return true;
                                 }
                             }
                             else
@@ -215,18 +227,20 @@ namespace Echokraut.Helper
 
                     if (!InDialog && voiceMessage != null)
                     {
-                        BackendHelper.GenerateVoice(voiceMessage);
-                        RequestedBubbleQueue.RemoveAt(0);
-                        Thread.Sleep(200);
+                        var res = await BackendHelper.GenerateVoice(voiceMessage);
+                        if (res)
+                            RequestedBubbleQueue.RemoveAt(0);
+
+                        return true;
                     }
                 }
                 catch (Exception ex)
                 {
                     LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while working bubble queue: {ex}", eventId);
                 }
-
-                Thread.Sleep(100);
             }
+
+            return true;
         }
         private static void SoundOut_PlaybackStopped(object? sender, StoppedEventArgs e)
         {
@@ -324,7 +338,13 @@ namespace Echokraut.Helper
 
         public static void Dispose()
         {
-            StopThread = true;
+            try
+            {
+                StopThread = true;
+                PlayingQueueThread.Interrupt();
+                RequestingQueueThread.Interrupt();
+            }
+            catch { }
         }
     }
 }
