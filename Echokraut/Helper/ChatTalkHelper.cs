@@ -165,12 +165,14 @@ namespace Echokraut.Helper
                     }
                     break;
                 case XivChatType.CustomEmote:
+                case XivChatType.StandardEmote:
                 case XivChatType.Echo:
                 case XivChatType.Debug:
                 case XivChatType.SystemMessage:
                 case XivChatType.ErrorMessage:
                 case XivChatType.SystemError:
                 case XivChatType.None:
+                case XivChatType.RetainerSale:
                 case XivChatType.Notice:
                 case XivChatType.GatheringSystemMessage:
                 case XivChatType.Urgent:
