@@ -2,13 +2,14 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Sound;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using System.Reflection;
+using Echokraut.DataClasses;
 
 namespace Echokraut.Helper
 {
     internal static class VolumeHelper
     {
 
-        public static unsafe float GetVoiceVolume(int eventId, IGameConfig gameConfig)
+        public static unsafe float GetVoiceVolume(EKEventId eventId, IGameConfig gameConfig)
         {
             var voiceVolume = .5f;
             var masterVolume = .5f;

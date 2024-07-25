@@ -23,7 +23,7 @@ namespace Echokraut.DataClasses
 
         public override bool Equals(object? obj)
         {
-            if (((PhoneticCorrection)obj).ToString() == ToString())
+            if (((PhoneticCorrection)obj).ToString().ToLower() == ToString().ToLower())
                 return true ;
 
             return false;
@@ -32,7 +32,7 @@ namespace Echokraut.DataClasses
         public int CompareTo(object? obj)
         {
             var otherObj = ((PhoneticCorrection)obj);
-            return otherObj.ToString().CompareTo(ToString());
+            return otherObj.ToString().ToLower().CompareTo(ToString().ToLower());
         }
     }
 }

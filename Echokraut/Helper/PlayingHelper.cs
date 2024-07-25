@@ -1,4 +1,5 @@
 using Echokraut.DataClasses;
+using Echokraut.Enums;
 using ECommons.DalamudServices;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
@@ -85,7 +86,7 @@ namespace Echokraut.Helper
 
         static void WorkPlayingQueue()
         {
-            var eventId = -1;
+            var eventId = new EKEventId(-1, Enums.TextSource.None);
             if ((ActivePlayer == null || ActivePlayer.PlaybackState != NAudio.Wave.PlaybackState.Playing) && PlayingQueue.Count > 0)
             {
                 try
@@ -130,7 +131,7 @@ namespace Echokraut.Helper
 
         static void WorkPlayingBubbleQueue()
         {
-            var eventId = -1;
+            var eventId = new EKEventId(-1, Enums.TextSource.None);
             if (PlayingBubbleQueue.Count > 0)
             {
                 try
@@ -197,7 +198,7 @@ namespace Echokraut.Helper
 
         static async Task<bool> WorkRequestingBubbleQueue()
         {
-            var eventId = -1;
+            var eventId = new EKEventId(-1, TextSource.None);
             if (RequestedBubbleQueue.Count > 0)
             {
                 try
@@ -244,7 +245,7 @@ namespace Echokraut.Helper
         }
         private static void SoundOut_PlaybackStopped(object? sender, StoppedEventArgs e)
         {
-            var eventId = -1; 
+            var eventId = new EKEventId(-1, TextSource.None); 
             if (CurrentlyPlayingStreamText != null)
                 eventId = CurrentlyPlayingStreamText.eventId;
 

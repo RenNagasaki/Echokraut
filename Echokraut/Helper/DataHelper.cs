@@ -1,5 +1,6 @@
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Echokraut.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using Microsoft.VisualBasic.Logging;
 using System;
@@ -18,21 +19,22 @@ namespace Echokraut.Helper
     {
         static int NextEventId = 1;
 
-        public static int EventId(string methodName)
+        public static EKEventId EventId(string methodName, TextSource textSource)
         {
-            var eventId = NextEventId;
+            var eventId = new EKEventId(NextEventId, textSource);
             NextEventId++;
+
             LogHelper.Start(methodName, eventId);
             return eventId;
         }
 
-        static public Dictionary<string, string> NpcRacesMap = new Dictionary<string, string>()
+        public static Dictionary<string, string> NpcRacesMap = new Dictionary<string, string>()
         {
             { "Hyuran", "Hyur" }
 
         };
 
-        static public string getRaceEng(string nationalRace, IPluginLog Log)
+        public static string GetRaceEng(string nationalRace, IPluginLog Log)
         {
             string engRace = nationalRace.Replace("'", "");
 
@@ -42,7 +44,7 @@ namespace Echokraut.Helper
             return engRace;
         }
 
-        static public NpcMapData GetCharacterMapData(List<NpcMapData> npcDatas, List<NpcMapData> playerDatas, NpcMapData data)
+        public static NpcMapData GetCharacterMapData(List<NpcMapData> npcDatas, List<NpcMapData> playerDatas, NpcMapData data)
         {
             NpcMapData result = null;
             var datas = data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? playerDatas : npcDatas;
@@ -65,7 +67,7 @@ namespace Echokraut.Helper
             return result;
         }
 
-        static public void AddCharacterMapData(List<NpcMapData> npcDatas, List<NpcMapData> playerDatas, NpcMapData data)
+        public static void AddCharacterMapData(List<NpcMapData> npcDatas, List<NpcMapData> playerDatas, NpcMapData data)
         {
             if (data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
                 playerDatas.Add(data);
@@ -73,7 +75,7 @@ namespace Echokraut.Helper
                 npcDatas.Add(data);
         }
 
-        static public string AnalyzeAndImproveText(string text)
+        public static string AnalyzeAndImproveText(string text)
         {
             var resultText = text;
 
@@ -82,7 +84,7 @@ namespace Echokraut.Helper
             return resultText;
         }
 
-        static public string CleanUpName(string name)
+        public static string CleanUpName(string name)
         {
             name = name.Replace("[a]", "");
             name = Regex.Replace(name, "[^a-zA-Z0-9-äöüÄÖÜ' ]+", "");
@@ -90,7 +92,7 @@ namespace Echokraut.Helper
             return name;
         }
 
-        static public string VoiceMessageToFileName(string voiceMessage)
+        public static string VoiceMessageToFileName(string voiceMessage)
         {
             string fileName = voiceMessage;
             string[] temp = fileName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries);

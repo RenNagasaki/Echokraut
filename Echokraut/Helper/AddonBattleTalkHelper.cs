@@ -90,7 +90,7 @@ public class AddonBattleTalkHelper
         if (Address != nint.Zero && oldAddress != Address)
         {
             oldAddress = Address;
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk address found: {Address}", 0);
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk address found: {Address}", new EKEventId(0, TextSource.AddonBattleTalk));
         }
     }
 
@@ -124,7 +124,7 @@ public class AddonBattleTalkHelper
             lastAddonText = "";
             return;
         }
-        int eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name);
+        EKEventId eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonBattleTalk);
         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk ({pollSource}): \"{state}\"", eventId);
 
         // Notify observers that the addon state was advanced
@@ -159,11 +159,11 @@ public class AddonBattleTalkHelper
 
         if (speakerObj != null)
         {
-            plugin.Say(eventId, speakerObj, speakerObj.Name, text, TextSource.AddonTalk);
+            plugin.Say(eventId, speakerObj, speakerObj.Name, text);
         }
         else
         {
-            plugin.Say(eventId, null, state.Speaker ?? "", text, TextSource.AddonTalk);
+            plugin.Say(eventId, null, state.Speaker ?? "", text);
         }
     }
 

@@ -150,7 +150,7 @@ namespace Echokraut.TextToTalk.Utils
         public static string ReplacePhonetics(string text, List<PhoneticCorrection> corrections)
         {
             foreach (var correction in corrections) {
-                text = text.Replace(correction.OriginalText, correction.CorrectedText, StringComparison.OrdinalIgnoreCase);
+                text = text.Replace(correction.OriginalText.ToLower(), correction.CorrectedText.ToLower(), StringComparison.OrdinalIgnoreCase);
             }
 
             return text;
@@ -221,7 +221,7 @@ namespace Echokraut.TextToTalk.Utils
             return text;
         }
 
-        public static string ReplaceRomanNumbers(int eventId, string text)
+        public static string ReplaceRomanNumbers(EKEventId eventId, string text)
         {
             try
             {

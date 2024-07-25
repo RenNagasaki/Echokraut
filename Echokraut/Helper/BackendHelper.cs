@@ -20,7 +20,6 @@ namespace Echokraut.Helper
 {
     public static class BackendHelper
     {
-        public static List<BackendVoiceItem> mappedVoices = null;
         static Random rand = new Random(Guid.NewGuid().GetHashCode());
         static Config Configuration;
         static IClientState ClientState;
@@ -40,9 +39,9 @@ namespace Echokraut.Helper
         {
             if (backendType == TTSBackends.Alltalk)
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Creating backend instance: {backendType}", 0);
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Creating backend instance: {backendType}", new EKEventId(0, Enums.TextSource.None));
                 backend = new AlltalkBackend(Configuration.Alltalk, Configuration);
-                getAndMapVoices(0);
+                getAndMapVoices(new EKEventId(0, TextSource.None));
             }
         }
 
@@ -68,7 +67,7 @@ namespace Echokraut.Helper
             }
         }
 
-        public static void OnCancel(int eventId)
+        public static void OnCancel(EKEventId eventId)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping voice inference", eventId);
             PlayingHelper.ClearRequestingQueue();
@@ -83,11 +82,10 @@ namespace Echokraut.Helper
             }
         }
 
-        static void getAndMapVoices(int eventId)
+        static void getAndMapVoices(EKEventId eventId)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Loading and mapping voices", eventId);
-            mappedVoices = backend.GetAvailableVoices(eventId);
-            mappedVoices.Sort((x, y) => x.ToString().CompareTo(y.ToString()));
+            BackendVoiceHelper.Setup(backend.GetAvailableVoices(eventId));
 
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Success", eventId);
         }
@@ -164,19 +162,19 @@ namespace Echokraut.Helper
             return false;
         }
 
-        public static async Task<string> CheckReady(int eventId)
+        public static async Task<string> CheckReady(EKEventId eventId)
         {
             return await backend.CheckReady(eventId);
         }
 
-        static void getVoiceOrRandom(int eventId, NpcMapData npcData)
+        static void getVoiceOrRandom(EKEventId eventId, NpcMapData npcData)
         {
             var voiceItem = npcData.voiceItem;
             var mappedList = npcData.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? Configuration.MappedPlayers : Configuration.MappedNpcs;
 
             if (voiceItem == null || mappedList.Find(p => p.voiceItem == voiceItem) == null)
             {
-                var voiceItems = mappedVoices.FindAll(p => p.voiceName.Equals(npcData.name, StringComparison.OrdinalIgnoreCase));
+                var voiceItems = BackendVoiceHelper.Voices.FindAll(p => p.voiceName.Equals(npcData.name, StringComparison.OrdinalIgnoreCase));
                 if (voiceItems.Count > 0)
                 {
                     voiceItem = voiceItems[0];
@@ -184,10 +182,10 @@ namespace Echokraut.Helper
 
                 if (voiceItem == null)
                 {
-                    voiceItems = mappedVoices.FindAll(p => p.gender == npcData.gender && p.race == npcData.race && p.voiceName.Contains("npc", StringComparison.OrdinalIgnoreCase));
+                    voiceItems = BackendVoiceHelper.Voices.FindAll(p => p.gender == npcData.gender && p.race == npcData.race && p.voiceName.Contains("npc", StringComparison.OrdinalIgnoreCase));
 
                     if (voiceItems.Count == 0)
-                        voiceItems = mappedVoices.FindAll(p => p.gender == npcData.gender && p.race == NpcRaces.Default && p.voiceName.Contains("npc", StringComparison.OrdinalIgnoreCase));
+                        voiceItems = BackendVoiceHelper.Voices.FindAll(p => p.gender == npcData.gender && p.race == NpcRaces.Default && p.voiceName.Contains("npc", StringComparison.OrdinalIgnoreCase));
 
                     if (voiceItems.Count > 0)
                     {
@@ -197,10 +195,10 @@ namespace Echokraut.Helper
                 }
 
                 if (voiceItem == null)
-                    voiceItem = mappedVoices.Find(p => p.voice == Constants.NARRATORVOICE);
+                    voiceItem = BackendVoiceHelper.Voices.Find(p => p.voice == Constants.NARRATORVOICE);
 
                 if (voiceItem == null)
-                    voiceItem = mappedVoices[0];
+                    voiceItem = BackendVoiceHelper.Voices[0];
 
                 if (voiceItem != npcData.voiceItem)
                 {
@@ -220,7 +218,7 @@ namespace Echokraut.Helper
             }
         }
 
-        static string getVoice(int eventId, NpcMapData npcData)
+        static string getVoice(EKEventId eventId, NpcMapData npcData)
         {
             getVoiceOrRandom(eventId, npcData);
 

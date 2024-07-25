@@ -29,7 +29,7 @@ namespace Echokraut.Backend
             this.configuration = config;
         }
 
-        public async Task<Stream> GenerateAudioStreamFromVoice(int eventId, string voiceLine, string voice, string language)
+        public async Task<Stream> GenerateAudioStreamFromVoice(EKEventId eventId, string voiceLine, string voice, string language)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating Alltalk Audio", eventId);
             HttpClient httpClient = new HttpClient();
@@ -69,7 +69,7 @@ namespace Echokraut.Backend
             return null;
         }
 
-        public List<BackendVoiceItem> GetAvailableVoices(int eventId)
+        public List<BackendVoiceItem> GetAvailableVoices(EKEventId eventId)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Loading Alltalk Voices", eventId);
             var mappedVoices = new List<BackendVoiceItem>();
@@ -150,7 +150,7 @@ namespace Echokraut.Backend
             return mappedVoices;
         }
 
-        public async void StopGenerating(int eventId)
+        public async void StopGenerating(EKEventId eventId)
         {
             HttpClient httpClient = new HttpClient();
             httpClient.BaseAddress = new Uri(data.BaseUrl);
@@ -167,7 +167,7 @@ namespace Echokraut.Backend
             }
         }
 
-        public async Task<string> CheckReady(int eventId)
+        public async Task<string> CheckReady(EKEventId eventId)
         {
             HttpClient httpClient = new HttpClient();
             httpClient.BaseAddress = new Uri(data.BaseUrl);

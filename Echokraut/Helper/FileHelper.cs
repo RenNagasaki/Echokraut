@@ -10,7 +10,7 @@ namespace Echokraut.Helper
 {
     public static class FileHelper
     {
-        public static bool LoadLocalAudio(int eventId, string localSaveLocation, VoiceMessage voiceMessage)
+        public static bool LoadLocalAudio(EKEventId eventId, string localSaveLocation, VoiceMessage voiceMessage)
         {
             try
             {
@@ -38,7 +38,7 @@ namespace Echokraut.Helper
             return false;
         }
 
-        public static bool LoadLocalBubbleAudio(int eventId, string localSaveLocation, VoiceMessage voiceMessage)
+        public static bool LoadLocalBubbleAudio(EKEventId eventId, string localSaveLocation, VoiceMessage voiceMessage)
         {
             try
             {
@@ -75,7 +75,7 @@ namespace Echokraut.Helper
             return filePath;
         }
 
-        public static bool WriteStreamToFile(int eventId, string filePath, ReadSeekableStream stream)
+        public static bool WriteStreamToFile(EKEventId eventId, string filePath, ReadSeekableStream stream)
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Saving audio locally: {filePath}", eventId);
             try

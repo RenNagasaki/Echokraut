@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 
 namespace Echokraut.DataClasses
 {
-    public class NpcMapData
+    public class NpcMapData : IComparable
     {
         public string name { get; set; }
         public NpcRaces race { get; set; }
@@ -31,6 +31,23 @@ namespace Echokraut.DataClasses
             }
 
             return $"{gender} - {name}";
+        }
+        public override bool Equals(object obj)
+        {
+            var item = obj as NpcMapData;
+
+            if (item == null)
+            {
+                return false;
+            }
+
+            return this.ToString(true).Equals(item.ToString(true), System.StringComparison.OrdinalIgnoreCase);
+        }
+
+        public int CompareTo(object? obj)
+        {
+            var otherObj = ((NpcMapData)obj);
+            return otherObj.ToString(true).ToLower().CompareTo(ToString(true).ToLower());
         }
     }
 }

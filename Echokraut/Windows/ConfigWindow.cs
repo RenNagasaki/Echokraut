@@ -13,6 +13,7 @@ using System.IO;
 using Dalamud.Interface.ImGuiFileDialog;
 using OtterGui;
 using Dalamud.Interface.Utility.Raii;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace Echokraut.Windows;
 
@@ -21,7 +22,6 @@ public class ConfigWindow : Window, IDisposable
     private Configuration Configuration;
     private Echokraut plugin;
     private string testConnectionRes = "";
-    private List<BackendVoiceItem> voices;
     private FileDialogManager fileDialogManager;
     private bool resetLogFilter = true;
     private string logFilter = "";
@@ -75,19 +75,19 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.EndTabItem();
                 }
 
-                if (ImGui.BeginTabItem("NPCs"))
+                if (ImGui.BeginTabItem("Voice selection"))
                 {
                     DrawNpcs();
                     ImGui.EndTabItem();
                 }
 
-                if (ImGui.BeginTabItem("Phonetic Corrections"))
+                if (ImGui.BeginTabItem("Phonetic corrections"))
                 {
                     DrawPhoneticCorrections();
                     ImGui.EndTabItem();
                 }
 
-                if (ImGui.BeginTabItem("Log"))
+                if (ImGui.BeginTabItem("Logs"))
                 {
                     DrawLogs();
                     ImGui.EndTabItem();
@@ -98,364 +98,396 @@ public class ConfigWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", 0);
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
         }
     }
 
     private void DrawSettings()
     {
-        try {
-            DrawGeneralSettings();
+        try
+        {
+            if (ImGui.BeginTabBar($"Settings##EKSettingsTab"))
+            {
+                if (ImGui.BeginTabItem("General"))
+                {
+                    DrawGeneralSettings();
+                    ImGui.EndTabItem();
+                }
 
-            DrawBackendSettings();
+                using (var disabled = ImRaii.Disabled(!Configuration.Enabled))
+                {
+                    if (ImGui.BeginTabItem("Dialogue"))
+                    {
+                        DrawDialogueSettings();
+                        ImGui.EndTabItem();
+                    }
 
-            DrawSaveSettings();
+                    if (ImGui.BeginTabItem("Battle dialogue"))
+                    {
+                        DrawBattleDialogueSettings();
+                        ImGui.EndTabItem();
+                    }
 
-            DrawBubbleSettings();
+                    if (ImGui.BeginTabItem("Chat"))
+                    {
+                        DrawChatSettings();
+                        ImGui.EndTabItem();
+                    }
 
-            DrawChatSettings();
+                    if (ImGui.BeginTabItem("Bubbles"))
+                    {
+                        DrawBubbleSettings();
+                        ImGui.EndTabItem();
+                    }
+
+                    if (ImGui.BeginTabItem("Save/Load"))
+                    {
+                        DrawSaveSettings();
+                        ImGui.EndTabItem();
+                    }
+
+                    if (ImGui.BeginTabItem("Backend"))
+                    {
+                        DrawBackendSettings();
+                        ImGui.EndTabItem();
+                    }
+                }
+            }
+
+            ImGui.EndTabBar();
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", 0);
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
         }
     }
 
     private void DrawGeneralSettings()
     {
-        if (ImGui.CollapsingHeader("General"))
+        var enabled = this.Configuration.Enabled;
+        if (ImGui.Checkbox("Enabled", ref enabled))
         {
-            var enabled = this.Configuration.Enabled;
-            if (ImGui.Checkbox("Enabled", ref enabled))
+            this.Configuration.Enabled = enabled;
+            this.Configuration.Save();
+        }
+
+        using (var disabled = ImRaii.Disabled(!enabled))
+        {
+            var removeStutters = this.Configuration.RemoveStutters;
+            if (ImGui.Checkbox("Remove stutters", ref removeStutters))
             {
-                this.Configuration.Enabled = enabled;
+                this.Configuration.RemoveStutters = removeStutters;
                 this.Configuration.Save();
-            }
+            } 
+        }
+    }
 
-            using (var disabled = ImRaii.Disabled(!enabled))
+    private void DrawDialogueSettings()
+    {
+        var voiceDialog = this.Configuration.VoiceDialog;
+        if (ImGui.Checkbox("Voice dialog", ref voiceDialog))
+        {
+            this.Configuration.VoiceDialog = voiceDialog;
+            this.Configuration.Save();
+        }
+
+        var voicePlayerChoicesCutscene = this.Configuration.VoicePlayerChoicesCutscene;
+        if (ImGui.Checkbox("Voice player choices in cutscene", ref voicePlayerChoicesCutscene))
+        {
+            this.Configuration.VoicePlayerChoicesCutscene = voicePlayerChoicesCutscene;
+            this.Configuration.Save();
+        }
+
+        var voicePlayerChoices = this.Configuration.VoicePlayerChoices;
+        if (ImGui.Checkbox("Voice player choices outside of cutscene", ref voicePlayerChoices))
+        {
+            this.Configuration.VoicePlayerChoices = voicePlayerChoices;
+            this.Configuration.Save();
+        }
+
+        var cancelAdvance = this.Configuration.CancelSpeechOnTextAdvance;
+        if (ImGui.Checkbox("Cancel voice on text advance", ref cancelAdvance))
+        {
+            this.Configuration.CancelSpeechOnTextAdvance = cancelAdvance;
+            this.Configuration.Save();
+        }
+
+        var autoAdvanceOnSpeechCompletion = this.Configuration.AutoAdvanceTextAfterSpeechCompleted;
+        if (ImGui.Checkbox("Click dialogue window after speech completion", ref autoAdvanceOnSpeechCompletion))
+        {
+            this.Configuration.AutoAdvanceTextAfterSpeechCompleted = autoAdvanceOnSpeechCompletion;
+            this.Configuration.Save();
+        }
+    }
+
+    private void DrawBattleDialogueSettings()
+    {
+        var voiceBattleDialog = this.Configuration.VoiceBattleDialog;
+        if (ImGui.Checkbox("Voice battle dialog", ref voiceBattleDialog))
+        {
+            this.Configuration.VoiceBattleDialog = voiceBattleDialog;
+            this.Configuration.Save();
+        }
+
+        using (var disabled = ImRaii.Disabled(!voiceBattleDialog))
+        {
+            var voiceBattleDialogQueued = this.Configuration.VoiceBattleDialogQueued;
+            if (ImGui.Checkbox("Voice battle dialog in a queue", ref voiceBattleDialogQueued))
             {
-                var voiceDialog = this.Configuration.VoiceDialog;
-                if (ImGui.Checkbox("Voice dialog", ref voiceDialog))
-                {
-                    this.Configuration.VoiceDialog = voiceDialog;
-                    this.Configuration.Save();
-                }
-
-                var voiceBattleDialog = this.Configuration.VoiceBattleDialog;
-                if (ImGui.Checkbox("Voice battle dialog", ref voiceBattleDialog))
-                {
-                    this.Configuration.VoiceBattleDialog = voiceBattleDialog;
-                    this.Configuration.Save();
-                }
-
-                using (var disabled2 = ImRaii.Disabled(!voiceBattleDialog))
-                {
-                    var voiceBattleDialogQueued = this.Configuration.VoiceBattleDialogQueued;
-                    if (ImGui.Checkbox("Voice battle dialog in a queue", ref voiceBattleDialogQueued))
-                    {
-                        this.Configuration.VoiceBattleDialogQueued = voiceBattleDialogQueued;
-                        this.Configuration.Save();
-                    }
-                }
-
-                var voicePlayerChoicesCutscene = this.Configuration.VoicePlayerChoicesCutscene;
-                if (ImGui.Checkbox("Voice player choices in cutscene", ref voicePlayerChoicesCutscene))
-                {
-                    this.Configuration.VoicePlayerChoicesCutscene = voicePlayerChoicesCutscene;
-                    this.Configuration.Save();
-                }
-
-                var voicePlayerChoices = this.Configuration.VoicePlayerChoices;
-                if (ImGui.Checkbox("Voice player choices outside of cutscene", ref voicePlayerChoices))
-                {
-                    this.Configuration.VoicePlayerChoices = voicePlayerChoices;
-                    this.Configuration.Save();
-                }
-
-                var cancelAdvance = this.Configuration.CancelSpeechOnTextAdvance;
-                if (ImGui.Checkbox("Cancel voice on text advance", ref cancelAdvance))
-                {
-                    this.Configuration.CancelSpeechOnTextAdvance = cancelAdvance;
-                    this.Configuration.Save();
-                }
-
-                var autoAdvanceOnSpeechCompletion = this.Configuration.AutoAdvanceTextAfterSpeechCompleted;
-                if (ImGui.Checkbox("Click dialogue window after speech completion", ref autoAdvanceOnSpeechCompletion))
-                {
-                    this.Configuration.AutoAdvanceTextAfterSpeechCompleted = autoAdvanceOnSpeechCompletion;
-                    this.Configuration.Save();
-                }
-
-                var removeStutters = this.Configuration.RemoveStutters;
-                if (ImGui.Checkbox("Remove stutters", ref removeStutters))
-                {
-                    this.Configuration.RemoveStutters = removeStutters;
-                    this.Configuration.Save();
-                }
+                this.Configuration.VoiceBattleDialogQueued = voiceBattleDialogQueued;
+                this.Configuration.Save();
             }
         }
     }
 
     private void DrawBackendSettings()
     {
-        if (ImGui.CollapsingHeader("Backend"))
+        var backends = Enum.GetValues<TTSBackends>().ToArray();
+        var backendsDisplay = backends.Select(b => b.ToString()).ToArray();
+        var presetIndex = Enum.GetValues<TTSBackends>().ToList().IndexOf(this.Configuration.BackendSelection);
+        if (ImGui.Combo($"Select Backend##EKCBoxBackend", ref presetIndex, backendsDisplay, backendsDisplay.Length))
         {
-            var backends = Enum.GetValues<TTSBackends>().ToArray();
-            var backendsDisplay = backends.Select(b => b.ToString()).ToArray();
-            var presetIndex = Enum.GetValues<TTSBackends>().ToList().IndexOf(this.Configuration.BackendSelection);
-            if (ImGui.Combo($"Select Backend##EKCBoxBackend", ref presetIndex, backendsDisplay, backendsDisplay.Length))
-            {
-                var backendSelection = backends[presetIndex];
-                this.Configuration.BackendSelection = backendSelection;
-                this.Configuration.Save();
-                BackendHelper.SetBackendType(backendSelection);
+            var backendSelection = backends[presetIndex];
+            this.Configuration.BackendSelection = backendSelection;
+            this.Configuration.Save();
+            BackendHelper.SetBackendType(backendSelection);
 
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated backendselection to: {Constants.BACKENDS[presetIndex]}", 0);
-            }
-
-            if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
-            {
-                if (ImGui.InputText($"Base Url##EKBaseUrl", ref this.Configuration.Alltalk.BaseUrl, 40))
-                    this.Configuration.Save();
-
-            }
-
-            if (ImGui.Button($"Test Connection##EKTestConnection"))
-            {
-                BackendCheckReady(0);
-            }
-
-            if (ImGui.Button($"Load Voices##EKLoadVoices"))
-            {
-                BackendGetVoices();
-            }
-
-            if (!string.IsNullOrWhiteSpace(testConnectionRes))
-                ImGui.TextColored(new(1.0f, 1.0f, 1.0f, 0.6f), $"Connection test result: {testConnectionRes}");
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated backendselection to: {Constants.BACKENDS[presetIndex]}", new EKEventId(0, TextSource.None));
         }
+
+        if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
+        {
+            if (ImGui.InputText($"Base Url##EKBaseUrl", ref this.Configuration.Alltalk.BaseUrl, 40))
+                this.Configuration.Save();
+
+        }
+
+        if (ImGui.Button($"Test Connection##EKTestConnection"))
+        {
+            BackendCheckReady(new EKEventId(0, TextSource.None));
+        }
+
+        if (ImGui.Button($"Load Voices##EKLoadVoices"))
+        {
+            BackendGetVoices();
+        }
+
+        if (!string.IsNullOrWhiteSpace(testConnectionRes))
+            ImGui.TextColored(new(1.0f, 1.0f, 1.0f, 0.6f), $"Connection test result: {testConnectionRes}");
     }
 
     private void DrawSaveSettings()
     {
-        if (ImGui.CollapsingHeader("Save locally"))
+        var loadLocalFirst = this.Configuration.LoadFromLocalFirst;
+        if (ImGui.Checkbox("Search audio locally first before generating", ref loadLocalFirst))
         {
-            var loadLocalFirst = this.Configuration.LoadFromLocalFirst;
-            if (ImGui.Checkbox("Search audio locally first before generating", ref loadLocalFirst))
+            this.Configuration.LoadFromLocalFirst = loadLocalFirst;
+            this.Configuration.Save();
+        }
+        var saveLocally = this.Configuration.SaveToLocal;
+        if (ImGui.Checkbox("Save generated audio locally", ref saveLocally))
+        {
+            this.Configuration.SaveToLocal = saveLocally;
+            this.Configuration.Save();
+        }
+
+        using (var disabled = ImRaii.Disabled(!saveLocally))
+        {
+            var createMissingLocalSave = this.Configuration.CreateMissingLocalSaveLocation;
+            if (ImGui.Checkbox("Create directory if not existing", ref createMissingLocalSave))
             {
-                this.Configuration.LoadFromLocalFirst = loadLocalFirst;
+                this.Configuration.CreateMissingLocalSaveLocation = createMissingLocalSave;
                 this.Configuration.Save();
             }
-            var saveLocally = this.Configuration.SaveToLocal;
-            if (ImGui.Checkbox("Save generated audio locally", ref saveLocally))
+        }
+
+        using (var disabled = ImRaii.Disabled(!saveLocally && !loadLocalFirst))
+        {
+            string localSaveLocation = this.Configuration.LocalSaveLocation;
+            if (ImGui.InputText($"##EKSavePath", ref localSaveLocation, 40))
             {
-                this.Configuration.SaveToLocal = saveLocally;
+                this.Configuration.LocalSaveLocation = localSaveLocation;
                 this.Configuration.Save();
             }
-
-            using (var disabled = ImRaii.Disabled(!saveLocally))
+            ImGui.SameLine();
+            if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Folder.ToIconString()}##import", new Vector2(25, 25),
+                    "Select a directory via dialog.", false, true))
             {
-                var createMissingLocalSave = this.Configuration.CreateMissingLocalSaveLocation;
-                if (ImGui.Checkbox("Create directory if not existing", ref createMissingLocalSave))
+                var startDir = this.Configuration.LocalSaveLocation.Length > 0 && Directory.Exists(this.Configuration.LocalSaveLocation)
+                ? this.Configuration.LocalSaveLocation
+                    : null;
+
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Connection test result: {startDir}", new EKEventId(0, TextSource.None));
+                fileDialogManager = new FileDialogManager();
+                fileDialogManager.OpenFolderDialog("Choose audiofiles directory", (b, s) =>
                 {
-                    this.Configuration.CreateMissingLocalSaveLocation = createMissingLocalSave;
+                    if (!b)
+                        return;
+
+                    this.Configuration.LocalSaveLocation = s;
                     this.Configuration.Save();
-                }
+                    fileDialogManager = null;
+                }, startDir, false);
             }
 
-            using (var disabled = ImRaii.Disabled(!saveLocally && !loadLocalFirst))
+            if (fileDialogManager != null)
             {
-                string localSaveLocation = this.Configuration.LocalSaveLocation;
-                if (ImGui.InputText($"##EKSavePath", ref localSaveLocation, 40))
-                {
-                    this.Configuration.LocalSaveLocation = localSaveLocation;
-                    this.Configuration.Save();
-                }
-                ImGui.SameLine();
-                if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Folder.ToIconString()}##import", new Vector2(25, 25),
-                        "Select a directory via dialog.", false, true))
-                {
-                    var startDir = this.Configuration.LocalSaveLocation.Length > 0 && Directory.Exists(this.Configuration.LocalSaveLocation)
-                    ? this.Configuration.LocalSaveLocation
-                        : null;
-
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Connection test result: {startDir}", 0);
-                    fileDialogManager = new FileDialogManager();
-                    fileDialogManager.OpenFolderDialog("Choose audiofiles directory", (b, s) =>
-                    {
-                        if (!b)
-                            return;
-
-                        this.Configuration.LocalSaveLocation = s;
-                        this.Configuration.Save();
-                        fileDialogManager = null;
-                    }, startDir, false);
-                }
-
-                if (fileDialogManager != null)
-                {
-                    fileDialogManager.Draw();
-                }
+                fileDialogManager.Draw();
             }
         }
     }
 
     private void DrawBubbleSettings()
     {
-        if (ImGui.CollapsingHeader("Bubbles"))
+        var voiceBubbles = this.Configuration.VoiceBubbles;
+        if (ImGui.Checkbox("Voice NPC Bubbles", ref voiceBubbles))
         {
-            var voiceBubbles = this.Configuration.VoiceBubbles;
-            if (ImGui.Checkbox("Voice NPC Bubbles", ref voiceBubbles))
+            this.Configuration.VoiceBubbles = voiceBubbles;
+            this.Configuration.Save();
+        }
+
+        using (var disabled = ImRaii.Disabled(!voiceBubbles))
+        {
+            var voiceBubblesInCity = this.Configuration.VoiceBubblesInCity;
+            if (ImGui.Checkbox("Voice NPC Bubbles in City", ref voiceBubblesInCity))
             {
-                this.Configuration.VoiceBubbles = voiceBubbles;
+                this.Configuration.VoiceBubblesInCity = voiceBubblesInCity;
                 this.Configuration.Save();
             }
+        }
 
-            using (var disabled = ImRaii.Disabled(!voiceBubbles))
+        using (var disabled = ImRaii.Disabled(!voiceBubbles))
+        {
+            var voiceSourceCam = this.Configuration.VoiceSourceCam;
+            if (ImGui.Checkbox("Voice Bubbles with camera as center", ref voiceSourceCam))
             {
-                var voiceBubblesInCity = this.Configuration.VoiceBubblesInCity;
-                if (ImGui.Checkbox("Voice NPC Bubbles in City", ref voiceBubblesInCity))
-                {
-                    this.Configuration.VoiceBubblesInCity = voiceBubblesInCity;
-                    this.Configuration.Save();
-                }
-            }
-
-            using (var disabled = ImRaii.Disabled(!voiceBubbles))
-            {
-                var voiceSourceCam = this.Configuration.VoiceSourceCam;
-                if (ImGui.Checkbox("Voice Bubbles with camera as center", ref voiceSourceCam))
-                {
-                    this.Configuration.VoiceSourceCam = voiceSourceCam;
-                    this.Configuration.Save();
-                }
+                this.Configuration.VoiceSourceCam = voiceSourceCam;
+                this.Configuration.Save();
             }
         }
     }
 
     private void DrawChatSettings()
     {
-        if (ImGui.CollapsingHeader("Chat"))
+        var voiceChat = this.Configuration.VoiceChat;
+        if (ImGui.Checkbox("Voice Chat", ref voiceChat))
         {
-            var voiceChat = this.Configuration.VoiceChat;
-            if (ImGui.Checkbox("Voice Chat", ref voiceChat))
+            this.Configuration.VoiceChat = voiceChat;
+            this.Configuration.Save();
+        }
+
+        using (var disabled = ImRaii.Disabled(!voiceChat))
+        {
+            var voiceChatPlayer = this.Configuration.VoiceChatPlayer;
+            if (ImGui.Checkbox("Voice your own Chat", ref voiceChatPlayer))
             {
-                this.Configuration.VoiceChat = voiceChat;
+                this.Configuration.VoiceChatPlayer = voiceChatPlayer;
                 this.Configuration.Save();
             }
+        }
 
-            using (var disabled = ImRaii.Disabled(!voiceChat))
+        using (var disabled = ImRaii.Disabled(!voiceChat))
+        {
+            var voiceChatSay = this.Configuration.VoiceChatSay;
+            if (ImGui.Checkbox("Voice say Chat", ref voiceChatSay))
             {
-                var voiceChatPlayer = this.Configuration.VoiceChatPlayer;
-                if (ImGui.Checkbox("Voice your own Chat", ref voiceChatPlayer))
-                {
-                    this.Configuration.VoiceChatPlayer = voiceChatPlayer;
-                    this.Configuration.Save();
-                }
+                this.Configuration.VoiceChatSay = voiceChatSay;
+                this.Configuration.Save();
             }
+        }
 
-            using (var disabled = ImRaii.Disabled(!voiceChat))
+        using (var disabled = ImRaii.Disabled(!voiceChat))
+        {
+            var voiceChatYell = this.Configuration.VoiceChatYell;
+            if (ImGui.Checkbox("Voice yell Chat", ref voiceChatYell))
             {
-                var voiceChatSay = this.Configuration.VoiceChatSay;
-                if (ImGui.Checkbox("Voice say Chat", ref voiceChatSay))
-                {
-                    this.Configuration.VoiceChatSay = voiceChatSay;
-                    this.Configuration.Save();
-                }
+                this.Configuration.VoiceChatYell = voiceChatYell;
+                this.Configuration.Save();
             }
+        }
 
-            using (var disabled = ImRaii.Disabled(!voiceChat))
+        using (var disabled = ImRaii.Disabled(!voiceChat))
+        {
+            var voiceChatShout = this.Configuration.VoiceChatShout;
+            if (ImGui.Checkbox("Voice shout Chat", ref voiceChatShout))
             {
-                var voiceChatYell = this.Configuration.VoiceChatYell;
-                if (ImGui.Checkbox("Voice yell Chat", ref voiceChatYell))
-                {
-                    this.Configuration.VoiceChatYell = voiceChatYell;
-                    this.Configuration.Save();
-                }
+                this.Configuration.VoiceChatShout = voiceChatShout;
+                this.Configuration.Save();
             }
+        }
 
-            using (var disabled = ImRaii.Disabled(!voiceChat))
+        using (var disabled = ImRaii.Disabled(!voiceChat))
+        {
+            var voiceChatFreeCompany = this.Configuration.VoiceChatFreeCompany;
+            if (ImGui.Checkbox("Voice free company Chat", ref voiceChatFreeCompany))
             {
-                var voiceChatShout = this.Configuration.VoiceChatShout;
-                if (ImGui.Checkbox("Voice shout Chat", ref voiceChatShout))
-                {
-                    this.Configuration.VoiceChatShout = voiceChatShout;
-                    this.Configuration.Save();
-                }
+                this.Configuration.VoiceChatFreeCompany = voiceChatFreeCompany;
+                this.Configuration.Save();
             }
+        }
 
-            using (var disabled = ImRaii.Disabled(!voiceChat))
+        using (var disabled = ImRaii.Disabled(!voiceChat))
+        {
+            var voiceChatTell = this.Configuration.VoiceChatTell;
+            if (ImGui.Checkbox("Voice tell Chat", ref voiceChatTell))
             {
-                var voiceChatFreeCompany = this.Configuration.VoiceChatFreeCompany;
-                if (ImGui.Checkbox("Voice free company Chat", ref voiceChatFreeCompany))
-                {
-                    this.Configuration.VoiceChatFreeCompany = voiceChatFreeCompany;
-                    this.Configuration.Save();
-                }
+                this.Configuration.VoiceChatTell = voiceChatTell;
+                this.Configuration.Save();
             }
+        }
 
-            using (var disabled = ImRaii.Disabled(!voiceChat))
+        using (var disabled = ImRaii.Disabled(!voiceChat))
+        {
+            var voiceChatParty = this.Configuration.VoiceChatParty;
+            if (ImGui.Checkbox("Voice party Chat", ref voiceChatParty))
             {
-                var voiceChatTell = this.Configuration.VoiceChatTell;
-                if (ImGui.Checkbox("Voice tell Chat", ref voiceChatTell))
-                {
-                    this.Configuration.VoiceChatTell = voiceChatTell;
-                    this.Configuration.Save();
-                }
+                this.Configuration.VoiceChatParty = voiceChatParty;
+                this.Configuration.Save();
             }
+        }
 
-            using (var disabled = ImRaii.Disabled(!voiceChat))
+        using (var disabled = ImRaii.Disabled(!voiceChat))
+        {
+            var voiceChatAlliance = this.Configuration.VoiceChatAlliance;
+            if (ImGui.Checkbox("Voice alliance Chat", ref voiceChatAlliance))
             {
-                var voiceChatParty = this.Configuration.VoiceChatParty;
-                if (ImGui.Checkbox("Voice party Chat", ref voiceChatParty))
-                {
-                    this.Configuration.VoiceChatParty = voiceChatParty;
-                    this.Configuration.Save();
-                }
+                this.Configuration.VoiceChatAlliance = voiceChatAlliance;
+                this.Configuration.Save();
             }
+        }
 
-            using (var disabled = ImRaii.Disabled(!voiceChat))
+        using (var disabled = ImRaii.Disabled(!voiceChat))
+        {
+            var voiceChatNoviceNetwork = this.Configuration.VoiceChatNoviceNetwork;
+            if (ImGui.Checkbox("Voice novice network Chat", ref voiceChatNoviceNetwork))
             {
-                var voiceChatAlliance = this.Configuration.VoiceChatAlliance;
-                if (ImGui.Checkbox("Voice alliance Chat", ref voiceChatAlliance))
-                {
-                    this.Configuration.VoiceChatAlliance = voiceChatAlliance;
-                    this.Configuration.Save();
-                }
+                this.Configuration.VoiceChatNoviceNetwork = voiceChatNoviceNetwork;
+                this.Configuration.Save();
             }
+        }
 
-            using (var disabled = ImRaii.Disabled(!voiceChat))
+        using (var disabled = ImRaii.Disabled(!voiceChat))
+        {
+            var voiceChatLinkshell = this.Configuration.VoiceChatLinkshell;
+            if (ImGui.Checkbox("Voice Linkshells", ref voiceChatLinkshell))
             {
-                var voiceChatNoviceNetwork = this.Configuration.VoiceChatNoviceNetwork;
-                if (ImGui.Checkbox("Voice novice network Chat", ref voiceChatNoviceNetwork))
-                {
-                    this.Configuration.VoiceChatNoviceNetwork = voiceChatNoviceNetwork;
-                    this.Configuration.Save();
-                }
+                this.Configuration.VoiceChatLinkshell = voiceChatLinkshell;
+                this.Configuration.Save();
             }
+        }
 
-            using (var disabled = ImRaii.Disabled(!voiceChat))
+        using (var disabled = ImRaii.Disabled(!voiceChat))
+        {
+            var voiceChatCrossLinkshell = this.Configuration.VoiceChatCrossLinkshell;
+            if (ImGui.Checkbox("Voice Cross Linkshells", ref voiceChatCrossLinkshell))
             {
-                var voiceChatLinkshell = this.Configuration.VoiceChatLinkshell;
-                if (ImGui.Checkbox("Voice Linkshells", ref voiceChatLinkshell))
-                {
-                    this.Configuration.VoiceChatLinkshell = voiceChatLinkshell;
-                    this.Configuration.Save();
-                }
-            }
-
-            using (var disabled = ImRaii.Disabled(!voiceChat))
-            {
-                var voiceChatCrossLinkshell = this.Configuration.VoiceChatCrossLinkshell;
-                if (ImGui.Checkbox("Voice Cross Linkshells", ref voiceChatCrossLinkshell))
-                {
-                    this.Configuration.VoiceChatCrossLinkshell = voiceChatCrossLinkshell;
-                    this.Configuration.Save();
-                }
+                this.Configuration.VoiceChatCrossLinkshell = voiceChatCrossLinkshell;
+                this.Configuration.Save();
             }
         }
     }
 
-    private async void BackendCheckReady(int eventId)
+    private async void BackendCheckReady(EKEventId eventId)
     {
         try
         {
@@ -481,7 +513,7 @@ public class ConfigWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), 0);
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), new EKEventId(0, TextSource.None));
         }
     }
 
@@ -489,205 +521,380 @@ public class ConfigWindow : Window, IDisposable
     {
         try
         {
-            if (ImGui.CollapsingHeader("Options:"))
+            if (ImGui.BeginTabBar($"Voices##EKVoicesTab"))
             {
-                var voicesAllOriginals = this.Configuration.VoicesAllOriginals;
-                if (ImGui.Checkbox("Show all original voices as option", ref voicesAllOriginals))
+                if (ImGui.BeginTabItem("Options"))
                 {
-                    this.Configuration.VoicesAllOriginals = voicesAllOriginals;
-                    this.Configuration.Save();
-
-                    voices = BackendHelper.mappedVoices;
-                    if (!voicesAllOriginals)
-                        voices = voices.FindAll(b => b.voiceName.Contains("NPC"));
-                }
-                var voicesAllGenders = this.Configuration.VoicesAllGenders;
-                if (ImGui.Checkbox("Show both genders as option", ref voicesAllGenders))
-                {
-                    this.Configuration.VoicesAllGenders = voicesAllGenders;
-                    this.Configuration.Save();
-                }
-                var voicesAllRaces = this.Configuration.VoicesAllRaces;
-                if (ImGui.Checkbox("Show all races as option", ref voicesAllRaces))
-                {
-                    this.Configuration.VoicesAllRaces = voicesAllRaces;
-                    this.Configuration.Save();
-                }
-                var voicesAllBubbles = this.Configuration.VoicesAllBubbles;
-                if (ImGui.Checkbox("Show all bubble npcs as option", ref voicesAllBubbles))
-                {
-                    this.Configuration.VoicesAllBubbles = voicesAllBubbles;
-                    this.Configuration.Save();
-                }
-            }
-
-            if (ImGui.CollapsingHeader("NPCs:"))
-            {
-
-                if (voices == null)
-                {
-                    voices = BackendHelper.mappedVoices;
-                    if (!this.Configuration.VoicesAllOriginals)
-                        voices = voices.FindAll(b => b.voiceName.Contains("NPC"));
-                }
-
-                if (filteredNpcs == null)
-                    filteredNpcs = Configuration.MappedNpcs;
-
-                if (ImGui.InputText($"Filter by npc name##EKFilterNpc", ref npcFilter, 40))
-                {
-                    filteredNpcs = Configuration.MappedNpcs.FindAll(b => b.name.ToLower().Contains(npcFilter.ToLower()));
-                    resetNpcFilter = false;
-                }
-                else if (!resetNpcFilter && npcFilter.Length == 0)
-                {
-                    filteredNpcs = Configuration.MappedNpcs;
-                }
-
-                if (ImGui.BeginChild("NpcsChild"))
-                {
-                    NpcMapData toBeRemoved = null;
-                    foreach (NpcMapData mapData in filteredNpcs)
+                    var voicesAllOriginals = this.Configuration.VoicesAllOriginals;
+                    if (ImGui.Checkbox("Show all original voices as option", ref voicesAllOriginals))
                     {
-                        if (!this.Configuration.VoicesAllOriginals && mapData.voiceItem.voiceName.ToLower().Contains(mapData.name.ToLower()))
-                            continue;
-
-                        if (!this.Configuration.VoicesAllBubbles && mapData.name.StartsWith("Bubble"))
-                            continue;
-
-                        var localVoices = new List<BackendVoiceItem>(voices);
-
-                        if (!this.Configuration.VoicesAllGenders)
-                            localVoices = localVoices.FindAll(b => b.gender == mapData.gender || (mapData.gender == Gender.None));
-
-                        if (!this.Configuration.VoicesAllRaces)
-                            localVoices = localVoices.FindAll(b => b.race == mapData.race);
-
-                        localVoices = localVoices.OrderBy(p => p.ToString()).ToList();
-                        localVoices.Insert(0, new BackendVoiceItem() { voiceName = "Remove", race = NpcRaces.Default, gender = Gender.None });
-                        var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
-                        var presetIndex = localVoices.FindIndex(p => p.ToString().Contains(mapData.voiceItem?.ToString() ?? "Narrator"));
-
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Trash.ToIconString()}##delnpc{mapData.ToString()}", new Vector2(25, 25), "Remove NPC mapping", false, true))
-                        {
-                            toBeRemoved = mapData;
-                        }
-                        ImGui.SameLine();
-                        if (ImGui.Combo($"{mapData.ToString(true)}##EKCBoxNPC{mapData.ToString(Configuration.VoicesAllRaces)}", ref presetIndex, voicesDisplay, voicesDisplay.Length))
-                        {
-                            var newVoiceItem = localVoices[presetIndex];
-
-                            if (newVoiceItem != null && newVoiceItem.voiceName != "Remove")
-                            {
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for Character: {mapData.ToString(true)} from: {mapData.voiceItem} to: {newVoiceItem}", 0);
-
-                                mapData.voiceItem = newVoiceItem;
-                                this.Configuration.Save();
-                            }
-                            else if (newVoiceItem.voiceName == "Remove")
-                            {
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Removing Configuration for Character: {mapData}", 0);
-                                toBeRemoved = mapData;
-                            }
-                            else
-                                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Voice for Character: {mapData}", 0);
-                        }
-
+                        this.Configuration.VoicesAllOriginals = voicesAllOriginals;
+                        this.Configuration.Save();
+                    }
+                    var voicesAllGenders = this.Configuration.VoicesAllGenders;
+                    if (ImGui.Checkbox("Show both genders as option", ref voicesAllGenders))
+                    {
+                        this.Configuration.VoicesAllGenders = voicesAllGenders;
+                        this.Configuration.Save();
+                    }
+                    var voicesAllRaces = this.Configuration.VoicesAllRaces;
+                    if (ImGui.Checkbox("Show all races as option", ref voicesAllRaces))
+                    {
+                        this.Configuration.VoicesAllRaces = voicesAllRaces;
+                        this.Configuration.Save();
+                    }
+                    var voicesAllBubbles = this.Configuration.VoicesAllBubbles;
+                    if (ImGui.Checkbox("Show all bubble npcs as option", ref voicesAllBubbles))
+                    {
+                        this.Configuration.VoicesAllBubbles = voicesAllBubbles;
+                        this.Configuration.Save();
                     }
 
-                    if (toBeRemoved != null)
-                    {
-                        Configuration.MappedNpcs.Remove(toBeRemoved);
-                        Configuration.Save();
+                    ImGui.EndTabItem();
+                }
+
+                if (ImGui.BeginTabItem("NPCs"))
+                {
+                    if (filteredNpcs == null) 
+                    { 
+                        filteredNpcs = Configuration.MappedNpcs;
+                        filteredNpcs.Sort();
                     }
 
-                    ImGui.EndChild();
-                }
-            }
-
-            if (ImGui.CollapsingHeader("Players:"))
-            {
-
-                if (voices == null)
-                {
-                    voices = BackendHelper.mappedVoices;
-                    if (!this.Configuration.VoicesAllOriginals)
-                        voices = voices.FindAll(b => b.voiceName.Contains("NPC"));
-                }
-
-                if (filteredPlayers == null)
-                    filteredPlayers = Configuration.MappedPlayers;
-
-                if (ImGui.InputText($"Filter by player name##EKFilterPlayer", ref playerFilter, 40))
-                {
-                    filteredPlayers = Configuration.MappedPlayers.FindAll(b => b.name.ToLower().Contains(playerFilter.ToLower()));
-                    resetPlayerFilter = false;
-                }
-                else if (!resetPlayerFilter && playerFilter.Length == 0)
-                {
-                    filteredPlayers = Configuration.MappedPlayers;
-                }
-
-                if (ImGui.BeginChild("PlayersChild"))
-                {
-                    NpcMapData toBeRemoved = null;
-                    foreach (NpcMapData mapData in filteredPlayers)
+                    if (ImGui.InputText($"Filter by npc name##EKFilterNpc", ref npcFilter, 40))
                     {
-                        if (!this.Configuration.VoicesAllOriginals && mapData.voiceItem.voiceName.ToLower().Contains(mapData.name.ToLower()))
-                            continue;
+                        filteredNpcs = Configuration.MappedNpcs.FindAll(b => b.name.ToLower().Contains(npcFilter.ToLower()));
+                        filteredNpcs.Sort();
+                        resetNpcFilter = false;
+                    }
+                    else if (!resetNpcFilter && npcFilter.Length == 0)
+                    {
+                        filteredNpcs = Configuration.MappedNpcs;
+                        filteredNpcs.Sort();
+                        resetNpcFilter = true;
+                    }
+                    ImGui.SameLine();
+                    if (ImGui.Button("Clear mapped npcs##clearnpc"))
+                    {
+                        this.Configuration.MappedNpcs.Clear();
+                        this.Configuration.Save();
+                    }
 
-                        var localVoices = new List<BackendVoiceItem>(voices);
-
-                        if (!this.Configuration.VoicesAllGenders)
-                            localVoices = localVoices.FindAll(b => b.gender == mapData.gender || (mapData.gender == Gender.None));
-
-                        if (!this.Configuration.VoicesAllRaces)
-                            localVoices = localVoices.FindAll(b => b.race == mapData.race);
-
-                        localVoices = localVoices.OrderBy(p => p.ToString()).ToList();
-                        localVoices.Insert(0, new BackendVoiceItem() { voiceName = "Remove", race = NpcRaces.Default, gender = Gender.None });
-                        var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
-                        var presetIndex = localVoices.FindIndex(p => p.ToString().Contains(mapData.voiceItem?.ToString() ?? "Narrator"));
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Trash.ToIconString()}##delplayer{mapData.ToString()}", new Vector2(25, 25), "Remove player mapping", false, true))
+                    if (ImGui.BeginChild("NpcsChild"))
+                    {
+                        if (ImGui.BeginTable("NPC Table##NPCTable", 5))
                         {
-                            toBeRemoved = mapData;
-                        }
-                        ImGui.SameLine();
-                        if (ImGui.Combo($"{mapData.ToString(true)}##EKCBoxNPC{mapData.ToString(Configuration.VoicesAllRaces)}", ref presetIndex, voicesDisplay, voicesDisplay.Length))
-                        {
-                            var newVoiceItem = localVoices[presetIndex];
+                            ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
+                            ImGui.TableSetupColumn("Delete", ImGuiTableColumnFlags.None, 35f);
+                            ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.None, 125);
+                            ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.None, 125);
+                            ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.None, 150);
+                            ImGui.TableSetupColumn("Voice", ImGuiTableColumnFlags.None, 250);
+                            ImGui.TableHeadersRow();
+                            ImGui.TableNextColumn();
+                            ImGui.TableNextColumn();
+                            ImGui.TableNextColumn();
+                            ImGui.TableNextColumn();
+                            ImGui.TableNextColumn();
+                            ImGui.TableNextRow();
 
-                            if (newVoiceItem != null && newVoiceItem.voiceName != "Remove")
+                            NpcMapData toBeRemoved = null;
+                            foreach (NpcMapData mapData in filteredNpcs)
                             {
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for Character: {mapData.ToString(true)} from: {mapData.voiceItem} to: {newVoiceItem}", 0);
+                                if (!this.Configuration.VoicesAllOriginals && mapData.voiceItem.voiceName.ToLower().Contains(mapData.name.ToLower()))
+                                    continue;
 
-                                mapData.voiceItem = newVoiceItem;
-                                this.Configuration.Save();
+                                if (!this.Configuration.VoicesAllBubbles && mapData.name.StartsWith("Bubble"))
+                                    continue;
+
+                                ImGui.TableNextColumn();
+                                ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                                if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Trash.ToIconString()}##delnpc{mapData.ToString()}", new Vector2(25, 25), "Remove NPC mapping", false, true))
+                                {
+                                    toBeRemoved = mapData;
+                                }
+                                ImGui.TableNextColumn();
+                                ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                                var presetIndexGender = BackendVoiceHelper.GenderDisplay.IndexOf(p => p.Contains(mapData.gender.ToString()));
+                                if (ImGui.Combo($"##EKCBoxNPC{mapData.ToString(Configuration.VoicesAllRaces)}1", ref presetIndexGender, BackendVoiceHelper.GenderDisplay, BackendVoiceHelper.GenderDisplay.Length))
+                                {
+                                    var newGender = BackendVoiceHelper.GenderArr[presetIndexGender];
+                                    if (newGender != mapData.gender)
+                                    {
+                                        if (Configuration.MappedNpcs.Contains(new NpcMapData(mapData.objectKind) { gender = newGender, race = mapData.race, name = mapData.name }))
+                                            toBeRemoved = mapData;
+                                        else
+                                        {
+                                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Gender for Character: {mapData.ToString(true)} from: {mapData.gender} to: {newGender}", new EKEventId(0, TextSource.None));
+
+                                            mapData.gender = newGender;
+                                            filteredNpcs.Sort();
+                                            this.Configuration.Save();
+                                        }
+                                    }
+                                    else
+                                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Gender for Character: {mapData}", new EKEventId(0, TextSource.None));
+                                }
+                                ImGui.TableNextColumn();
+                                ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                                var presetIndexRace = BackendVoiceHelper.RaceDisplay.IndexOf(p => p.Contains(mapData.race.ToString()));
+                                if (ImGui.Combo($"##EKCBoxNPC{mapData.ToString(Configuration.VoicesAllRaces)}2", ref presetIndexRace, BackendVoiceHelper.RaceDisplay, BackendVoiceHelper.RaceDisplay.Length))
+                                {
+                                    var newRace = BackendVoiceHelper.RaceArr[presetIndexRace];
+                                    if (newRace != mapData.race)
+                                    {
+                                        if (Configuration.MappedNpcs.Contains(new NpcMapData(mapData.objectKind) { gender = mapData.gender, race = newRace, name = mapData.name }))
+                                            toBeRemoved = mapData;
+                                        else
+                                        {
+                                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Race for Character: {mapData.ToString(true)} from: {mapData.race} to: {newRace}", new EKEventId(0, TextSource.None));
+
+                                            mapData.race = newRace;
+                                            filteredNpcs.Sort();
+                                            this.Configuration.Save();
+                                        }
+                                    }
+                                    else
+                                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Race for Character: {mapData}", new EKEventId(0, TextSource.None));
+                                }
+                                ImGui.TableNextColumn();
+                                ImGui.TextUnformatted(mapData.name);
+                                ImGui.TableNextColumn();
+                                ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                                var localVoices = (this.Configuration.VoicesAllOriginals ? 
+                                                    (this.Configuration.VoicesAllGenders ? 
+                                                        (this.Configuration.VoicesAllRaces ? 
+                                                            BackendVoiceHelper.Voices : 
+                                                            BackendVoiceHelper.FilteredVoicesAllGenders[mapData.race]
+                                                        ):
+                                                        (this.Configuration.VoicesAllRaces ?
+                                                            BackendVoiceHelper.FilteredVoicesAllRaces[mapData.gender] :
+                                                            BackendVoiceHelper.FilteredVoices[mapData.gender][mapData.race]
+                                                        )
+                                                    ):
+                                                    (this.Configuration.VoicesAllGenders ?
+                                                        (this.Configuration.VoicesAllRaces ?
+                                                            BackendVoiceHelper.VoicesOriginal :
+                                                            BackendVoiceHelper.FilteredVoicesAllGendersOriginal[mapData.race]
+                                                        ):
+                                                        (this.Configuration.VoicesAllRaces ?
+                                                            BackendVoiceHelper.FilteredVoicesAllRacesOriginal[mapData.gender] :
+                                                            BackendVoiceHelper.FilteredVoicesOriginal[mapData.gender][mapData.race]
+                                                        )
+                                                    )
+                                                  );
+
+                                var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
+                                var presetIndexVoice = localVoices.FindIndex(p => p.ToString().Contains(mapData.voiceItem?.ToString() ?? "Narrator"));
+                                if (ImGui.Combo($"##EKCBoxNPC{mapData.ToString(Configuration.VoicesAllRaces)}3", ref presetIndexVoice, voicesDisplay, voicesDisplay.Length))
+                                {
+                                    var newVoiceItem = localVoices[presetIndexVoice];
+
+                                    if (newVoiceItem != null)
+                                    {
+                                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for Character: {mapData.ToString(true)} from: {mapData.voiceItem} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
+
+                                        mapData.voiceItem = newVoiceItem;
+                                        filteredNpcs.Sort();
+                                        this.Configuration.Save();
+                                    }
+                                    else
+                                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Voice for Character: {mapData}", new EKEventId(0, TextSource.None));
+                                }
+
+                                ImGui.TableNextRow();
                             }
-                            else if (newVoiceItem.voiceName == "Remove")
+
+                            if (toBeRemoved != null)
                             {
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Removing Configuration for Character: {mapData}", 0);
-                                toBeRemoved = mapData;
+                                Configuration.MappedNpcs.Remove(toBeRemoved);
+                                filteredNpcs.Sort();
+                                Configuration.Save();
                             }
-                            else
-                                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Voice for Character: {mapData}", 0);
+
+                            ImGui.EndTable();
                         }
 
+                        ImGui.EndChild();
                     }
 
-                    if (toBeRemoved != null)
-                    {
-                        Configuration.MappedPlayers.Remove(toBeRemoved);
-                        Configuration.Save();
-                    }
-
-                    ImGui.EndChild();
+                    ImGui.EndTabItem();
                 }
+
+                if (ImGui.BeginTabItem("Players"))
+                {
+                    if (filteredPlayers == null)
+                    {
+                        filteredPlayers = Configuration.MappedPlayers;
+                        filteredPlayers.Sort();
+                    }
+
+                    if (ImGui.InputText($"Filter by player name##EKFilterPlayer", ref playerFilter, 40))
+                    {
+                        filteredPlayers = Configuration.MappedPlayers.FindAll(b => b.name.ToLower().Contains(playerFilter.ToLower()));
+                        filteredPlayers.Sort();
+                        resetPlayerFilter = false;
+                    }
+                    else if (!resetPlayerFilter && playerFilter.Length == 0)
+                    {
+                        filteredPlayers = Configuration.MappedPlayers;
+                        filteredPlayers.Sort();
+                        resetPlayerFilter = true;
+                    }
+                    ImGui.SameLine();
+                    if (ImGui.Button("Clear mapped players##clearplayers"))
+                    {
+                        this.Configuration.MappedPlayers.Clear();
+                        this.Configuration.Save();
+                    }
+
+                    if (ImGui.BeginChild("PlayerssChild"))
+                    {
+                        if (ImGui.BeginTable("Player Table##PlayerTable", 5))
+                        {
+                            ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
+                            ImGui.TableSetupColumn("Delete", ImGuiTableColumnFlags.None, 35f);
+                            ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.None, 125);
+                            ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.None, 125);
+                            ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.None, 150);
+                            ImGui.TableSetupColumn("Voice", ImGuiTableColumnFlags.None, 250);
+                            ImGui.TableHeadersRow();
+                            ImGui.TableNextColumn();
+                            ImGui.TableNextColumn();
+                            ImGui.TableNextColumn();
+                            ImGui.TableNextColumn();
+                            ImGui.TableNextColumn();
+                            ImGui.TableNextRow();
+
+                            NpcMapData toBeRemoved = null;
+                            foreach (NpcMapData mapData in filteredPlayers)
+                            {
+                                if (!this.Configuration.VoicesAllOriginals && mapData.voiceItem.voiceName.ToLower().Contains(mapData.name.ToLower()))
+                                    continue;
+
+                                if (!this.Configuration.VoicesAllBubbles && mapData.name.StartsWith("Bubble"))
+                                    continue;
+
+                                ImGui.TableNextColumn();
+                                ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                                if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Trash.ToIconString()}##delplayer{mapData.ToString()}", new Vector2(25, 25), "Remove Player mapping", false, true))
+                                {
+                                    toBeRemoved = mapData;
+                                }
+                                ImGui.TableNextColumn();
+                                ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                                var presetIndexGender = BackendVoiceHelper.GenderDisplay.IndexOf(p => p.Contains(mapData.gender.ToString()));
+                                if (ImGui.Combo($"##EKCBoxPlayer{mapData.ToString(Configuration.VoicesAllRaces)}1", ref presetIndexGender, BackendVoiceHelper.GenderDisplay, BackendVoiceHelper.GenderDisplay.Length))
+                                {
+                                    var newGender = BackendVoiceHelper.GenderArr[presetIndexGender];
+                                    if (newGender != mapData.gender)
+                                    {
+                                        if (Configuration.MappedPlayers.Contains(new NpcMapData(mapData.objectKind) { gender = newGender, race = mapData.race, name = mapData.name }))
+                                            toBeRemoved = mapData;
+                                        else
+                                        {
+                                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Gender for Character: {mapData.ToString(true)} from: {mapData.gender} to: {newGender}", new EKEventId(0, TextSource.None));
+
+                                            mapData.gender = newGender;
+                                            filteredPlayers.Sort();
+                                            this.Configuration.Save();
+                                        }
+                                    }
+                                    else
+                                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Gender for Character: {mapData}", new EKEventId(0, TextSource.None));
+                                }
+                                ImGui.TableNextColumn();
+                                ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                                var presetIndexRace = BackendVoiceHelper.RaceDisplay.IndexOf(p => p.Contains(mapData.race.ToString()));
+                                if (ImGui.Combo($"##EKCBoxPlayer{mapData.ToString(Configuration.VoicesAllRaces)}2", ref presetIndexRace, BackendVoiceHelper.RaceDisplay, BackendVoiceHelper.RaceDisplay.Length))
+                                {
+                                    var newRace = BackendVoiceHelper.RaceArr[presetIndexRace];
+                                    if (newRace != mapData.race)
+                                    {
+                                        if (Configuration.MappedPlayers.Contains(new NpcMapData(mapData.objectKind) { gender = mapData.gender, race = newRace, name = mapData.name }))
+                                            toBeRemoved = mapData;
+                                        else
+                                        {
+                                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Race for Character: {mapData.ToString(true)} from: {mapData.race} to: {newRace}", new EKEventId(0, TextSource.None));
+
+                                            mapData.race = newRace;
+                                            filteredPlayers.Sort();
+                                            this.Configuration.Save();
+                                        }
+                                    }
+                                    else
+                                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Race for Character: {mapData}", new EKEventId(0, TextSource.None));
+                                }
+                                ImGui.TableNextColumn();
+                                ImGui.TextUnformatted(mapData.name);
+                                ImGui.TableNextColumn();
+                                ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                                var localVoices = (this.Configuration.VoicesAllOriginals ?
+                                                    (this.Configuration.VoicesAllGenders ?
+                                                        (this.Configuration.VoicesAllRaces ?
+                                                            BackendVoiceHelper.Voices :
+                                                            BackendVoiceHelper.FilteredVoicesAllGenders[mapData.race]
+                                                        ) :
+                                                        (this.Configuration.VoicesAllRaces ?
+                                                            BackendVoiceHelper.FilteredVoicesAllRaces[mapData.gender] :
+                                                            BackendVoiceHelper.FilteredVoices[mapData.gender][mapData.race]
+                                                        )
+                                                    ) :
+                                                    (this.Configuration.VoicesAllGenders ?
+                                                        (this.Configuration.VoicesAllRaces ?
+                                                            BackendVoiceHelper.VoicesOriginal :
+                                                            BackendVoiceHelper.FilteredVoicesAllGendersOriginal[mapData.race]
+                                                        ) :
+                                                        (this.Configuration.VoicesAllRaces ?
+                                                            BackendVoiceHelper.FilteredVoicesAllRacesOriginal[mapData.gender] :
+                                                            BackendVoiceHelper.FilteredVoicesOriginal[mapData.gender][mapData.race]
+                                                        )
+                                                    )
+                                                  );
+
+                                var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
+                                var presetIndexVoice = localVoices.FindIndex(p => p.ToString().Contains(mapData.voiceItem?.ToString() ?? "Narrator"));
+                                if (ImGui.Combo($"##EKCBoxPlayer{mapData.ToString(Configuration.VoicesAllRaces)}3", ref presetIndexVoice, voicesDisplay, voicesDisplay.Length))
+                                {
+                                    var newVoiceItem = localVoices[presetIndexVoice];
+
+                                    if (newVoiceItem != null)
+                                    {
+                                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for Character: {mapData.ToString(true)} from: {mapData.voiceItem} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
+
+                                        mapData.voiceItem = newVoiceItem;
+                                        filteredPlayers.Sort();
+                                        this.Configuration.Save();
+                                    }
+                                    else
+                                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Voice for Character: {mapData}", new EKEventId(0, TextSource.None));
+                                }
+
+                                ImGui.TableNextRow();
+                            }
+
+                            if (toBeRemoved != null)
+                            {
+                                Configuration.MappedPlayers.Remove(toBeRemoved);
+                                filteredPlayers.Sort();
+                                Configuration.Save();
+                            }
+
+                            ImGui.EndTable();
+                        }
+
+                        ImGui.EndChild();
+                    }
+
+                    ImGui.EndTabItem();
+                }
+
+                ImGui.EndTabBar();
             }
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", 0);
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
         }
     }
 
@@ -721,7 +928,7 @@ public class ConfigWindow : Window, IDisposable
                 if (!string.IsNullOrWhiteSpace(originalText) && !string.IsNullOrWhiteSpace(correctedText))
                 {
                     PhoneticCorrection newCorrection = new PhoneticCorrection(originalText, correctedText);
-                    if (Configuration.PhoneticCorrections.Contains(newCorrection))
+                    if (!Configuration.PhoneticCorrections.Contains(newCorrection))
                     {
                         Configuration.PhoneticCorrections.Add(newCorrection);
                         Configuration.PhoneticCorrections.Sort();
@@ -745,7 +952,7 @@ public class ConfigWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", 0);
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
         }
     }
 
@@ -753,72 +960,491 @@ public class ConfigWindow : Window, IDisposable
     {
         try
         {
-            if (ImGui.CollapsingHeader("Options:"))
+            if (ImGui.BeginTabBar($"Logs##EKLogsTab"))
             {
-                var showInfoLog = this.Configuration.ShowInfoLog;
-                if (ImGui.Checkbox("Show info logs", ref showInfoLog))
+                if (ImGui.BeginTabItem("General"))
                 {
-                    this.Configuration.ShowInfoLog = showInfoLog;
-                    this.Configuration.Save();
-                    LogHelper.RecreateLogList();
-                }
-                var showDebugLog = this.Configuration.ShowDebugLog;
-                if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
-                {
-                    this.Configuration.ShowDebugLog = showDebugLog;
-                    this.Configuration.Save();
-                    LogHelper.RecreateLogList();
-                }
-                var showErrorLog = this.Configuration.ShowErrorLog;
-                if (ImGui.Checkbox("Show error logs", ref showErrorLog))
-                {
-                    this.Configuration.ShowErrorLog = showErrorLog;
-                    this.Configuration.Save();
-                    LogHelper.RecreateLogList();
-                }
-                var jumpToBottom = this.Configuration.JumpToBottom;
-                if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
-                {
-                    this.Configuration.JumpToBottom = jumpToBottom;
-                    this.Configuration.Save();
-                }
-            }
-            if (ImGui.CollapsingHeader("Log:"))
-            {
-                List<LogMessage> logMessages = LogHelper.logList;
-
-                if (ImGui.InputText($"Filter by event-id##EKFilterNpcId", ref logFilter, 40))
-                {
-                    LogHelper.FilterLogList(logFilter);
-                    resetLogFilter = false;
-                }
-                else if (!resetLogFilter && logFilter.Length == 0)
-                {
-                    LogHelper.RecreateLogList();
-                }
-
-                if (ImGui.BeginChild("LogsChild"))
-                {
-                    foreach (var logMessage in logMessages)
+                    if (ImGui.CollapsingHeader("Options:"))
                     {
-                        var text = $"{logMessage.timeStamp.ToShortDateString()} - {logMessage.timeStamp.ToString("HH:mm:ss.fff")}: {logMessage.message}";
-                        ImGui.PushStyleColor(ImGuiCol.Text, logMessage.color);
-                        ImGui.TextUnformatted(text);
-                        ImGui.PopStyleColor();
+                        var showInfoLog = this.Configuration.logConfig.ShowGeneralInfoLog;
+                        if (ImGui.Checkbox("Show info logs", ref showInfoLog))
+                        {
+                            this.Configuration.logConfig.ShowGeneralInfoLog = showInfoLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var showDebugLog = this.Configuration.logConfig.ShowGeneralDebugLog;
+                        if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
+                        {
+                            this.Configuration.logConfig.ShowGeneralDebugLog = showDebugLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var showErrorLog = this.Configuration.logConfig.ShowGeneralErrorLog;
+                        if (ImGui.Checkbox("Show error logs", ref showErrorLog))
+                        {
+                            this.Configuration.logConfig.ShowGeneralErrorLog = showErrorLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var jumpToBottom = this.Configuration.logConfig.GeneralJumpToBottom;
+                        if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
+                        {
+                            this.Configuration.logConfig.GeneralJumpToBottom = jumpToBottom;
+                            this.Configuration.Save();
+                        }
+                    }
+                    if (ImGui.CollapsingHeader("Log:"))
+                    {
+                        List<LogMessage> logMessages = LogHelper.GeneralLogsFiltered;
+
+                        if (ImGui.InputText($"Filter by event-id##EKFilterNpcId", ref logFilter, 40))
+                        {
+                            LogHelper.FilterLogList(TextSource.None, logFilter);
+                            resetLogFilter = false;
+                        }
+                        else if (!resetLogFilter && logFilter.Length == 0)
+                        {
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+
+                        if (ImGui.BeginChild("LogsChild"))
+                        {
+                            foreach (var logMessage in logMessages)
+                            {
+                                var text = $"{logMessage.timeStamp.ToShortDateString()} - {logMessage.timeStamp.ToString("HH:mm:ss.fff")}: {logMessage.message}";
+                                ImGui.PushStyleColor(ImGuiCol.Text, logMessage.color);
+                                ImGui.PushTextWrapPos();
+                                ImGui.TextUnformatted(text);
+                                ImGui.PopStyleColor();
+                            }
+
+                            if (Configuration.logConfig.GeneralJumpToBottom)
+                            {
+                                ImGui.SetScrollHereY();
+                            }
+
+                            ImGui.EndChild();
+                        }
                     }
 
-                    if (Configuration.JumpToBottom)
+                    ImGui.EndTabItem();
+                }
+                if (ImGui.BeginTabItem("Dialogue"))
+                {
+                    if (ImGui.CollapsingHeader("Options:"))
                     {
-                        ImGui.SetScrollHereY();
+                        var showInfoLog = this.Configuration.logConfig.ShowTalkInfoLog;
+                        if (ImGui.Checkbox("Show info logs", ref showInfoLog))
+                        {
+                            this.Configuration.logConfig.ShowTalkInfoLog = showInfoLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var showDebugLog = this.Configuration.logConfig.ShowTalkDebugLog;
+                        if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
+                        {
+                            this.Configuration.logConfig.ShowTalkDebugLog = showDebugLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var showErrorLog = this.Configuration.logConfig.ShowTalkErrorLog;
+                        if (ImGui.Checkbox("Show error logs", ref showErrorLog))
+                        {
+                            this.Configuration.logConfig.ShowTalkErrorLog = showErrorLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var jumpToBottom = this.Configuration.logConfig.TalkJumpToBottom;
+                        if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
+                        {
+                            this.Configuration.logConfig.TalkJumpToBottom = jumpToBottom;
+                            this.Configuration.Save();
+                        }
+                    }
+                    if (ImGui.CollapsingHeader("Log:"))
+                    {
+                        List<LogMessage> logMessages = LogHelper.TalkLogsFiltered;
+
+                        if (ImGui.InputText($"Filter by event-id##EKFilterNpcId", ref logFilter, 40))
+                        {
+                            LogHelper.FilterLogList(TextSource.None, logFilter);
+                            resetLogFilter = false;
+                        }
+                        else if (!resetLogFilter && logFilter.Length == 0)
+                        {
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+
+                        if (ImGui.BeginChild("LogsChild"))
+                        {
+                            foreach (var logMessage in logMessages)
+                            {
+                                var text = $"{logMessage.timeStamp.ToShortDateString()} - {logMessage.timeStamp.ToString("HH:mm:ss.fff")}: {logMessage.message}";
+                                ImGui.PushStyleColor(ImGuiCol.Text, logMessage.color);
+                                ImGui.PushTextWrapPos();
+                                ImGui.TextUnformatted(text);
+                                ImGui.PopStyleColor();
+                            }
+
+                            if (Configuration.logConfig.TalkJumpToBottom)
+                            {
+                                ImGui.SetScrollHereY();
+                            }
+
+                            ImGui.EndChild();
+                        }
                     }
 
-                    ImGui.EndChild();
+                    ImGui.EndTabItem();
+                }
+                if (ImGui.BeginTabItem("Battle dialogue"))
+                {
+                    if (ImGui.CollapsingHeader("Options:"))
+                    {
+                        var showInfoLog = this.Configuration.logConfig.ShowBattleTalkInfoLog;
+                        if (ImGui.Checkbox("Show info logs", ref showInfoLog))
+                        {
+                            this.Configuration.logConfig.ShowBattleTalkInfoLog = showInfoLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var showDebugLog = this.Configuration.logConfig.ShowBattleTalkDebugLog;
+                        if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
+                        {
+                            this.Configuration.logConfig.ShowBattleTalkDebugLog = showDebugLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var showErrorLog = this.Configuration.logConfig.ShowBattleTalkErrorLog;
+                        if (ImGui.Checkbox("Show error logs", ref showErrorLog))
+                        {
+                            this.Configuration.logConfig.ShowBattleTalkErrorLog = showErrorLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var jumpToBottom = this.Configuration.logConfig.BattleTalkJumpToBottom;
+                        if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
+                        {
+                            this.Configuration.logConfig.BattleTalkJumpToBottom = jumpToBottom;
+                            this.Configuration.Save();
+                        }
+                    }
+                    if (ImGui.CollapsingHeader("Log:"))
+                    {
+                        List<LogMessage> logMessages = LogHelper.BattleTalkLogsFiltered;
+
+                        if (ImGui.InputText($"Filter by event-id##EKFilterNpcId", ref logFilter, 40))
+                        {
+                            LogHelper.FilterLogList(TextSource.None, logFilter);
+                            resetLogFilter = false;
+                        }
+                        else if (!resetLogFilter && logFilter.Length == 0)
+                        {
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+
+                        if (ImGui.BeginChild("LogsChild"))
+                        {
+                            foreach (var logMessage in logMessages)
+                            {
+                                var text = $"{logMessage.timeStamp.ToShortDateString()} - {logMessage.timeStamp.ToString("HH:mm:ss.fff")}: {logMessage.message}";
+                                ImGui.PushStyleColor(ImGuiCol.Text, logMessage.color);
+                                ImGui.PushTextWrapPos();
+                                ImGui.TextUnformatted(text);
+                                ImGui.PopStyleColor();
+                            }
+
+                            if (Configuration.logConfig.BattleTalkJumpToBottom)
+                            {
+                                ImGui.SetScrollHereY();
+                            }
+
+                            ImGui.EndChild();
+                        }
+                    }
+
+                    ImGui.EndTabItem();
+                }
+                if (ImGui.BeginTabItem("Chat"))
+                {
+                    if (ImGui.CollapsingHeader("Options:"))
+                    {
+                        var showInfoLog = this.Configuration.logConfig.ShowChatInfoLog;
+                        if (ImGui.Checkbox("Show info logs", ref showInfoLog))
+                        {
+                            this.Configuration.logConfig.ShowChatInfoLog = showInfoLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var showDebugLog = this.Configuration.logConfig.ShowChatDebugLog;
+                        if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
+                        {
+                            this.Configuration.logConfig.ShowChatDebugLog = showDebugLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var showErrorLog = this.Configuration.logConfig.ShowChatErrorLog;
+                        if (ImGui.Checkbox("Show error logs", ref showErrorLog))
+                        {
+                            this.Configuration.logConfig.ShowChatErrorLog = showErrorLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var jumpToBottom = this.Configuration.logConfig.ChatJumpToBottom;
+                        if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
+                        {
+                            this.Configuration.logConfig.ChatJumpToBottom = jumpToBottom;
+                            this.Configuration.Save();
+                        }
+                    }
+                    if (ImGui.CollapsingHeader("Log:"))
+                    {
+                        List<LogMessage> logMessages = LogHelper.ChatLogsFiltered;
+
+                        if (ImGui.InputText($"Filter by event-id##EKFilterNpcId", ref logFilter, 40))
+                        {
+                            LogHelper.FilterLogList(TextSource.None, logFilter);
+                            resetLogFilter = false;
+                        }
+                        else if (!resetLogFilter && logFilter.Length == 0)
+                        {
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+
+                        if (ImGui.BeginChild("LogsChild"))
+                        {
+                            foreach (var logMessage in logMessages)
+                            {
+                                var text = $"{logMessage.timeStamp.ToShortDateString()} - {logMessage.timeStamp.ToString("HH:mm:ss.fff")}: {logMessage.message}";
+                                ImGui.PushStyleColor(ImGuiCol.Text, logMessage.color);
+                                ImGui.PushTextWrapPos();
+                                ImGui.TextUnformatted(text);
+                                ImGui.PopStyleColor();
+                            }
+
+                            if (Configuration.logConfig.ChatJumpToBottom)
+                            {
+                                ImGui.SetScrollHereY();
+                            }
+
+                            ImGui.EndChild();
+                        }
+                    }
+
+                    ImGui.EndTabItem();
+                }
+                if (ImGui.BeginTabItem("Bubbles"))
+                {
+                    if (ImGui.CollapsingHeader("Options:"))
+                    {
+                        var showInfoLog = this.Configuration.logConfig.ShowBubbleInfoLog;
+                        if (ImGui.Checkbox("Show info logs", ref showInfoLog))
+                        {
+                            this.Configuration.logConfig.ShowBubbleInfoLog = showInfoLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var showDebugLog = this.Configuration.logConfig.ShowBubbleDebugLog;
+                        if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
+                        {
+                            this.Configuration.logConfig.ShowBubbleDebugLog = showDebugLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var showErrorLog = this.Configuration.logConfig.ShowBubbleErrorLog;
+                        if (ImGui.Checkbox("Show error logs", ref showErrorLog))
+                        {
+                            this.Configuration.logConfig.ShowBubbleErrorLog = showErrorLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var jumpToBottom = this.Configuration.logConfig.BubbleJumpToBottom;
+                        if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
+                        {
+                            this.Configuration.logConfig.BubbleJumpToBottom = jumpToBottom;
+                            this.Configuration.Save();
+                        }
+                    }
+                    if (ImGui.CollapsingHeader("Log:"))
+                    {
+                        List<LogMessage> logMessages = LogHelper.BubbleLogsFiltered;
+
+                        if (ImGui.InputText($"Filter by event-id##EKFilterNpcId", ref logFilter, 40))
+                        {
+                            LogHelper.FilterLogList(TextSource.None, logFilter);
+                            resetLogFilter = false;
+                        }
+                        else if (!resetLogFilter && logFilter.Length == 0)
+                        {
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+
+                        if (ImGui.BeginChild("LogsChild"))
+                        {
+                            foreach (var logMessage in logMessages)
+                            {
+                                var text = $"{logMessage.timeStamp.ToShortDateString()} - {logMessage.timeStamp.ToString("HH:mm:ss.fff")}: {logMessage.message}";
+                                ImGui.PushStyleColor(ImGuiCol.Text, logMessage.color);
+                                ImGui.PushTextWrapPos();
+                                ImGui.TextUnformatted(text);
+                                ImGui.PopStyleColor();
+                            }
+
+                            if (Configuration.logConfig.BubbleJumpToBottom)
+                            {
+                                ImGui.SetScrollHereY();
+                            }
+
+                            ImGui.EndChild();
+                        }
+                    }
+
+                    ImGui.EndTabItem();
+                }
+                if (ImGui.BeginTabItem("Player choice in cutscenes"))
+                {
+                    if (ImGui.CollapsingHeader("Options:"))
+                    {
+                        var showInfoLog = this.Configuration.logConfig.ShowCutSceneSelectStringInfoLog;
+                        if (ImGui.Checkbox("Show info logs", ref showInfoLog))
+                        {
+                            this.Configuration.logConfig.ShowCutSceneSelectStringInfoLog = showInfoLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var showDebugLog = this.Configuration.logConfig.ShowCutSceneSelectStringDebugLog;
+                        if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
+                        {
+                            this.Configuration.logConfig.ShowCutSceneSelectStringDebugLog = showDebugLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var showErrorLog = this.Configuration.logConfig.ShowCutSceneSelectStringErrorLog;
+                        if (ImGui.Checkbox("Show error logs", ref showErrorLog))
+                        {
+                            this.Configuration.logConfig.ShowCutSceneSelectStringErrorLog = showErrorLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var jumpToBottom = this.Configuration.logConfig.CutSceneSelectStringJumpToBottom;
+                        if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
+                        {
+                            this.Configuration.logConfig.CutSceneSelectStringJumpToBottom = jumpToBottom;
+                            this.Configuration.Save();
+                        }
+                    }
+                    if (ImGui.CollapsingHeader("Log:"))
+                    {
+                        List<LogMessage> logMessages = LogHelper.CutSceneSelectStringLogsFiltered;
+
+                        if (ImGui.InputText($"Filter by event-id##EKFilterNpcId", ref logFilter, 40))
+                        {
+                            LogHelper.FilterLogList(TextSource.None, logFilter);
+                            resetLogFilter = false;
+                        }
+                        else if (!resetLogFilter && logFilter.Length == 0)
+                        {
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+
+                        if (ImGui.BeginChild("LogsChild"))
+                        {
+                            foreach (var logMessage in logMessages)
+                            {
+                                var text = $"{logMessage.timeStamp.ToShortDateString()} - {logMessage.timeStamp.ToString("HH:mm:ss.fff")}: {logMessage.message}";
+                                ImGui.PushStyleColor(ImGuiCol.Text, logMessage.color);
+                                ImGui.PushTextWrapPos();
+                                ImGui.TextUnformatted(text);
+                                ImGui.PopStyleColor();
+                            }
+
+                            if (Configuration.logConfig.CutSceneSelectStringJumpToBottom)
+                            {
+                                ImGui.SetScrollHereY();
+                            }
+
+                            ImGui.EndChild();
+                        }
+                    }
+
+                    ImGui.EndTabItem();
+                }
+                if (ImGui.BeginTabItem("Player choice"))
+                {
+                    if (ImGui.CollapsingHeader("Options:"))
+                    {
+                        var showInfoLog = this.Configuration.logConfig.ShowSelectStringInfoLog;
+                        if (ImGui.Checkbox("Show info logs", ref showInfoLog))
+                        {
+                            this.Configuration.logConfig.ShowSelectStringInfoLog = showInfoLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var showDebugLog = this.Configuration.logConfig.ShowSelectStringDebugLog;
+                        if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
+                        {
+                            this.Configuration.logConfig.ShowSelectStringDebugLog = showDebugLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var showErrorLog = this.Configuration.logConfig.ShowSelectStringErrorLog;
+                        if (ImGui.Checkbox("Show error logs", ref showErrorLog))
+                        {
+                            this.Configuration.logConfig.ShowSelectStringErrorLog = showErrorLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+                        var jumpToBottom = this.Configuration.logConfig.SelectStringJumpToBottom;
+                        if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
+                        {
+                            this.Configuration.logConfig.SelectStringJumpToBottom = jumpToBottom;
+                            this.Configuration.Save();
+                        }
+                    }
+                    if (ImGui.CollapsingHeader("Log:"))
+                    {
+                        List<LogMessage> logMessages = LogHelper.SelectStringLogsFiltered;
+
+                        if (ImGui.InputText($"Filter by event-id##EKFilterNpcId", ref logFilter, 40))
+                        {
+                            LogHelper.FilterLogList(TextSource.None, logFilter);
+                            resetLogFilter = false;
+                        }
+                        else if (!resetLogFilter && logFilter.Length == 0)
+                        {
+                            LogHelper.RecreateLogList(TextSource.None);
+                        }
+
+                        if (ImGui.BeginChild("LogsChild"))
+                        {
+                            foreach (var logMessage in logMessages)
+                            {
+                                var text = $"{logMessage.timeStamp.ToShortDateString()} - {logMessage.timeStamp.ToString("HH:mm:ss.fff")}: {logMessage.message}";
+                                ImGui.PushStyleColor(ImGuiCol.Text, logMessage.color);
+                                ImGui.PushTextWrapPos();
+                                ImGui.TextUnformatted(text);
+                                ImGui.PopStyleColor();
+                            }
+
+                            if (Configuration.logConfig.SelectStringJumpToBottom)
+                            {
+                                ImGui.SetScrollHereY();
+                            }
+
+                            ImGui.EndChild();
+                        }
+                    }
+
+                    ImGui.EndTabItem();
                 }
             }
+
+            ImGui.EndTabBar();
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", 0, false);
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", new EKEventId(0, TextSource.None), false);
         }
     }
 }

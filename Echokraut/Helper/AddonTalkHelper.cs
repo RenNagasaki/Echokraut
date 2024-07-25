@@ -107,12 +107,12 @@ public class AddonTalkHelper
         if (address != nint.Zero && Address != address)
         {
             Address = address;
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonTalk address found: {Address}", 0);
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonTalk address found: {Address}", new EKEventId(0, Enums.TextSource.AddonTalk));
         }
         else if (address == nint.Zero && Address != address)
         {
             Address = address;
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonTalk done, address: {Address}", 0);
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonTalk done, address: {Address}", new EKEventId(0, Enums.TextSource.AddonTalk));
         }
     }
 
@@ -143,12 +143,12 @@ public class AddonTalkHelper
         {
             PlayingHelper.InDialog = false;
             // The addon was closed
-            plugin.Cancel(0);
+            plugin.Cancel(new EKEventId(0, Enums.TextSource.None));
             lastAddonSpeaker = "";
             lastAddonText = "";
             return;
         }
-        var eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name);
+        var eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
 
         // Notify observers that the addon state was advanced
         plugin.Cancel(eventId);
@@ -184,11 +184,11 @@ public class AddonTalkHelper
 
         if (speakerObj != null)
         {
-            plugin.Say(eventId, speakerObj, speakerObj.Name, text, TextSource.AddonTalk);
+            plugin.Say(eventId, speakerObj, speakerObj.Name, text);
         }
         else
         {
-            plugin.Say(eventId, null, state.Speaker ?? "", text, TextSource.AddonTalk);
+            plugin.Say(eventId, null, state.Speaker ?? "", text);
         }
     }
 
@@ -209,7 +209,7 @@ public class AddonTalkHelper
         return (AddonTalk*)Address.ToPointer();
     }
 
-    public void Click(int eventId)
+    public void Click(EKEventId eventId)
     {
         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Auto advancing...", eventId);
         UpdateAddonAddress();

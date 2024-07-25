@@ -1,3 +1,5 @@
+using Echokraut.DataClasses;
+using Echokraut.Enums;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -18,7 +20,7 @@ namespace Echokraut.Helper
             {
                 if (stream == null)
                 {
-                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Failed to load resource: {resourceName}", 0);
+                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Failed to load resource: {resourceName}", new EKEventId(0, TextSource.None));
                     return null;
                 }
                 using (var reader = new StreamReader(stream))

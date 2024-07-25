@@ -89,13 +89,13 @@ public partial class Echokraut : IDalamudPlugin
 
         LogHelper.Setup(log, Configuration);
         BackendHelper.Setup(Configuration, clientState, this, Configuration.BackendSelection);
-        VoiceHelper.Setup(); 
+        VoiceMapHelper.Setup(); 
         ECommonsMain.Init(pluginInterface, this, ECommons.Module.All);
         this.ConfigWindow = new ConfigWindow(this, Configuration);
-        this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration);
-        this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, sigScanner, gameInterop);
+        this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration, new EKEventId(0, Enums.TextSource.None));
         this.addonTalkHelper = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
+        this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, sigScanner, gameInterop);
         this.addonSelectStringHelper = new AddonSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonBubbleHelper = new AddonBubbleHelper(this, this.DataManager, this.Framework, this.ObjectTable,sigScanner, gameInterop, this.ClientState, this.Configuration);
@@ -119,7 +119,7 @@ public partial class Echokraut : IDalamudPlugin
         PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUI;
     }
 
-    public void Cancel(int eventId)
+    public void Cancel(EKEventId eventId)
     {
         if (Configuration.CancelSpeechOnTextAdvance)
         {
@@ -128,15 +128,16 @@ public partial class Echokraut : IDalamudPlugin
         }
     }
 
-    public void StopLipSync(int eventId)
+    public void StopLipSync(EKEventId eventId)
     {
         lipSyncHelper.StopLipSync(eventId);
     }
 
-    public unsafe void Say(int eventId, GameObject? speaker, SeString speakerName, string textValue, TextSource source)
+    public unsafe void Say(EKEventId eventId, GameObject? speaker, SeString speakerName, string textValue)
     {
         try
         {
+            var source = eventId.textSource;
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Preparing for Inference: {speakerName} - {textValue} - {source}", eventId);
             // Run a preprocessing pipeline to clean the text for the speech synthesizer
             var cleanText = FunctionalUtils.Pipe(
@@ -233,7 +234,7 @@ public partial class Echokraut : IDalamudPlugin
         }
     }
 
-    private unsafe NpcRaces GetSpeakerRace(int eventId, GameObject? speaker, out string raceStr)
+    private unsafe NpcRaces GetSpeakerRace(EKEventId eventId, GameObject? speaker, out string raceStr)
     {
         var race = this.DataManager.GetExcelSheet<Race>();
         var raceEnum = NpcRaces.Default;
@@ -252,7 +253,7 @@ public partial class Echokraut : IDalamudPlugin
 
             if (!(row is null))
             {
-                raceStr = DataHelper.getRaceEng(row.Masculine.RawString, Log);
+                raceStr = DataHelper.GetRaceEng(row.Masculine.RawString, Log);
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found Race: {raceStr}", eventId);
                 if (!Enum.TryParse<NpcRaces>(raceStr.Replace(" ", ""), out raceEnum))
                 {

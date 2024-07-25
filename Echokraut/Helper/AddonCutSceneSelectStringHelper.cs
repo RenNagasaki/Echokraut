@@ -83,7 +83,7 @@ public class AddonCutSceneSelectStringHelper
         if (Address != nint.Zero && oldAddress != Address)
         {
             oldAddress = Address;
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonCutSceneSelectString address found: {Address}", 0);
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonCutSceneSelectString address found: {Address}", new EKEventId(0, Enums.TextSource.AddonCutSceneSelectString));
         }
     }
 
@@ -115,7 +115,7 @@ public class AddonCutSceneSelectStringHelper
             return;
         }
 
-        int eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name);
+        EKEventId eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonCutSceneSelectString);
         // Notify observers that the addon state was advanced
         plugin.Cancel(eventId);
 
@@ -130,12 +130,12 @@ public class AddonCutSceneSelectStringHelper
         if (speakerObj != null)
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonSelectString for speakerobject: ({speakerObj.Name})", eventId);
-            plugin.Say(eventId, speakerObj, speakerObj.Name, text, TextSource.AddonCutSceneSelectString);
+            plugin.Say(eventId, speakerObj, speakerObj.Name, text);
         }
         else
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonSelectString for object: ({state.Speaker})", eventId);
-            plugin.Say(eventId, null, state.Speaker ?? "PLAYER", text, TextSource.AddonCutSceneSelectString);
+            plugin.Say(eventId, null, state.Speaker ?? "PLAYER", text);
         }
     }
 

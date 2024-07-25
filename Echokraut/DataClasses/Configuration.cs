@@ -26,10 +26,7 @@ public class Configuration : IPluginConfiguration
     public bool CancelSpeechOnTextAdvance { get; set; } = true;
     public bool AutoAdvanceTextAfterSpeechCompleted { get; set; } = true;
     public bool RemoveStutters { get; set; } = true;
-    public bool ShowInfoLog { get; set; } = true;
-    public bool ShowDebugLog { get; set; } = true;
-    public bool ShowErrorLog { get; set; } = true;
-    public bool JumpToBottom { get; set; } = true;
+    public LogConfig logConfig { get; set; } = new LogConfig();
     public bool SaveToLocal { get; set; } = false;
     public bool LoadFromLocalFirst { get; set; } = false;
     public string LocalSaveLocation { get; set; } = "";

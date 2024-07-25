@@ -82,7 +82,7 @@ public class AddonSelectStringHelper
         if (Address != nint.Zero && oldAddress != Address)
         {
             oldAddress = Address;
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonSelectString address found: {Address}", 0);
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonSelectString address found: {Address}", new EKEventId(0, Enums.TextSource.AddonSelectString));
         }
     }
 
@@ -108,7 +108,7 @@ public class AddonSelectStringHelper
     private void HandleChange(AddonSelectStringState state)
     {
         var (speaker, text, pollSource) = state;
-        var eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name);
+        var eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonSelectString);
 
         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonSelectString ({state})", eventId);
         if (state == default)
@@ -131,12 +131,12 @@ public class AddonSelectStringHelper
         if (speakerObj != null)
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonSelectString for speakerobject: ({speakerObj.Name})", eventId);
-            plugin.Say(eventId, speakerObj, speakerObj.Name, text, TextSource.AddonSelectString);
+            plugin.Say(eventId, speakerObj, speakerObj.Name, text);
         }
         else
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonSelectString for object: ({state.Speaker})", eventId);
-            plugin.Say(eventId, null, state.Speaker ?? "PLAYER", text, TextSource.AddonSelectString);
+            plugin.Say(eventId, null, state.Speaker ?? "PLAYER", text);
         }
     }
 

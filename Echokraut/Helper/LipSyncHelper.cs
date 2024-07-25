@@ -33,7 +33,7 @@ namespace Echokraut.Helper
         Dictionary<ICharacter, CancellationTokenSource> taskCancellations = new Dictionary<ICharacter, CancellationTokenSource>();
         public List<ActionTimeline> LipSyncTypes { get; private set; }
 
-        public LipSyncHelper(IClientState clientState, IObjectTable objects, Configuration config, int eventId = 0)
+        public LipSyncHelper(IClientState clientState, IObjectTable objects, Configuration config, EKEventId eventId)
         {
             this.clientState = clientState;
             this.config = config;
@@ -45,7 +45,7 @@ namespace Echokraut.Helper
             });
         }
 
-        public async void TriggerLipSync(int eventId, string npcName, float length, IGameObject npc = null)
+        public async void TriggerLipSync(EKEventId eventId, string npcName, float length, IGameObject npc = null)
         {
             if (Conditions.IsBoundByDuty && !Conditions.IsWatchingCutscene) return;
             if (!config.Enabled) return;
@@ -193,7 +193,7 @@ namespace Echokraut.Helper
             }
         }
 
-        public async void StopLipSync(int eventId)
+        public async void StopLipSync(EKEventId eventId)
         {
             if (Conditions.IsBoundByDuty && !Conditions.IsWatchingCutscene) return;
             if (!config.Enabled) return;
@@ -229,7 +229,7 @@ namespace Echokraut.Helper
             }
         }
 
-        private async Task InitializeAsync(int eventId)
+        private async Task InitializeAsync(EKEventId eventId)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "InitializeAsync --> Waiting for Game Process Stability", eventId);
             await WaitForGameProcessStability();
@@ -258,10 +258,10 @@ namespace Echokraut.Helper
         private async void StartServices()
         {
             await _memoryService.Initialize();
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StartServices --> Waiting for Process Response", 0);
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StartServices --> Waiting for Process Response", new EKEventId(0, Enums.TextSource.None));
             while (!Process.GetCurrentProcess().Responding)
                 await Task.Delay(100);
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StartServices --> Done waiting", 0);
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StartServices --> Done waiting", new EKEventId(0, Enums.TextSource.None));
             await _memoryService.OpenProcess(Process.GetCurrentProcess());
             await _gameDataService.Initialize();
 

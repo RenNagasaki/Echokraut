@@ -3,6 +3,7 @@ using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin.Services;
 using Echokraut.Enums;
 using Echokraut.Helper;
+using Echokraut.DataClasses;
 using System.Reflection;
 
 namespace Echokraut.Utils;
@@ -10,7 +11,7 @@ namespace Echokraut.Utils;
 public static class CharacterGenderUtils
 {
     // TODO: Use NPC ID instead of reading the model information :(
-    public static unsafe Gender GetCharacterGender(int eventId, IGameObject? gObj)
+    public static unsafe Gender GetCharacterGender(EKEventId eventId, IGameObject? gObj)
     {
         if (gObj == null || gObj.Address == nint.Zero)
         {
