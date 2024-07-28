@@ -169,6 +169,11 @@ namespace Echokraut.Helper
 
         static void getVoiceOrRandom(EKEventId eventId, NpcMapData npcData)
         {
+            if (BackendVoiceHelper.Voices.Count == 0)
+            {
+                SetBackendType(TTSBackends.Alltalk);
+            }
+
             var voiceItem = npcData.voiceItem;
             var mappedList = npcData.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? Configuration.MappedPlayers : Configuration.MappedNpcs;
 

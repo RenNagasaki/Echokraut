@@ -161,7 +161,7 @@ namespace Echokraut.Helper
                     case (ushort)XivChatType.NPCDialogueAnnouncements:
                     case (ushort)XivChatType.RetainerSale:
                     case ushort:
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Unwanted Chat ({type}): \"{text}\"", new EKEventId(0, TextSource.Chat));
+                        //LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Unwanted Chat ({type}): \"{text}\"", new EKEventId(0, TextSource.Chat));
                         return;
                 }
 

@@ -28,6 +28,12 @@ namespace Echokraut.Helper
 
         public static void Setup(List<BackendVoiceItem> voices)
         {
+            FilteredVoices = new Dictionary<Gender, Dictionary<NpcRaces, List<BackendVoiceItem>>>();
+            FilteredVoicesOriginal = new Dictionary<Gender, Dictionary<NpcRaces, List<BackendVoiceItem>>>();
+            FilteredVoicesAllRaces = new Dictionary<Gender, List<BackendVoiceItem>>();
+            FilteredVoicesAllRacesOriginal = new Dictionary<Gender, List<BackendVoiceItem>>();
+            FilteredVoicesAllGenders = new Dictionary<NpcRaces, List<BackendVoiceItem>>();
+            FilteredVoicesAllGendersOriginal = new Dictionary<NpcRaces, List<BackendVoiceItem>>();
             Voices = voices;
             Voices.Sort((x, y) => x.ToString().CompareTo(y.ToString()));
 

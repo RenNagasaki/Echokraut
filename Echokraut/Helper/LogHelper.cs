@@ -4,6 +4,7 @@ using Echokraut.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -224,7 +225,35 @@ namespace Echokraut.Helper
             var logListFiltered = RecreateLogList(textSource);
 
             if (eventId.Length > 0)
+            {
                 logListFiltered = logListFiltered.FindAll(p => p.message.EndsWith(eventId));
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Did some filtering {eventId} {logListFiltered.Count}", new EKEventId(0, TextSource.None), false);
+            }
+
+            switch (textSource)
+            {
+                case TextSource.None:
+                    GeneralLogsFiltered = logListFiltered;
+                    break;
+                case TextSource.Chat:
+                    ChatLogsFiltered = logListFiltered;
+                    break;
+                case TextSource.AddonTalk:
+                    TalkLogsFiltered = logListFiltered;
+                    break;
+                case TextSource.AddonBattleTalk:
+                    BattleTalkLogsFiltered = logListFiltered;
+                    break;
+                case TextSource.AddonSelectString:
+                    SelectStringLogsFiltered = logListFiltered;
+                    break;
+                case TextSource.AddonCutSceneSelectString:
+                    CutSceneSelectStringLogsFiltered = logListFiltered;
+                    break;
+                case TextSource.AddonBubble:
+                    BubbleLogsFiltered = logListFiltered;
+                    break;
+            }
 
             return logListFiltered;
         }
