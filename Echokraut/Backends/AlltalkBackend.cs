@@ -34,7 +34,7 @@ namespace Echokraut.Backend
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating Alltalk Audio", eventId);
             HttpClient httpClient = new HttpClient();
             httpClient.BaseAddress = new Uri(data.BaseUrl);
-            httpClient.Timeout = TimeSpan.FromSeconds(5);
+            httpClient.Timeout = TimeSpan.FromSeconds(2);
 
             HttpResponseMessage res = null;
             try

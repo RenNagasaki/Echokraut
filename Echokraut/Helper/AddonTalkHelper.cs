@@ -163,6 +163,7 @@ public class AddonTalkHelper
             if (lastAddonSpeaker == speaker && lastAddonText == text)
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping duplicate line: {text}", eventId);
+                LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
                 return;
             }
 
@@ -173,6 +174,7 @@ public class AddonTalkHelper
         if (pollSource == AddonPollSource.VoiceLinePlayback)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}", eventId);
+            LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
             return;
         }
 

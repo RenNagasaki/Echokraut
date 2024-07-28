@@ -15,7 +15,7 @@ public static class CharacterGenderUtils
     {
         if (gObj == null || gObj.Address == nint.Zero)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, "GameObject is null; cannot check gender.", eventId);
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "GameObject is null; cannot check gender.", eventId);
             return Gender.None;
         }
 

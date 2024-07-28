@@ -100,13 +100,13 @@ namespace Echokraut.Helper
                 var voice = getVoice(eventId, message.Speaker);
                 var language = message.Language;
 
-                var ready = "";
+                Stream responseStream = null;
                 int i = 0;
-                while (ready != "Ready" && i < 5)
+                while (i < 10 && responseStream == null)
                 {
                     try
                     {
-                        ready = await CheckReady(eventId);
+                        responseStream = await backend.GenerateAudioStreamFromVoice(eventId, text, voice, language);
                     }
                     catch (Exception ex)
                     {
@@ -116,10 +116,6 @@ namespace Echokraut.Helper
                     i++;
                 }
 
-                if (ready != "Ready")
-                    return false;
-
-                var responseStream = await backend.GenerateAudioStreamFromVoice(eventId, text, voice, language);
                 if (message.Source == TextSource.AddonBubble || message.Source == TextSource.Chat)
                 {
                     if (Configuration.SaveToLocal && Directory.Exists(Configuration.LocalSaveLocation))
@@ -157,6 +153,7 @@ namespace Echokraut.Helper
             catch (Exception ex)
             {
                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), eventId);
+                LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
             }
 
             return false;

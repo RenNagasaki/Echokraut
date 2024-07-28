@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
+using System.Threading;
 using Dalamud.Game;
 using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
@@ -56,11 +57,13 @@ public class SoundHelper : IDisposable
             this.loadSoundFileHook =
                 gameInterop.HookFromAddress<LoadSoundFileDelegate>(loadSoundFilePtr, LoadSoundFileDetour);
             this.loadSoundFileHook.Enable();
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Hooked into LoadSoundFile", new EKEventId(0, TextSource.None));
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Hooked into LoadSoundFile", new EKEventId(0, TextSource.AddonBattleTalk));
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Hooked into LoadSoundFile", new EKEventId(0, TextSource.AddonTalk));
         }
         else
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Failed to hook into LoadSoundFile", new EKEventId(0, TextSource.None));
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Failed to hook into LoadSoundFile", new EKEventId(0, TextSource.AddonBattleTalk));
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Failed to hook into LoadSoundFile", new EKEventId(0, TextSource.AddonTalk));
         }
 
         if (sigScanner.TryScanText(PlaySpecificSoundSig, out var playSpecificSoundPtr))
@@ -68,11 +71,13 @@ public class SoundHelper : IDisposable
             this.playSpecificSoundHook =
                 gameInterop.HookFromAddress<PlaySpecificSoundDelegate>(playSpecificSoundPtr, PlaySpecificSoundDetour);
             this.playSpecificSoundHook.Enable();
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Hooked into PlaySpecificSound", new EKEventId(0, TextSource.None));
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Hooked into PlaySpecificSound", new EKEventId(0, TextSource.AddonBattleTalk));
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Hooked into PlaySpecificSound", new EKEventId(0, TextSource.AddonTalk));
         }
         else
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Failed to hook into PlaySpecificSound", new EKEventId(0, TextSource.None));
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Failed to hook into PlaySpecificSound", new EKEventId(0, TextSource.AddonBattleTalk));
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Failed to hook into PlaySpecificSound", new EKEventId(0, TextSource.AddonTalk));
         }
     }
 
@@ -103,7 +108,8 @@ public class SoundHelper : IDisposable
 
                     if (!IgnoredSoundFileNameRegex.IsMatch(fileName))
                     {
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Loaded sound: {fileName}", new EKEventId(0, TextSource.None));
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Loaded sound: {fileName}", new EKEventId(0, TextSource.AddonBattleTalk));
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Loaded sound: {fileName}", new EKEventId(0, TextSource.AddonTalk));
 
                         if (VoiceLineFileNameRegex.IsMatch(fileName) || BattleVoiceLineFileNameRegex.IsMatch(fileName))
                         {
@@ -113,8 +119,10 @@ public class SoundHelper : IDisposable
 
                     if (isVoiceLine)
                     {
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Discovered voice line at address {resourceDataPtr:x}", new EKEventId(0, TextSource.None));
-                        this.knownVoiceLinePtrs.Add(resourceDataPtr);
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Discovered voice line at address {resourceDataPtr:x}", new EKEventId(0, TextSource.AddonBattleTalk));
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Discovered voice line at address {resourceDataPtr:x}", new EKEventId(0, TextSource.AddonTalk));
+                        this.knownVoiceLinePtrs.Add(resourceDataPtr); 
+                        addonBattleTalkHelper.voiceLinesToCome += 1;
                     }
                     else
                     {
@@ -122,8 +130,8 @@ public class SoundHelper : IDisposable
                         // occupied by a voice line.
                         if (this.knownVoiceLinePtrs.Remove(resourceDataPtr))
                         {
-                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, 
-                                $"Cleared voice line from address {resourceDataPtr:x} (address reused by: {fileName})", new EKEventId(0, TextSource.None));
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleared voice line from address {resourceDataPtr:x} (address reused by: {fileName})", new EKEventId(0, TextSource.AddonBattleTalk));
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleared voice line from address {resourceDataPtr:x} (address reused by: {fileName})", new EKEventId(0, TextSource.AddonTalk));
                         }
                     }
                 }
@@ -131,7 +139,8 @@ public class SoundHelper : IDisposable
         }
         catch (Exception exc)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error in LoadSoundFile detour: {exc}", new EKEventId(0, TextSource.None));
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error in LoadSoundFile detour: {exc}", new EKEventId(0, TextSource.AddonBattleTalk));
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error in LoadSoundFile detour: {exc}", new EKEventId(0, TextSource.AddonTalk));
         }
 
         return result;
@@ -148,14 +157,16 @@ public class SoundHelper : IDisposable
             // lines are played.
             if (this.knownVoiceLinePtrs.Remove(soundDataPtr))
             {
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Caught playback of known voice line at address {soundDataPtr:x}", new EKEventId(0, TextSource.None));
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Caught playback of known voice line at address {soundDataPtr:x}", new EKEventId(0, TextSource.AddonBattleTalk));
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Caught playback of known voice line at address {soundDataPtr:x}", new EKEventId(0, TextSource.AddonTalk));
                 this.addonTalkHelper.PollAddon(AddonPollSource.VoiceLinePlayback);
                 this.addonBattleTalkHelper.PollAddon(AddonPollSource.VoiceLinePlayback);
             }
         }
         catch (Exception exc)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error in PlaySpecificSound detour: {exc}", new EKEventId(0, TextSource.None));
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error in PlaySpecificSound detour: {exc}", new EKEventId(0, TextSource.AddonBattleTalk));
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error in PlaySpecificSound detour: {exc}", new EKEventId(0, TextSource.AddonTalk));
         }
 
         return result;

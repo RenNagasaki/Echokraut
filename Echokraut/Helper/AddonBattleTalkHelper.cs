@@ -29,6 +29,7 @@ public class AddonBattleTalkHelper
     private readonly Configuration config;
     private readonly Echokraut plugin;
     private OnUpdateDelegate updateHandler;
+    public int voiceLinesToCome = 0;
 
     private readonly string name;
 
@@ -67,15 +68,15 @@ public class AddonBattleTalkHelper
         PollAddon(AddonPollSource.FrameworkUpdate);
     }
 
-    private void Mutate(AddonBattleTalkState nextValue)
+    private bool Mutate(AddonBattleTalkState nextValue)
     {
         if (lastValue.Equals(nextValue))
         {
-            return;
+            return false;
         }
 
         lastValue = nextValue;
-        HandleChange(nextValue);
+        return HandleChange(nextValue);
     }
 
     private void UpdateAddonAddress()
@@ -107,13 +108,13 @@ public class AddonBattleTalkHelper
             : default;
     }
 
-    public void PollAddon(AddonPollSource pollSource)
+    public bool PollAddon(AddonPollSource pollSource)
     {
         var state = GetTalkAddonState(pollSource);
-        Mutate(state);
+        return Mutate(state);
     }
 
-    private void HandleChange(AddonBattleTalkState state)
+    private bool HandleChange(AddonBattleTalkState state)
     {
         var (speaker, text, pollSource) = state;
 
@@ -122,7 +123,7 @@ public class AddonBattleTalkHelper
             // The addon was closed
             lastAddonSpeaker = "";
             lastAddonText = "";
-            return;
+            return false;
         }
         EKEventId eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonBattleTalk);
         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk ({pollSource}): \"{state}\"", eventId);
@@ -135,6 +136,14 @@ public class AddonBattleTalkHelper
 
         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk ({pollSource}): \"{text}\"", eventId);
 
+
+        if (voiceLinesToCome > 0 && pollSource == AddonPollSource.FrameworkUpdate)
+        {
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping maybe voice line: {text}", eventId);
+            LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+            return false;
+        }
+
         {
             // This entire callback executes twice in a row - once for the voice line, and then again immediately
             // afterwards for the framework update itself. This prevents the second invocation from being spoken.
@@ -142,7 +151,7 @@ public class AddonBattleTalkHelper
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping duplicate line: {text}", eventId);
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                return;
+                return false;
             }
 
             lastAddonSpeaker = speaker;
@@ -153,7 +162,8 @@ public class AddonBattleTalkHelper
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}", eventId);
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-            return;
+            voiceLinesToCome -= 1;
+            return true;
         }
 
         // Find the game object this speaker is representing
@@ -167,6 +177,8 @@ public class AddonBattleTalkHelper
         {
             plugin.Say(eventId, null, state.Speaker ?? "", text);
         }
+
+        return false;
     }
 
     public unsafe AddonTalkText? ReadText()

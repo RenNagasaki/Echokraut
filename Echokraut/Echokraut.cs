@@ -226,7 +226,10 @@ public partial class Echokraut : IDalamudPlugin
             if (volume > 0)
                 BackendHelper.OnSay(voiceMessage, volume);
             else
+            {
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);
+                LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+            }
         }
         catch (Exception ex)
         {

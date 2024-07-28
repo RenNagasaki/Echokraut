@@ -161,6 +161,12 @@ namespace Echokraut.Helper
                                     var actorObject = objects.CreateObjectReference((IntPtr)pActor);
                                     echokraut.Say(eventId, actorObject, speakerName, text.ToString());
                                 }
+                                else
+                                {
+
+                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Bubble already played in the last <5 seconds: {speakerName} - {text}", eventId);
+                                    LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                                }
 
                                 extantMatch.TimeLastSeen_mSec = currentTime_mSec;
                             }
