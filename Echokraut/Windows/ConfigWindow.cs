@@ -14,6 +14,9 @@ using Dalamud.Interface.ImGuiFileDialog;
 using OtterGui;
 using Dalamud.Interface.Utility.Raii;
 using static System.Net.Mime.MediaTypeNames;
+using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using System.Xml.Linq;
 
 namespace Echokraut.Windows;
 
@@ -33,13 +36,17 @@ public class ConfigWindow : Window, IDisposable
     private List<NpcMapData> filteredNpcs;
     private string originalText = "";
     private string correctedText = "";
+    private IClientState clientState;
+    public static bool UpdateNpcData = false;
+    public static bool UpdatePlayerData = false;
 
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
     // and the window ID will always be "###XYZ counter window" for ImGui
-    public ConfigWindow(Echokraut plugin, Configuration configuration) : base($"Echokraut configuration###EKSettings")
+    public ConfigWindow(Echokraut plugin, Configuration configuration, IClientState clientState) : base($"Echokraut configuration###EKSettings")
     {
         this.plugin = plugin;
+        this.clientState = clientState;
 
         Flags = ImGuiWindowFlags.AlwaysVerticalScrollbar & ImGuiWindowFlags.HorizontalScrollbar & ImGuiWindowFlags.AlwaysHorizontalScrollbar;
         Size = new Vector2(540, 480);
@@ -259,21 +266,28 @@ public class ConfigWindow : Window, IDisposable
         {
             if (ImGui.InputText($"Base Url##EKBaseUrl", ref this.Configuration.Alltalk.BaseUrl, 40))
                 this.Configuration.Save();
+            ImGui.SameLine();
+            if (ImGui.Button($"Test Connection##EKTestConnection"))
+            {
+                BackendCheckReady(new EKEventId(0, TextSource.None));
+            }
 
+            if (ImGui.InputText($"Model to reload##EKBaseUrl", ref this.Configuration.Alltalk.ReloadModel, 40))
+                this.Configuration.Save();
+            ImGui.SameLine();
+            if (ImGui.Button($"Restart Service##EKRestartService"))
+            {
+                BackendReloadService(this.Configuration.Alltalk.ReloadModel);
+            }
+
+            if (ImGui.Button($"Reload Voices##EKLoadVoices"))
+            {
+                BackendGetVoices();
+            }
+
+            if (!string.IsNullOrWhiteSpace(testConnectionRes))
+                ImGui.TextColored(new(1.0f, 1.0f, 1.0f, 0.6f), $"Connection test result: {testConnectionRes}");
         }
-
-        if (ImGui.Button($"Test Connection##EKTestConnection"))
-        {
-            BackendCheckReady(new EKEventId(0, TextSource.None));
-        }
-
-        if (ImGui.Button($"Reload Voices##EKLoadVoices"))
-        {
-            BackendGetVoices();
-        }
-
-        if (!string.IsNullOrWhiteSpace(testConnectionRes))
-            ImGui.TextColored(new(1.0f, 1.0f, 1.0f, 0.6f), $"Connection test result: {testConnectionRes}");
     }
 
     private void DrawSaveSettings()
@@ -517,6 +531,53 @@ public class ConfigWindow : Window, IDisposable
         }
     }
 
+    private async void BackendReloadService(string reloadModel)
+    {
+        try
+        {
+            if (BackendHelper.ReloadService(reloadModel, new EKEventId(0, TextSource.None)))
+                testConnectionRes = "Successfully started service reload. Please wait for up to 30 seconds before using.";
+            else
+                testConnectionRes = "Error while service reload. Please check logs.";
+
+            LogHelper.Important(MethodBase.GetCurrentMethod().Name, testConnectionRes, new EKEventId(0, TextSource.None));
+        }
+        catch (Exception ex)
+        {
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), new EKEventId(0, TextSource.None));
+        }
+    }
+
+    private async void BackendTestVoice(BackendVoiceItem voice)
+    {
+        var eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
+        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Testing voice: {voice.ToString()}", eventId);
+        // Say the thing
+        var voiceMessage = new VoiceMessage
+        {
+            pActor = null,
+            Source = TextSource.AddonTalk,
+            Speaker = new NpcMapData(Dalamud.Game.ClientState.Objects.Enums.ObjectKind.None)
+            {
+                gender = voice.gender,
+                race = voice.race,
+                name = voice.voiceName
+            },
+            Text = Constants.TESTMESSAGEDE,
+            Language = this.clientState.ClientLanguage.ToString(),
+            eventId = eventId
+        };
+        var volume = VolumeHelper.GetVoiceVolume(eventId);
+
+        if (volume > 0)
+            BackendHelper.OnSay(voiceMessage, volume);
+        else
+        {
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);
+            LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+        }
+    }
+
     private void DrawVoiceSelection()
     {
         try
@@ -557,6 +618,8 @@ public class ConfigWindow : Window, IDisposable
 
                 DrawPlayerTab();
 
+                DrawVoicesTab();
+
                 ImGui.EndTabBar();
             }
         }
@@ -576,17 +639,19 @@ public class ConfigWindow : Window, IDisposable
                 filteredNpcs.Sort();
             }
 
-            if (ImGui.InputText($"Filter by npc name##EKFilterNpc", ref npcFilter, 40))
+            if (ImGui.InputText($"Filter by npc name##EKFilterNpc", ref npcFilter, 40) || (npcFilter.Length > 0 && UpdateNpcData))
             {
                 filteredNpcs = Configuration.MappedNpcs.FindAll(b => b.name.ToLower().Contains(npcFilter.ToLower()));
                 filteredNpcs.Sort();
                 resetNpcFilter = false;
+                UpdateNpcData = false;
             }
-            else if (!resetNpcFilter && npcFilter.Length == 0)
+            else if ((!resetNpcFilter && npcFilter.Length == 0) || UpdateNpcData)
             {
                 filteredNpcs = Configuration.MappedNpcs;
                 filteredNpcs.Sort();
                 resetNpcFilter = true;
+                UpdateNpcData = false;
             }
             ImGui.SameLine();
             if (ImGui.Button("Clear mapped npcs##clearnpc"))
@@ -597,15 +662,17 @@ public class ConfigWindow : Window, IDisposable
 
             if (ImGui.BeginChild("NpcsChild"))
             {
-                if (ImGui.BeginTable("NPC Table##NPCTable", 5))
+                if (ImGui.BeginTable("NPC Table##NPCTable", 6))
                 {
                     ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
-                    ImGui.TableSetupColumn("Delete", ImGuiTableColumnFlags.None, 35f);
+                    ImGui.TableSetupColumn("Mapping", ImGuiTableColumnFlags.None, 35f);
+                    ImGui.TableSetupColumn("Saves", ImGuiTableColumnFlags.None, 35f);
                     ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.None, 150);
                     ImGui.TableSetupColumn("Voice", ImGuiTableColumnFlags.None, 250);
                     ImGui.TableHeadersRow();
+                    ImGui.TableNextColumn();
                     ImGui.TableNextColumn();
                     ImGui.TableNextColumn();
                     ImGui.TableNextColumn();
@@ -627,6 +694,12 @@ public class ConfigWindow : Window, IDisposable
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Trash.ToIconString()}##delnpc{mapData.ToString()}", new Vector2(25, 25), "Remove NPC mapping", false, true))
                         {
                             toBeRemoved = mapData;
+                        }
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.TrashAlt.ToIconString()}##delnpcsaves{mapData.ToString()}", new Vector2(25, 25), "Remove NPC saves", false, true))
+                        {
+                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, mapData.name);
                         }
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -747,17 +820,19 @@ public class ConfigWindow : Window, IDisposable
                 filteredPlayers.Sort();
             }
 
-            if (ImGui.InputText($"Filter by player name##EKFilterPlayer", ref playerFilter, 40))
+            if (ImGui.InputText($"Filter by player name##EKFilterPlayer", ref playerFilter, 40) || (playerFilter.Length > 0 && UpdatePlayerData))
             {
                 filteredPlayers = Configuration.MappedPlayers.FindAll(b => b.name.ToLower().Contains(playerFilter.ToLower()));
                 filteredPlayers.Sort();
                 resetPlayerFilter = false;
+                UpdatePlayerData = false;
             }
-            else if (!resetPlayerFilter && playerFilter.Length == 0)
+            else if ((!resetPlayerFilter && playerFilter.Length == 0) || UpdatePlayerData)
             {
                 filteredPlayers = Configuration.MappedPlayers;
                 filteredPlayers.Sort();
                 resetPlayerFilter = true;
+                UpdatePlayerData = false;
             }
             ImGui.SameLine();
             if (ImGui.Button("Clear mapped players##clearplayers"))
@@ -768,15 +843,17 @@ public class ConfigWindow : Window, IDisposable
 
             if (ImGui.BeginChild("PlayerssChild"))
             {
-                if (ImGui.BeginTable("Player Table##PlayerTable", 5))
+                if (ImGui.BeginTable("Player Table##PlayerTable", 6))
                 {
                     ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
-                    ImGui.TableSetupColumn("Delete", ImGuiTableColumnFlags.None, 35f);
+                    ImGui.TableSetupColumn("Mapping", ImGuiTableColumnFlags.None, 35f);
+                    ImGui.TableSetupColumn("Saves", ImGuiTableColumnFlags.None, 35f);
                     ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.None, 150);
                     ImGui.TableSetupColumn("Voice", ImGuiTableColumnFlags.None, 250);
                     ImGui.TableHeadersRow();
+                    ImGui.TableNextColumn();
                     ImGui.TableNextColumn();
                     ImGui.TableNextColumn();
                     ImGui.TableNextColumn();
@@ -798,6 +875,12 @@ public class ConfigWindow : Window, IDisposable
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Trash.ToIconString()}##delplayer{mapData.ToString()}", new Vector2(25, 25), "Remove Player mapping", false, true))
                         {
                             toBeRemoved = mapData;
+                        }
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.TrashAlt.ToIconString()}##delplayersaves{mapData.ToString()}", new Vector2(25, 25), "Remove Player saves", false, true))
+                        {
+                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, mapData.name);
                         }
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -896,6 +979,58 @@ public class ConfigWindow : Window, IDisposable
                         Configuration.MappedPlayers.Remove(toBeRemoved);
                         filteredPlayers.Sort();
                         Configuration.Save();
+                    }
+
+                    ImGui.EndTable();
+                }
+
+                ImGui.EndChild();
+            }
+
+            ImGui.EndTabItem();
+        }
+    }
+
+    private void DrawVoicesTab()
+    {
+        if (ImGui.BeginTabItem("Voices"))
+        {
+            if (ImGui.BeginChild("PlayerssChild"))
+            {
+                if (ImGui.BeginTable("Player Table##PlayerTable", 4))
+                {
+                    ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
+                    ImGui.TableSetupColumn("Test", ImGuiTableColumnFlags.None, 70f);
+                    ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.None, 125);
+                    ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.None, 125);
+                    ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.None, 150);
+                    ImGui.TableHeadersRow();
+                    ImGui.TableNextColumn();
+                    ImGui.TableNextColumn();
+                    ImGui.TableNextColumn();
+                    ImGui.TableNextColumn();
+                    ImGui.TableNextRow();
+
+                    var voices = BackendVoiceHelper.Voices;
+                    foreach (var voice in voices)
+                    {
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.ThumbsUp.ToIconString()}##testvoice{voice.ToString()}", new Vector2(25, 25), "Test Voice", false, true))
+                        {
+                            BackendTestVoice(voice);
+                        }
+
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        ImGui.TextUnformatted(voice.gender.ToString());
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        ImGui.TextUnformatted(voice.race.ToString());
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        ImGui.TextUnformatted(voice.voiceName);
+                        ImGui.TableNextRow();
                     }
 
                     ImGui.EndTable();

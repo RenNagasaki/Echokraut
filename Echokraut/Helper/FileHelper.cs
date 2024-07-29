@@ -67,10 +67,19 @@ namespace Echokraut.Helper
 
         public static string GetLocalAudioPath(string localSaveLocation, VoiceMessage voiceMessage)
         {
+            string filePath = GetSpeakerAudioPath(localSaveLocation, voiceMessage.Speaker.name) + $"{ voiceMessage.Speaker.race.ToString()}-{voiceMessage.Speaker.voiceItem?.voiceName}\\{DataHelper.VoiceMessageToFileName(voiceMessage.Text)}.wav";
+
+            return filePath;
+        }
+
+        public static string GetSpeakerAudioPath(string localSaveLocation, string speaker)
+        {
             string filePath = localSaveLocation;
             if (!filePath.EndsWith(@"\"))
                 filePath += @"\";
-            filePath += $"{voiceMessage.Speaker.name}\\{voiceMessage.Speaker.race.ToString()}-{voiceMessage.Speaker.voiceItem?.voiceName}\\{DataHelper.VoiceMessageToFileName(voiceMessage.Text)}.wav";
+
+            speaker = speaker != "" ? speaker : "NOPERSON";
+            filePath += $"{speaker}\\";
 
             return filePath;
         }
@@ -91,6 +100,26 @@ namespace Echokraut.Helper
             catch (Exception ex)
             {
                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while saving audio locally: {ex.ToString()}", eventId);
+            }
+
+            return false;
+        }
+
+        public static bool RemoveSavedNpcFiles(string localSaveLocation, string speaker)
+        {
+            var speakerFolderPath = GetSpeakerAudioPath(localSaveLocation, speaker);
+
+            if (Directory.Exists(speakerFolderPath))
+            {
+                try
+                {
+                    Directory.Delete(speakerFolderPath, true);
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while deleting local saves for: {speaker} - {ex.ToString()}", new EKEventId(0, Enums.TextSource.None));
+                }
             }
 
             return false;

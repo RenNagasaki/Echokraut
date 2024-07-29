@@ -45,6 +45,11 @@ namespace Echokraut.Helper
             }
         }
 
+        public static bool ReloadService(string reloadModel, EKEventId eventId)
+        {
+            return backend.ReloadService(reloadModel, eventId).Result;
+        }
+
         public static void OnSay(VoiceMessage voiceMessage, float volume)
         {
             var eventId = voiceMessage.eventId;

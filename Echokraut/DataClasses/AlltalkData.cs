@@ -13,6 +13,9 @@ namespace Echokraut.DataClasses
         public string ReadyPath { get; } = "/api/ready";
         public string VoicesPath { get; } = "/api/voices";
         public string StopPath { get; } = "/api/stop-generation";
+        public string ReloadPath { get; } = "/api/reload?tts_method=";
+
+        public string ReloadModel = "xtts - xtts2.0.3-trained";
 
         public override string ToString()
         {

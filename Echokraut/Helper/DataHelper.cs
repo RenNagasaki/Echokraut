@@ -1,6 +1,7 @@
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
+using Echokraut.Windows;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using Microsoft.VisualBasic.Logging;
 using System;
@@ -44,35 +45,31 @@ namespace Echokraut.Helper
             return engRace;
         }
 
-        public static NpcMapData GetCharacterMapData(List<NpcMapData> npcDatas, List<NpcMapData> playerDatas, NpcMapData data)
+        public static NpcMapData GetCharacterMapData(List<NpcMapData> npcDatas, List<NpcMapData> playerDatas, NpcMapData data, EKEventId  eventId)
         {
-            NpcMapData result = null;
-            var datas = data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? playerDatas : npcDatas;
+            NpcMapData? result = null;
+            var datas = data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player || eventId.textSource == TextSource.Chat ? playerDatas : npcDatas;
+            result = datas.Find(p => p.ToString() == data.ToString());
 
-            foreach (var item in datas)
-            {
-                if (item.ToString() == data.ToString())
-                {
-                    result = item;
-                    break;
-                }
-
-                if (item.name == data.name)
-                {
-                    result = item;
-                    break;
-                }
-            }
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Tried finding existing mapping for: {data.ToString()} result: {result?.ToString()}", eventId);
 
             return result;
         }
 
-        public static void AddCharacterMapData(List<NpcMapData> npcDatas, List<NpcMapData> playerDatas, NpcMapData data)
+        public static void AddCharacterMapData(List<NpcMapData> npcDatas, List<NpcMapData> playerDatas, NpcMapData data, EKEventId eventId)
         {
-            if (data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
+            if (data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player || eventId.textSource == TextSource.Chat)
+            {
                 playerDatas.Add(data);
+                ConfigWindow.UpdatePlayerData = true;
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Added new player to mapping: {data.ToString()}", eventId);
+            }
             else
+            {
                 npcDatas.Add(data);
+                ConfigWindow.UpdateNpcData = true;
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Added new npc to mapping: {data.ToString()}", eventId);
+            }
         }
 
         public static string AnalyzeAndImproveText(string text)

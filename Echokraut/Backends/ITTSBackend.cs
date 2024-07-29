@@ -11,6 +11,7 @@ namespace Echokraut.Backend
         List<BackendVoiceItem> GetAvailableVoices(EKEventId eventId);
         Task<Stream> GenerateAudioStreamFromVoice(EKEventId eventId, string voiceLine, string voice, string language);
         Task<string> CheckReady(EKEventId eventId);
+        Task<bool> ReloadService(string reloadModel, EKEventId eventId);
         void StopGenerating(EKEventId eventId);
     }
 }

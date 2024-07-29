@@ -89,9 +89,10 @@ public partial class Echokraut : IDalamudPlugin
 
         LogHelper.Setup(log, Configuration);
         BackendHelper.Setup(Configuration, clientState, this, Configuration.BackendSelection);
-        VoiceMapHelper.Setup(); 
+        VoiceMapHelper.Setup();
+        VolumeHelper.Setup(gameConfig);
         ECommonsMain.Init(pluginInterface, this, ECommons.Module.All);
-        this.ConfigWindow = new ConfigWindow(this, Configuration);
+        this.ConfigWindow = new ConfigWindow(this, Configuration, this.ClientState);
         this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration, new EKEventId(0, Enums.TextSource.None));
         this.addonTalkHelper = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
@@ -188,7 +189,7 @@ public partial class Echokraut : IDalamudPlugin
             else if (string.IsNullOrWhiteSpace(npcData.name) && source == TextSource.AddonBubble)
                 npcData.name = GetBubbleName(speaker);
 
-            var resNpcData = DataHelper.GetCharacterMapData(Configuration.MappedNpcs, Configuration.MappedPlayers, npcData);
+            var resNpcData = DataHelper.GetCharacterMapData(Configuration.MappedNpcs, Configuration.MappedPlayers, npcData, eventId);
             if (resNpcData != null && resNpcData.race == NpcRaces.Default && npcData.raceStr != NpcRaces.Default.ToString())
             {
                 resNpcData.race = npcData.race;
@@ -196,7 +197,7 @@ public partial class Echokraut : IDalamudPlugin
             }
             else if (resNpcData == null)
             {
-                DataHelper.AddCharacterMapData(Configuration.MappedNpcs, Configuration.MappedPlayers, npcData);
+                DataHelper.AddCharacterMapData(Configuration.MappedNpcs, Configuration.MappedPlayers, npcData, eventId);
                 Configuration.MappedNpcs = Configuration.MappedNpcs.OrderBy(p => p.ToString(true)).ToList();
                 Configuration.Save();
             }
@@ -217,11 +218,10 @@ public partial class Echokraut : IDalamudPlugin
                 Source = source,
                 Speaker = npcData,
                 Text = cleanText,
-                TextTemplate = textTemplate,
                 Language = this.ClientState.ClientLanguage.ToString(),
                 eventId = eventId
             };
-            var volume = VolumeHelper.GetVoiceVolume(eventId, GameConfig);
+            var volume = VolumeHelper.GetVoiceVolume(eventId);
 
             if (volume > 0)
                 BackendHelper.OnSay(voiceMessage, volume);

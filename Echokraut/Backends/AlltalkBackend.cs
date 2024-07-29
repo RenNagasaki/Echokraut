@@ -215,5 +215,26 @@ namespace Echokraut.Backend
 
             return "de";
         }
+
+        public async Task<bool> ReloadService(string reloadModel, EKEventId eventId)
+        {
+            HttpClient httpClient = new HttpClient();
+            httpClient.BaseAddress = new Uri(data.BaseUrl);
+            httpClient.Timeout = TimeSpan.FromSeconds(5);
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Reloading Alltalk Service", eventId);
+            HttpResponseMessage res = null;
+            try
+            {
+                var content = new StringContent("");
+                res = await httpClient.PostAsync(data.ReloadPath + reloadModel, content).ConfigureAwait(false);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), eventId);
+            }
+
+            return false;
+        }
     }
 }

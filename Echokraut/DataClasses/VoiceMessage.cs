@@ -12,7 +12,7 @@ namespace Echokraut.DataClasses
     public class VoiceMessage
     {
         public string Text { get; set; }
-        public string TextTemplate { get; set; }
+        //public string TextTemplate { get; set; }
 
         public IGameObject pActor {  get; set; }
         public NpcMapData Speaker { get; set; }

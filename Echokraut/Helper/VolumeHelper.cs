@@ -8,8 +8,14 @@ namespace Echokraut.Helper
 {
     internal static class VolumeHelper
     {
+        private static IGameConfig GameConfig;
 
-        public static unsafe float GetVoiceVolume(EKEventId eventId, IGameConfig gameConfig)
+        public static void Setup(IGameConfig gameConfig)
+        {
+            GameConfig = gameConfig;
+        }
+
+        public static unsafe float GetVoiceVolume(EKEventId eventId)
         {
             var voiceVolume = .5f;
             var masterVolume = .5f;
@@ -22,8 +28,8 @@ namespace Echokraut.Helper
                 var isMasterMuted = false;
                 var isVoiceMuted = false;
 
-                gameConfig.System.TryGetBool("IsSndMaster", out isMasterMuted);
-                gameConfig.System.TryGetBool("IsSndVoice", out isVoiceMuted);
+                GameConfig.System.TryGetBool("IsSndMaster", out isMasterMuted);
+                GameConfig.System.TryGetBool("IsSndVoice", out isVoiceMuted);
 
 
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Master volume: {(isMasterMuted ? 0f : masterVolume)}", eventId);
