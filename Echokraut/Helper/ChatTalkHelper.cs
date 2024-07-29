@@ -64,6 +64,7 @@ namespace Echokraut.Helper
             {
                 var (type, sender, message) = chatMessage;
                 var text = message.TextValue;
+                var realSender = sender.TextValue;
                 text = TalkUtils.StripWorldFromNames(text);
                 text = TalkUtils.NormalizePunctuation(text);
 
@@ -95,6 +96,7 @@ namespace Echokraut.Helper
                         {
                             return;
                         }
+                        realSender = realSender.Substring(1);
                         break;
                     case (ushort)XivChatType.Alliance:
                         if (!config.VoiceChatAlliance)
@@ -169,10 +171,11 @@ namespace Echokraut.Helper
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chat ({type}): \"{text}\"", eventId);
 
                 // Find the game object this speaker represents
-                var speaker = ObjectTableUtils.GetGameObjectByName(this.objects, sender);
+                var speaker = ObjectTableUtils.GetGameObjectByName(clientState, this.objects, realSender, eventId);
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chat ({type}): \"{speaker}\" {realSender}", eventId);
 
                 var localPlayer = clientState.LocalPlayer;
-                if (!config.VoiceChatPlayer && localPlayer != null && localPlayer.Name.TextValue == sender.TextValue) return;
+                if (!config.VoiceChatPlayer && localPlayer != null && localPlayer.Name.TextValue == realSender) return;
 
                 if (speaker != null)
                 {
@@ -180,7 +183,7 @@ namespace Echokraut.Helper
                 }
                 else
                 {
-                    echokraut.Say(eventId, null, sender ?? "", text);
+                    echokraut.Say(eventId, null, realSender ?? "", text);
                 }
             }
             catch (Exception ex)

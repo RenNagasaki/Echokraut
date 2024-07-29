@@ -167,7 +167,7 @@ public class AddonBattleTalkHelper
         }
 
         // Find the game object this speaker is representing
-        var speakerObj = speaker != null ? ObjectTableUtils.GetGameObjectByName(objects, speaker) : null;
+        var speakerObj = speaker != null ? ObjectTableUtils.GetGameObjectByName(clientState, objects, speaker, eventId) : null;
 
         if (speakerObj != null)
         {

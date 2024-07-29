@@ -171,7 +171,7 @@ public class AddonTalkHelper
             lastAddonText = text;
         }
 
-        if (pollSource == AddonPollSource.VoiceLinePlayback)
+        if (speaker == "?????" && pollSource == AddonPollSource.VoiceLinePlayback)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}", eventId);
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
@@ -179,18 +179,21 @@ public class AddonTalkHelper
         }
 
         // Find the game object this speaker is representing
-        var speakerObj = speaker != null ? ObjectTableUtils.GetGameObjectByName(objects, speaker) : null;
+        var speakerObj = speaker != null ? ObjectTableUtils.GetGameObjectByName(clientState, objects, speaker, eventId) : null;
 
         PlayingHelper.InDialog = true;
         LogHelper.Debug("TalkHelper.HandleChange", "Setting inDialog true", eventId);
 
-        if (speakerObj != null)
+        if (pollSource != AddonPollSource.VoiceLinePlayback)
         {
-            plugin.Say(eventId, speakerObj, speakerObj.Name, text);
-        }
-        else
-        {
-            plugin.Say(eventId, null, state.Speaker ?? "", text);
+            if (speakerObj != null)
+            {
+                plugin.Say(eventId, speakerObj, speakerObj.Name, text);
+            }
+            else
+            {
+                plugin.Say(eventId, null, state.Speaker ?? "", text);
+            }
         }
     }
 
