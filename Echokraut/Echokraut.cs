@@ -228,6 +228,12 @@ public partial class Echokraut : IDalamudPlugin
             else
             {
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);
+
+                if (voiceMessage.Speaker.voiceItem == null)
+                {
+                    LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Getting voice since not set.", eventId);
+                    BackendHelper.GetVoiceOrRandom(eventId, voiceMessage.Speaker);
+                }
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
             }
         }

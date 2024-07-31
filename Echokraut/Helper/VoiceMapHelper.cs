@@ -16,7 +16,7 @@ namespace Echokraut.Helper
     {
         private static string VoiceNamesDE = "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesDE.json";
         private static string VoiceNamesEN = "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesEN.json";
-        public static List<VoiceMap> voiceMaps;
+        public static List<VoiceMap> VoiceMaps;
 
         public static void Setup(ClientLanguage clientLanguage)
         {
@@ -42,17 +42,26 @@ namespace Echokraut.Helper
                 string json = returninfo.ReadToEnd();
                 if (json == null)
                 {
-                    voiceMaps = new List<VoiceMap>();
+                    VoiceMaps = new List<VoiceMap>();
                     LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Failed to load voiceNames.", new EKEventId(0, TextSource.None));
                     return;
                 }
-                voiceMaps = System.Text.Json.JsonSerializer.Deserialize<List<VoiceMap>>(json);
-                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Loaded voice name maps for {voiceMaps?.Count} npcs", new EKEventId(0, TextSource.None));
+                VoiceMaps = System.Text.Json.JsonSerializer.Deserialize<List<VoiceMap>>(json);
+                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Loaded voice name maps for {VoiceMaps?.Count} npcs", new EKEventId(0, TextSource.None));
             }
             catch (Exception ex) 
             {
                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while loading voices map: {ex}", new EKEventId(0, TextSource.None));
             }
+        }
+
+        public static string GetNpcName(string npcName)
+        {
+            var voiceMap = VoiceMaps.Find(p => p.speakers.Contains(npcName));
+            if (voiceMap != null)
+                npcName = voiceMap.voiceName;
+
+            return npcName;
         }
     }
 }

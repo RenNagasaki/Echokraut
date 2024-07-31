@@ -183,7 +183,7 @@ public class AddonTalkHelper
         var speakerObj = speaker != null ? ObjectTableUtils.GetGameObjectByName(clientState, objects, speaker, eventId) : null;
 
         PlayingHelper.InDialog = true;
-        LogHelper.Debug("TalkHelper.HandleChange", "Setting inDialog true", eventId);
+        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Setting inDialog true", eventId);
 
         if (pollSource != AddonPollSource.VoiceLinePlayback)
         {

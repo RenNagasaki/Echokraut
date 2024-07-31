@@ -974,7 +974,7 @@ public class ConfigWindow : Window, IDisposable
                                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for Character: {mapData.ToString(true)} from: {mapData.voiceItem} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
 
                                 mapData.voiceItem = newVoiceItem;
-                                filteredPlayers.Sort();
+                                filteredPlayers = null;
                                 this.Configuration.Save();
                             }
                             else

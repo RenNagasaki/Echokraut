@@ -170,7 +170,7 @@ namespace Echokraut.Helper
             return await backend.CheckReady(eventId);
         }
 
-        static void getVoiceOrRandom(EKEventId eventId, NpcMapData npcData)
+        public static void GetVoiceOrRandom(EKEventId eventId, NpcMapData npcData)
         {
             if (BackendVoiceHelper.Voices.Count == 0)
             {
@@ -184,7 +184,13 @@ namespace Echokraut.Helper
 
             if (voiceItem == null)
             {
-                var voiceItems = BackendVoiceHelper.Voices.FindAll(p => p.voiceName.Equals(npcData.name, StringComparison.OrdinalIgnoreCase));
+                var npcName = npcData.name;
+
+                if (npcData.objectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
+                    npcName = VoiceMapHelper.GetNpcName(npcName);
+
+
+                var voiceItems = BackendVoiceHelper.Voices.FindAll(p => p.voiceName.Equals(npcName, StringComparison.OrdinalIgnoreCase));
                 if (voiceItems.Count > 0)
                 {
                     voiceItem = voiceItems[0];
@@ -214,12 +220,12 @@ namespace Echokraut.Helper
                 {
                     if (npcData.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
                     {
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem} for Player: {npcData.name}", eventId);
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem} for Player: {npcName}", eventId);
                         Configuration.MappedPlayers = Configuration.MappedPlayers.OrderBy(p => p.ToString(true)).ToList();
                     }
                     else
                     {
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem} for NPC: {npcData.name}", eventId);
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem} for NPC: {npcName}", eventId);
                         Configuration.MappedNpcs = Configuration.MappedNpcs.OrderBy(p => p.ToString(true)).ToList();
                     }
                     npcData.voiceItem = voiceItem;
@@ -230,7 +236,7 @@ namespace Echokraut.Helper
 
         static string getVoice(EKEventId eventId, NpcMapData npcData)
         {
-            getVoiceOrRandom(eventId, npcData);
+            GetVoiceOrRandom(eventId, npcData);
 
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, string.Format("Loaded voice: {0} for NPC: {1}", npcData.voiceItem.voice, npcData.name), eventId);
             return npcData.voiceItem.voice;
