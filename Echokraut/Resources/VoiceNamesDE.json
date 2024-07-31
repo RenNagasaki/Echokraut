@@ -14,5 +14,9 @@
     {
         "voiceName": "Nero Tol Scaeva",
         "speakers": [ "Nero" ]
+    },
+    {
+        "voiceName": "Sadu Himmelsflamme",
+        "speakers": [ "Sadu" ]
     }
 ]
