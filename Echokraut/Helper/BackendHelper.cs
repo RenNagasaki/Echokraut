@@ -176,7 +176,7 @@ namespace Echokraut.Helper
                 SetBackendType(TTSBackends.Alltalk);
             }
 
-            var voiceItem = npcData.voiceItem;
+            var voiceItem = BackendVoiceHelper.Voices.Find( p => p.Equals(npcData.voiceItem));
             var mappedList = npcData.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? Configuration.MappedPlayers : Configuration.MappedNpcs;
 
             if (voiceItem == null || mappedList.Find(p => p.voiceItem == voiceItem) == null)

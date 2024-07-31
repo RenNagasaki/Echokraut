@@ -94,8 +94,7 @@ namespace Echokraut.Helper
                 if (camera == null && CameraManager.Instance() != null)
                     camera = CameraManager.Instance()->GetActiveCamera();
 
-                if (localPlayer == null)
-                    localPlayer = clientState.LocalPlayer;
+                localPlayer = clientState.LocalPlayer;
 
                 if (camera != null &&localPlayer != null)
                 {

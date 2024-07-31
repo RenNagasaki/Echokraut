@@ -64,8 +64,7 @@ namespace Echokraut.Helper
             {
                 var (type, sender, message) = chatMessage;
                 var text = message.TextValue;
-                var realSender = sender.TextValue;
-                text = TalkUtils.StripWorldFromNames(text);
+                var realSender = TalkUtils.StripWorldFromNames(sender);
                 text = TalkUtils.NormalizePunctuation(text);
 
                 switch (((ushort)type))

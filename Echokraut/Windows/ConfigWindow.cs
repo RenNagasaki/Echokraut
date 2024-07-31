@@ -656,6 +656,10 @@ public class ConfigWindow : Window, IDisposable
             ImGui.SameLine();
             if (ImGui.Button("Clear mapped npcs##clearnpc"))
             {
+                foreach (NpcMapData npcMapData in this.Configuration.MappedNpcs)
+                {
+                    FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, npcMapData.name);
+                }
                 this.Configuration.MappedNpcs.Clear();
                 this.Configuration.Save();
             }
@@ -716,7 +720,7 @@ public class ConfigWindow : Window, IDisposable
                                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Gender for Character: {mapData.ToString(true)} from: {mapData.gender} to: {newGender}", new EKEventId(0, TextSource.None));
 
                                     mapData.gender = newGender;
-                                    filteredNpcs.Sort();
+                                    filteredNpcs = null;
                                     this.Configuration.Save();
                                 }
                             }
@@ -738,7 +742,7 @@ public class ConfigWindow : Window, IDisposable
                                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Race for Character: {mapData.ToString(true)} from: {mapData.race} to: {newRace}", new EKEventId(0, TextSource.None));
 
                                     mapData.race = newRace;
-                                    filteredNpcs.Sort();
+                                    filteredNpcs = null;
                                     this.Configuration.Save();
                                 }
                             }
@@ -783,7 +787,7 @@ public class ConfigWindow : Window, IDisposable
                                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for Character: {mapData.ToString(true)} from: {mapData.voiceItem} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
 
                                 mapData.voiceItem = newVoiceItem;
-                                filteredNpcs.Sort();
+                                filteredNpcs = null;
                                 this.Configuration.Save();
                             }
                             else
@@ -795,6 +799,7 @@ public class ConfigWindow : Window, IDisposable
 
                     if (toBeRemoved != null)
                     {
+                        FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, toBeRemoved.name);
                         Configuration.MappedNpcs.Remove(toBeRemoved);
                         filteredNpcs.Sort();
                         Configuration.Save();
@@ -837,6 +842,10 @@ public class ConfigWindow : Window, IDisposable
             ImGui.SameLine();
             if (ImGui.Button("Clear mapped players##clearplayers"))
             {
+                foreach (NpcMapData playerMapData in this.Configuration.MappedPlayers)
+                {
+                    FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, playerMapData.name);
+                }
                 this.Configuration.MappedPlayers.Clear();
                 this.Configuration.Save();
             }
@@ -897,7 +906,7 @@ public class ConfigWindow : Window, IDisposable
                                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Gender for Character: {mapData.ToString(true)} from: {mapData.gender} to: {newGender}", new EKEventId(0, TextSource.None));
 
                                     mapData.gender = newGender;
-                                    filteredPlayers.Sort();
+                                    filteredPlayers = null;
                                     this.Configuration.Save();
                                 }
                             }
@@ -919,7 +928,7 @@ public class ConfigWindow : Window, IDisposable
                                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Race for Character: {mapData.ToString(true)} from: {mapData.race} to: {newRace}", new EKEventId(0, TextSource.None));
 
                                     mapData.race = newRace;
-                                    filteredPlayers.Sort();
+                                    filteredPlayers = null;
                                     this.Configuration.Save();
                                 }
                             }
@@ -976,6 +985,7 @@ public class ConfigWindow : Window, IDisposable
 
                     if (toBeRemoved != null)
                     {
+                        FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, toBeRemoved.name);
                         Configuration.MappedPlayers.Remove(toBeRemoved);
                         filteredPlayers.Sort();
                         Configuration.Save();

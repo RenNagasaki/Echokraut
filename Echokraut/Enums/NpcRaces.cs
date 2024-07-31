@@ -10,7 +10,6 @@ namespace Echokraut.Enums
     public enum NpcRaces
     {
         Default,
-        Child,
         Hyur,
         Elezen,
         Miqote,
@@ -19,29 +18,32 @@ namespace Echokraut.Enums
         Viera,
         AuRa,
         Hrothgar,
+        Child,
+        ///
         Amaljaa,
         Ixal,
-        Kobold,
         Sylph,
         Goblin,
         Moogle,
-        Sahagin,
         MamoolJa,
         Qiqirn,
         VanuVanu,
-        Gnath,
         Kojin,
         Ananta,
         Lupin,
-        Namazu,
         Arkasodara,
         NuMou,
         Pixie,
         Loporrit,
-        Omicron,
         Frog,
         Ea,
         YokHuy,
-        Endless
+        Endless,
+        Sahagin,
+
+        Kobold,
+        Gnath,
+        Namazu,
+        Omicron
     }
 }
