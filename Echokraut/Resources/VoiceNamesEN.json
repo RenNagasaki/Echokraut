@@ -1,0 +1,286 @@
+[
+    {
+        "voiceName": "Minfilia",
+        "speakers": [ "Minfilia", "Minfilia's Avatar", "The Word of the Mother", "Oracle of Light" ]
+    },
+    {
+        "voiceName": "Tataru",
+        "speakers": [ "Tataru", "Tataru's Avatar" ]
+    },
+    {
+        "voiceName": "Y'shtola",
+        "speakers": [ "Y'shtola", "Y'shtola's Avatar", "Cultured Conjurer" ]
+    },
+    {
+        "voiceName": "Papalymo",
+        "speakers": [ "Papalymo", "Papalymo's Avatar" ]
+    },
+    {
+        "voiceName": "Thancred",
+        "speakers": [ "Thancred", "Thancred's Avatar", "Handsome Stranger" ]
+    },
+    {
+        "voiceName": "Urianger",
+        "speakers": [ "Urianger", "Urianger's Avatar" ]
+    },
+    {
+        "voiceName": "Alphinaud",
+        "speakers": [ "Alphinaud", "Alphinaud's Avatar", "Alphinaud's Voice" ]
+    },
+    {
+        "voiceName": "Alisaie",
+        "speakers": [ "Alisaie", "Alisaie's Avatar" ]
+    },
+    {
+        "voiceName": "Krile",
+        "speakers": [ "Krile", "Krile's Avatar" ]
+    },
+    {
+        "voiceName": "Estinien",
+        "speakers": [ "Estinien", "Estinien's Avatar", "Estinien Wyrmblood" ]
+    },
+    {
+        "voiceName": "G'raha Tia",
+        "speakers": [ "G'raha Tia", "G'raha Tia's Avatar", "Crystal Exarch", "Disembodied Voice", "Familiar Voice" ]
+    },
+    {
+        "voiceName": "Merlwyb",
+        "speakers": [ "Merlwyb", "Bloefhiswyn", "Admiral Bloefhiswyn" ]
+    },
+    {
+        "voiceName": "Eynzahr Slafyrsyn",
+        "speakers": [ "Eynzahr", "Eynzahr Slafyrsyn", "Mistbeard", "Musosai" ]
+    },
+    {
+        "voiceName": "Sicard",
+        "speakers": [ "Sicard", "Sicard the Last Word" ]
+    },
+    {
+        "voiceName": "Carvallain",
+        "speakers": [ "Carvallain", "Adjunct Ostyrgrein", "Ostyrgrein", "Captain Carvallain" ]
+    },
+    {
+        "voiceName": "Kan-E-Senna",
+        "speakers": [ "Kan-E-Senna", "Elder Seedseer" ]
+    },
+    {
+        "voiceName": "Nanamo Ul Namo",
+        "speakers": [ "Nanamo Ul Namo", "Lilira" ]
+    },
+    {
+        "voiceName": "Raubahn",
+        "speakers": [ "Raubahn", "Flame General Aldynn" ]
+    },
+    {
+        "voiceName": "Pipin",
+        "speakers": [ "Pipin", "Pipin of the Steel Heart" ]
+    },
+    {
+        "voiceName": "Lolorito",
+        "speakers": [ "Lolorito", "Gurumi Borlumi" ]
+    },
+    {
+        "voiceName": "Aymeric",
+        "speakers": [ "Aymeric", "Aymeric the Blue" ]
+    },
+    {
+        "voiceName": "Lucia",
+        "speakers": [ "Lucia", "Taciturn Temple Knight", "Lucia the Radiant" ]
+    },
+    {
+        "voiceName": "Emmanellain",
+        "speakers": [ "Emmanellain", "Emmanellain the Lofty" ]
+    },
+    {
+        "voiceName": "Hilda",
+        "speakers": [ "Hilda", "Hilda Ware", "Hilda the Mongrel", "The Mongrel" ]
+    },
+    {
+        "voiceName": "Artoirel",
+        "speakers": [ "Artoirel", "Artoirel Ironbone" ]
+    },
+    {
+        "voiceName": "Ysayle",
+        "speakers": [ "Ysayle", "Iceheart" ]
+    },
+    {
+        "voiceName": "Lyse",
+        "speakers": [ "Lyse", "Yda", "Yda's Avatar" ]
+    },
+    {
+        "voiceName": "Conrad",
+        "speakers": [ "Conrad", "Conrad Farsight", "Genbu" ]
+    },
+    {
+        "voiceName": "Fordola",
+        "speakers": [ "Fordola", "Fordola rem Lupis", "Fordola Lupis" ]
+    },
+    {
+        "voiceName": "Yugiri",
+        "speakers": [ "Yugiri", "Yugiri Mistwalker", "Refugee Leader" ]
+    },
+    {
+        "voiceName": "Gosetsu",
+        "speakers": [ "Gosetsu", "Gosetsu Everfall", "Xande" ]
+    },
+    {
+        "voiceName": "Tansui",
+        "speakers": [ "Tansui", "Tansui the Foxed" ]
+    },
+    {
+        "voiceName": "Yotsuyu",
+        "speakers": [ "Yotsuyu", "Tsuyu", "Tsukuyomi" ]
+    },
+    {
+        "voiceName": "Cirina",
+        "speakers": [ "Cirina", "Cirina of the Laughing Reeds" ]
+    },
+    {
+        "voiceName": "Magnai",
+        "speakers": [ "Magnai", "Magnai the Older" ]
+    },
+    {
+        "voiceName": "Sadu",
+        "speakers": [ "Sadu", "Sadu Heavensflame" ]
+    },
+    {
+        "voiceName": "Cid",
+        "speakers": [ "Cid", "Marques" ]
+    },
+    {
+        "voiceName": "Ilberd",
+        "speakers": [ "Ilberd", "Ilberd of the Dull Blade" ]
+    },
+    {
+        "voiceName": "Varis zos Galvus",
+        "speakers": [ "Varis", "Varis zos Galvus", "Varis yae Galvus" ]
+    },
+    {
+        "voiceName": "Zenos yae Galvus",
+        "speakers": [ "Zenos yae Galvus", "Zenos", "Zenos viator Galvus" ]
+    },
+    {
+        "voiceName": "Gaius van Baelsar",
+        "speakers": [ "Gaius", "Gaius Baelsar", "Gaius van Baelsar", "Shadowhunter", "Menacing Mercenary" ]
+    },
+    {
+        "voiceName": "Livia sas Junius",
+        "speakers": [ "Livia", "Livia sas Junius", "Livia the Undeterred", "Drusilla", "The Reaper" ]
+    },
+    {
+        "voiceName": "Nero",
+        "speakers": [ "Nero", "Nero tol Scaeva", "Iron Nero", "Outlandish Man", "Nero Scaeva" ]
+    },
+    {
+        "voiceName": "Maxima",
+        "speakers": [ "Maxima", "Maxima the Neoteric", "Ugetsu", "Ugetsu Tachikake", "Ugetsu, Slayer of a Thousand Souls" ]
+    },
+    {
+        "voiceName": "Midgardsormr",
+        "speakers": [ "Midgardsormr", "Voice of Midgardsormr" ]
+    },
+    {
+        "voiceName": "Emet-Selch",
+        "speakers": [ "Emet-Selch", "The Voice of Emet-Selch", "Sol zos Galvus", "Solus zos Galvus", "How to Drink Ludicrously Strong Alcohol and Not Die" ]
+    },
+    {
+        "voiceName": "Elidibus",
+        "speakers": [ "Elidibus", "Themis" ]
+    },
+    {
+        "voiceName": "Lahabrea",
+        "speakers": [ "Lahabrea", "Ascian Lahabrea", "Masked Magus", "Lahabrea's Shade" ]
+    },
+    {
+        "voiceName": "Ardbert",
+        "speakers": [ "Ardbert", "“Ardbert”", "Warrior of Darkness" ]
+    },
+    {
+        "voiceName": "Nabriales",
+        "speakers": [ "Nabriales", "Nabriales's Shade" ]
+    },
+    {
+        "voiceName": "Venat",
+        "speakers": [ "Venat", "Lady of the Light", "Hydaelyn", "Azem" ]
+    },
+    {
+        "voiceName": "Gaia",
+        "speakers": [ "Gaia", "Voidwalker", "Oracle of Darkness", "Yozakura", "Yozakura the Fleeting" ]
+    },
+    {
+        "voiceName": "Gaia",
+        "speakers": [ "Gaia", "Oracle of Darkness", "Voidwalker" ]
+    },
+    {
+        "voiceName": "Lyna",
+        "speakers": [ "Lyna", "Curt Gateguard" ]
+    },
+    {
+        "voiceName": "Tesleen",
+        "speakers": [ "Tesleen", "Tesleen, the Forgiven" ]
+    },
+    {
+        "voiceName": "Dulia-Chai",
+        "speakers": [ "Dulia-Chai", "Renda-Sue" ]
+    },
+    {
+        "voiceName": "Fourchenault",
+        "speakers": [ "Fourchenault", "Fourchenault Leveilleur" ]
+    },
+    {
+        "voiceName": "Koana",
+        "speakers": [ "Koana", "Second Promise of Tuliyollal" ]
+    },
+    {
+        "voiceName": "Otis",
+        "speakers": [ "Otis", "Otis Oathbroken" ]
+    },
+    {
+        "voiceName": "2B",
+        "speakers": [ "2B", "2P", "FUDefender-2B", "FUDefender-2P" ]
+    },
+    {
+        "voiceName": "9S",
+        "speakers": [ "9S", "FUDefender-9S" ]
+    },
+    {
+        "voiceName": "Clive",
+        "speakers": [ "Clive", "Strange Man" ]
+    },
+    {
+        "voiceName": "YoshiP",
+        "speakers": [ "Naoki Yoshida", "Wandering Minstrel" ]
+    },
+    {
+        "voiceName": "Bremondt",
+        "speakers": [ "Bremondt", "Grizzled Passenger", "Brendt", "Brennan" ]
+    },
+    {
+        "voiceName": "Hildibrand",
+        "speakers": [ "Hildibrand", "Hildibrand Manderville", "Well-spoken Zombie", "Zombibrand", "Perturbed Gentleman", "Hildibella", "The Forgiven Gentleman" ]
+    },
+    {
+        "voiceName": "Godbert",
+        "speakers": [ "Godbert", "Godbert-like Gentleman", "Godbert Mandaville", "Saint of Nymeia", "Godbrand" ]
+    },
+    {
+        "voiceName": "Nashu",
+        "speakers": [ "Nashu", "Nashu Mhakaracca" ]
+    },
+    {
+        "voiceName": "Widargelt",
+        "speakers": [ "Widargelt", "Widargelt the Watcher", "Widargelt Beake", "Theodred" ]
+    },
+    {
+        "voiceName": "Dragon-Female",
+        "speakers": [ "Vidofnir", "Tiamat", "Azdaja" ]
+    },
+    {
+        "voiceName": "Midgardsormr",
+        "speakers": [ "Midgardsormr", "Voice of Midgardsormr" ]
+    },
+    {
+        "voiceName": "Nald'thal",
+        "speakers": [ "Nald'thal", "Nald", "Thal" ]
+    }
+]
