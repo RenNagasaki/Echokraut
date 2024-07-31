@@ -42,5 +42,9 @@
     {
         "voiceName": "Doros",
         "speakers": [ "Mann mit blonden gebundenen Haaren" ]
+    },
+    {
+        "voiceName": "Venat",
+        "speakers": [ "Hydaelyn" ]
     }
 ]
