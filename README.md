@@ -6,32 +6,41 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 ## Dislaimer: 
 * Since this plugin is dependent on [AllTalk_TTS](https://github.com/erew123/alltalk_tts) it is important to note that at the moment on Windows only Nvidia GPUs are supported. On Linux AMD should work as well. In the future this will expand.
 * The plugin is only tested in german, but should work in every client language. (Report an issue if not 😘)
-* Self hosted TTS is currently heavily dependent on a strong GPU. It's recommended to have at least a RTX 3060 (or AMD equivalent on Linux) with 6+GB VRAM built into the system hosting [AllTalk_TTS](https://github.com/erew123/alltalk_tts) for inference. (Keep in mind thats just for training. If you want to play FFXIV on the same machine I guess 3080 is minimum) For training I'd recommend at least 12 GB of VRAM but the more the better.
+* Self hosted TTS is currently heavily dependent on a strong GPU. It's recommended to have at least a RTX 3060 (or AMD equivalent on Linux) with 6+GB VRAM built into the system hosting [AllTalk_TTS](https://github.com/erew123/alltalk_tts) for inference. (Keep in mind thats just for inference. If you want to play FFXIV on the same machine I guess 3080 is minimum) For training I'd recommend at least 12 GB of VRAM but the more the better.
 
 ## Commands
-* `/eksettings`: Opens the configuration window.
+* `/ek`: Opens the configuration window.
 
-## Features
-* Ingame volume: This plugin uses the ingame volume for all generated TTS, meaning the infered(generated) audio should be close or equal to normal voiced cutscenes
-* Auto advance: You have the option to have text auto advance after the infered text is done speaking.
-* Auto voice matching: The plugin tries to match an NPC via his name to a existing voice in your TTS of none are found it tries to match to specified 'NPC' voices per race of NPC or lastly the narrator voice. [AllTalk_TTS](https://github.com/erew123/alltalk_tts) has the option to inform you of all available voices.
+## Features - Each feature is on/off toggleable
+* Dialogue TTS: All unvoiced Dialogues get voiced via the TTS Engine.
+* Battletalk TTS: All unvoiced Battletalks get voiced via the TTS Engine. (Battletalks are the small popup Texts in Duties or Story contents.)
+* Playerchoice TTS: Altough still in it's infant phase, the selections of the player in cutscenes get Voiced. This means you can give your own Character a voice! (Altough small in content)
+* Chat TTS: Your Chat get's Voiced in 3D Space. Meaning only people chatting around you are actually audible.
+* Bubble TTS: Like the Chat the ingame NPC Bubbles get Voiced in 3D Space. (Bubbles are the small text bubbles above random NPC's you meet on your journey)
+* Auto advance: The Text auto advances after the infered text is done speaking -> no need to click while in unvoiced cutscenes/quest dialogues.
+* Local saving/loading -> You can set the option so save generated text on your Disk so each time the text then is requested it gets loaded from disk instead of generated.(Only applies as long as the voice of the NPC doesn't change)
 * NPC voice selection: You can change the voice of every npc you met.
 
+## Features - Fixed
+* Ingame volume: This plugin uses the ingame volume for all generated TTS, meaning the infered(generated) audio should be close or equal to normal voiced cutscenes
+* Auto voice matching: The plugin tries to match an NPC via his name to a existing voice in your TTS. If none are found it tries to match to specified 'NPC' voices per race of NPC or lastly the narrator voice. [AllTalk_TTS](https://github.com/erew123/alltalk_tts) has the option to inform you of all available voices.
+
 ## Planned Features
-* Chat TTS: At the moment only dialogues are getting voiced, I'm planning to expand into chat as well.
 * I'm currently looking in getting emotions to work for TTS meaning that people could use [angry] in their chats and the voice would sound angry. The raw dialogue text for story or quests sometimes contains stuff like <pant> for when a npc is exhausted and more. I aim to use that for more detailed voicing.
+* I'm still trying to figure out a way to identify "???" Dialogues to set the correct voice if possible. At the moment Dialogues with "???" as name get identified as a single NPC called "???" resulting in wrong voices.
   
 ## Supported TTS providers
-* At the moment it only supports [AllTalk_TTS](https://github.com/erew123/alltalk_tts) which uses CoquiTTS for streaming inference. The developer of said TTS is working hard to make it an 'one service many TTS engines' project. Please refer to his GitHub regarding setting it up. (NVIDIA GPU Only at the moment)
+* At the moment it only supports [AllTalk_TTS](https://github.com/erew123/alltalk_tts) which uses CoquiTTS for streaming inference.
+  The v2_Beta of said TTS System supports Piper, VITS and more aswell.
 
 ## Setup/Install
-* Setup [AllTalk_TTS](https://github.com/erew123/alltalk_tts) -> Refer to this site on how to install.
+* Setup [AllTalk_TTS](https://github.com/erew123/alltalk_tts) -> Refer to this site on how to install (Branch v2_Beta preferred. It's faster, easier to use, and more reliable).
 * (Optional) Finetune the xtts2 model to your own voices. Will sound better than simple voice cloning.
 * Add the following path to the experimental paths of [Dalamud](https://github.com/goatcorp/Dalamud): `https://raw.githubusercontent.com/RenNagasaki/MyDalamudPlugins/master/pluginmaster.json`
 * Search for 'Echokraut' in Dalamud and install the plugin
-* Open the settings window either via the button or by typing `/eksettings`
-* In the 'Backend' Tab enter the url of your [AllTalk_TTS](https://github.com/erew123/alltalk_tts) instance. (127.0.0.1:7851 should be default)
-* If clicking 'Test Connection' results in `ready`, click on Load Voices and you're set.
+* Open the settings window either via the button or by typing `/ek`
+* In the 'Settings -> Backend' Tab enter the url of your [AllTalk_TTS](https://github.com/erew123/alltalk_tts) instance. (127.0.0.1:7851 should be default)
+* If clicking 'Test Connection' results in `ready` you're set.
 * (IMPORTANT) The naming scheme of the voices should be like this: `GENDER_RACE_NAME.wav`.
     For example: `Male_Hyur_Thancred.wav` for a named NPC
     and `Male_Hyur_NPC1.wav` for a random Hyur NPC. If more than one NPC voice exists then the plugin selects one randomly the first time you meet a new NPC.
