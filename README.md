@@ -45,7 +45,8 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
     For example: `Male_Hyur_Thancred.wav` for a named NPC
     and `Male_Hyur_NPC1.wav` for a random Hyur NPC. If more than one NPC voice exists then the plugin selects one randomly the first time you meet a new NPC.
     There is one exception, the so called narrator voice. It gets used for all dialogues without a speaker and all NPCs where no other voice could be found (last fallback) and should be named `Narrator.wav`.
-* ![grafik](https://github.com/user-attachments/assets/7a879f5d-9753-423b-a6cc-850871f6eba9)
+* Small example of how the files should be named:
+![grafik](https://github.com/user-attachments/assets/7a879f5d-9753-423b-a6cc-850871f6eba9)
 
 ## Just starting
 I started this whole project as a way for me to enjoy replaying the game without having to read all of 2.0 again. It evolved from there so please bear with many features still missing. You can always request more. 😊
