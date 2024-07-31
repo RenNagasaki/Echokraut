@@ -45,6 +45,8 @@ public class SoundHelper : IDisposable
     private readonly AddonTalkHelper addonTalkHelper;
     private readonly AddonBattleTalkHelper addonBattleTalkHelper;
 
+    public static int VoiceLinesToCome = 0;
+
     public SoundHelper(AddonTalkHelper addonTalkHelper, AddonBattleTalkHelper addonBattleTalkHelper,
         ISigScanner sigScanner, IGameInteropProvider gameInterop)
     {
@@ -122,7 +124,7 @@ public class SoundHelper : IDisposable
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Discovered voice line at address {resourceDataPtr:x}", new EKEventId(0, TextSource.AddonBattleTalk));
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Discovered voice line at address {resourceDataPtr:x}", new EKEventId(0, TextSource.AddonTalk));
                         this.knownVoiceLinePtrs.Add(resourceDataPtr); 
-                        addonBattleTalkHelper.voiceLinesToCome += 1;
+                        VoiceLinesToCome += 1;
                     }
                     else
                     {

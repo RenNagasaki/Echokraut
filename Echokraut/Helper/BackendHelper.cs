@@ -67,6 +67,7 @@ namespace Echokraut.Helper
                 case TextSource.AddonBattleTalk:
                 case TextSource.AddonCutSceneSelectString:
                 case TextSource.AddonSelectString:
+                case TextSource.VoiceTest:
                     PlayingHelper.AddRequestToQueue(voiceMessage);
                     break;
             }
@@ -176,10 +177,12 @@ namespace Echokraut.Helper
                 SetBackendType(TTSBackends.Alltalk);
             }
 
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Searching voice: {npcData.voiceItem} for NPC: {npcData.name}", eventId);
             var voiceItem = BackendVoiceHelper.Voices.Find( p => p.Equals(npcData.voiceItem));
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Searched voice: {voiceItem} for NPC: {npcData.name}", eventId);
             var mappedList = npcData.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? Configuration.MappedPlayers : Configuration.MappedNpcs;
 
-            if (voiceItem == null || mappedList.Find(p => p.voiceItem == voiceItem) == null)
+            if (voiceItem == null)
             {
                 var voiceItems = BackendVoiceHelper.Voices.FindAll(p => p.voiceName.Equals(npcData.name, StringComparison.OrdinalIgnoreCase));
                 if (voiceItems.Count > 0)
@@ -211,12 +214,12 @@ namespace Echokraut.Helper
                 {
                     if (npcData.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
                     {
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem.voiceName} for Player: {npcData.name}", eventId);
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem} for Player: {npcData.name}", eventId);
                         Configuration.MappedPlayers = Configuration.MappedPlayers.OrderBy(p => p.ToString(true)).ToList();
                     }
                     else
                     {
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem.voiceName} for NPC: {npcData.name}", eventId);
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem} for NPC: {npcData.name}", eventId);
                         Configuration.MappedNpcs = Configuration.MappedNpcs.OrderBy(p => p.ToString(true)).ToList();
                     }
                     npcData.voiceItem = voiceItem;

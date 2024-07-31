@@ -1,3 +1,4 @@
+using Dalamud.Game;
 using Dalamud.Game.ClientState.Objects.Types;
 using Echokraut.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
@@ -18,7 +19,7 @@ namespace Echokraut.DataClasses
         public NpcMapData Speaker { get; set; }
         public TextSource Source { get; set; }
         public int? ChatType { get; set; }
-        public string Language { get; set; }
+        public ClientLanguage Language { get; set; }
 
         public EKEventId eventId { get; set; }
 

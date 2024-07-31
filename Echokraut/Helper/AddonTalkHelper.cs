@@ -45,7 +45,7 @@ public class AddonTalkHelper
     private readonly IGameGui gui;
     private readonly IFramework framework;
     private readonly Configuration config;
-    private readonly Echokraut plugin;
+    private readonly Echokraut echokraut;
     private OnUpdateDelegate updateHandler;
 
     private readonly string name;
@@ -59,7 +59,7 @@ public class AddonTalkHelper
 
     public AddonTalkHelper(Echokraut plugin, IClientState clientState, ICondition condition, IGameGui gui, IFramework framework, IObjectTable objects, Configuration config)
     {
-        this.plugin = plugin;
+        this.echokraut = plugin;
         this.clientState = clientState;
         this.condition = condition;
         this.gui = gui;
@@ -143,7 +143,7 @@ public class AddonTalkHelper
         {
             PlayingHelper.InDialog = false;
             // The addon was closed
-            plugin.Cancel(new EKEventId(0, Enums.TextSource.None));
+            echokraut.Cancel(new EKEventId(0, Enums.TextSource.None));
             lastAddonSpeaker = "";
             lastAddonText = "";
             return;
@@ -151,7 +151,7 @@ public class AddonTalkHelper
         var eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
 
         // Notify observers that the addon state was advanced
-        plugin.Cancel(eventId);
+        echokraut.Cancel(eventId);
 
         text = TalkUtils.NormalizePunctuation(text);
 
@@ -171,10 +171,11 @@ public class AddonTalkHelper
             lastAddonText = text;
         }
 
-        if (speaker == "?????" && pollSource == AddonPollSource.VoiceLinePlayback)
+        if (pollSource == AddonPollSource.VoiceLinePlayback)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}", eventId);
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+            SoundHelper.VoiceLinesToCome -= 1;
             return;
         }
 
@@ -188,11 +189,11 @@ public class AddonTalkHelper
         {
             if (speakerObj != null)
             {
-                plugin.Say(eventId, speakerObj, speakerObj.Name, text);
+                echokraut.Say(eventId, speakerObj, speakerObj.Name, text);
             }
             else
             {
-                plugin.Say(eventId, null, state.Speaker ?? "", text);
+                echokraut.Say(eventId, null, state.Speaker ?? "", text);
             }
         }
     }

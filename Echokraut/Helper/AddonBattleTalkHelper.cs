@@ -29,7 +29,6 @@ public class AddonBattleTalkHelper
     private readonly Configuration config;
     private readonly Echokraut plugin;
     private OnUpdateDelegate updateHandler;
-    public int voiceLinesToCome = 0;
 
     private readonly string name;
 
@@ -137,7 +136,7 @@ public class AddonBattleTalkHelper
         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk ({pollSource}): \"{text}\"", eventId);
 
 
-        if (voiceLinesToCome > 0 && pollSource == AddonPollSource.FrameworkUpdate)
+        if (SoundHelper.VoiceLinesToCome > 0 && pollSource == AddonPollSource.FrameworkUpdate)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping maybe voice line: {text}", eventId);
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
@@ -162,7 +161,7 @@ public class AddonBattleTalkHelper
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}", eventId);
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-            voiceLinesToCome -= 1;
+            SoundHelper.VoiceLinesToCome -= 1;
             return true;
         }
 

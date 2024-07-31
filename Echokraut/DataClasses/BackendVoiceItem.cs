@@ -12,9 +12,6 @@ namespace Echokraut.DataClasses
 
         public override string ToString()
         {
-            if (voiceName == "Remove")
-                return voiceName;
-
             return $"{gender} - {race} - {voiceName}";
         }
         public override bool Equals(object obj)

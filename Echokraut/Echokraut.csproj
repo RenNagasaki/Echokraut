@@ -3,7 +3,7 @@
   <Import Project="Dalamud.Plugin.Bootstrap.targets" />
 
   <PropertyGroup>
-    <Version>0.10.2.7</Version>
+    <Version>0.10.2.8</Version>
     <Description>A TTS Dalamud Plugin that breaks the silence! For self hosted TTS Services.</Description>
     <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
@@ -16,7 +16,6 @@
     <None Remove="Anamnesis\Data\ItemCategories.json" />
     <None Remove="Anamnesis\Data\NpcNames.json" />
     <None Remove="Anamnesis\Data\Tips.json" />
-    <None Remove="Resources\VoiceNames.json" />
     <None Remove="Utils\overridenModelIds.txt" />
     <None Remove="Utils\VoiceNames.json" />
   </ItemGroup>
@@ -27,9 +26,6 @@
     <EmbeddedResource Include="Anamnesis\Data\ItemCategories.json" />
     <EmbeddedResource Include="Anamnesis\Data\NpcNames.json" />
     <EmbeddedResource Include="Anamnesis\Data\Tips.json" />
-    <EmbeddedResource Include="Resources\VoiceNames.json">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-    </EmbeddedResource>
   </ItemGroup>
 
   <ItemGroup>
@@ -64,6 +60,12 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Echokraut.png">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\VoiceNamesDE.json">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\VoiceNamesEN.json">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
   </ItemGroup>

@@ -16,6 +16,7 @@ using System.Threading;
 using NAudio.Wave;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using Dalamud.Game;
 
 namespace Echokraut.Backend
 {
@@ -29,7 +30,7 @@ namespace Echokraut.Backend
             this.configuration = config;
         }
 
-        public async Task<Stream> GenerateAudioStreamFromVoice(EKEventId eventId, string voiceLine, string voice, string language)
+        public async Task<Stream> GenerateAudioStreamFromVoice(EKEventId eventId, string voiceLine, string voice, ClientLanguage language)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating Alltalk Audio", eventId);
             HttpClient httpClient = new HttpClient();
@@ -199,17 +200,17 @@ namespace Echokraut.Backend
             }
         }
 
-        static string getAlltalkLanguage(string language)
+        static string getAlltalkLanguage(ClientLanguage language)
         {
             switch (language)
             {
-                case "German":
+                case ClientLanguage.German:
                     return "de";
-                case "English":
+                case ClientLanguage.English:
                     return "en";
-                case "French":
+                case ClientLanguage.French:
                     return "fr";
-                case "Japanese":
+                case ClientLanguage.Japanese:
                     return "ja";
             }
 

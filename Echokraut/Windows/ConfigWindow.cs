@@ -556,15 +556,16 @@ public class ConfigWindow : Window, IDisposable
         var voiceMessage = new VoiceMessage
         {
             pActor = null,
-            Source = TextSource.AddonTalk,
+            Source = TextSource.VoiceTest,
             Speaker = new NpcMapData(Dalamud.Game.ClientState.Objects.Enums.ObjectKind.None)
             {
                 gender = voice.gender,
                 race = voice.race,
-                name = voice.voiceName
+                name = voice.voiceName,
+                voiceItem = voice
             },
             Text = Constants.TESTMESSAGEDE,
-            Language = this.clientState.ClientLanguage.ToString(),
+            Language = this.clientState.ClientLanguage,
             eventId = eventId
         };
         var volume = VolumeHelper.GetVoiceVolume(eventId);
@@ -1007,7 +1008,7 @@ public class ConfigWindow : Window, IDisposable
         {
             if (ImGui.BeginChild("PlayerssChild"))
             {
-                if (ImGui.BeginTable("Player Table##PlayerTable", 4))
+                if (ImGui.BeginTable("Player Table##PlayerTable", 4, ImGuiTableFlags.BordersInnerH))
                 {
                     ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
                     ImGui.TableSetupColumn("Test", ImGuiTableColumnFlags.None, 70f);
@@ -1021,7 +1022,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.TableNextColumn();
                     ImGui.TableNextRow();
 
-                    var voices = BackendVoiceHelper.Voices;
+                    var voices = BackendVoiceHelper.Voices.FindAll(p => !(p.race == NpcRaces.Default && p.voiceName.Contains("NPC")));
                     foreach (var voice in voices)
                     {
                         ImGui.TableNextColumn();

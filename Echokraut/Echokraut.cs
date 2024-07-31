@@ -89,7 +89,7 @@ public partial class Echokraut : IDalamudPlugin
 
         LogHelper.Setup(log, Configuration);
         BackendHelper.Setup(Configuration, clientState, this, Configuration.BackendSelection);
-        VoiceMapHelper.Setup();
+        VoiceMapHelper.Setup(this.ClientState.ClientLanguage);
         VolumeHelper.Setup(gameConfig);
         ECommonsMain.Init(pluginInterface, this, ECommons.Module.All);
         this.ConfigWindow = new ConfigWindow(this, Configuration, this.ClientState);
@@ -218,7 +218,7 @@ public partial class Echokraut : IDalamudPlugin
                 Source = source,
                 Speaker = npcData,
                 Text = cleanText,
-                Language = this.ClientState.ClientLanguage.ToString(),
+                Language = this.ClientState.ClientLanguage,
                 eventId = eventId
             };
             var volume = VolumeHelper.GetVoiceVolume(eventId);

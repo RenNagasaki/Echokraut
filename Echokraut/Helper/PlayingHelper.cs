@@ -258,7 +258,7 @@ namespace Echokraut.Helper
                 {
                     var playedText = CurrentlyPlayingStreamText;
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}", eventId);
-                    if (!string.IsNullOrWhiteSpace(playedText.Text))
+                    if (!string.IsNullOrWhiteSpace(playedText.Text) && playedText.Source != TextSource.VoiceTest)
                     {
                         var filePath = FileHelper.GetLocalAudioPath(Configuration.LocalSaveLocation, playedText);
                         var stream = CurrentlyPlayingStream;
@@ -298,7 +298,7 @@ namespace Echokraut.Helper
 
         public static void AddRequestToQueue(VoiceMessage voiceMessage)
         {
-            if (Configuration.LoadFromLocalFirst && Directory.Exists(Configuration.LocalSaveLocation) && voiceMessage.Speaker.voiceItem != null)
+            if (Configuration.LoadFromLocalFirst && Directory.Exists(Configuration.LocalSaveLocation) && voiceMessage.Speaker.voiceItem != null && voiceMessage.Source != TextSource.VoiceTest)
             {
                 var result = FileHelper.LoadLocalAudio(voiceMessage.eventId, Configuration.LocalSaveLocation, voiceMessage);
 
