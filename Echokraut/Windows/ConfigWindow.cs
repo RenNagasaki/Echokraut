@@ -667,7 +667,7 @@ public class ConfigWindow : Window, IDisposable
 
             if (ImGui.BeginChild("NpcsChild"))
             {
-                if (ImGui.BeginTable("NPC Table##NPCTable", 6))
+                if (ImGui.BeginTable("NPC Table##NPCTable", 6, ImGuiTableFlags.BordersInnerH))
                 {
                     ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
                     ImGui.TableSetupColumn("Mapping", ImGuiTableColumnFlags.None, 35f);
@@ -853,7 +853,7 @@ public class ConfigWindow : Window, IDisposable
 
             if (ImGui.BeginChild("PlayerssChild"))
             {
-                if (ImGui.BeginTable("Player Table##PlayerTable", 6))
+                if (ImGui.BeginTable("Player Table##PlayerTable", 6, ImGuiTableFlags.BordersInnerH))
                 {
                     ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
                     ImGui.TableSetupColumn("Mapping", ImGuiTableColumnFlags.None, 35f);
