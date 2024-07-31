@@ -22,5 +22,25 @@
     {
         "voiceName": "Livia Sas Junius",
         "speakers": [ "Livia die Glühende" ]
+    },
+    {
+        "voiceName": "Yaana",
+        "speakers": [ "Schwarze Katze" ]
+    },
+    {
+        "voiceName": "Lyse",
+        "speakers": [ "Yda" ]
+    },
+    {
+        "voiceName": "Ysayle",
+        "speakers": [ "Shiva", "Eisherz" ]
+    },
+    {
+        "voiceName": "Gerolt",
+        "speakers": [ "Grenoldt", "Genolt" ]
+    },
+    {
+        "voiceName": "Doros",
+        "speakers": [ "Mann mit blonden gebundenen Haaren" ]
     }
 ]
