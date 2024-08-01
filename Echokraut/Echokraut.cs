@@ -24,6 +24,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Dalamud.Game.ClientState.Objects.Enums;
 using ECommons;
 using static Anamnesis.GUI.Views.FileBrowserView;
+using System.Xml.Linq;
 
 namespace Echokraut;
 
@@ -90,6 +91,7 @@ public partial class Echokraut : IDalamudPlugin
         LogHelper.Setup(log, Configuration);
         BackendHelper.Setup(Configuration, clientState, this, Configuration.BackendSelection);
         VoiceMapHelper.Setup(this.ClientState.ClientLanguage);
+        NpcRacesHelper.Setup();
         VolumeHelper.Setup(gameConfig);
         DataHelper.Setup(Configuration, this.ClientState, this.DataManager);
         ECommonsMain.Init(pluginInterface, this, ECommons.Module.All);
@@ -295,6 +297,7 @@ public partial class Echokraut : IDalamudPlugin
                     if (activeData == -1)
                         activeData = modelData2;
 
+                    LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"ModelId for Race matching: {activeData}", eventId);
                     var activeNpcRace = NpcRaces.Unknown;
                     try
                     {

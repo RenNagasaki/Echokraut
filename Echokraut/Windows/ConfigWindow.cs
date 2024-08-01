@@ -28,21 +28,25 @@ public class ConfigWindow : Window, IDisposable
     private FileDialogManager fileDialogManager;
     private bool resetLogFilter = true;
     private string logFilter = "";
+    public static bool UpdatePlayerData = false;
     private List<NpcMapData> filteredPlayers;
     private bool resetPlayerFilter = true;
     private string playerFilter = "";
+    public static bool UpdateNpcData = false;
     private List<NpcMapData> filteredNpcs;
     private bool resetNpcFilter = true;
     private string npcFilter = "";
+    public static bool UpdateBubbleData = false;
     private List<NpcMapData> filteredBubbles;
     private bool resetBubbleFilter = true;
     private string bubbleFilter = "";
+    public static bool UpdateVoiceData = false;
+    private List<BackendVoiceItem> filteredVoices;
+    private bool resetVoiceFilter = true;
+    private string voiceFilter = "";
     private string originalText = "";
     private string correctedText = "";
     private IClientState clientState;
-    public static bool UpdateNpcData = false;
-    public static bool UpdateBubbleData = false;
-    public static bool UpdatePlayerData = false;
 
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
@@ -156,6 +160,12 @@ public class ConfigWindow : Window, IDisposable
                         }
                         UpdateBubbleData = true;
                         this.Configuration.Save();
+                    }
+
+
+                    if (ImGui.Button("Reload remote mappings##reloadremote"))
+                    {
+                        ReloadRemoteMappings();
                     }
                 }
 
@@ -741,13 +751,13 @@ public class ConfigWindow : Window, IDisposable
                         }
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.TrashAlt.ToIconString()}##delnpcsaves{mapData.ToString()}", new Vector2(25, 25), "Remove local saved files.\r\nWill also clear bubble data", false, true))
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.TrashAlt.ToIconString()}##delnpcsaves{mapData.ToString()}", new Vector2(25, 25), "Remove local saved files.\r\nWill also clear bubble data.", false, true))
                         {
                             FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, mapData.name);
                         }
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.SquareXmark.ToIconString()}##delnpc{mapData.ToString()}", new Vector2(25, 25), "Remove npc mapping and local saved files.\r\nWill also clear bubble data", false, true))
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.SquareXmark.ToIconString()}##delnpc{mapData.ToString()}", new Vector2(25, 25), "Remove npc mapping and local saved files.\r\nWill also clear bubble data.", false, true))
                         {
                             toBeRemoved = mapData;
                         }
@@ -1107,13 +1117,13 @@ public class ConfigWindow : Window, IDisposable
                         }
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.TrashAlt.ToIconString()}##delbubblesaves{mapData.ToString()}", new Vector2(25, 25), "Remove local saved files.\r\nWill also clear normal npc data", false, true))
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.TrashAlt.ToIconString()}##delbubblesaves{mapData.ToString()}", new Vector2(25, 25), "Remove local saved files.\r\nWill also clear normal npc data.", false, true))
                         {
                             FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, mapData.name);
                         }
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.SquareXmark.ToIconString()}##delbubble{mapData.ToString()}", new Vector2(25, 25), "Remove bubble mapping and local saved files.\r\nWill also clear normal npc data", false, true))
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.SquareXmark.ToIconString()}##delbubble{mapData.ToString()}", new Vector2(25, 25), "Remove bubble mapping and local saved files.\r\nWill also clear normal npc data.", false, true))
                         {
                             toBeRemoved = mapData;
                         }
@@ -1143,11 +1153,29 @@ public class ConfigWindow : Window, IDisposable
     {
         if (ImGui.BeginTabItem("Voices"))
         {
-            DrawVoiceSelectionOptions();
-
-            if (ImGui.BeginChild("PlayerssChild"))
+            if (filteredVoices == null)
             {
-                if (ImGui.BeginTable("Player Table##PlayerTable", 4, ImGuiTableFlags.BordersInnerH))
+                filteredVoices = BackendVoiceHelper.Voices.FindAll(p => !(p.race == NpcRaces.Unknown && p.voiceName.Contains("NPC")));
+                filteredVoices.Sort();
+            }
+
+            if (ImGui.InputText($"Filter by voice gender/race/name##EKFilterVoice", ref voiceFilter, 40) || (voiceFilter.Length > 0 && UpdateVoiceData))
+            {
+                filteredVoices = BackendVoiceHelper.Voices.FindAll(p => !(p.race == NpcRaces.Unknown && p.voiceName.Contains("NPC")) && p.ToString().Contains(voiceFilter)); ;
+                filteredVoices.Sort();
+                resetVoiceFilter = false;
+                UpdateVoiceData = false;
+            }
+            else if ((!resetBubbleFilter && bubbleFilter.Length == 0) || UpdateBubbleData)
+            {
+                filteredVoices = BackendVoiceHelper.Voices.FindAll(p => !(p.race == NpcRaces.Unknown && p.voiceName.Contains("NPC")));
+                filteredVoices.Sort();
+                resetVoiceFilter = true;
+                UpdateVoiceData = false;
+            }
+            if (ImGui.BeginChild("VoicesChild"))
+            {
+                if (ImGui.BeginTable("Voice Table##VoiceTable", 4, ImGuiTableFlags.BordersInnerH))
                 {
                     ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
                     ImGui.TableSetupColumn("Test", ImGuiTableColumnFlags.None, 70f);
@@ -1161,8 +1189,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.TableNextColumn();
                     ImGui.TableNextRow();
 
-                    var voices = BackendVoiceHelper.Voices.FindAll(p => !(p.race == NpcRaces.Unknown && p.voiceName.Contains("NPC")));
-                    foreach (var voice in voices)
+                    foreach (var voice in filteredVoices)
                     {
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1810,6 +1837,8 @@ public class ConfigWindow : Window, IDisposable
         {
             if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
                 BackendHelper.SetBackendType(this.Configuration.BackendSelection);
+
+            UpdateVoiceData = true;
         }
         catch (Exception ex)
         {
@@ -1863,6 +1892,12 @@ public class ConfigWindow : Window, IDisposable
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
         }
+    }
+
+    private void ReloadRemoteMappings()
+    {
+        VoiceMapHelper.Setup(this.clientState.ClientLanguage);
+        NpcRacesHelper.Setup();
     }
     #endregion
 }
