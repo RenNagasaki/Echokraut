@@ -15,6 +15,7 @@ public class Configuration : IPluginConfiguration
     public TTSBackends BackendSelection { get; set; } = TTSBackends.Alltalk;
     public AlltalkData Alltalk { get; set; } = new AlltalkData();
     public List<NpcMapData> MappedNpcs { get; set; } = new List<NpcMapData>();
+    public List<NpcMapData> MappedBubbles { get; set; } = new List<NpcMapData>();
     public List<NpcMapData> MappedPlayers { get; set; } = new List<NpcMapData>();
     public bool Enabled { get; set; } = true;
     public bool VoiceDialog { get; set; } = true;
@@ -34,7 +35,6 @@ public class Configuration : IPluginConfiguration
     public bool VoicesAllGenders { get; set; } = false;
     public bool VoicesAllRaces { get; set; } = false;
     public bool VoicesAllOriginals { get; set; } = false;
-    public bool VoicesAllBubbles { get; set; } = false;
     public bool VoiceBubbles { get; set; } = false;
     public bool VoiceBubblesInCity { get; set; } = false;
     public bool VoiceSourceCam { get; set; } = false;

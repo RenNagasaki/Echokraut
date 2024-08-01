@@ -28,16 +28,20 @@ public class ConfigWindow : Window, IDisposable
     private FileDialogManager fileDialogManager;
     private bool resetLogFilter = true;
     private string logFilter = "";
+    private List<NpcMapData> filteredPlayers;
     private bool resetPlayerFilter = true;
     private string playerFilter = "";
-    private List<NpcMapData> filteredPlayers;
+    private List<NpcMapData> filteredNpcs;
     private bool resetNpcFilter = true;
     private string npcFilter = "";
-    private List<NpcMapData> filteredNpcs;
+    private List<NpcMapData> filteredBubbles;
+    private bool resetBubbleFilter = true;
+    private string bubbleFilter = "";
     private string originalText = "";
     private string correctedText = "";
     private IClientState clientState;
     public static bool UpdateNpcData = false;
+    public static bool UpdateBubbleData = false;
     public static bool UpdatePlayerData = false;
 
     // We give this window a constant ID using ###
@@ -109,6 +113,7 @@ public class ConfigWindow : Window, IDisposable
         }
     }
 
+    #region Settings
     private void DrawSettings()
     {
         try
@@ -119,6 +124,39 @@ public class ConfigWindow : Window, IDisposable
                 {
                     DrawGeneralSettings();
                     ImGui.EndTabItem();
+
+                    if (ImGui.Button("Clear mapped npcs##clearnpc"))
+                    {
+                        foreach (NpcMapData npcMapData in this.Configuration.MappedNpcs.FindAll(p => !p.name.StartsWith("BB")))
+                        {
+                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, npcMapData.name);
+                            this.Configuration.MappedNpcs.Remove(npcMapData);
+                        }
+                        UpdateNpcData = true;
+                        this.Configuration.Save();
+                    }
+                    ImGui.SameLine();
+                    if (ImGui.Button("Clear mapped players##clearplayers"))
+                    {
+                        foreach (NpcMapData playerMapData in this.Configuration.MappedPlayers)
+                        {
+                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, playerMapData.name);
+                        }
+                        this.Configuration.MappedPlayers.Clear();
+                        UpdatePlayerData = true;
+                        this.Configuration.Save();
+                    }
+                    ImGui.SameLine();
+                    if (ImGui.Button("Clear mapped bubbles##clearbubblenpc"))
+                    {
+                        foreach (NpcMapData npcMapData in this.Configuration.MappedNpcs.FindAll(p => p.name.StartsWith("BB")))
+                        {
+                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, npcMapData.name);
+                            this.Configuration.MappedNpcs.Remove(npcMapData);
+                        }
+                        UpdateBubbleData = true;
+                        this.Configuration.Save();
+                    }
                 }
 
                 using (var disabled = ImRaii.Disabled(!Configuration.Enabled))
@@ -500,124 +538,20 @@ public class ConfigWindow : Window, IDisposable
             }
         }
     }
+    #endregion
 
-    private async void BackendCheckReady(EKEventId eventId)
-    {
-        try
-        {
-            if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
-                testConnectionRes = await BackendHelper.CheckReady(eventId);
-            else
-                testConnectionRes = "No backend selected";
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Connection test result: {testConnectionRes}", eventId);
-        }
-        catch (Exception ex)
-        {
-            testConnectionRes = ex.ToString();
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), eventId);
-        }
-    }
-
-    private async void BackendGetVoices()
-    {
-        try
-        {
-            if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
-                BackendHelper.SetBackendType(this.Configuration.BackendSelection);
-        }
-        catch (Exception ex)
-        {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), new EKEventId(0, TextSource.None));
-        }
-    }
-
-    private async void BackendReloadService(string reloadModel)
-    {
-        try
-        {
-            if (BackendHelper.ReloadService(reloadModel, new EKEventId(0, TextSource.None)))
-                testConnectionRes = "Successfully started service reload. Please wait for up to 30 seconds before using.";
-            else
-                testConnectionRes = "Error while service reload. Please check logs.";
-
-            LogHelper.Important(MethodBase.GetCurrentMethod().Name, testConnectionRes, new EKEventId(0, TextSource.None));
-        }
-        catch (Exception ex)
-        {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), new EKEventId(0, TextSource.None));
-        }
-    }
-
-    private async void BackendTestVoice(BackendVoiceItem voice)
-    {
-        var eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
-        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Testing voice: {voice.ToString()}", eventId);
-        // Say the thing
-        var voiceMessage = new VoiceMessage
-        {
-            pActor = null,
-            Source = TextSource.VoiceTest,
-            Speaker = new NpcMapData(Dalamud.Game.ClientState.Objects.Enums.ObjectKind.None)
-            {
-                gender = voice.gender,
-                race = voice.race,
-                name = voice.voiceName,
-                voiceItem = voice
-            },
-            Text = Constants.TESTMESSAGEDE,
-            Language = this.clientState.ClientLanguage,
-            eventId = eventId
-        };
-        var volume = VolumeHelper.GetVoiceVolume(eventId);
-
-        if (volume > 0)
-            BackendHelper.OnSay(voiceMessage, volume);
-        else
-        {
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);
-            LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-        }
-    }
-
+    #region Voice selection
     private void DrawVoiceSelection()
     {
         try
         {
             if (ImGui.BeginTabBar($"Voices##EKVoicesTab"))
             {
-                if (ImGui.BeginTabItem("Options"))
-                {
-                    var voicesAllOriginals = this.Configuration.VoicesAllOriginals;
-                    if (ImGui.Checkbox("Show all original voices as option", ref voicesAllOriginals))
-                    {
-                        this.Configuration.VoicesAllOriginals = voicesAllOriginals;
-                        this.Configuration.Save();
-                    }
-                    var voicesAllGenders = this.Configuration.VoicesAllGenders;
-                    if (ImGui.Checkbox("Show both genders as option", ref voicesAllGenders))
-                    {
-                        this.Configuration.VoicesAllGenders = voicesAllGenders;
-                        this.Configuration.Save();
-                    }
-                    var voicesAllRaces = this.Configuration.VoicesAllRaces;
-                    if (ImGui.Checkbox("Show all races as option", ref voicesAllRaces))
-                    {
-                        this.Configuration.VoicesAllRaces = voicesAllRaces;
-                        this.Configuration.Save();
-                    }
-                    var voicesAllBubbles = this.Configuration.VoicesAllBubbles;
-                    if (ImGui.Checkbox("Show all bubble npcs as option", ref voicesAllBubbles))
-                    {
-                        this.Configuration.VoicesAllBubbles = voicesAllBubbles;
-                        this.Configuration.Save();
-                    }
-
-                    ImGui.EndTabItem();
-                }
-
                 DrawNpcTab();
 
                 DrawPlayerTab();
+
+                DrawBubblesTab();
 
                 DrawVoicesTab();
 
@@ -630,52 +564,71 @@ public class ConfigWindow : Window, IDisposable
         }
     }
 
+    private void DrawVoiceSelectionOptions()
+    {
+        if (ImGui.CollapsingHeader("Options:"))
+        {
+            var voicesAllOriginals = this.Configuration.VoicesAllOriginals;
+            if (ImGui.Checkbox("Show all original voices as option", ref voicesAllOriginals))
+            {
+                this.Configuration.VoicesAllOriginals = voicesAllOriginals;
+                this.Configuration.Save();
+            }
+            var voicesAllGenders = this.Configuration.VoicesAllGenders;
+            if (ImGui.Checkbox("Show both genders as option", ref voicesAllGenders))
+            {
+                this.Configuration.VoicesAllGenders = voicesAllGenders;
+                this.Configuration.Save();
+            }
+            var voicesAllRaces = this.Configuration.VoicesAllRaces;
+            if (ImGui.Checkbox("Show all races as option", ref voicesAllRaces))
+            {
+                this.Configuration.VoicesAllRaces = voicesAllRaces;
+                this.Configuration.Save();
+            }
+
+        }
+    }
+
     private void DrawNpcTab()
     {
         if (ImGui.BeginTabItem("NPCs"))
         {
+            DrawVoiceSelectionOptions();
+
             if (filteredNpcs == null)
             {
-                filteredNpcs = Configuration.MappedNpcs;
+                filteredNpcs = Configuration.MappedNpcs.FindAll(p => !p.name.StartsWith("BB"));
                 filteredNpcs.Sort();
             }
 
             if (ImGui.InputText($"Filter by npc name##EKFilterNpc", ref npcFilter, 40) || (npcFilter.Length > 0 && UpdateNpcData))
             {
-                filteredNpcs = Configuration.MappedNpcs.FindAll(b => b.name.ToLower().Contains(npcFilter.ToLower()));
+                filteredNpcs = Configuration.MappedNpcs.FindAll(p => p.name.ToLower().Contains(npcFilter.ToLower()) && !p.name.StartsWith("BB"));
                 filteredNpcs.Sort();
                 resetNpcFilter = false;
                 UpdateNpcData = false;
             }
             else if ((!resetNpcFilter && npcFilter.Length == 0) || UpdateNpcData)
             {
-                filteredNpcs = Configuration.MappedNpcs;
+                filteredNpcs = Configuration.MappedNpcs.FindAll(p => !p.name.StartsWith("BB"));
                 filteredNpcs.Sort();
                 resetNpcFilter = true;
                 UpdateNpcData = false;
             }
-            ImGui.SameLine();
-            if (ImGui.Button("Clear mapped npcs##clearnpc"))
-            {
-                foreach (NpcMapData npcMapData in this.Configuration.MappedNpcs)
-                {
-                    FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, npcMapData.name);
-                }
-                this.Configuration.MappedNpcs.Clear();
-                this.Configuration.Save();
-            }
 
             if (ImGui.BeginChild("NpcsChild"))
             {
-                if (ImGui.BeginTable("NPC Table##NPCTable", 6, ImGuiTableFlags.BordersInnerH))
+                if (ImGui.BeginTable("NPC Table##NPCTable", 7, ImGuiTableFlags.BordersInnerH))
                 {
                     ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
-                    ImGui.TableSetupColumn("Mapping", ImGuiTableColumnFlags.None, 35f);
-                    ImGui.TableSetupColumn("Saves", ImGuiTableColumnFlags.None, 35f);
+                    ImGui.TableSetupColumn("Mute?", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.None, 150);
                     ImGui.TableSetupColumn("Voice", ImGuiTableColumnFlags.None, 250);
+                    ImGui.TableSetupColumn("##npcsaves", ImGuiTableColumnFlags.None, 25f);
+                    ImGui.TableSetupColumn("##npcmapping", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableHeadersRow();
                     ImGui.TableNextColumn();
                     ImGui.TableNextColumn();
@@ -691,25 +644,17 @@ public class ConfigWindow : Window, IDisposable
                         if (!this.Configuration.VoicesAllOriginals && mapData.voiceItem.voiceName.ToLower().Contains(mapData.name.ToLower()))
                             continue;
 
-                        if (!this.Configuration.VoicesAllBubbles && mapData.name.StartsWith("Bubble"))
-                            continue;
-
                         ImGui.TableNextColumn();
-                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Trash.ToIconString()}##delnpc{mapData.ToString()}", new Vector2(25, 25), "Remove NPC mapping", false, true))
+                        var muted = mapData.muted;
+                        if (ImGui.Checkbox($"##EKNpcMute{mapData.ToString()}", ref muted))
                         {
-                            toBeRemoved = mapData;
-                        }
-                        ImGui.TableNextColumn();
-                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.TrashAlt.ToIconString()}##delnpcsaves{mapData.ToString()}", new Vector2(25, 25), "Remove NPC saves", false, true))
-                        {
-                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, mapData.name);
+                            mapData.muted = muted;
+                            this.Configuration.Save();
                         }
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                         var presetIndexGender = BackendVoiceHelper.GenderDisplay.IndexOf(p => p.Contains(mapData.gender.ToString()));
-                        if (ImGui.Combo($"##EKCBoxNPC{mapData.ToString(Configuration.VoicesAllRaces)}1", ref presetIndexGender, BackendVoiceHelper.GenderDisplay, BackendVoiceHelper.GenderDisplay.Length))
+                        if (ImGui.Combo($"##EKCBoxNPC{mapData.ToString()}1", ref presetIndexGender, BackendVoiceHelper.GenderDisplay, BackendVoiceHelper.GenderDisplay.Length))
                         {
                             var newGender = BackendVoiceHelper.GenderArr[presetIndexGender];
                             if (newGender != mapData.gender)
@@ -718,10 +663,10 @@ public class ConfigWindow : Window, IDisposable
                                     toBeRemoved = mapData;
                                 else
                                 {
-                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Gender for Character: {mapData.ToString(true)} from: {mapData.gender} to: {newGender}", new EKEventId(0, TextSource.None));
+                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Gender for Character: {mapData.ToString()} from: {mapData.gender} to: {newGender}", new EKEventId(0, TextSource.None));
 
                                     mapData.gender = newGender;
-                                    filteredNpcs = null;
+                                    UpdateNpcData = true;
                                     this.Configuration.Save();
                                 }
                             }
@@ -731,7 +676,7 @@ public class ConfigWindow : Window, IDisposable
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                         var presetIndexRace = BackendVoiceHelper.RaceDisplay.IndexOf(p => p.Contains(mapData.race.ToString()));
-                        if (ImGui.Combo($"##EKCBoxNPC{mapData.ToString(Configuration.VoicesAllRaces)}2", ref presetIndexRace, BackendVoiceHelper.RaceDisplay, BackendVoiceHelper.RaceDisplay.Length))
+                        if (ImGui.Combo($"##EKCBoxNPC{mapData.ToString()}2", ref presetIndexRace, BackendVoiceHelper.RaceDisplay, BackendVoiceHelper.RaceDisplay.Length))
                         {
                             var newRace = BackendVoiceHelper.RaceArr[presetIndexRace];
                             if (newRace != mapData.race)
@@ -740,10 +685,10 @@ public class ConfigWindow : Window, IDisposable
                                     toBeRemoved = mapData;
                                 else
                                 {
-                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Race for Character: {mapData.ToString(true)} from: {mapData.race} to: {newRace}", new EKEventId(0, TextSource.None));
+                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Race for Character: {mapData.ToString()} from: {mapData.race} to: {newRace}", new EKEventId(0, TextSource.None));
 
                                     mapData.race = newRace;
-                                    filteredNpcs = null;
+                                    UpdateNpcData = true;
                                     this.Configuration.Save();
                                 }
                             }
@@ -779,20 +724,32 @@ public class ConfigWindow : Window, IDisposable
 
                         var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
                         var presetIndexVoice = localVoices.FindIndex(p => p.ToString().Contains(mapData.voiceItem?.ToString() ?? "Narrator"));
-                        if (ImGui.Combo($"##EKCBoxNPC{mapData.ToString(Configuration.VoicesAllRaces)}3", ref presetIndexVoice, voicesDisplay, voicesDisplay.Length))
+                        if (ImGui.Combo($"##EKCBoxNPC{mapData.ToString()}3", ref presetIndexVoice, voicesDisplay, voicesDisplay.Length))
                         {
                             var newVoiceItem = localVoices[presetIndexVoice];
 
                             if (newVoiceItem != null)
                             {
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for Character: {mapData.ToString(true)} from: {mapData.voiceItem} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
+                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for Character: {mapData.ToString()} from: {mapData.voiceItem} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
 
                                 mapData.voiceItem = newVoiceItem;
-                                filteredNpcs = null;
+                                UpdateNpcData = true;
                                 this.Configuration.Save();
                             }
                             else
                                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Voice for Character: {mapData}", new EKEventId(0, TextSource.None));
+                        }
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.TrashAlt.ToIconString()}##delnpcsaves{mapData.ToString()}", new Vector2(25, 25), "Remove local saved files.\r\nWill also clear bubble data", false, true))
+                        {
+                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, mapData.name);
+                        }
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.SquareXmark.ToIconString()}##delnpc{mapData.ToString()}", new Vector2(25, 25), "Remove npc mapping and local saved files.\r\nWill also clear bubble data", false, true))
+                        {
+                            toBeRemoved = mapData;
                         }
 
                         ImGui.TableNextRow();
@@ -802,7 +759,7 @@ public class ConfigWindow : Window, IDisposable
                     {
                         FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, toBeRemoved.name);
                         Configuration.MappedNpcs.Remove(toBeRemoved);
-                        filteredNpcs.Sort();
+                        UpdateNpcData = true;
                         Configuration.Save();
                     }
 
@@ -820,6 +777,8 @@ public class ConfigWindow : Window, IDisposable
     {
         if (ImGui.BeginTabItem("Players"))
         {
+            DrawVoiceSelectionOptions();
+
             if (filteredPlayers == null)
             {
                 filteredPlayers = Configuration.MappedPlayers;
@@ -840,28 +799,19 @@ public class ConfigWindow : Window, IDisposable
                 resetPlayerFilter = true;
                 UpdatePlayerData = false;
             }
-            ImGui.SameLine();
-            if (ImGui.Button("Clear mapped players##clearplayers"))
-            {
-                foreach (NpcMapData playerMapData in this.Configuration.MappedPlayers)
-                {
-                    FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, playerMapData.name);
-                }
-                this.Configuration.MappedPlayers.Clear();
-                this.Configuration.Save();
-            }
 
             if (ImGui.BeginChild("PlayerssChild"))
             {
-                if (ImGui.BeginTable("Player Table##PlayerTable", 6, ImGuiTableFlags.BordersInnerH))
+                if (ImGui.BeginTable("Player Table##PlayerTable", 7, ImGuiTableFlags.BordersInnerH))
                 {
                     ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
-                    ImGui.TableSetupColumn("Mapping", ImGuiTableColumnFlags.None, 35f);
-                    ImGui.TableSetupColumn("Saves", ImGuiTableColumnFlags.None, 35f);
+                    ImGui.TableSetupColumn("Mute?", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.None, 150);
                     ImGui.TableSetupColumn("Voice", ImGuiTableColumnFlags.None, 250);
+                    ImGui.TableSetupColumn("##playersaves", ImGuiTableColumnFlags.None, 25f);
+                    ImGui.TableSetupColumn("##playermapping", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableHeadersRow();
                     ImGui.TableNextColumn();
                     ImGui.TableNextColumn();
@@ -877,25 +827,17 @@ public class ConfigWindow : Window, IDisposable
                         if (!this.Configuration.VoicesAllOriginals && mapData.voiceItem.voiceName.ToLower().Contains(mapData.name.ToLower()))
                             continue;
 
-                        if (!this.Configuration.VoicesAllBubbles && mapData.name.StartsWith("Bubble"))
-                            continue;
-
                         ImGui.TableNextColumn();
-                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Trash.ToIconString()}##delplayer{mapData.ToString()}", new Vector2(25, 25), "Remove Player mapping", false, true))
+                        var muted = mapData.muted;
+                        if (ImGui.Checkbox($"##EKPlayerMute{mapData.ToString()}", ref muted))
                         {
-                            toBeRemoved = mapData;
-                        }
-                        ImGui.TableNextColumn();
-                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.TrashAlt.ToIconString()}##delplayersaves{mapData.ToString()}", new Vector2(25, 25), "Remove Player saves", false, true))
-                        {
-                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, mapData.name);
+                            mapData.muted = muted;
+                            this.Configuration.Save();
                         }
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                         var presetIndexGender = BackendVoiceHelper.GenderDisplay.IndexOf(p => p.Contains(mapData.gender.ToString()));
-                        if (ImGui.Combo($"##EKCBoxPlayer{mapData.ToString(Configuration.VoicesAllRaces)}1", ref presetIndexGender, BackendVoiceHelper.GenderDisplay, BackendVoiceHelper.GenderDisplay.Length))
+                        if (ImGui.Combo($"##EKCBoxPlayer{mapData.ToString()}1", ref presetIndexGender, BackendVoiceHelper.GenderDisplay, BackendVoiceHelper.GenderDisplay.Length))
                         {
                             var newGender = BackendVoiceHelper.GenderArr[presetIndexGender];
                             if (newGender != mapData.gender)
@@ -904,10 +846,10 @@ public class ConfigWindow : Window, IDisposable
                                     toBeRemoved = mapData;
                                 else
                                 {
-                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Gender for Character: {mapData.ToString(true)} from: {mapData.gender} to: {newGender}", new EKEventId(0, TextSource.None));
+                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Gender for Character: {mapData.ToString()} from: {mapData.gender} to: {newGender}", new EKEventId(0, TextSource.None));
 
                                     mapData.gender = newGender;
-                                    filteredPlayers = null;
+                                    UpdatePlayerData = true;
                                     this.Configuration.Save();
                                 }
                             }
@@ -917,7 +859,7 @@ public class ConfigWindow : Window, IDisposable
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                         var presetIndexRace = BackendVoiceHelper.RaceDisplay.IndexOf(p => p.Contains(mapData.race.ToString()));
-                        if (ImGui.Combo($"##EKCBoxPlayer{mapData.ToString(Configuration.VoicesAllRaces)}2", ref presetIndexRace, BackendVoiceHelper.RaceDisplay, BackendVoiceHelper.RaceDisplay.Length))
+                        if (ImGui.Combo($"##EKCBoxPlayer{mapData.ToString()}2", ref presetIndexRace, BackendVoiceHelper.RaceDisplay, BackendVoiceHelper.RaceDisplay.Length))
                         {
                             var newRace = BackendVoiceHelper.RaceArr[presetIndexRace];
                             if (newRace != mapData.race)
@@ -926,10 +868,10 @@ public class ConfigWindow : Window, IDisposable
                                     toBeRemoved = mapData;
                                 else
                                 {
-                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Race for Character: {mapData.ToString(true)} from: {mapData.race} to: {newRace}", new EKEventId(0, TextSource.None));
+                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Race for Character: {mapData.ToString()} from: {mapData.race} to: {newRace}", new EKEventId(0, TextSource.None));
 
                                     mapData.race = newRace;
-                                    filteredPlayers = null;
+                                    UpdatePlayerData = true;
                                     this.Configuration.Save();
                                 }
                             }
@@ -965,20 +907,32 @@ public class ConfigWindow : Window, IDisposable
 
                         var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
                         var presetIndexVoice = localVoices.FindIndex(p => p.ToString().Contains(mapData.voiceItem?.ToString() ?? "Narrator"));
-                        if (ImGui.Combo($"##EKCBoxPlayer{mapData.ToString(Configuration.VoicesAllRaces)}3", ref presetIndexVoice, voicesDisplay, voicesDisplay.Length))
+                        if (ImGui.Combo($"##EKCBoxPlayer{mapData.ToString()}3", ref presetIndexVoice, voicesDisplay, voicesDisplay.Length))
                         {
                             var newVoiceItem = localVoices[presetIndexVoice];
 
                             if (newVoiceItem != null)
                             {
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for Character: {mapData.ToString(true)} from: {mapData.voiceItem} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
+                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for Character: {mapData.ToString()} from: {mapData.voiceItem} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
 
                                 mapData.voiceItem = newVoiceItem;
-                                filteredPlayers = null;
+                                UpdatePlayerData = true;
                                 this.Configuration.Save();
                             }
                             else
                                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Voice for Character: {mapData}", new EKEventId(0, TextSource.None));
+                        }
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.TrashAlt.ToIconString()}##delplayersaves{mapData.ToString()}", new Vector2(25, 25), "Remove local saved files", false, true))
+                        {
+                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, mapData.name);
+                        }
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.SquareXmark.ToIconString()}##delplayer{mapData.ToString()}", new Vector2(25, 25), "Remove player mapping and local saved files", false, true))
+                        {
+                            toBeRemoved = mapData;
                         }
 
                         ImGui.TableNextRow();
@@ -988,7 +942,190 @@ public class ConfigWindow : Window, IDisposable
                     {
                         FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, toBeRemoved.name);
                         Configuration.MappedPlayers.Remove(toBeRemoved);
-                        filteredPlayers.Sort();
+                        UpdatePlayerData = true;
+                        Configuration.Save();
+                    }
+
+                    ImGui.EndTable();
+                }
+
+                ImGui.EndChild();
+            }
+
+            ImGui.EndTabItem();
+        }
+    }
+
+    private void DrawBubblesTab()
+    {
+        if (ImGui.BeginTabItem("Bubbles"))
+        {
+            DrawVoiceSelectionOptions();
+
+            if (filteredBubbles == null)
+            {
+                filteredBubbles = Configuration.MappedNpcs.FindAll(p => p.hasBubbles);
+                filteredBubbles.Sort();
+            }
+
+            if (ImGui.InputText($"Filter by npc name##EKFilterBubbleNpc", ref bubbleFilter, 40) || (bubbleFilter.Length > 0 && UpdateBubbleData))
+            {
+                filteredBubbles = Configuration.MappedNpcs.FindAll(p => p.name.ToLower().Contains(bubbleFilter.ToLower()) && p.hasBubbles);
+                filteredBubbles.Sort();
+                resetBubbleFilter = false;
+                UpdateBubbleData = false;
+            }
+            else if ((!resetBubbleFilter && bubbleFilter.Length == 0) || UpdateBubbleData)
+            {
+                filteredBubbles = Configuration.MappedNpcs.FindAll(p => p.hasBubbles);
+                filteredBubbles.Sort();
+                resetBubbleFilter = true;
+                UpdateBubbleData = false;
+            }
+
+            if (ImGui.BeginChild("BubblesChild"))
+            {
+                if (ImGui.BeginTable("Bubble Table##BubbleTable", 7, ImGuiTableFlags.BordersInnerH))
+                {
+                    ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
+                    ImGui.TableSetupColumn("Mute?", ImGuiTableColumnFlags.None, 25f);
+                    ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.None, 125);
+                    ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.None, 125);
+                    ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.None, 150);
+                    ImGui.TableSetupColumn("Voice", ImGuiTableColumnFlags.None, 250);
+                    ImGui.TableSetupColumn("##bubblesaves", ImGuiTableColumnFlags.None, 25f);
+                    ImGui.TableSetupColumn("##bubblemapping", ImGuiTableColumnFlags.None, 25f);
+                    ImGui.TableHeadersRow();
+                    ImGui.TableNextColumn();
+                    ImGui.TableNextColumn();
+                    ImGui.TableNextColumn();
+                    ImGui.TableNextColumn();
+                    ImGui.TableNextColumn();
+                    ImGui.TableNextColumn();
+                    ImGui.TableNextRow();
+
+                    NpcMapData toBeRemoved = null;
+                    foreach (NpcMapData mapData in filteredBubbles)
+                    {
+                        if (!this.Configuration.VoicesAllOriginals && mapData.voiceItem.voiceName.ToLower().Contains(mapData.name.ToLower()))
+                            continue;
+
+                        ImGui.TableNextColumn();
+                        var mutedBubble = mapData.mutedBubble;
+                        if (ImGui.Checkbox($"##EKBubbleMute{mapData.ToString()}", ref mutedBubble))
+                        {
+                            mapData.mutedBubble = mutedBubble;
+                            this.Configuration.Save(); 
+                        }
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        var presetIndexGender = BackendVoiceHelper.GenderDisplay.IndexOf(p => p.Contains(mapData.gender.ToString()));
+                        if (ImGui.Combo($"##EKCBoxNPC{mapData.ToString()}1", ref presetIndexGender, BackendVoiceHelper.GenderDisplay, BackendVoiceHelper.GenderDisplay.Length))
+                        {
+                            var newGender = BackendVoiceHelper.GenderArr[presetIndexGender];
+                            if (newGender != mapData.gender)
+                            {
+                                if (Configuration.MappedNpcs.Contains(new NpcMapData(mapData.objectKind) { gender = newGender, race = mapData.race, name = mapData.name }))
+                                    toBeRemoved = mapData;
+                                else
+                                {
+                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Gender for Character: {mapData.ToString()} from: {mapData.gender} to: {newGender}", new EKEventId(0, TextSource.None));
+
+                                    mapData.gender = newGender;
+                                    UpdateBubbleData = true;
+                                    this.Configuration.Save();
+                                }
+                            }
+                            else
+                                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Gender for Character: {mapData}", new EKEventId(0, TextSource.None));
+                        }
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        var presetIndexRace = BackendVoiceHelper.RaceDisplay.IndexOf(p => p.Contains(mapData.race.ToString()));
+                        if (ImGui.Combo($"##EKCBoxBubble{mapData.ToString()}2", ref presetIndexRace, BackendVoiceHelper.RaceDisplay, BackendVoiceHelper.RaceDisplay.Length))
+                        {
+                            var newRace = BackendVoiceHelper.RaceArr[presetIndexRace];
+                            if (newRace != mapData.race)
+                            {
+                                if (Configuration.MappedNpcs.Contains(new NpcMapData(mapData.objectKind) { gender = mapData.gender, race = newRace, name = mapData.name }))
+                                    toBeRemoved = mapData;
+                                else
+                                {
+                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Race for Character: {mapData.ToString()} from: {mapData.race} to: {newRace}", new EKEventId(0, TextSource.None));
+
+                                    mapData.race = newRace;
+                                    UpdateBubbleData = true;
+                                    this.Configuration.Save();
+                                }
+                            }
+                            else
+                                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Race for Character: {mapData}", new EKEventId(0, TextSource.None));
+                        }
+                        ImGui.TableNextColumn();
+                        ImGui.TextUnformatted(mapData.name);
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        var localVoices = (this.Configuration.VoicesAllOriginals ?
+                                            (this.Configuration.VoicesAllGenders ?
+                                                (this.Configuration.VoicesAllRaces ?
+                                                    BackendVoiceHelper.Voices :
+                                                    BackendVoiceHelper.FilteredVoicesAllGenders[mapData.race]
+                                                ) :
+                                                (this.Configuration.VoicesAllRaces ?
+                                                    BackendVoiceHelper.FilteredVoicesAllRaces[mapData.gender] :
+                                                    BackendVoiceHelper.FilteredVoices[mapData.gender][mapData.race]
+                                                )
+                                            ) :
+                                            (this.Configuration.VoicesAllGenders ?
+                                                (this.Configuration.VoicesAllRaces ?
+                                                    BackendVoiceHelper.VoicesOriginal :
+                                                    BackendVoiceHelper.FilteredVoicesAllGendersOriginal[mapData.race]
+                                                ) :
+                                                (this.Configuration.VoicesAllRaces ?
+                                                    BackendVoiceHelper.FilteredVoicesAllRacesOriginal[mapData.gender] :
+                                                    BackendVoiceHelper.FilteredVoicesOriginal[mapData.gender][mapData.race]
+                                                )
+                                            )
+                                          );
+
+                        var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
+                        var presetIndexVoice = localVoices.FindIndex(p => p.ToString().Contains(mapData.voiceItem?.ToString() ?? "Narrator"));
+                        if (ImGui.Combo($"##EKCBoxNPC{mapData.ToString()}3", ref presetIndexVoice, voicesDisplay, voicesDisplay.Length))
+                        {
+                            var newVoiceItem = localVoices[presetIndexVoice];
+
+                            if (newVoiceItem != null)
+                            {
+                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for Character: {mapData.ToString()} from: {mapData.voiceItem} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
+
+                                mapData.voiceItem = newVoiceItem;
+                                UpdateBubbleData = true;
+                                this.Configuration.Save();
+                            }
+                            else
+                                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Voice for Character: {mapData}", new EKEventId(0, TextSource.None));
+                        }
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.TrashAlt.ToIconString()}##delbubblesaves{mapData.ToString()}", new Vector2(25, 25), "Remove local saved files.\r\nWill also clear normal npc data", false, true))
+                        {
+                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, mapData.name);
+                        }
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.SquareXmark.ToIconString()}##delbubble{mapData.ToString()}", new Vector2(25, 25), "Remove bubble mapping and local saved files.\r\nWill also clear normal npc data", false, true))
+                        {
+                            toBeRemoved = mapData;
+                        }
+
+                        ImGui.TableNextRow();
+                    }
+
+                    if (toBeRemoved != null)
+                    {
+                        FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, toBeRemoved.name);
+                        Configuration.MappedNpcs.Remove(toBeRemoved);
+                        UpdateBubbleData = true;
                         Configuration.Save();
                     }
 
@@ -1006,6 +1143,8 @@ public class ConfigWindow : Window, IDisposable
     {
         if (ImGui.BeginTabItem("Voices"))
         {
+            DrawVoiceSelectionOptions();
+
             if (ImGui.BeginChild("PlayerssChild"))
             {
                 if (ImGui.BeginTable("Player Table##PlayerTable", 4, ImGuiTableFlags.BordersInnerH))
@@ -1022,7 +1161,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.TableNextColumn();
                     ImGui.TableNextRow();
 
-                    var voices = BackendVoiceHelper.Voices.FindAll(p => !(p.race == NpcRaces.Default && p.voiceName.Contains("NPC")));
+                    var voices = BackendVoiceHelper.Voices.FindAll(p => !(p.race == NpcRaces.Unknown && p.voiceName.Contains("NPC")));
                     foreach (var voice in voices)
                     {
                         ImGui.TableNextColumn();
@@ -1053,7 +1192,9 @@ public class ConfigWindow : Window, IDisposable
             ImGui.EndTabItem();
         }
     }
+    #endregion
 
+    #region Phonetic corrections
     private void DrawPhoneticCorrections()
     {
         try
@@ -1142,7 +1283,9 @@ public class ConfigWindow : Window, IDisposable
             LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
         }
     }
+    #endregion
 
+    #region Logs
     private void DrawLogs()
     {
         try
@@ -1641,4 +1784,85 @@ public class ConfigWindow : Window, IDisposable
             LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", new EKEventId(0, TextSource.None), false);
         }
     }
+    #endregion
+
+    #region Helper Functions
+    private async void BackendCheckReady(EKEventId eventId)
+    {
+        try
+        {
+            if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
+                testConnectionRes = await BackendHelper.CheckReady(eventId);
+            else
+                testConnectionRes = "No backend selected";
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Connection test result: {testConnectionRes}", eventId);
+        }
+        catch (Exception ex)
+        {
+            testConnectionRes = ex.ToString();
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), eventId);
+        }
+    }
+
+    private async void BackendGetVoices()
+    {
+        try
+        {
+            if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
+                BackendHelper.SetBackendType(this.Configuration.BackendSelection);
+        }
+        catch (Exception ex)
+        {
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), new EKEventId(0, TextSource.None));
+        }
+    }
+
+    private async void BackendReloadService(string reloadModel)
+    {
+        try
+        {
+            if (BackendHelper.ReloadService(reloadModel, new EKEventId(0, TextSource.None)))
+                testConnectionRes = "Successfully started service reload. Please wait for up to 30 seconds before using.";
+            else
+                testConnectionRes = "Error while service reload. Please check logs.";
+
+            LogHelper.Important(MethodBase.GetCurrentMethod().Name, testConnectionRes, new EKEventId(0, TextSource.None));
+        }
+        catch (Exception ex)
+        {
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), new EKEventId(0, TextSource.None));
+        }
+    }
+
+    private async void BackendTestVoice(BackendVoiceItem voice)
+    {
+        var eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
+        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Testing voice: {voice.ToString()}", eventId);
+        // Say the thing
+        var voiceMessage = new VoiceMessage
+        {
+            pActor = null,
+            Source = TextSource.VoiceTest,
+            Speaker = new NpcMapData(Dalamud.Game.ClientState.Objects.Enums.ObjectKind.None)
+            {
+                gender = voice.gender,
+                race = voice.race,
+                name = voice.voiceName,
+                voiceItem = voice
+            },
+            Text = Constants.TESTMESSAGEDE,
+            Language = this.clientState.ClientLanguage,
+            eventId = eventId
+        };
+        var volume = VolumeHelper.GetVoiceVolume(eventId);
+
+        if (volume > 0)
+            BackendHelper.OnSay(voiceMessage, volume);
+        else
+        {
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);
+            LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+        }
+    }
+    #endregion
 }

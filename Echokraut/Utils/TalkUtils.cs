@@ -143,6 +143,7 @@ namespace Echokraut.TextToTalk.Utils
                        // TextToTalk#29 emdashes and dashes and whatever else
                        .Replace("─", " - ") // These are not the same character
                        .Replace("—", " - ")
+                       .Replace("...", " - ")
                        .Replace("–", "-") ??
                    ""; // Hopefully, this one is only in Kan-E-Senna's name? Otherwise, I'm not sure how to parse this correctly.
         }

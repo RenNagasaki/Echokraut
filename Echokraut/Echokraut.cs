@@ -91,6 +91,7 @@ public partial class Echokraut : IDalamudPlugin
         BackendHelper.Setup(Configuration, clientState, this, Configuration.BackendSelection);
         VoiceMapHelper.Setup(this.ClientState.ClientLanguage);
         VolumeHelper.Setup(gameConfig);
+        DataHelper.Setup(Configuration, this.ClientState, this.DataManager);
         ECommonsMain.Init(pluginInterface, this, ECommons.Module.All);
         this.ConfigWindow = new ConfigWindow(this, Configuration, this.ClientState);
         this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration, new EKEventId(0, Enums.TextSource.None));
@@ -155,27 +156,18 @@ public partial class Echokraut : IDalamudPlugin
 
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleantext: {cleanText}", eventId);
             // Ensure that the result is clean; ignore it otherwise
-            if (!cleanText.Any() || !TalkUtils.IsSpeakable(cleanText))
+            if (!cleanText.Any() || !TalkUtils.IsSpeakable(cleanText) || cleanText.Length == 0)
             {
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text not speakable: {cleanText}", eventId);
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
                 return;
             }
 
-            // Build a template for the text payload
-            var textTemplate = TalkUtils.ExtractTokens(cleanText, new Dictionary<string, string?>
-            {
-                { "{{FULL_NAME}}", this.ClientState.LocalPlayer?.GetFullName() },
-                { "{{FIRST_NAME}}", this.ClientState.LocalPlayer?.GetFirstName() },
-                { "{{LAST_NAME}}", this.ClientState.LocalPlayer?.GetLastName() },
-            });
-
             // Some characters have emdashes in their names, which should be treated
             // as hyphens for the sake of the plugin.
             var cleanSpeakerName = TalkUtils.NormalizePunctuation(speakerName.TextValue);
 
             var objectKind = speaker == null ? ObjectKind.None : speaker.ObjectKind;
-
             NpcMapData npcData = new NpcMapData(objectKind);
             // Get the speaker's race if it exists.
             var raceStr = "";
@@ -184,33 +176,63 @@ public partial class Echokraut : IDalamudPlugin
             npcData.gender = CharacterGenderUtils.GetCharacterGender(eventId, speaker);
             npcData.name = DataHelper.CleanUpName(cleanSpeakerName);
 
+            if (npcData.objectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
+                npcData.name = VoiceMapHelper.GetNpcName(npcData.name);
+
             if (npcData.name == "PLAYER")
                 npcData.name = this.ClientState.LocalPlayer?.Name.ToString() ?? "PLAYER";
             else if (string.IsNullOrWhiteSpace(npcData.name) && source == TextSource.AddonBubble)
-                npcData.name = GetBubbleName(speaker);
+                npcData.name = GetBubbleName(speaker, cleanText);
 
-            var resNpcData = DataHelper.GetCharacterMapData(Configuration.MappedNpcs, Configuration.MappedPlayers, npcData, eventId);
-            if (resNpcData != null && resNpcData.race == NpcRaces.Default && npcData.raceStr != NpcRaces.Default.ToString())
+            var resNpcData = DataHelper.GetAddCharacterMapData(npcData, eventId);
+            if (resNpcData != null && resNpcData.race == NpcRaces.Unknown && npcData.raceStr != NpcRaces.Unknown.ToString())
             {
                 resNpcData.race = npcData.race;
+                resNpcData.raceStr = npcData.raceStr;
                 Configuration.Save();
             }
-            else if (resNpcData == null)
-            {
-                DataHelper.AddCharacterMapData(Configuration.MappedNpcs, Configuration.MappedPlayers, npcData, eventId);
-                Configuration.MappedNpcs = Configuration.MappedNpcs.OrderBy(p => p.ToString(true)).ToList();
-                Configuration.Save();
-            }
-            else
-                npcData = resNpcData;
 
-            if (npcData.objectKind != objectKind)
+            npcData = resNpcData;
+
+            if (npcData.objectKind != objectKind && objectKind != ObjectKind.None)
             {
                 npcData.objectKind = objectKind;
                 Configuration.Save();
             }
 
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"NpcData: {npcData.ToString(true)}", eventId);
+            switch (source)
+            {
+                case TextSource.AddonBubble:
+                    if (!npcData.hasBubbles)
+                        npcData.hasBubbles = true;
+
+                    if (npcData.mutedBubble)
+                    {
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Bubble is muted: {npcData.ToString()}", eventId);
+                        LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                        return;
+                    }
+                    break;
+                case TextSource.AddonBattleTalk:
+                case TextSource.AddonTalk:
+                    if (npcData.muted)
+                    {
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Npc is muted: {npcData.ToString()}", eventId);
+                        LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                        return;
+                    }
+                    break;
+                case TextSource.AddonCutSceneSelectString:
+                case TextSource.AddonSelectString:
+                case TextSource.Chat:
+                    if (npcData.mutedBubble)
+                    {
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Player is muted: {npcData.ToString()}", eventId);
+                        LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                        return;
+                    }
+                    break;
+            }
             // Say the thing
             var voiceMessage = new VoiceMessage
             {
@@ -246,14 +268,14 @@ public partial class Echokraut : IDalamudPlugin
     private unsafe NpcRaces GetSpeakerRace(EKEventId eventId, GameObject? speaker, out string raceStr)
     {
         var race = this.DataManager.GetExcelSheet<Race>();
-        var raceEnum = NpcRaces.Default;
+        var raceEnum = NpcRaces.Unknown;
 
         try
         {
             if (race is null || speaker is null || speaker.Address == nint.Zero)
             {
                 raceStr = raceEnum.ToString();
-                return NpcRaces.Default;
+                return raceEnum;
             }
 
             var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker.Address;
@@ -262,7 +284,7 @@ public partial class Echokraut : IDalamudPlugin
 
             if (!(row is null))
             {
-                raceStr = DataHelper.GetRaceEng(row.Masculine.RawString, Log);
+                raceStr = DataHelper.GetRaceEng(row.Masculine.RawString);
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found Race: {raceStr}", eventId);
                 if (!Enum.TryParse<NpcRaces>(raceStr.Replace(" ", ""), out raceEnum))
                 {
@@ -273,20 +295,21 @@ public partial class Echokraut : IDalamudPlugin
                     if (activeData == -1)
                         activeData = modelData2;
 
-                    var activeNpcRace = NpcRaces.Default;
+                    var activeNpcRace = NpcRaces.Unknown;
                     try
                     {
                         if (NpcRacesHelper.ModelsToRaceMap.TryGetValue(activeData, out activeNpcRace))
                             raceEnum = activeNpcRace;
                         else
                         {
-                            raceEnum = NpcRaces.Default;
+                            raceEnum = NpcRaces.Unknown;
                         }
                     }
                     catch (Exception ex)
                     {
-                        raceEnum = NpcRaces.Default;
+                        raceEnum = NpcRaces.Unknown;
                     }
+                    raceStr = activeData.ToString();
                 }
             }
 
@@ -301,8 +324,9 @@ public partial class Echokraut : IDalamudPlugin
         return raceEnum;
     }
 
-    private unsafe string GetBubbleName(GameObject? speaker)
+    private unsafe string GetBubbleName(GameObject? speaker, string text)
     {
+        var territory = DataHelper.GetTerritory();
         var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker.Address;
         var modelData = charaStruct->CharacterData.ModelSkeletonId;
         var modelData2 = charaStruct->CharacterData.ModelSkeletonId_2;
@@ -311,7 +335,7 @@ public partial class Echokraut : IDalamudPlugin
         if (activeData == -1)
             activeData = modelData2;
 
-        return "Bubble-" + activeData;
+        return $"BB-{territory.PlaceName.Value.Name.ToString()}-{activeData}-{text.Substring(0, 20)}";
     }
 
     public void Dispose()

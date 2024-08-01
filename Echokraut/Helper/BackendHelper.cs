@@ -41,7 +41,7 @@ namespace Echokraut.Helper
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Creating backend instance: {backendType}", new EKEventId(0, Enums.TextSource.None));
                 backend = new AlltalkBackend(Configuration.Alltalk, Configuration);
-                getAndMapVoices(new EKEventId(0, TextSource.None));
+                GetAndMapVoices(new EKEventId(0, TextSource.None));
             }
         }
 
@@ -88,7 +88,7 @@ namespace Echokraut.Helper
             }
         }
 
-        static void getAndMapVoices(EKEventId eventId)
+        static void GetAndMapVoices(EKEventId eventId)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Loading and mapping voices", eventId);
             BackendVoiceHelper.Setup(backend.GetAvailableVoices(eventId));
@@ -179,16 +179,12 @@ namespace Echokraut.Helper
 
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Searching voice: {npcData.voiceItem} for NPC: {npcData.name}", eventId);
             var voiceItem = BackendVoiceHelper.Voices.Find( p => p.Equals(npcData.voiceItem));
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Searched voice: {voiceItem} for NPC: {npcData.name}", eventId);
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found voice: {voiceItem} for NPC: {npcData.name}", eventId);
             var mappedList = npcData.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? Configuration.MappedPlayers : Configuration.MappedNpcs;
 
             if (voiceItem == null)
             {
                 var npcName = npcData.name;
-
-                if (npcData.objectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
-                    npcName = VoiceMapHelper.GetNpcName(npcName);
-
 
                 var voiceItems = BackendVoiceHelper.Voices.FindAll(p => p.voiceName.Equals(npcName, StringComparison.OrdinalIgnoreCase));
                 if (voiceItems.Count > 0)
@@ -201,7 +197,7 @@ namespace Echokraut.Helper
                     voiceItems = BackendVoiceHelper.Voices.FindAll(p => p.gender == npcData.gender && p.race == npcData.race && p.voiceName.Contains("npc", StringComparison.OrdinalIgnoreCase));
 
                     if (voiceItems.Count == 0)
-                        voiceItems = BackendVoiceHelper.Voices.FindAll(p => p.gender == npcData.gender && p.race == NpcRaces.Default && p.voiceName.Contains("npc", StringComparison.OrdinalIgnoreCase));
+                        voiceItems = BackendVoiceHelper.Voices.FindAll(p => p.gender == npcData.gender && p.voiceName.Contains("npc", StringComparison.OrdinalIgnoreCase));
 
                     if (voiceItems.Count > 0)
                     {
@@ -221,12 +217,12 @@ namespace Echokraut.Helper
                     if (npcData.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
                     {
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem} for Player: {npcName}", eventId);
-                        Configuration.MappedPlayers = Configuration.MappedPlayers.OrderBy(p => p.ToString(true)).ToList();
+                        Configuration.MappedPlayers = Configuration.MappedPlayers.OrderBy(p => p.ToString()).ToList();
                     }
                     else
                     {
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem} for NPC: {npcName}", eventId);
-                        Configuration.MappedNpcs = Configuration.MappedNpcs.OrderBy(p => p.ToString(true)).ToList();
+                        Configuration.MappedNpcs = Configuration.MappedNpcs.OrderBy(p => p.ToString()).ToList();
                     }
                     npcData.voiceItem = voiceItem;
                     Configuration.Save();

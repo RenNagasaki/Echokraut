@@ -3,6 +3,9 @@ using Echokraut.DataClasses;
 using Echokraut.Enums;
 using Echokraut.Windows;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using FFXIVClientStructs.FFXIV.Client.Game.Fate;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using Lumina.Excel.GeneratedSheets;
 using Microsoft.VisualBasic.Logging;
 using System;
 using System.Collections.Generic;
@@ -19,6 +22,18 @@ namespace Echokraut.Helper
     public static class DataHelper
     {
         static int NextEventId = 1;
+        private static Configuration Configuration;
+        private static IClientState ClientState;
+        private static IDataManager DataManager;
+        private static ushort TerritoryRow;
+        private static TerritoryType? Territory;
+
+        public static void Setup(Configuration configuration, IClientState clientState, IDataManager dataManager)
+        {
+            Configuration = configuration;
+            ClientState = clientState;
+            DataManager = dataManager;
+        }
 
         public static EKEventId EventId(string methodName, TextSource textSource)
         {
@@ -35,7 +50,7 @@ namespace Echokraut.Helper
 
         };
 
-        public static string GetRaceEng(string nationalRace, IPluginLog Log)
+        public static string GetRaceEng(string nationalRace)
         {
             string engRace = nationalRace.Replace("'", "");
 
@@ -45,31 +60,60 @@ namespace Echokraut.Helper
             return engRace;
         }
 
-        public static NpcMapData GetCharacterMapData(List<NpcMapData> npcDatas, List<NpcMapData> playerDatas, NpcMapData data, EKEventId  eventId)
+        public static TerritoryType? GetTerritory()
         {
-            NpcMapData? result = null;
-            var datas = data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player || eventId.textSource == TextSource.Chat ? playerDatas : npcDatas;
-            result = datas.Find(p => p.ToString() == data.ToString());
+            var territoryRow = ClientState.TerritoryType;
+            if (territoryRow != TerritoryRow)
+            {
+                TerritoryRow = territoryRow;
+                Territory = DataManager.GetExcelSheet<TerritoryType>()!.GetRow(territoryRow);
+            }
 
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Tried finding existing mapping for: {data.ToString()} result: {result?.ToString()}", eventId);
-
-            return result;
+            return Territory;
         }
 
-        public static void AddCharacterMapData(List<NpcMapData> npcDatas, List<NpcMapData> playerDatas, NpcMapData data, EKEventId eventId)
-        {
-            if (data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player || eventId.textSource == TextSource.Chat)
+        private static List<NpcMapData> GetCharacterMapDatas(TextSource textSource) {
+            List<NpcMapData> datas = new List<NpcMapData>();
+
+            switch (textSource)
             {
-                playerDatas.Add(data);
+                case TextSource.AddonTalk:
+                case TextSource.AddonBattleTalk:
+                case TextSource.AddonBubble:
+                    datas = Configuration.MappedNpcs;
+                    break;
+                case TextSource.AddonSelectString:
+                case TextSource.AddonCutSceneSelectString:
+                case TextSource.Chat:
+                    datas = Configuration.MappedPlayers;
+                    break;
+            }
+
+            return datas;
+        }
+
+        public static NpcMapData GetAddCharacterMapData(NpcMapData data, EKEventId  eventId)
+        {
+            NpcMapData? result = null;
+            var datas = GetCharacterMapDatas(eventId.textSource);
+
+            result = datas.Find(p => p.ToString() == data.ToString());
+
+            if (result == null)
+            {
+                datas.Add(data);
+                ConfigWindow.UpdateNpcData = true;
+                ConfigWindow.UpdateBubbleData = true;
                 ConfigWindow.UpdatePlayerData = true;
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Added new player to mapping: {data.ToString()}", eventId);
+                var mapping = data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? "player" : "npc";
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Added new {mapping} to mapping: {data.ToString()}", eventId);
+
+                result = data;
             }
             else
-            {
-                npcDatas.Add(data);
-                ConfigWindow.UpdateNpcData = true;
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Added new npc to mapping: {data.ToString()}", eventId);
-            }
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found existing mapping for: {data.ToString()} result.", eventId);
+
+            return result;
         }
 
         public static string AnalyzeAndImproveText(string text)

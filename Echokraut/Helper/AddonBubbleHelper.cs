@@ -87,8 +87,7 @@ namespace Echokraut.Helper
                 if (!configuration.Enabled) return;
                 if (!configuration.VoiceBubbles) return;
 
-                var territoryRow = clientState.TerritoryType;
-                var territory = dataManager.GetExcelSheet<TerritoryType>()!.GetRow(territoryRow);
+                var territory = DataHelper.GetTerritory();
                 if (territory == null || (!configuration.VoiceBubblesInCity && !territory.Mount)) return;
 
                 if (camera == null && CameraManager.Instance() != null)

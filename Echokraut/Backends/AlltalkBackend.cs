@@ -104,7 +104,7 @@ namespace Echokraut.Backend
                         string voiceName = splitVoice[2].Replace(".wav", "");
 
                         object gender = Gender.Male;
-                        object race = NpcRaces.Default;
+                        object race = NpcRaces.Unknown;
                         var voiceItem = new BackendVoiceItem()
                         {
                             gender = (Gender)gender,
@@ -121,24 +121,12 @@ namespace Echokraut.Backend
                                 voiceItem.race = (NpcRaces)race;
                             }
                             else
-                                race = NpcRaces.Default;
+                                race = NpcRaces.Unknown;
                         }
                         else
                             gender = Gender.Male;
 
                         mappedVoices.Add(voiceItem);
-
-                        if (voice.Contains("npc", StringComparison.OrdinalIgnoreCase) && Constants.RACESFORRANDOMNPC.Contains((NpcRaces)race))
-                        {
-                            voiceItem = new BackendVoiceItem()
-                            {
-                                gender = (Gender)gender,
-                                race = NpcRaces.Default,
-                                voiceName = voiceName,
-                                voice = voice
-                            };
-                            mappedVoices.Add(voiceItem);
-                        }
                     }
                 }
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Done", eventId);

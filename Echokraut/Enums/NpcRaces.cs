@@ -9,7 +9,7 @@ namespace Echokraut.Enums
 {
     public enum NpcRaces
     {
-        Default,
+        Unknown,
         Hyur,
         Elezen,
         Miqote,
@@ -19,7 +19,6 @@ namespace Echokraut.Enums
         AuRa,
         Hrothgar,
         Child,
-        ///
         Amaljaa,
         Ixal,
         Sylph,
@@ -40,7 +39,6 @@ namespace Echokraut.Enums
         YokHuy,
         Endless,
         Sahagin,
-
         Kobold,
         Gnath,
         Namazu,

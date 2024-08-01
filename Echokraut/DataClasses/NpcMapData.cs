@@ -16,21 +16,20 @@ namespace Echokraut.DataClasses
         public Gender gender { get; set; }
         public BackendVoiceItem voiceItem { get; set; }
 
+        public bool muted {get; set; }
+        public bool mutedBubble { get; set; }
+        public bool hasBubbles { get; set; }
+
         public ObjectKind objectKind { get; set; }
 
         public NpcMapData(ObjectKind objectKind) {
             this.objectKind = objectKind;
         }
 
-        public string ToString(bool showRace = false)
+        public override string ToString()
         {
-            if (showRace)
-            {
-                var raceString = race == NpcRaces.Default ? raceStr : race.ToString();
-                return $"{gender} - {raceString} - {name}";
-            }
-
-            return $"{gender} - {name}";
+            var raceString = race == NpcRaces.Unknown ? raceStr : race.ToString();
+            return $"{gender} - {raceString} - {name}";
         }
         public override bool Equals(object obj)
         {
@@ -41,13 +40,13 @@ namespace Echokraut.DataClasses
                 return false;
             }
 
-            return this.ToString(true).Equals(item.ToString(true), System.StringComparison.OrdinalIgnoreCase);
+            return this.ToString().Equals(item.ToString(), System.StringComparison.OrdinalIgnoreCase);
         }
 
         public int CompareTo(object? obj)
         {
             var otherObj = ((NpcMapData)obj);
-            return otherObj.ToString(true).ToLower().CompareTo(ToString(true).ToLower());
+            return otherObj.ToString().ToLower().CompareTo(ToString().ToLower());
         }
     }
 }
