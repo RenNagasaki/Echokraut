@@ -335,7 +335,8 @@ public partial class Echokraut : IDalamudPlugin
         if (activeData == -1)
             activeData = modelData2;
 
-        return $"BB-{territory.PlaceName.Value.Name.ToString()}-{activeData}-{text.Substring(0, 20)}";
+        var textSubstring = text.Length > 20 ? text.Substring(0, 20) : text;
+        return $"BB-{territory.PlaceName.Value.Name.ToString()}-{activeData}-{textSubstring}";
     }
 
     public void Dispose()
