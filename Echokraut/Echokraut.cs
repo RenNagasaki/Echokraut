@@ -91,7 +91,7 @@ public partial class Echokraut : IDalamudPlugin
         LogHelper.Setup(log, Configuration);
         BackendHelper.Setup(Configuration, clientState, this, Configuration.BackendSelection);
         VoiceMapHelper.Setup(this.ClientState.ClientLanguage);
-        NpcRacesHelper.Setup();
+        NpcGenderRacesHelper.Setup();
         VolumeHelper.Setup(gameConfig);
         DataHelper.Setup(Configuration, this.ClientState, this.DataManager);
         ECommonsMain.Init(pluginInterface, this, ECommons.Module.All);
@@ -173,9 +173,9 @@ public partial class Echokraut : IDalamudPlugin
             NpcMapData npcData = new NpcMapData(objectKind);
             // Get the speaker's race if it exists.
             var raceStr = "";
-            npcData.race = GetSpeakerRace(eventId, speaker, out raceStr);
+            npcData.race = CharacterGenderRaceUtils.GetSpeakerRace(this.DataManager, eventId, speaker, out raceStr);
             npcData.raceStr = raceStr;
-            npcData.gender = CharacterGenderUtils.GetCharacterGender(eventId, speaker);
+            npcData.gender = CharacterGenderRaceUtils.GetCharacterGender(this.DataManager, eventId, speaker, npcData.race);
             npcData.name = DataHelper.CleanUpName(cleanSpeakerName);
 
             if (npcData.objectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
@@ -267,66 +267,6 @@ public partial class Echokraut : IDalamudPlugin
         }
     }
 
-    private unsafe NpcRaces GetSpeakerRace(EKEventId eventId, GameObject? speaker, out string raceStr)
-    {
-        var race = this.DataManager.GetExcelSheet<Race>();
-        var raceEnum = NpcRaces.Unknown;
-
-        try
-        {
-            if (race is null || speaker is null || speaker.Address == nint.Zero)
-            {
-                raceStr = raceEnum.ToString();
-                return raceEnum;
-            }
-
-            var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker.Address;
-            var speakerRace = charaStruct->DrawData.CustomizeData.Race;
-            var row = race.GetRow(speakerRace);
-
-            if (!(row is null))
-            {
-                raceStr = DataHelper.GetRaceEng(row.Masculine.RawString);
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found Race: {raceStr}", eventId);
-                if (!Enum.TryParse<NpcRaces>(raceStr.Replace(" ", ""), out raceEnum))
-                {
-                    var modelData = charaStruct->CharacterData.ModelSkeletonId;
-                    var modelData2 = charaStruct->CharacterData.ModelSkeletonId_2;
-
-                    var activeData = modelData;
-                    if (activeData == -1)
-                        activeData = modelData2;
-
-                    LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"ModelId for Race matching: {activeData}", eventId);
-                    var activeNpcRace = NpcRaces.Unknown;
-                    try
-                    {
-                        if (NpcRacesHelper.ModelsToRaceMap.TryGetValue(activeData, out activeNpcRace))
-                            raceEnum = activeNpcRace;
-                        else
-                        {
-                            raceEnum = NpcRaces.Unknown;
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        raceEnum = NpcRaces.Unknown;
-                    }
-                    raceStr = activeData.ToString();
-                }
-            }
-
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Determined Race: {raceEnum}", eventId);
-        }
-        catch (Exception ex)
-        {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while determining race: {ex}", eventId);
-        }
-
-        raceStr = raceEnum.ToString();
-        return raceEnum;
-    }
-
     private unsafe string GetBubbleName(GameObject? speaker, string text)
     {
         var territory = DataHelper.GetTerritory();
@@ -338,6 +278,7 @@ public partial class Echokraut : IDalamudPlugin
         if (activeData == -1)
             activeData = modelData2;
 
+        text = DataHelper.VoiceMessageToFileName(text);
         var textSubstring = text.Length > 20 ? text.Substring(0, 20) : text;
         return $"BB-{territory.PlaceName.Value.Name.ToString()}-{activeData}-{textSubstring}";
     }

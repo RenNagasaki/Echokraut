@@ -44,22 +44,6 @@ namespace Echokraut.Helper
             return eventId;
         }
 
-        public static Dictionary<string, string> NpcRacesMap = new Dictionary<string, string>()
-        {
-            { "Hyuran", "Hyur" }
-
-        };
-
-        public static string GetRaceEng(string nationalRace)
-        {
-            string engRace = nationalRace.Replace("'", "");
-
-            if (NpcRacesMap.ContainsKey(engRace))
-                engRace = NpcRacesMap[engRace];
-
-            return engRace;
-        }
-
         public static TerritoryType? GetTerritory()
         {
             var territoryRow = ClientState.TerritoryType;
