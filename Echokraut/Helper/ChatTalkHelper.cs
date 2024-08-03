@@ -6,6 +6,7 @@ using Echokraut.DataClasses;
 using Echokraut.Enums;
 using Echokraut.TextToTalk.Utils;
 using Echokraut.Utils;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using R3;
 using System;
@@ -28,8 +29,8 @@ namespace Echokraut.Helper
 
         private readonly Echokraut echokraut;
         private readonly Configuration config;
-        private readonly IObjectTable objects;
         private readonly IChatGui chat;
+        private readonly IObjectTable objects;
         private readonly IClientState clientState;
         private IChatGui.OnMessageDelegate handler;
 
@@ -37,8 +38,8 @@ namespace Echokraut.Helper
         {
             this.echokraut = echokraut;
             this.config = config;
-            this.objects = objects;
             this.chat = chat;
+            this.objects = objects;
             this.clientState = clientState;
 
             HookIntoChat();
@@ -53,6 +54,7 @@ namespace Echokraut.Helper
         {
             if (!config.Enabled) return;
             if (!config.VoiceChat) return;
+            if (Conditions.IsWatchingCutscene78 || Conditions.IsWatchingCutscene || Conditions.IsOccupiedInCutSceneEvent || Conditions.IsDutyRecorderPlayback) return;
             
             var messageObj = new ChatMessage(type, sender, message);
             ProcessChatMessage(messageObj);
