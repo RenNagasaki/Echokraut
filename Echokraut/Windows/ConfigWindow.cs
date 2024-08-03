@@ -17,6 +17,7 @@ using static System.Net.Mime.MediaTypeNames;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using System.Xml.Linq;
+using OtterGui.Widgets;
 
 namespace Echokraut.Windows;
 
@@ -131,7 +132,7 @@ public class ConfigWindow : Window, IDisposable
 
                     if (ImGui.Button("Clear mapped npcs##clearnpc"))
                     {
-                        foreach (NpcMapData npcMapData in this.Configuration.MappedNpcs.FindAll(p => !p.name.StartsWith("BB")))
+                        foreach (NpcMapData npcMapData in this.Configuration.MappedNpcs.FindAll(p => !p.name.StartsWith("BB") && !p.doNotDelete))
                         {
                             FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, npcMapData.name);
                             this.Configuration.MappedNpcs.Remove(npcMapData);
@@ -142,18 +143,18 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SameLine();
                     if (ImGui.Button("Clear mapped players##clearplayers"))
                     {
-                        foreach (NpcMapData playerMapData in this.Configuration.MappedPlayers)
+                        foreach (NpcMapData playerMapData in this.Configuration.MappedPlayers.FindAll(p => !p.doNotDelete))
                         {
                             FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, playerMapData.name);
+                            this.Configuration.MappedPlayers.Remove(playerMapData);
                         }
-                        this.Configuration.MappedPlayers.Clear();
                         UpdatePlayerData = true;
                         this.Configuration.Save();
                     }
                     ImGui.SameLine();
                     if (ImGui.Button("Clear mapped bubbles##clearbubblenpc"))
                     {
-                        foreach (NpcMapData npcMapData in this.Configuration.MappedNpcs.FindAll(p => p.name.StartsWith("BB")))
+                        foreach (NpcMapData npcMapData in this.Configuration.MappedNpcs.FindAll(p => p.name.StartsWith("BB") && !p.doNotDelete))
                         {
                             FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, npcMapData.name);
                             this.Configuration.MappedNpcs.Remove(npcMapData);
@@ -629,14 +630,15 @@ public class ConfigWindow : Window, IDisposable
 
             if (ImGui.BeginChild("NpcsChild"))
             {
-                if (ImGui.BeginTable("NPC Table##NPCTable", 7, ImGuiTableFlags.BordersInnerH))
+                if (ImGui.BeginTable("NPC Table##NPCTable", 8, ImGuiTableFlags.BordersInnerH))
                 {
                     ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
-                    ImGui.TableSetupColumn("Mute?", ImGuiTableColumnFlags.None, 25f);
+                    ImGui.TableSetupColumn("Lock", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.None, 150);
                     ImGui.TableSetupColumn("Voice", ImGuiTableColumnFlags.None, 250);
+                    ImGui.TableSetupColumn("Mute", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableSetupColumn("##npcsaves", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableSetupColumn("##npcmapping", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableHeadersRow();
@@ -655,10 +657,10 @@ public class ConfigWindow : Window, IDisposable
                             continue;
 
                         ImGui.TableNextColumn();
-                        var muted = mapData.muted;
-                        if (ImGui.Checkbox($"##EKNpcMute{mapData.ToString()}", ref muted))
+                        var doNotDelete = mapData.doNotDelete;
+                        if (ImGui.Checkbox($"##EKNpcDoNotDelete{mapData.ToString()}", ref doNotDelete))
                         {
-                            mapData.muted = muted;
+                            mapData.doNotDelete = doNotDelete;
                             this.Configuration.Save();
                         }
                         ImGui.TableNextColumn();
@@ -733,10 +735,12 @@ public class ConfigWindow : Window, IDisposable
                                           );
 
                         var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
-                        var presetIndexVoice = localVoices.FindIndex(p => p.ToString().Contains(mapData.voiceItem?.ToString() ?? "Narrator"));
-                        if (ImGui.Combo($"##EKCBoxNPC{mapData.ToString()}3", ref presetIndexVoice, voicesDisplay, voicesDisplay.Length))
+                        ClippedSelectableCombo<BackendVoiceItem> voiceItems = new($"##AllVoices{mapData.ToString()}", string.Empty, 250, localVoices, g => g.ToString());
+                        var presetIndexVoice = localVoices.Find(p => p.Equals(mapData.voiceItem)) ?? localVoices.Find(p => p.voiceName.Contains("Narrator"));                        
+                        int selectedIndexVoice;
+                        if (voiceItems.Draw(presetIndexVoice.ToString(), out selectedIndexVoice))
                         {
-                            var newVoiceItem = localVoices[presetIndexVoice];
+                            var newVoiceItem = localVoices[selectedIndexVoice];
 
                             if (newVoiceItem != null)
                             {
@@ -750,16 +754,26 @@ public class ConfigWindow : Window, IDisposable
                                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Voice for Character: {mapData}", new EKEventId(0, TextSource.None));
                         }
                         ImGui.TableNextColumn();
+                        var muted = mapData.muted;
+                        if (ImGui.Checkbox($"##EKNpcMute{mapData.ToString()}", ref muted))
+                        {
+                            mapData.muted = muted;
+                            this.Configuration.Save();
+                        }
+                        ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.TrashAlt.ToIconString()}##delnpcsaves{mapData.ToString()}", new Vector2(25, 25), "Remove local saved files.\r\nWill also clear bubble data.", false, true))
                         {
                             FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, mapData.name);
                         }
                         ImGui.TableNextColumn();
-                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.SquareXmark.ToIconString()}##delnpc{mapData.ToString()}", new Vector2(25, 25), "Remove npc mapping and local saved files.\r\nWill also clear bubble data.", false, true))
+                        if (!mapData.doNotDelete)
                         {
-                            toBeRemoved = mapData;
+                            ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                            if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.SquareXmark.ToIconString()}##delnpc{mapData.ToString()}", new Vector2(25, 25), "Remove npc mapping and local saved files.\r\nWill also clear bubble data.", false, true))
+                            {
+                                toBeRemoved = mapData;
+                            }
                         }
 
                         ImGui.TableNextRow();
@@ -812,14 +826,15 @@ public class ConfigWindow : Window, IDisposable
 
             if (ImGui.BeginChild("PlayerssChild"))
             {
-                if (ImGui.BeginTable("Player Table##PlayerTable", 7, ImGuiTableFlags.BordersInnerH))
+                if (ImGui.BeginTable("Player Table##PlayerTable", 8, ImGuiTableFlags.BordersInnerH))
                 {
                     ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
-                    ImGui.TableSetupColumn("Mute?", ImGuiTableColumnFlags.None, 25f);
+                    ImGui.TableSetupColumn("Lock", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.None, 150);
                     ImGui.TableSetupColumn("Voice", ImGuiTableColumnFlags.None, 250);
+                    ImGui.TableSetupColumn("Mute", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableSetupColumn("##playersaves", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableSetupColumn("##playermapping", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableHeadersRow();
@@ -838,10 +853,10 @@ public class ConfigWindow : Window, IDisposable
                             continue;
 
                         ImGui.TableNextColumn();
-                        var muted = mapData.muted;
-                        if (ImGui.Checkbox($"##EKPlayerMute{mapData.ToString()}", ref muted))
+                        var doNotDelete = mapData.doNotDelete;
+                        if (ImGui.Checkbox($"##EKNpcDoNotDelete{mapData.ToString()}", ref doNotDelete))
                         {
-                            mapData.muted = muted;
+                            mapData.doNotDelete = doNotDelete;
                             this.Configuration.Save();
                         }
                         ImGui.TableNextColumn();
@@ -916,10 +931,12 @@ public class ConfigWindow : Window, IDisposable
                                           );
 
                         var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
-                        var presetIndexVoice = localVoices.FindIndex(p => p.ToString().Contains(mapData.voiceItem?.ToString() ?? "Narrator"));
-                        if (ImGui.Combo($"##EKCBoxPlayer{mapData.ToString()}3", ref presetIndexVoice, voicesDisplay, voicesDisplay.Length))
+                        ClippedSelectableCombo<BackendVoiceItem> voiceItems = new($"##AllVoices{mapData.ToString()}", string.Empty, 250, localVoices, g => g.ToString());
+                        var presetIndexVoice = localVoices.Find(p => p.Equals(mapData.voiceItem)) ?? localVoices.Find(p => p.voiceName.Contains("Narrator"));
+                        int selectedIndexVoice;
+                        if (voiceItems.Draw(presetIndexVoice.ToString(), out selectedIndexVoice))
                         {
-                            var newVoiceItem = localVoices[presetIndexVoice];
+                            var newVoiceItem = localVoices[selectedIndexVoice];
 
                             if (newVoiceItem != null)
                             {
@@ -933,16 +950,26 @@ public class ConfigWindow : Window, IDisposable
                                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Voice for Character: {mapData}", new EKEventId(0, TextSource.None));
                         }
                         ImGui.TableNextColumn();
+                        var muted = mapData.muted;
+                        if (ImGui.Checkbox($"##EKPlayerMute{mapData.ToString()}", ref muted))
+                        {
+                            mapData.muted = muted;
+                            this.Configuration.Save();
+                        }
+                        ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.TrashAlt.ToIconString()}##delplayersaves{mapData.ToString()}", new Vector2(25, 25), "Remove local saved files", false, true))
                         {
                             FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, mapData.name);
                         }
                         ImGui.TableNextColumn();
-                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.SquareXmark.ToIconString()}##delplayer{mapData.ToString()}", new Vector2(25, 25), "Remove player mapping and local saved files", false, true))
+                        if (!mapData.doNotDelete)
                         {
-                            toBeRemoved = mapData;
+                            ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                            if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.SquareXmark.ToIconString()}##delplayer{mapData.ToString()}", new Vector2(25, 25), "Remove player mapping and local saved files", false, true))
+                            {
+                                toBeRemoved = mapData;
+                            }
                         }
 
                         ImGui.TableNextRow();
@@ -995,14 +1022,15 @@ public class ConfigWindow : Window, IDisposable
 
             if (ImGui.BeginChild("BubblesChild"))
             {
-                if (ImGui.BeginTable("Bubble Table##BubbleTable", 7, ImGuiTableFlags.BordersInnerH))
+                if (ImGui.BeginTable("Bubble Table##BubbleTable", 8, ImGuiTableFlags.BordersInnerH))
                 {
                     ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
-                    ImGui.TableSetupColumn("Mute?", ImGuiTableColumnFlags.None, 25f);
+                    ImGui.TableSetupColumn("Lock", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.None, 150);
                     ImGui.TableSetupColumn("Voice", ImGuiTableColumnFlags.None, 250);
+                    ImGui.TableSetupColumn("Mute", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableSetupColumn("##bubblesaves", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableSetupColumn("##bubblemapping", ImGuiTableColumnFlags.None, 25f);
                     ImGui.TableHeadersRow();
@@ -1021,11 +1049,11 @@ public class ConfigWindow : Window, IDisposable
                             continue;
 
                         ImGui.TableNextColumn();
-                        var mutedBubble = mapData.mutedBubble;
-                        if (ImGui.Checkbox($"##EKBubbleMute{mapData.ToString()}", ref mutedBubble))
+                        var doNotDelete = mapData.doNotDelete;
+                        if (ImGui.Checkbox($"##EKNpcDoNotDelete{mapData.ToString()}", ref doNotDelete))
                         {
-                            mapData.mutedBubble = mutedBubble;
-                            this.Configuration.Save(); 
+                            mapData.doNotDelete = doNotDelete;
+                            this.Configuration.Save();
                         }
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1099,10 +1127,12 @@ public class ConfigWindow : Window, IDisposable
                                           );
 
                         var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
-                        var presetIndexVoice = localVoices.FindIndex(p => p.ToString().Contains(mapData.voiceItem?.ToString() ?? "Narrator"));
-                        if (ImGui.Combo($"##EKCBoxNPC{mapData.ToString()}3", ref presetIndexVoice, voicesDisplay, voicesDisplay.Length))
+                        ClippedSelectableCombo<BackendVoiceItem> voiceItems = new($"##AllVoices{mapData.ToString()}", string.Empty, 250, localVoices, g => g.ToString());
+                        var presetIndexVoice = localVoices.Find(p => p.Equals(mapData.voiceItem)) ?? localVoices.Find(p => p.voiceName.Contains("Narrator"));
+                        int selectedIndexVoice;
+                        if (voiceItems.Draw(presetIndexVoice.ToString(), out selectedIndexVoice))
                         {
-                            var newVoiceItem = localVoices[presetIndexVoice];
+                            var newVoiceItem = localVoices[selectedIndexVoice];
 
                             if (newVoiceItem != null)
                             {
@@ -1116,16 +1146,26 @@ public class ConfigWindow : Window, IDisposable
                                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Voice for Character: {mapData}", new EKEventId(0, TextSource.None));
                         }
                         ImGui.TableNextColumn();
+                        var mutedBubble = mapData.mutedBubble;
+                        if (ImGui.Checkbox($"##EKBubbleMute{mapData.ToString()}", ref mutedBubble))
+                        {
+                            mapData.mutedBubble = mutedBubble;
+                            this.Configuration.Save();
+                        }
+                        ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.TrashAlt.ToIconString()}##delbubblesaves{mapData.ToString()}", new Vector2(25, 25), "Remove local saved files.\r\nWill also clear normal npc data.", false, true))
                         {
                             FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, mapData.name);
                         }
                         ImGui.TableNextColumn();
-                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.SquareXmark.ToIconString()}##delbubble{mapData.ToString()}", new Vector2(25, 25), "Remove bubble mapping and local saved files.\r\nWill also clear normal npc data.", false, true))
+                        if (!mapData.doNotDelete)
                         {
-                            toBeRemoved = mapData;
+                            ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                            if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.SquareXmark.ToIconString()}##delbubble{mapData.ToString()}", new Vector2(25, 25), "Remove bubble mapping and local saved files.\r\nWill also clear normal npc data.", false, true))
+                            {
+                                toBeRemoved = mapData;
+                            }
                         }
 
                         ImGui.TableNextRow();

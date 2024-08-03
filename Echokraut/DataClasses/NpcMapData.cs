@@ -16,6 +16,7 @@ namespace Echokraut.DataClasses
         public Gender gender { get; set; }
         public BackendVoiceItem voiceItem { get; set; }
 
+        public bool doNotDelete { get; set; }
         public bool muted {get; set; }
         public bool mutedBubble { get; set; }
         public bool hasBubbles { get; set; }
