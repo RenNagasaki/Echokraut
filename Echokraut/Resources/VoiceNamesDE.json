@@ -76,6 +76,10 @@
         "speakers": [ "Da Za Vom 269. Orden" ]
     },
     {
+        "voiceName": "Kupopo",
+        "speakers": [ "Aufdringlicher Mogry" ]
+    },
+    {
         "voiceName": "Galuf",
         "speakers": [ "Galuf Baldesion" ]
     },
