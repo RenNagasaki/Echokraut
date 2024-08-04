@@ -20,6 +20,18 @@
         "speakers": [ "Zenos Viator Galvus", "Zenos Yae Galvus" ]
     },
     {
+        "voiceName": "Livia Sas Junius",
+        "speakers": [ "Livia die Glühende" ]
+    },
+    {
+        "voiceName": "Regula",
+        "speakers": [ "Regula Van Hydrus" ]
+    },
+    {
+        "voiceName": "Gaius",
+        "speakers": [ "Gaius Van Baelsar" ]
+    },
+    {
         "voiceName": "Nero",
         "speakers": [ "Nero Tol Scaeva" ]
     },
@@ -28,8 +40,8 @@
         "speakers": [ "Sadu Himmelsflamme" ]
     },
     {
-        "voiceName": "Livia Sas Junius",
-        "speakers": [ "Livia die Glühende" ]
+        "voiceName": "Magnai",
+        "speakers": [ "Magnai der Ältere" ]
     },
     {
         "voiceName": "Yaana",
@@ -52,8 +64,24 @@
         "speakers": [ "Mann mit blonden gebundenen Haaren" ]
     },
     {
+        "voiceName": "Emet-Selch",
+        "speakers": [ "Solus Zos Galvus", "Hades" ]
+    },
+    {
+        "voiceName": "Ardbert",
+        "speakers": [ "Krieger der Dunkelheit" ]
+    },
+    {
+        "voiceName": "Da Za",
+        "speakers": [ "Da Za Vom 269. Orden" ]
+    },
+    {
+        "voiceName": "Galuf",
+        "speakers": [ "Galuf Baldesion" ]
+    },
+    {
         "voiceName": "Hydaelyn",
-        "speakers": [ "Venat" ]
+        "speakers": [ "Venat", "Amaurotanerin Venat" ]
     },
     {
         "voiceName": "Coph-coodg",
