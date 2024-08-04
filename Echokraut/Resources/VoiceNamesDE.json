@@ -68,6 +68,10 @@
         "speakers": [ "Solus Zos Galvus", "Hades" ]
     },
     {
+        "voiceName": "Elidibus",
+        "speakers": [ "Krieger des Lichts" ]
+    },
+    {
         "voiceName": "Ardbert",
         "speakers": [ "Krieger der Dunkelheit" ]
     },
