@@ -1,5 +1,9 @@
 [
     {
+        "voiceName": "Zero",
+        "speakers": [ "Schwarzgekleidete Nichtsgesandte" ]
+    },
+    {
         "voiceName": "Tesleen",
         "speakers": [ "Tesleen die Bekehrte" ]
     },
