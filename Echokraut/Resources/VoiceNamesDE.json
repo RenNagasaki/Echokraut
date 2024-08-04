@@ -12,20 +12,20 @@
         "speakers": [ "Lilira" ]
     },
     {
-        "voiceName": "Varis Zos Galvus",
-        "speakers": [ "Varis" ]
+        "voiceName": "Varis",
+        "speakers": [ "Varis Zos Galvus" ]
     },
     {
-        "voiceName": "Zenos Yae Galvus",
-        "speakers": [ "Zenos Viator Galvus" ]
+        "voiceName": "Zenos",
+        "speakers": [ "Zenos Viator Galvus", "Zenos Yae Galvus" ]
     },
     {
-        "voiceName": "Nero Tol Scaeva",
-        "speakers": [ "Nero" ]
+        "voiceName": "Nero",
+        "speakers": [ "Nero Tol Scaeva" ]
     },
     {
-        "voiceName": "Sadu Himmelsflamme",
-        "speakers": [ "Sadu" ]
+        "voiceName": "Sadu",
+        "speakers": [ "Sadu Himmelsflamme" ]
     },
     {
         "voiceName": "Livia Sas Junius",
@@ -36,12 +36,12 @@
         "speakers": [ "Schwarze Katze" ]
     },
     {
-        "voiceName": "Lyse",
-        "speakers": [ "Yda" ]
+        "voiceName": "Yda",
+        "speakers": [ "Lyse" ]
     },
     {
-        "voiceName": "Ysayle",
-        "speakers": [ "Shiva", "Eisherz" ]
+        "voiceName": "Eisherz",
+        "speakers": [ "Shiva", "Ysayle" ]
     },
     {
         "voiceName": "Gerolt",
@@ -52,8 +52,8 @@
         "speakers": [ "Mann mit blonden gebundenen Haaren" ]
     },
     {
-        "voiceName": "Venat",
-        "speakers": [ "Hydaelyn" ]
+        "voiceName": "Hydaelyn",
+        "speakers": [ "Venat" ]
     },
     {
         "voiceName": "Coph-coodg",
