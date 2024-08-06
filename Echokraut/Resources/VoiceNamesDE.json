@@ -96,6 +96,10 @@
         "speakers": [ "Venat", "Amaurotanerin Venat" ]
     },
     {
+        "voiceName": "Ilberd",
+        "speakers": [ "Golbez" ]
+    },
+    {
         "voiceName": "Coph-coodg",
         "speakers": [ "Rundliche Lebensform" ]
     }
