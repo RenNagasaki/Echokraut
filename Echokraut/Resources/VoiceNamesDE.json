@@ -76,6 +76,10 @@
         "speakers": [ "Krieger der Dunkelheit" ]
     },
     {
+        "voiceName": "Mehrahd",
+        "speakers": [ "Bekannte Jungenstimme" ]
+    },
+    {
         "voiceName": "Da Za",
         "speakers": [ "Da Za Vom 269. Orden" ]
     },
