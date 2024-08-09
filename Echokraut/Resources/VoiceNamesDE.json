@@ -24,6 +24,10 @@
         "speakers": [ "Livia die Glühende" ]
     },
     {
+        "voiceName": "Magnus",
+        "speakers": [ "Tiefe Stimme" ]
+    },
+    {
         "voiceName": "Regula",
         "speakers": [ "Regula Van Hydrus" ]
     },
