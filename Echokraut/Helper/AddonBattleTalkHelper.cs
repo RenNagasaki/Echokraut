@@ -136,13 +136,6 @@ public class AddonBattleTalkHelper
         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk ({pollSource}): \"{text}\"", eventId);
 
 
-        if (SoundHelper.VoiceLinesToCome > 0 && pollSource == AddonPollSource.FrameworkUpdate)
-        {
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping maybe voice line: {text}", eventId);
-            LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-            return false;
-        }
-
         {
             // This entire callback executes twice in a row - once for the voice line, and then again immediately
             // afterwards for the framework update itself. This prevents the second invocation from being spoken.

@@ -54,24 +54,31 @@ namespace Echokraut.Helper
             this.configuration = config;
             ManagedBass.Bass.Init(Flags: ManagedBass.DeviceInitFlags.Device3D);
             //ManagedBass.Bass.CurrentDevice = 1;
-            ManagedBass.Bass.Set3DFactors(0.9144f, 1f, 1);
+            Update3DFactors(config.VoiceBubbleAudibleRange);
 
             unsafe
             {
                 IntPtr fpOpenChatBubble = sigScanner.ScanText("E8 ?? ?? ?? FF 48 8B 7C 24 48 C7 46 0C 01 00 00 00");
                 if (fpOpenChatBubble != IntPtr.Zero)
                 {
-                    LogHelper.Info("AddonBubbleHelper", $"OpenChatBubble function signature found at 0x{fpOpenChatBubble:X}", new EKEventId(0, TextSource.AddonBubble));
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"OpenChatBubble function signature found at 0x{fpOpenChatBubble:X}", new EKEventId(0, TextSource.AddonBubble));
                     mOpenChatBubbleHook = gameInteropProvider.HookFromAddress<OpenChatBubbleDelegate>(fpOpenChatBubble, OpenChatBubbleDetour);
                     mOpenChatBubbleHook?.Enable();
                 }
                 else
                 {
-                    LogHelper.Error("AddonBubbleHelper", $"Unable to find the specified function signature for OpenChatBubble", new EKEventId(0, TextSource.AddonBubble));
+                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Unable to find the specified function signature for OpenChatBubble", new EKEventId(0, TextSource.AddonBubble));
                 }
             }
 
             HookIntoFrameworkUpdate();
+        }
+
+        public void Update3DFactors(float audibleRange)
+        {
+            ManagedBass.Bass.Set3DFactors(audibleRange, 1f, 1);
+            ManagedBass.Bass.Apply3D();
+            LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Updated 3D factors to: {audibleRange}", new EKEventId(0, TextSource.AddonBubble));
         }
 
         private void HookIntoFrameworkUpdate()
@@ -114,7 +121,7 @@ namespace Echokraut.Helper
             }
             catch (Exception ex)
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", new EKEventId(0, TextSource.None));
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", new EKEventId(0, TextSource.AddonBubble));
             }
         }
 
@@ -124,12 +131,6 @@ namespace Echokraut.Helper
             {
                 if (!configuration.Enabled || !configuration.VoiceBubble)
                     return mOpenChatBubbleHook.Original(pThis, pActor, pString, param3, attachmentPointID);
-
-                if (SoundHelper.VoiceLinesToCome > 0)
-                {
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping bubble because voice line to come", new EKEventId(0, TextSource.AddonBubble));
-                    return mOpenChatBubbleHook.Original(pThis, pActor, pString, param3, attachmentPointID);
-                }
 
                 var territoryRow = clientState.TerritoryType;
                 var territory = dataManager.GetExcelSheet<TerritoryType>()!.GetRow(territoryRow);

@@ -45,8 +45,6 @@ public class SoundHelper : IDisposable
     private readonly AddonTalkHelper addonTalkHelper;
     private readonly AddonBattleTalkHelper addonBattleTalkHelper;
 
-    public static int VoiceLinesToCome = 0;
-
     public SoundHelper(AddonTalkHelper addonTalkHelper, AddonBattleTalkHelper addonBattleTalkHelper,
         ISigScanner sigScanner, IGameInteropProvider gameInterop)
     {
@@ -124,7 +122,6 @@ public class SoundHelper : IDisposable
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Discovered voice line at address {resourceDataPtr:x}", new EKEventId(0, TextSource.AddonBattleTalk));
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Discovered voice line at address {resourceDataPtr:x}", new EKEventId(0, TextSource.AddonTalk));
                         this.knownVoiceLinePtrs.Add(resourceDataPtr); 
-                        VoiceLinesToCome += 1;
                     }
                     else
                     {
@@ -134,7 +131,6 @@ public class SoundHelper : IDisposable
                         {
                             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleared voice line from address {resourceDataPtr:x} (address reused by: {fileName})", new EKEventId(0, TextSource.AddonBattleTalk));
                             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleared voice line from address {resourceDataPtr:x} (address reused by: {fileName})", new EKEventId(0, TextSource.AddonTalk));
-                            VoiceLinesToCome -= 1;
                         }
                     }
                 }
@@ -164,7 +160,6 @@ public class SoundHelper : IDisposable
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Caught playback of known voice line at address {soundDataPtr:x}", new EKEventId(0, TextSource.AddonTalk));
                 this.addonTalkHelper.PollAddon(AddonPollSource.VoiceLinePlayback);
                 this.addonBattleTalkHelper.PollAddon(AddonPollSource.VoiceLinePlayback);
-                VoiceLinesToCome -= 1;
             }
         }
         catch (Exception exc)

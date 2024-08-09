@@ -24,7 +24,7 @@ namespace Echokraut.Windows;
 public class ConfigWindow : Window, IDisposable
 {
     private Configuration Configuration;
-    private Echokraut plugin;
+    private Echokraut echokraut;
     private string testConnectionRes = "";
     private FileDialogManager fileDialogManager;
     private bool resetLogFilter = true;
@@ -54,7 +54,7 @@ public class ConfigWindow : Window, IDisposable
     // and the window ID will always be "###XYZ counter window" for ImGui
     public ConfigWindow(Echokraut plugin, Configuration configuration, IClientState clientState) : base($"Echokraut configuration###EKSettings")
     {
-        this.plugin = plugin;
+        this.echokraut = plugin;
         this.clientState = clientState;
 
         Flags = ImGuiWindowFlags.AlwaysVerticalScrollbar & ImGuiWindowFlags.HorizontalScrollbar & ImGuiWindowFlags.AlwaysHorizontalScrollbar;
@@ -417,15 +417,21 @@ public class ConfigWindow : Window, IDisposable
                 this.Configuration.VoiceBubblesInCity = voiceBubblesInCity;
                 this.Configuration.Save();
             }
-        }
 
-        using (var disabled = ImRaii.Disabled(!voiceBubbles))
-        {
             var voiceSourceCam = this.Configuration.VoiceSourceCam;
             if (ImGui.Checkbox("Voice Bubbles with camera as center", ref voiceSourceCam))
             {
                 this.Configuration.VoiceSourceCam = voiceSourceCam;
                 this.Configuration.Save();
+            }
+
+            var voiceBubbleAudibleRange = this.Configuration.VoiceBubbleAudibleRange;
+            if (ImGui.SliderInt("3D Space audible range (shared with chat)", ref voiceBubbleAudibleRange, 1, 20))
+            {
+                this.Configuration.VoiceBubbleAudibleRange = voiceBubbleAudibleRange;
+                this.Configuration.Save();
+
+                echokraut.addonBubbleHelper.Update3DFactors(voiceBubbleAudibleRange);
             }
         }
     }
@@ -447,105 +453,84 @@ public class ConfigWindow : Window, IDisposable
                 this.Configuration.VoiceChatPlayer = voiceChatPlayer;
                 this.Configuration.Save();
             }
-        }
 
-        using (var disabled = ImRaii.Disabled(!voiceChat))
-        {
             var voiceChatSay = this.Configuration.VoiceChatSay;
             if (ImGui.Checkbox("Voice say Chat", ref voiceChatSay))
             {
                 this.Configuration.VoiceChatSay = voiceChatSay;
                 this.Configuration.Save();
             }
-        }
 
-        using (var disabled = ImRaii.Disabled(!voiceChat))
-        {
             var voiceChatYell = this.Configuration.VoiceChatYell;
             if (ImGui.Checkbox("Voice yell Chat", ref voiceChatYell))
             {
                 this.Configuration.VoiceChatYell = voiceChatYell;
                 this.Configuration.Save();
             }
-        }
 
-        using (var disabled = ImRaii.Disabled(!voiceChat))
-        {
             var voiceChatShout = this.Configuration.VoiceChatShout;
             if (ImGui.Checkbox("Voice shout Chat", ref voiceChatShout))
             {
                 this.Configuration.VoiceChatShout = voiceChatShout;
                 this.Configuration.Save();
             }
-        }
 
-        using (var disabled = ImRaii.Disabled(!voiceChat))
-        {
             var voiceChatFreeCompany = this.Configuration.VoiceChatFreeCompany;
             if (ImGui.Checkbox("Voice free company Chat", ref voiceChatFreeCompany))
             {
                 this.Configuration.VoiceChatFreeCompany = voiceChatFreeCompany;
                 this.Configuration.Save();
             }
-        }
 
-        using (var disabled = ImRaii.Disabled(!voiceChat))
-        {
             var voiceChatTell = this.Configuration.VoiceChatTell;
             if (ImGui.Checkbox("Voice tell Chat", ref voiceChatTell))
             {
                 this.Configuration.VoiceChatTell = voiceChatTell;
                 this.Configuration.Save();
             }
-        }
 
-        using (var disabled = ImRaii.Disabled(!voiceChat))
-        {
             var voiceChatParty = this.Configuration.VoiceChatParty;
             if (ImGui.Checkbox("Voice party Chat", ref voiceChatParty))
             {
                 this.Configuration.VoiceChatParty = voiceChatParty;
                 this.Configuration.Save();
             }
-        }
 
-        using (var disabled = ImRaii.Disabled(!voiceChat))
-        {
             var voiceChatAlliance = this.Configuration.VoiceChatAlliance;
             if (ImGui.Checkbox("Voice alliance Chat", ref voiceChatAlliance))
             {
                 this.Configuration.VoiceChatAlliance = voiceChatAlliance;
                 this.Configuration.Save();
             }
-        }
 
-        using (var disabled = ImRaii.Disabled(!voiceChat))
-        {
             var voiceChatNoviceNetwork = this.Configuration.VoiceChatNoviceNetwork;
             if (ImGui.Checkbox("Voice novice network Chat", ref voiceChatNoviceNetwork))
             {
                 this.Configuration.VoiceChatNoviceNetwork = voiceChatNoviceNetwork;
                 this.Configuration.Save();
             }
-        }
 
-        using (var disabled = ImRaii.Disabled(!voiceChat))
-        {
             var voiceChatLinkshell = this.Configuration.VoiceChatLinkshell;
             if (ImGui.Checkbox("Voice Linkshells", ref voiceChatLinkshell))
             {
                 this.Configuration.VoiceChatLinkshell = voiceChatLinkshell;
                 this.Configuration.Save();
             }
-        }
 
-        using (var disabled = ImRaii.Disabled(!voiceChat))
-        {
             var voiceChatCrossLinkshell = this.Configuration.VoiceChatCrossLinkshell;
             if (ImGui.Checkbox("Voice Cross Linkshells", ref voiceChatCrossLinkshell))
             {
                 this.Configuration.VoiceChatCrossLinkshell = voiceChatCrossLinkshell;
                 this.Configuration.Save();
+            }
+
+            var voiceBubbleAudibleRange = this.Configuration.VoiceBubbleAudibleRange;
+            if (ImGui.SliderInt("3D Space audible range (shared with bubbles)", ref voiceBubbleAudibleRange, 1, 20))
+            {
+                this.Configuration.VoiceBubbleAudibleRange = voiceBubbleAudibleRange;
+                this.Configuration.Save();
+
+                echokraut.addonBubbleHelper.Update3DFactors(voiceBubbleAudibleRange);
             }
         }
     }

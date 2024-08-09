@@ -143,7 +143,7 @@ public class AddonTalkHelper
         {
             PlayingHelper.InDialog = false;
             // The addon was closed
-            echokraut.Cancel(new EKEventId(0, Enums.TextSource.None));
+            echokraut.Cancel(new EKEventId(0, Enums.TextSource.AddonTalk));
             lastAddonSpeaker = "";
             lastAddonText = "";
             return;

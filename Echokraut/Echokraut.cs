@@ -150,6 +150,7 @@ public partial class Echokraut : IDalamudPlugin
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Stopping Inference", eventId);
             BackendHelper.OnCancel(eventId);
+            StopLipSync(eventId);
         }
     }
 
@@ -302,7 +303,7 @@ public partial class Echokraut : IDalamudPlugin
         if (activeData == -1)
             activeData = modelData2;
 
-        text = DataHelper.VoiceMessageToFileName(text);
+        text = FileHelper.VoiceMessageToFileName(text);
         var textSubstring = text.Length > 20 ? text.Substring(0, 20) : text;
         return $"BB-{territory.PlaceName.Value.Name.ToString()}-{activeData}-{textSubstring}";
     }

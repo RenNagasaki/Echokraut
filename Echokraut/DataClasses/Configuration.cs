@@ -35,6 +35,7 @@ public class Configuration : IPluginConfiguration
     public bool VoiceBubble { get; set; } = false;
     public bool VoiceBubblesInCity { get; set; } = false;
     public bool VoiceSourceCam { get; set; } = false;
+    public int VoiceBubbleAudibleRange { get; set; } = 1;
     public bool VoiceChat { get; set; } = false;
     public bool VoiceChatPlayer { get; set; } = false;
     public bool VoiceChatSay { get; set; } = false;

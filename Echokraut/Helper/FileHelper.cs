@@ -18,9 +18,10 @@ namespace Echokraut.Helper
 
                 if (File.Exists(filePath))
                 {
+                    voiceMessage.loadedLocally = true;
                     WaveStream mainOutputStream = new WaveFileReader(filePath);
                     PlayingHelper.PlayingQueue.Add(mainOutputStream);
-                    PlayingHelper.PlayingQueueText.Add(new VoiceMessage { eventId = voiceMessage.eventId, Text = "", Speaker = new NpcMapData(voiceMessage.Speaker.objectKind) { name = Path.GetFileName(Path.GetFileName(Path.GetDirectoryName(filePath))) } });
+                    PlayingHelper.PlayingQueueText.Add(voiceMessage);
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Local file found. Location: {filePath}", eventId);
 
                     return true;
@@ -46,9 +47,10 @@ namespace Echokraut.Helper
 
                 if (File.Exists(filePath))
                 {
+                    voiceMessage.loadedLocally = true;
                     PlayingHelper.PlayingBubbleQueue.Add(filePath);
-                    PlayingHelper.PlayingBubbleQueueText.Add(new VoiceMessage { eventId = voiceMessage.eventId, pActor = voiceMessage.pActor, Text = "", Speaker = new NpcMapData(voiceMessage.Speaker.objectKind) { name = Path.GetFileName(Path.GetFileName(Path.GetDirectoryName(filePath))) } });
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Local file found. Location: {filePath}", eventId);
+                    PlayingHelper.PlayingBubbleQueueText.Add(voiceMessage);
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Local file found. Location: {filePath}", eventId); 
 
                     return true;
                 }
@@ -67,7 +69,7 @@ namespace Echokraut.Helper
 
         public static string GetLocalAudioPath(string localSaveLocation, VoiceMessage voiceMessage)
         {
-            string filePath = GetSpeakerAudioPath(localSaveLocation, voiceMessage.Speaker.name) + $"{ voiceMessage.Speaker.race.ToString()}-{voiceMessage.Speaker.voiceItem?.voiceName}\\{DataHelper.VoiceMessageToFileName(voiceMessage.Text)}.wav";
+            string filePath = GetSpeakerAudioPath(localSaveLocation, voiceMessage.Speaker.name) + $"{ voiceMessage.Speaker.race.ToString()}-{voiceMessage.Speaker.voiceItem?.voiceName}\\{VoiceMessageToFileName(voiceMessage.Text)}.wav";
 
             return filePath;
         }
@@ -82,6 +84,17 @@ namespace Echokraut.Helper
             filePath += $"{speaker}\\";
 
             return filePath;
+        }
+
+        public static string VoiceMessageToFileName(string voiceMessage)
+        {
+            string fileName = voiceMessage;
+            string[] temp = fileName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries);
+            fileName = String.Join("", temp).ToLower().Replace(" ", "").Replace(".", "").Replace("!", "").Replace(",", "").Replace("-", "").Replace("_", "");
+            if (fileName.Length > 120)
+                fileName = fileName.Substring(0, 120);
+
+            return fileName;
         }
 
         public static bool WriteStreamToFile(EKEventId eventId, string filePath, ReadSeekableStream stream)

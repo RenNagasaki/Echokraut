@@ -110,13 +110,15 @@ namespace Echokraut.Helper
                     ActivePlayer.Play();
                     char[] delimiters = new char[] { ' ' };
 
-                    var estimatedLength = .5f;
+                    var estimatedLength = 10f;
                     if (!string.IsNullOrEmpty(queueItemText.Text))
                     {
                         var count = queueItemText.Text.Split(delimiters, StringSplitOptions.RemoveEmptyEntries).Length;
                         estimatedLength = count / 2.1f;
+                        LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Text} length: {estimatedLength}", eventId);
                     }
                     Echokraut.lipSyncHelper.TriggerLipSync(eventId, queueItemText.Speaker.name, estimatedLength);
+                    LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Speaker.name} length: {estimatedLength}", eventId);
                     Playing = true;
                 }
                 catch (Exception ex)
@@ -258,7 +260,7 @@ namespace Echokraut.Helper
                 {
                     var playedText = CurrentlyPlayingStreamText;
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}", eventId);
-                    if (!string.IsNullOrWhiteSpace(playedText.Text) && playedText.Source != TextSource.VoiceTest)
+                    if (!string.IsNullOrWhiteSpace(playedText.Text) && playedText.Source != TextSource.VoiceTest && !playedText.loadedLocally)
                     {
                         var filePath = FileHelper.GetLocalAudioPath(Configuration.LocalSaveLocation, playedText);
                         var stream = CurrentlyPlayingStream;
@@ -274,7 +276,6 @@ namespace Echokraut.Helper
             var soundOut = sender as WasapiOut;
             soundOut?.Dispose();
             Playing = false;
-            Echokraut.StopLipSync(eventId);
 
             if (Configuration.AutoAdvanceTextAfterSpeechCompleted)
             {
