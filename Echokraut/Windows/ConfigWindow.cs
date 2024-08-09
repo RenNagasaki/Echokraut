@@ -240,10 +240,10 @@ public class ConfigWindow : Window, IDisposable
 
     private void DrawDialogueSettings()
     {
-        var voiceDialog = this.Configuration.VoiceDialog;
+        var voiceDialog = this.Configuration.VoiceDialogue;
         if (ImGui.Checkbox("Voice dialog", ref voiceDialog))
         {
-            this.Configuration.VoiceDialog = voiceDialog;
+            this.Configuration.VoiceDialogue = voiceDialog;
             this.Configuration.Save();
         }
 
@@ -278,10 +278,10 @@ public class ConfigWindow : Window, IDisposable
 
     private void DrawBattleDialogueSettings()
     {
-        var voiceBattleDialog = this.Configuration.VoiceBattleDialog;
+        var voiceBattleDialog = this.Configuration.VoiceBattleDialogue;
         if (ImGui.Checkbox("Voice battle dialog", ref voiceBattleDialog))
         {
-            this.Configuration.VoiceBattleDialog = voiceBattleDialog;
+            this.Configuration.VoiceBattleDialogue = voiceBattleDialog;
             this.Configuration.Save();
         }
 
@@ -402,10 +402,10 @@ public class ConfigWindow : Window, IDisposable
 
     private void DrawBubbleSettings()
     {
-        var voiceBubbles = this.Configuration.VoiceBubbles;
+        var voiceBubbles = this.Configuration.VoiceBubble;
         if (ImGui.Checkbox("Voice NPC Bubbles", ref voiceBubbles))
         {
-            this.Configuration.VoiceBubbles = voiceBubbles;
+            this.Configuration.VoiceBubble = voiceBubbles;
             this.Configuration.Save();
         }
 
@@ -575,38 +575,10 @@ public class ConfigWindow : Window, IDisposable
         }
     }
 
-    private void DrawVoiceSelectionOptions()
-    {
-        if (ImGui.CollapsingHeader("Options:"))
-        {
-            var voicesAllOriginals = this.Configuration.VoicesAllOriginals;
-            if (ImGui.Checkbox("Show all original voices as option", ref voicesAllOriginals))
-            {
-                this.Configuration.VoicesAllOriginals = voicesAllOriginals;
-                this.Configuration.Save();
-            }
-            var voicesAllGenders = this.Configuration.VoicesAllGenders;
-            if (ImGui.Checkbox("Show both genders as option", ref voicesAllGenders))
-            {
-                this.Configuration.VoicesAllGenders = voicesAllGenders;
-                this.Configuration.Save();
-            }
-            var voicesAllRaces = this.Configuration.VoicesAllRaces;
-            if (ImGui.Checkbox("Show all races as option", ref voicesAllRaces))
-            {
-                this.Configuration.VoicesAllRaces = voicesAllRaces;
-                this.Configuration.Save();
-            }
-
-        }
-    }
-
     private void DrawNpcTab()
     {
         if (ImGui.BeginTabItem("NPCs"))
         {
-            DrawVoiceSelectionOptions();
-
             if (filteredNpcs == null)
             {
                 filteredNpcs = Configuration.MappedNpcs.FindAll(p => !p.name.StartsWith("BB"));
@@ -653,9 +625,6 @@ public class ConfigWindow : Window, IDisposable
                     NpcMapData toBeRemoved = null;
                     foreach (NpcMapData mapData in filteredNpcs)
                     {
-                        if (!this.Configuration.VoicesAllOriginals && mapData.voiceItem.voiceName.ToLower().Contains(mapData.name.ToLower()))
-                            continue;
-
                         ImGui.TableNextColumn();
                         var doNotDelete = mapData.doNotDelete;
                         if (ImGui.Checkbox($"##EKNpcDoNotDelete{mapData.ToString()}", ref doNotDelete))
@@ -711,36 +680,17 @@ public class ConfigWindow : Window, IDisposable
                         ImGui.TextUnformatted(mapData.name);
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        var localVoices = (this.Configuration.VoicesAllOriginals ?
-                                            (this.Configuration.VoicesAllGenders ?
-                                                (this.Configuration.VoicesAllRaces ?
-                                                    BackendVoiceHelper.Voices :
-                                                    BackendVoiceHelper.FilteredVoicesAllGenders[mapData.race]
-                                                ) :
-                                                (this.Configuration.VoicesAllRaces ?
-                                                    BackendVoiceHelper.FilteredVoicesAllRaces[mapData.gender] :
-                                                    BackendVoiceHelper.FilteredVoices[mapData.gender][mapData.race]
-                                                )
-                                            ) :
-                                            (this.Configuration.VoicesAllGenders ?
-                                                (this.Configuration.VoicesAllRaces ?
-                                                    BackendVoiceHelper.VoicesOriginal :
-                                                    BackendVoiceHelper.FilteredVoicesAllGendersOriginal[mapData.race]
-                                                ) :
-                                                (this.Configuration.VoicesAllRaces ?
-                                                    BackendVoiceHelper.FilteredVoicesAllRacesOriginal[mapData.gender] :
-                                                    BackendVoiceHelper.FilteredVoicesOriginal[mapData.gender][mapData.race]
-                                                )
-                                            )
-                                          );
 
-                        var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
-                        ClippedSelectableCombo<BackendVoiceItem> voiceItems = new($"##AllVoices{mapData.ToString()}", string.Empty, 250, localVoices, g => g.ToString());
-                        var presetIndexVoice = localVoices.Find(p => p.Equals(mapData.voiceItem)) ?? localVoices.Find(p => p.voiceName.Contains("Narrator"));                        
-                        int selectedIndexVoice;
-                        if (voiceItems.Draw(presetIndexVoice.ToString(), out selectedIndexVoice))
+                        if (mapData.voicesSelectable == null)
                         {
-                            var newVoiceItem = localVoices[selectedIndexVoice];
+                            mapData.voicesSelectable = new($"##AllVoices{mapData.ToString()}", string.Empty, 250, BackendVoiceHelper.Voices, g => g.ToString());
+                            Configuration.Save();
+                        }
+
+                        if (mapData.voicesSelectable.Draw(mapData.voiceItem?.ToString() ?? "", out var selectedIndexVoice))
+                        {
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Selected: {selectedIndexVoice}", new EKEventId(0, TextSource.None));
+                            var newVoiceItem = BackendVoiceHelper.Voices[selectedIndexVoice];
 
                             if (newVoiceItem != null)
                             {
@@ -801,8 +751,6 @@ public class ConfigWindow : Window, IDisposable
     {
         if (ImGui.BeginTabItem("Players"))
         {
-            DrawVoiceSelectionOptions();
-
             if (filteredPlayers == null)
             {
                 filteredPlayers = Configuration.MappedPlayers;
@@ -849,9 +797,6 @@ public class ConfigWindow : Window, IDisposable
                     NpcMapData toBeRemoved = null;
                     foreach (NpcMapData mapData in filteredPlayers)
                     {
-                        if (!this.Configuration.VoicesAllOriginals && mapData.voiceItem.voiceName.ToLower().Contains(mapData.name.ToLower()))
-                            continue;
-
                         ImGui.TableNextColumn();
                         var doNotDelete = mapData.doNotDelete;
                         if (ImGui.Checkbox($"##EKNpcDoNotDelete{mapData.ToString()}", ref doNotDelete))
@@ -907,36 +852,16 @@ public class ConfigWindow : Window, IDisposable
                         ImGui.TextUnformatted(mapData.name);
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        var localVoices = (this.Configuration.VoicesAllOriginals ?
-                                            (this.Configuration.VoicesAllGenders ?
-                                                (this.Configuration.VoicesAllRaces ?
-                                                    BackendVoiceHelper.Voices :
-                                                    BackendVoiceHelper.FilteredVoicesAllGenders[mapData.race]
-                                                ) :
-                                                (this.Configuration.VoicesAllRaces ?
-                                                    BackendVoiceHelper.FilteredVoicesAllRaces[mapData.gender] :
-                                                    BackendVoiceHelper.FilteredVoices[mapData.gender][mapData.race]
-                                                )
-                                            ) :
-                                            (this.Configuration.VoicesAllGenders ?
-                                                (this.Configuration.VoicesAllRaces ?
-                                                    BackendVoiceHelper.VoicesOriginal :
-                                                    BackendVoiceHelper.FilteredVoicesAllGendersOriginal[mapData.race]
-                                                ) :
-                                                (this.Configuration.VoicesAllRaces ?
-                                                    BackendVoiceHelper.FilteredVoicesAllRacesOriginal[mapData.gender] :
-                                                    BackendVoiceHelper.FilteredVoicesOriginal[mapData.gender][mapData.race]
-                                                )
-                                            )
-                                          );
 
-                        var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
-                        ClippedSelectableCombo<BackendVoiceItem> voiceItems = new($"##AllVoices{mapData.ToString()}", string.Empty, 250, localVoices, g => g.ToString());
-                        var presetIndexVoice = localVoices.Find(p => p.Equals(mapData.voiceItem)) ?? localVoices.Find(p => p.voiceName.Contains("Narrator"));
-                        int selectedIndexVoice;
-                        if (voiceItems.Draw(presetIndexVoice.ToString(), out selectedIndexVoice))
+                        if (mapData.voicesSelectable == null)
                         {
-                            var newVoiceItem = localVoices[selectedIndexVoice];
+                            mapData.voicesSelectable = new($"##AllVoices{mapData.ToString()}", string.Empty, 250, BackendVoiceHelper.Voices, g => g.ToString());
+                            Configuration.Save();
+                        }
+
+                        if (mapData.voicesSelectable.Draw(mapData.voiceItem?.ToString() ?? "", out var selectedIndexVoice))
+                        {
+                            var newVoiceItem = BackendVoiceHelper.Voices[selectedIndexVoice];
 
                             if (newVoiceItem != null)
                             {
@@ -997,8 +922,6 @@ public class ConfigWindow : Window, IDisposable
     {
         if (ImGui.BeginTabItem("Bubbles"))
         {
-            DrawVoiceSelectionOptions();
-
             if (filteredBubbles == null)
             {
                 filteredBubbles = Configuration.MappedNpcs.FindAll(p => p.hasBubbles);
@@ -1045,9 +968,6 @@ public class ConfigWindow : Window, IDisposable
                     NpcMapData toBeRemoved = null;
                     foreach (NpcMapData mapData in filteredBubbles)
                     {
-                        if (!this.Configuration.VoicesAllOriginals && mapData.voiceItem.voiceName.ToLower().Contains(mapData.name.ToLower()))
-                            continue;
-
                         ImGui.TableNextColumn();
                         var doNotDelete = mapData.doNotDelete;
                         if (ImGui.Checkbox($"##EKNpcDoNotDelete{mapData.ToString()}", ref doNotDelete))
@@ -1103,36 +1023,16 @@ public class ConfigWindow : Window, IDisposable
                         ImGui.TextUnformatted(mapData.name);
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        var localVoices = (this.Configuration.VoicesAllOriginals ?
-                                            (this.Configuration.VoicesAllGenders ?
-                                                (this.Configuration.VoicesAllRaces ?
-                                                    BackendVoiceHelper.Voices :
-                                                    BackendVoiceHelper.FilteredVoicesAllGenders[mapData.race]
-                                                ) :
-                                                (this.Configuration.VoicesAllRaces ?
-                                                    BackendVoiceHelper.FilteredVoicesAllRaces[mapData.gender] :
-                                                    BackendVoiceHelper.FilteredVoices[mapData.gender][mapData.race]
-                                                )
-                                            ) :
-                                            (this.Configuration.VoicesAllGenders ?
-                                                (this.Configuration.VoicesAllRaces ?
-                                                    BackendVoiceHelper.VoicesOriginal :
-                                                    BackendVoiceHelper.FilteredVoicesAllGendersOriginal[mapData.race]
-                                                ) :
-                                                (this.Configuration.VoicesAllRaces ?
-                                                    BackendVoiceHelper.FilteredVoicesAllRacesOriginal[mapData.gender] :
-                                                    BackendVoiceHelper.FilteredVoicesOriginal[mapData.gender][mapData.race]
-                                                )
-                                            )
-                                          );
 
-                        var voicesDisplay = localVoices.Select(b => b.ToString()).ToArray();
-                        ClippedSelectableCombo<BackendVoiceItem> voiceItems = new($"##AllVoices{mapData.ToString()}", string.Empty, 250, localVoices, g => g.ToString());
-                        var presetIndexVoice = localVoices.Find(p => p.Equals(mapData.voiceItem)) ?? localVoices.Find(p => p.voiceName.Contains("Narrator"));
-                        int selectedIndexVoice;
-                        if (voiceItems.Draw(presetIndexVoice.ToString(), out selectedIndexVoice))
+                        if (mapData.voicesSelectable == null)
                         {
-                            var newVoiceItem = localVoices[selectedIndexVoice];
+                            mapData.voicesSelectable = new($"##AllVoices{mapData.ToString()}", string.Empty, 250, BackendVoiceHelper.Voices, g => g.ToString());
+                            Configuration.Save();
+                        }
+
+                        if (mapData.voicesSelectable.Draw(mapData.voiceItem?.ToString() ?? "", out var selectedIndexVoice))
+                        {
+                            var newVoiceItem = BackendVoiceHelper.Voices[selectedIndexVoice];
 
                             if (newVoiceItem != null)
                             {

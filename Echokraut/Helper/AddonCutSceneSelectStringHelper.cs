@@ -13,6 +13,12 @@ using System.Diagnostics;
 using System.Reflection;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using static System.Windows.Forms.Design.AxImporter;
+using System.Linq;
+using System.Collections.Generic;
 
 namespace Echokraut.Helper;
 
@@ -20,90 +26,82 @@ public class AddonCutSceneSelectStringHelper
 {
     private record struct AddonCutSceneSelectStringState(string? Speaker, string? Text, AddonPollSource PollSource);
 
-    private readonly IObjectTable objects;
+    private readonly IAddonLifecycle addonLifecycle;
     private readonly IClientState clientState;
-    private readonly ICondition condition;
-    private readonly IGameGui gui;
-    private readonly IFramework framework;
+    private readonly IObjectTable objects;
     private readonly Configuration config;
     private readonly Echokraut plugin;
-    private OnUpdateDelegate updateHandler;
+    private List<string> options = new List<string>();
 
-    public static nint Address { get; set; }
-    private static nint oldAddress { get; set; }
-    private AddonCutSceneSelectStringState lastValue;
-
-    public AddonCutSceneSelectStringHelper(Echokraut plugin, IClientState clientState, ICondition condition, IGameGui gui, IFramework framework, IObjectTable objects, Configuration config)
+    public AddonCutSceneSelectStringHelper(Echokraut plugin, IAddonLifecycle addonLifecycle, IClientState clientState, IObjectTable objects, Configuration config)
     {
         this.plugin = plugin;
+        this.addonLifecycle = addonLifecycle;
         this.clientState = clientState;
-        this.condition = condition;
-        this.gui = gui;
-        this.framework = framework;
         this.config = config;
         this.objects = objects;
 
-        HookIntoFrameworkUpdate();
+        HookIntoAddonLifecycle();
     }
 
-    private void HookIntoFrameworkUpdate()
+    private void HookIntoAddonLifecycle()
     {
-        updateHandler = new OnUpdateDelegate(Handle);
-        framework.Update += updateHandler;
-
+        addonLifecycle.RegisterListener(AddonEvent.PostSetup, "CutSceneSelectString", OnPostSetup);
+        addonLifecycle.RegisterListener(AddonEvent.PreFinalize, "CutSceneSelectString", OnPreFinalize);
     }
-    void Handle(IFramework f)
+
+    private unsafe void OnPostSetup(AddonEvent type, AddonArgs args)
     {
-        UpdateAddonAddress();
         if (!config.Enabled) return;
         if (!config.VoicePlayerChoicesCutscene) return;
-        PollAddon(AddonPollSource.FrameworkUpdate);
+
+        GetAddonStrings(((AddonCutSceneSelectString*)args.Addon)->OptionList);
     }
 
-    private void Mutate(AddonCutSceneSelectStringState nextValue)
+    private unsafe void OnPreFinalize(AddonEvent type, AddonArgs args)
     {
-        if (lastValue.Equals(nextValue))
-        {
-            return;
-        }
+        if (!config.Enabled) return;
+        if (!config.VoicePlayerChoicesCutscene) return;
 
-        lastValue = nextValue;
-        HandleChange(nextValue);
+        HandleSelectedString(((AddonCutSceneSelectString*)args.Addon)->OptionList);
     }
 
-    private void UpdateAddonAddress()
+    private unsafe void GetAddonStrings(AtkComponentList* list)
     {
-        if (!clientState.IsLoggedIn || condition[ConditionFlag.CreatingCharacter])
-        {
-            Address = nint.Zero;
-            return;
-        }
+        if (list is null) return;
 
-        Address = gui.GetAddonByName("CutSceneSelectString");
-        if (Address != nint.Zero && oldAddress != Address)
+        options.Clear();
+
+        foreach (var index in Enumerable.Range(0, list->ListLength))
         {
-            oldAddress = Address;
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonCutSceneSelectString address found: {Address}", new EKEventId(0, Enums.TextSource.AddonCutSceneSelectString));
+            var listItemRenderer = list->ItemRendererList[index].AtkComponentListItemRenderer;
+            if (listItemRenderer is null) continue;
+
+            var buttonTextNode = listItemRenderer->AtkComponentButton.ButtonTextNode;
+            if (buttonTextNode is null) continue;
+
+            var buttonText = TalkUtils.ReadStringNode(buttonTextNode->NodeText);
+
+            options.Add(buttonText);
         }
     }
 
-    private AddonCutSceneSelectStringState GetCutSceneSelectStringAddonState(AddonPollSource pollSource)
+    private unsafe void HandleSelectedString(AtkComponentList* list)
     {
-        if (!IsVisible())
+        if (list is null) return;
+
+        var selectedItem = list->SelectedItemIndex;
+        if (selectedItem < 0 || selectedItem >= options.Count) return;
+
+        var selectedString = options[selectedItem];
+        var localPlayerName = clientState.LocalPlayer?.Name;
+
+        HandleChange(new AddonCutSceneSelectStringState()
         {
-            return default;
-        }
-
-        var addonCutSceneSelectStringText = ReadText();
-        return addonCutSceneSelectStringText != null
-            ? new AddonCutSceneSelectStringState(addonCutSceneSelectStringText.Speaker, addonCutSceneSelectStringText.Text, pollSource)
-            : default;
-    }
-
-    public void PollAddon(AddonPollSource pollSource)
-    {
-        var state = GetCutSceneSelectStringAddonState(pollSource);
-        Mutate(state);
+            PollSource = AddonPollSource.FrameworkUpdate,
+            Text = selectedString,
+            Speaker = localPlayerName.TextValue ?? "PLAYER"
+        });
     }
 
     private void HandleChange(AddonCutSceneSelectStringState state)
@@ -139,25 +137,9 @@ public class AddonCutSceneSelectStringHelper
         }
     }
 
-    public unsafe AddonTalkText? ReadText()
-    {
-        var addonTalk = GetAddonCutSceneSelectString();
-        return addonTalk == null ? null : TalkUtils.ReadCutSceneSelectStringAddon(addonTalk);
-    }
-
-    public unsafe bool IsVisible()
-    {
-        var addonSelectString = GetAddonCutSceneSelectString();
-        return addonSelectString != null && addonSelectString->AtkUnitBase.IsVisible;
-    }
-
-    private unsafe AddonCutSceneSelectString* GetAddonCutSceneSelectString()
-    {
-        return (AddonCutSceneSelectString*)Address.ToPointer();
-    }
-
     public void Dispose()
     {
-        framework.Update -= updateHandler;
+        addonLifecycle.UnregisterListener(AddonEvent.PostSetup, "CutSceneSelectString", OnPostSetup);
+        addonLifecycle.UnregisterListener(AddonEvent.PreFinalize, "CutSceneSelectString", OnPreFinalize);
     }
 }

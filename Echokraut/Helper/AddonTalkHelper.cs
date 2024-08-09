@@ -80,7 +80,7 @@ public class AddonTalkHelper
     {
         UpdateAddonAddress();
         if (!config.Enabled) return;
-        if (!config.VoiceDialog) return;
+        if (!config.VoiceDialogue) return;
         PollAddon(AddonPollSource.FrameworkUpdate);
     }
 
@@ -171,11 +171,11 @@ public class AddonTalkHelper
             lastAddonText = text;
         }
 
+        //ObjectTableUtils.TryGetUnnamedObject(clientState, objects, speaker, eventId);
         if (pollSource == AddonPollSource.VoiceLinePlayback)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}", eventId);
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-            SoundHelper.VoiceLinesToCome -= 1;
             return;
         }
 

@@ -12,6 +12,17 @@ using System.Threading.Tasks;
 using System.Diagnostics;
 using System.Reflection;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using static System.Windows.Forms.AxHost;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Game.Text;
+using FFXIVClientStructs.FFXIV.Client.Game.UI;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using static System.Windows.Forms.Design.AxImporter;
+using System.Collections.Generic;
+using Lumina.Data.Parsing;
+using System.Linq;
 
 namespace Echokraut.Helper;
 
@@ -19,90 +30,86 @@ public class AddonSelectStringHelper
 {
     private record struct AddonSelectStringState(string? Speaker, string? Text, AddonPollSource PollSource);
 
-    private readonly IObjectTable objects;
+    private readonly IAddonLifecycle addonLifecycle;
     private readonly IClientState clientState;
+    private readonly IObjectTable objects;
     private readonly ICondition condition;
-    private readonly IGameGui gui;
-    private readonly IFramework framework;
     private readonly Configuration config;
     private readonly Echokraut plugin;
-    private OnUpdateDelegate updateHandler;
+    private List<string> options = new List<string>();
 
-    public static nint Address { get; set; }
-    private static nint oldAddress { get; set; }
-    private AddonSelectStringState lastValue;
-
-    public AddonSelectStringHelper(Echokraut plugin, IClientState clientState, ICondition condition, IGameGui gui, IFramework framework, IObjectTable objects, Configuration config)
+    public AddonSelectStringHelper(Echokraut plugin, IAddonLifecycle addonLifecycle, IClientState clientState, IObjectTable objects, ICondition condition, Configuration config)
     {
         this.plugin = plugin;
+        this.addonLifecycle = addonLifecycle;
         this.clientState = clientState;
-        this.condition = condition;
-        this.gui = gui;
-        this.framework = framework;
         this.config = config;
         this.objects = objects;
+        this.condition = condition;
 
-        HookIntoFrameworkUpdate();
+        HookIntoAddonLifecycle();
     }
 
-    private void HookIntoFrameworkUpdate()
+    private void HookIntoAddonLifecycle()
     {
-        updateHandler = new OnUpdateDelegate(Handle);
-        framework.Update += updateHandler;
-
+        addonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectString", OnPostSetup);
+        addonLifecycle.RegisterListener(AddonEvent.PreFinalize, "SelectString", OnPreFinalize);
     }
-    void Handle(IFramework f)
+
+    private unsafe void OnPostSetup(AddonEvent type, AddonArgs args)
     {
-        UpdateAddonAddress();
         if (!config.Enabled) return;
         if (!config.VoicePlayerChoices) return;
-        PollAddon(AddonPollSource.FrameworkUpdate);
+        if (!condition[ConditionFlag.OccupiedInQuestEvent]) return;
+
+        GetAddonStrings(((AddonSelectString*)args.Addon)->PopupMenu.PopupMenu.List);
     }
 
-    private void Mutate(AddonSelectStringState nextValue)
+    private unsafe void OnPreFinalize(AddonEvent type, AddonArgs args)
     {
-        if (lastValue.Equals(nextValue))
-        {
-            return;
-        }
+        if (!config.Enabled) return;
+        if (!config.VoicePlayerChoices) return;
+        if (!condition[ConditionFlag.OccupiedInQuestEvent]) return;
 
-        lastValue = nextValue;
-        HandleChange(nextValue);
+        HandleSelectedString(((AddonSelectString*)args.Addon)->PopupMenu.PopupMenu.List);
     }
 
-    private void UpdateAddonAddress()
+    private unsafe void GetAddonStrings(AtkComponentList* list)
     {
-        if (!clientState.IsLoggedIn || condition[ConditionFlag.CreatingCharacter] || !condition[ConditionFlag.OccupiedInQuestEvent])
-        {
-            Address = nint.Zero;
-            return;
-        }
+        if (list is null) return;
 
-        Address = gui.GetAddonByName("SelectString");
-        if (Address != nint.Zero && oldAddress != Address)
+        options.Clear();
+
+        foreach (var index in Enumerable.Range(0, list->ListLength))
         {
-            oldAddress = Address;
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonSelectString address found: {Address}", new EKEventId(0, Enums.TextSource.AddonSelectString));
+            var listItemRenderer = list->ItemRendererList[index].AtkComponentListItemRenderer;
+            if (listItemRenderer is null) continue;
+
+            var buttonTextNode = listItemRenderer->AtkComponentButton.ButtonTextNode;
+            if (buttonTextNode is null) continue;
+
+            var buttonText = TalkUtils.ReadStringNode(buttonTextNode->NodeText);
+
+            options.Add(buttonText);
         }
     }
 
-    private AddonSelectStringState GetSelectStringAddonState(AddonPollSource pollSource)
+    private unsafe void HandleSelectedString(AtkComponentList* list)
     {
-        if (!IsVisible())
+        if (list is null) return;
+
+        var selectedItem = list->SelectedItemIndex;
+        if (selectedItem < 0 || selectedItem >= options.Count) return;
+
+        var selectedString = options[selectedItem];
+        var localPlayerName = clientState.LocalPlayer?.Name;
+
+        HandleChange(new AddonSelectStringState()
         {
-            return default;
-        }
-
-        var addonSelectStringText = ReadText();
-        return addonSelectStringText != null
-            ? new AddonSelectStringState(addonSelectStringText.Speaker, addonSelectStringText.Text, pollSource)
-            : default;
-    }
-
-    public void PollAddon(AddonPollSource pollSource)
-    {
-        var state = GetSelectStringAddonState(pollSource);
-        Mutate(state);
+            PollSource = AddonPollSource.FrameworkUpdate,
+            Text = selectedString,
+            Speaker = localPlayerName.TextValue ?? "PLAYER"
+        });
     }
 
     private void HandleChange(AddonSelectStringState state)
@@ -140,25 +147,9 @@ public class AddonSelectStringHelper
         }
     }
 
-    public unsafe AddonTalkText? ReadText()
-    {
-        var addonTalk = GetAddonSelectString();
-        return addonTalk == null ? null : TalkUtils.ReadSelectStringAddon(addonTalk);
-    }
-
-    public unsafe bool IsVisible()
-    {
-        var addonSelectString = GetAddonSelectString();
-        return addonSelectString != null && addonSelectString->AtkUnitBase.IsVisible;
-    }
-
-    private unsafe AddonSelectString* GetAddonSelectString()
-    {
-        return (AddonSelectString*)Address.ToPointer();
-    }
-
     public void Dispose()
     {
-        framework.Update -= updateHandler;
+        addonLifecycle.UnregisterListener(AddonEvent.PostSetup, "SelectString", OnPostSetup);
+        addonLifecycle.UnregisterListener(AddonEvent.PreFinalize, "SelectString", OnPreFinalize);
     }
 }

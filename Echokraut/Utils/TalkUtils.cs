@@ -111,7 +111,7 @@ namespace Echokraut.TextToTalk.Utils
                 .Replace("\r", "");
         }
 
-        private static unsafe string ReadStringNode(Utf8String textNode)
+        public static unsafe string ReadStringNode(Utf8String textNode)
         {
             var textPtr = textNode.StringPtr;
             var textLength = textNode.BufUsed - 1; // Null-terminated; chop off the null byte

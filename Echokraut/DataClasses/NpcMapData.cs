@@ -1,5 +1,7 @@
 using Dalamud.Game.ClientState.Objects.Enums;
 using Echokraut.Enums;
+using Echokraut.Helper;
+using OtterGui.Widgets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,6 +24,9 @@ namespace Echokraut.DataClasses
         public bool hasBubbles { get; set; }
 
         public ObjectKind objectKind { get; set; }
+
+        [NonSerialized]
+        public ClippedSelectableCombo<BackendVoiceItem> voicesSelectable;
 
         public NpcMapData(ObjectKind objectKind) {
             this.objectKind = objectKind;

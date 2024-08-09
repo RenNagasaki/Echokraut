@@ -17,8 +17,6 @@ namespace Echokraut.Utils;
 
 public static class ObjectTableUtils
 {
-    static List<Character> knownCharacters = new List<Character>();
-
     public static IGameObject? GetGameObjectByName(IClientState clientState, IObjectTable objects, SeString? name, EKEventId eventId)
     {
         // Names are complicated; the name SeString can come from chat, meaning it can
@@ -30,26 +28,17 @@ public static class ObjectTableUtils
             TalkUtils.TryGetEntityName(gObj.Name, out var gObjName) && gObjName == parsedName);
     }
 
-    private static IGameObject? TryGetUnnamedObject(IClientState clientState, IObjectTable objects, SeString? name, EKEventId eventId)
+    public static IGameObject? TryGetUnnamedObject(IClientState clientState, IObjectTable objects, SeString? name, EKEventId eventId)
     {
         IGameObject? gameObject = null;
-        if (objects.Count() != knownCharacters.Count)
+        foreach (var item in objects)
         {
-            var newKnownCharacters = new List<Character>();
-            foreach (var item in objects)
-            {
-                Character character = item as Character;
+            Character character = item as Character;
 
-                if (character == null) continue;
-                newKnownCharacters.Add(character);
-                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Looking at ??? character: {character.Name}", eventId);
-                if (character == null || character == clientState.LocalPlayer || name.TextValue != "???" || knownCharacters.Contains(character)) continue;
+            if (character == null) continue;
+            LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Looking at ??? character: {character.Name} - {character.Position.X}/{character.Position.Y}/{character.Position.Z}", eventId);
 
-                gameObject = character;
-                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Found ??? character: {character.Name}", eventId);
-            }
-
-            knownCharacters = newKnownCharacters;
+            gameObject = character;
         }
 
         return gameObject;

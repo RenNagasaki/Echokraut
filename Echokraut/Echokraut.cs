@@ -71,7 +71,8 @@ public partial class Echokraut : IDalamudPlugin
         IGameGui gameGui,
         ISigScanner sigScanner,
         IGameInteropProvider gameInterop,
-        IGameConfig gameConfig)
+        IGameConfig gameConfig,
+        IAddonLifecycle addonLifecycle)
     {
         PluginInterface = pluginInterface;
         CommandManager = commandManager;
@@ -100,16 +101,36 @@ public partial class Echokraut : IDalamudPlugin
         this.addonTalkHelper = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
         this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, sigScanner, gameInterop);
-        this.addonSelectStringHelper = new AddonSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
-        this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
+        this.addonSelectStringHelper = new AddonSelectStringHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, condition, this.Configuration);
+        this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
         this.addonBubbleHelper = new AddonBubbleHelper(this, this.DataManager, this.Framework, this.ObjectTable,sigScanner, gameInterop, this.ClientState, this.Configuration);
         this.chatTalkHelper = new ChatTalkHelper(this, this.Configuration, chatGui, objectTable, clientState);
 
         WindowSystem.AddWindow(ConfigWindow);
 
-        CommandManager.AddHandler("/eksettings", new CommandInfo(OnCommand)
+        CommandManager.AddHandler("/ekt", new CommandInfo(OnCommand)
         {
-            HelpMessage = "Opens the configuration window"
+            HelpMessage = "Toggles Echokraut"
+        });
+        CommandManager.AddHandler("/ekttalk", new CommandInfo(OnCommand)
+        {
+            HelpMessage = "Toggles dialogue voicing"
+        });
+        CommandManager.AddHandler("/ektbtalk", new CommandInfo(OnCommand)
+        {
+            HelpMessage = "Toggles battle dialogue voicing"
+        });
+        CommandManager.AddHandler("/ektbubble", new CommandInfo(OnCommand)
+        {
+            HelpMessage = "Toggles bubble voicing"
+        });
+        CommandManager.AddHandler("/ektcutschoice", new CommandInfo(OnCommand)
+        {
+            HelpMessage = "Toggles cutscene choice voicing"
+        });
+        CommandManager.AddHandler("/ektchoice", new CommandInfo(OnCommand)
+        {
+            HelpMessage = "Toggles choice voicing"
         });
         CommandManager.AddHandler("/ek", new CommandInfo(OnCommand)
         {
@@ -202,6 +223,7 @@ public partial class Echokraut : IDalamudPlugin
                 Configuration.Save();
             }
 
+            var language = this.ClientState.ClientLanguage;
             switch (source)
             {
                 case TextSource.AddonBubble:
@@ -233,6 +255,8 @@ public partial class Echokraut : IDalamudPlugin
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
                         return;
                     }
+                    if (source == TextSource.Chat)
+                        language = DataHelper.GetTextLanguage(cleanText, eventId);
                     break;
             }
             // Say the thing
@@ -242,7 +266,7 @@ public partial class Echokraut : IDalamudPlugin
                 Source = source,
                 Speaker = npcData,
                 Text = cleanText,
-                Language = this.ClientState.ClientLanguage,
+                Language = language,
                 eventId = eventId
             };
             var volume = VolumeHelper.GetVoiceVolume(eventId);
@@ -298,15 +322,51 @@ public partial class Echokraut : IDalamudPlugin
         this.Configuration.Save();
         WindowSystem.RemoveAllWindows();
         ConfigWindow.Dispose();
-
-        CommandManager.RemoveHandler("/eksettings");
         CommandManager.RemoveHandler("/ek");
+        CommandManager.RemoveHandler("/ekt");
+        CommandManager.RemoveHandler("/ekttalk");
+        CommandManager.RemoveHandler("/ektbtalk");
+        CommandManager.RemoveHandler("/ektbubble");
+        CommandManager.RemoveHandler("/ektcutschoice");
+        CommandManager.RemoveHandler("/ektchoice");
     }
 
     private void OnCommand(string command, string args)
     {
         // in response to the slash command, just toggle the display status of our config ui
-        ToggleConfigUI();
+
+        switch (command)
+        {
+            case "/ek":
+                ToggleConfigUI();
+                break;
+            case "/ekt":
+                Configuration.Enabled = !Configuration.Enabled;
+                Configuration.Save();
+                break;
+            case "/ekttalk":
+                Configuration.VoiceDialogue = !Configuration.VoiceDialogue;
+                Configuration.Save();
+                break;
+            case "/ektbtalk":
+                Configuration.VoiceBattleDialogue = !Configuration.VoiceBattleDialogue;
+                Configuration.Save();
+                break;
+            case "/ektbubble":
+                Configuration.VoiceBubble = !Configuration.VoiceBubble;
+                Configuration.Save();
+                break;
+            case "/ektcutschoice":
+                Configuration.VoicePlayerChoicesCutscene = !Configuration.VoicePlayerChoicesCutscene;
+                Configuration.Save();
+                break;
+            case "/ektchoice":
+                Configuration.VoicePlayerChoices = !Configuration.VoicePlayerChoices;
+                Configuration.Save();
+                break;
+        }
+
+        LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"New Command triggered: {command}", new EKEventId(0, TextSource.None));
     }
 
     private void DrawUI() => WindowSystem.Draw();

@@ -54,7 +54,7 @@ namespace Echokraut.Helper
         {
             var eventId = voiceMessage.eventId;
             PlayingHelper.Volume = volume;
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Starting voice inference: ", eventId);
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Starting voice inference: {voiceMessage.Language}", eventId);
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, voiceMessage.Text.ToString(), eventId);
 
             switch (voiceMessage.Source)

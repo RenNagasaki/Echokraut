@@ -54,7 +54,7 @@ namespace Echokraut.Helper
             this.configuration = config;
             ManagedBass.Bass.Init(Flags: ManagedBass.DeviceInitFlags.Device3D);
             //ManagedBass.Bass.CurrentDevice = 1;
-            ManagedBass.Bass.Set3DFactors(0.9144f * 50, .2f, 1);
+            ManagedBass.Bass.Set3DFactors(0.9144f, 1f, 1);
 
             unsafe
             {
@@ -85,7 +85,7 @@ namespace Echokraut.Helper
             try
             {
                 if (!configuration.Enabled) return;
-                if (!configuration.VoiceBubbles) return;
+                if (!configuration.VoiceBubble) return;
 
                 var territory = DataHelper.GetTerritory();
                 if (territory == null || (!configuration.VoiceBubblesInCity && !territory.Mount)) return;
@@ -93,7 +93,7 @@ namespace Echokraut.Helper
                 if (camera == null && CameraManager.Instance() != null)
                     camera = CameraManager.Instance()->GetActiveCamera();
 
-                localPlayer = clientState.LocalPlayer;
+                localPlayer = clientState.LocalPlayer!;
 
                 if (camera != null &&localPlayer != null)
                 {
@@ -122,8 +122,14 @@ namespace Echokraut.Helper
         {
             try
             {
-                if (!configuration.Enabled || !configuration.VoiceBubbles)
+                if (!configuration.Enabled || !configuration.VoiceBubble)
                     return mOpenChatBubbleHook.Original(pThis, pActor, pString, param3, attachmentPointID);
+
+                if (SoundHelper.VoiceLinesToCome > 0)
+                {
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping bubble because voice line to come", new EKEventId(0, TextSource.AddonBubble));
+                    return mOpenChatBubbleHook.Original(pThis, pActor, pString, param3, attachmentPointID);
+                }
 
                 var territoryRow = clientState.TerritoryType;
                 var territory = dataManager.GetExcelSheet<TerritoryType>()!.GetRow(territoryRow);

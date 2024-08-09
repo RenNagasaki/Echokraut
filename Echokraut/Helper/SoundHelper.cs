@@ -134,6 +134,7 @@ public class SoundHelper : IDisposable
                         {
                             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleared voice line from address {resourceDataPtr:x} (address reused by: {fileName})", new EKEventId(0, TextSource.AddonBattleTalk));
                             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleared voice line from address {resourceDataPtr:x} (address reused by: {fileName})", new EKEventId(0, TextSource.AddonTalk));
+                            VoiceLinesToCome -= 1;
                         }
                     }
                 }
@@ -163,6 +164,7 @@ public class SoundHelper : IDisposable
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Caught playback of known voice line at address {soundDataPtr:x}", new EKEventId(0, TextSource.AddonTalk));
                 this.addonTalkHelper.PollAddon(AddonPollSource.VoiceLinePlayback);
                 this.addonBattleTalkHelper.PollAddon(AddonPollSource.VoiceLinePlayback);
+                VoiceLinesToCome -= 1;
             }
         }
         catch (Exception exc)

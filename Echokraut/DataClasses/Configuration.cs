@@ -18,8 +18,8 @@ public class Configuration : IPluginConfiguration
     public List<NpcMapData> MappedBubbles { get; set; } = new List<NpcMapData>();
     public List<NpcMapData> MappedPlayers { get; set; } = new List<NpcMapData>();
     public bool Enabled { get; set; } = true;
-    public bool VoiceDialog { get; set; } = true;
-    public bool VoiceBattleDialog { get; set; } = true;
+    public bool VoiceDialogue { get; set; } = true;
+    public bool VoiceBattleDialogue { get; set; } = true;
     public bool VoiceBattleDialogQueued { get; set; } = true;
     public bool VoicePlayerDialog { get; set; } = true;
     public bool VoicePlayerChoicesCutscene { get; set; } = true;
@@ -32,10 +32,7 @@ public class Configuration : IPluginConfiguration
     public bool LoadFromLocalFirst { get; set; } = false;
     public string LocalSaveLocation { get; set; } = "";
     public bool CreateMissingLocalSaveLocation { get; set; } = false;
-    public bool VoicesAllGenders { get; set; } = false;
-    public bool VoicesAllRaces { get; set; } = false;
-    public bool VoicesAllOriginals { get; set; } = false;
-    public bool VoiceBubbles { get; set; } = false;
+    public bool VoiceBubble { get; set; } = false;
     public bool VoiceBubblesInCity { get; set; } = false;
     public bool VoiceSourceCam { get; set; } = false;
     public bool VoiceChat { get; set; } = false;

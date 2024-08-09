@@ -63,7 +63,7 @@ public class AddonBattleTalkHelper
     {
         UpdateAddonAddress();
         if (!config.Enabled) return;
-        if (!config.VoiceBattleDialog) return;
+        if (!config.VoiceBattleDialogue) return;
         PollAddon(AddonPollSource.FrameworkUpdate);
     }
 
@@ -161,7 +161,6 @@ public class AddonBattleTalkHelper
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}", eventId);
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-            SoundHelper.VoiceLinesToCome -= 1;
             return true;
         }
 
