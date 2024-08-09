@@ -96,6 +96,10 @@
         "speakers": [ "Venat", "Amaurotanerin Venat" ]
     },
     {
+        "voiceName": "Hien",
+        "speakers": [ "Mettius"]
+    },
+    {
         "voiceName": "Ilberd",
         "speakers": [ "Golbez" ]
     },
