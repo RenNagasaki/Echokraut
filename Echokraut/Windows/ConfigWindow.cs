@@ -13,11 +13,14 @@ using System.IO;
 using Dalamud.Interface.ImGuiFileDialog;
 using OtterGui;
 using Dalamud.Interface.Utility.Raii;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using static System.Net.Mime.MediaTypeNames;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using System.Xml.Linq;
 using OtterGui.Widgets;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
+using Dalamud.Game.ClientState.Objects.SubKinds;
 
 namespace Echokraut.Windows;
 
@@ -48,6 +51,8 @@ public class ConfigWindow : Window, IDisposable
     private string originalText = "";
     private string correctedText = "";
     private IClientState clientState;
+    private unsafe Camera* camera;
+    private unsafe IPlayerCharacter localPlayer;
 
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
@@ -400,7 +405,7 @@ public class ConfigWindow : Window, IDisposable
         }
     }
 
-    private void DrawBubbleSettings()
+    private unsafe void DrawBubbleSettings()
     {
         var voiceBubbles = this.Configuration.VoiceBubble;
         if (ImGui.Checkbox("Voice NPC Bubbles", ref voiceBubbles))
@@ -426,12 +431,39 @@ public class ConfigWindow : Window, IDisposable
             }
 
             var voiceBubbleAudibleRange = this.Configuration.VoiceBubbleAudibleRange;
-            if (ImGui.SliderInt("3D Space audible range (shared with chat)", ref voiceBubbleAudibleRange, 1, 20))
+            if (ImGui.SliderFloat("3D Space audible range (shared with chat)", ref voiceBubbleAudibleRange, .1f, 2f))
             {
                 this.Configuration.VoiceBubbleAudibleRange = voiceBubbleAudibleRange;
                 this.Configuration.Save();
 
                 echokraut.addonBubbleHelper.Update3DFactors(voiceBubbleAudibleRange);
+            }
+
+
+            if (camera == null && CameraManager.Instance() != null)
+                camera = CameraManager.Instance()->GetActiveCamera();
+
+            localPlayer = clientState.LocalPlayer!;
+
+            var position = new Vector3();
+            if (Configuration.VoiceSourceCam)
+                position = camera->CameraBase.SceneCamera.Position;
+            else
+                position = localPlayer.Position;
+
+            if (ImGui.CollapsingHeader("3D space debug info##3DSpaceDebug"))
+            {
+                ImGui.TextUnformatted($"Pos-X: {position.X}");
+                ImGui.TextUnformatted($"Pos-Y: {position.Y}");
+                ImGui.TextUnformatted($"Pos-Z: {position.Z}");
+
+                if (camera != null)
+                {
+                    var matrix = camera->CameraBase.SceneCamera.ViewMatrix;
+                    ImGui.TextUnformatted($"Rot-X: {matrix[2]}");
+                    ImGui.TextUnformatted($"Rot-Y: {matrix[1]}");
+                    ImGui.TextUnformatted($"Rot-Z: {matrix[0]}");
+                }
             }
         }
     }
@@ -525,7 +557,7 @@ public class ConfigWindow : Window, IDisposable
             }
 
             var voiceBubbleAudibleRange = this.Configuration.VoiceBubbleAudibleRange;
-            if (ImGui.SliderInt("3D Space audible range (shared with bubbles)", ref voiceBubbleAudibleRange, 1, 20))
+            if (ImGui.SliderFloat("3D Space audible range (shared with chat)", ref voiceBubbleAudibleRange, .1f, 2f))
             {
                 this.Configuration.VoiceBubbleAudibleRange = voiceBubbleAudibleRange;
                 this.Configuration.Save();
