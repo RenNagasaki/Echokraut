@@ -217,7 +217,7 @@ namespace Echokraut.Helper
             }
             logListFiltered.Sort((p, q) => p.timeStamp.CompareTo(q.timeStamp));
 
-            return logListFiltered;
+            return new List<LogMessage> (logListFiltered);
         }
 
         public static List<LogMessage> FilterLogList(TextSource textSource, string eventId)
@@ -255,7 +255,7 @@ namespace Echokraut.Helper
                     break;
             }
 
-            return logListFiltered;
+            return new List<LogMessage>(logListFiltered);
         }
     }
 }
