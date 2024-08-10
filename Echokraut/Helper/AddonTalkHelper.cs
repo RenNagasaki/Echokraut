@@ -4,6 +4,9 @@ using R3;
 using Echokraut.TextToTalk.Utils;
 using Dalamud.Configuration;
 using Echokraut.DataClasses;
+using static Dalamud.Plugin.Services.IFramework;
+using System.IO;
+using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Echokraut.Enums;
 using Echokraut.Utils;
@@ -26,6 +29,7 @@ public class AddonTalkHelper
     public DateTime timeNextVoice = DateTime.Now;
 
     public static nint Address { get; set; }
+    private AddonTalkState lastValue;
 
     public AddonTalkHelper(Echokraut plugin, IAddonLifecycle addonLifecycle, IClientState clientState, IObjectTable objects, Configuration config)
     {
@@ -60,6 +64,12 @@ public class AddonTalkHelper
 
     private void Mutate(AddonTalkState nextValue)
     {
+        if (lastValue.Equals(nextValue))
+        {
+            return;
+        }
+
+        lastValue = nextValue;
         HandleChange(nextValue);
     }
 
@@ -124,6 +134,12 @@ public class AddonTalkHelper
     {
         var addonTalk = GetAddonTalk();
         return addonTalk == null ? null : TalkUtils.ReadTalkAddon(addonTalk);
+    }
+
+    public unsafe bool IsVisible()
+    {
+        var addonTalk = GetAddonTalk();
+        return addonTalk != null && addonTalk->AtkUnitBase.IsVisible;
     }
 
     private unsafe AddonTalk* GetAddonTalk()

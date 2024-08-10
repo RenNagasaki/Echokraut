@@ -30,6 +30,7 @@ public class AddonBattleTalkHelper
     private readonly Echokraut plugin;
     public bool nextIsVoice = false;
     public DateTime timeNextVoice = DateTime.Now;
+    private AddonBattleTalkState lastValue;
 
     public AddonBattleTalkHelper(Echokraut plugin, IAddonLifecycle addonLifecycle, IClientState clientState, IObjectTable objects, Configuration config)
     {
@@ -75,6 +76,12 @@ public class AddonBattleTalkHelper
 
     private void Mutate(AddonBattleTalkState nextValue)
     {
+        if (lastValue.Equals(nextValue))
+        {
+            return;
+        }
+
+        lastValue = nextValue;
         HandleChange(nextValue);
     }
 
