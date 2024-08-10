@@ -100,8 +100,12 @@
         "speakers": [ "Venat", "Amaurotanerin Venat" ]
     },
     {
+        "voiceName": "Wuk Lamat",
+        "speakers": [ "Energetische Frau" ]
+    },
+    {
         "voiceName": "Ilberd",
-        "speakers": [ "Golbez" ]
+        "speakers": [ "Golbez", "Durante" ]
     },
     {
         "voiceName": "Coph-coodg",
