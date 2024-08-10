@@ -45,6 +45,12 @@ public class AddonTalkHelper
     private void HookIntoFrameworkUpdate()
     {
         addonLifecycle.RegisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
+        addonLifecycle.RegisterListener(AddonEvent.PreFinalize, "Talk", OnPreFinalize);
+    }
+
+    private void OnPreFinalize(AddonEvent type, AddonArgs args)
+    {
+        echokraut.Cancel(new EKEventId(0, Enums.TextSource.AddonTalk));
     }
 
     private unsafe void OnPostDraw(AddonEvent type, AddonArgs args)
@@ -90,13 +96,6 @@ public class AddonTalkHelper
         if (voiceNext && DateTime.Now > timeNextVoice.AddSeconds(1))
             voiceNext = false;
 
-        if (state == default)
-        {
-            PlayingHelper.InDialog = false;
-            // The addon was closed
-            echokraut.Cancel(new EKEventId(0, Enums.TextSource.AddonTalk));
-            return;
-        }
         var eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
 
         // Notify observers that the addon state was advanced
@@ -156,5 +155,6 @@ public class AddonTalkHelper
     public void Dispose()
     {
         addonLifecycle.UnregisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
+        addonLifecycle.UnregisterListener(AddonEvent.PreFinalize, "Talk", OnPreFinalize);
     }
 }
