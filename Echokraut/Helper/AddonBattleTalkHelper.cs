@@ -28,19 +28,8 @@ public class AddonBattleTalkHelper
     private readonly IObjectTable objects;
     private readonly Configuration config;
     private readonly Echokraut plugin;
-    private OnUpdateDelegate updateHandler;
     public bool nextIsVoice = false;
     public DateTime timeNextVoice = DateTime.Now;
-
-    private readonly string name;
-
-    protected nint Address { get; set; }
-    private static nint oldAddress { get; set; }
-
-    // Most recent speaker/text specific to this addon
-    private string? lastAddonSpeaker;
-    private string? lastAddonText;
-    private AddonBattleTalkState lastValue;
 
     public AddonBattleTalkHelper(Echokraut plugin, IAddonLifecycle addonLifecycle, IClientState clientState, IObjectTable objects, Configuration config)
     {
@@ -86,12 +75,6 @@ public class AddonBattleTalkHelper
 
     private void Mutate(AddonBattleTalkState nextValue)
     {
-        if (lastValue.Equals(nextValue))
-        {
-            return;
-        }
-
-        lastValue = nextValue;
         HandleChange(nextValue);
     }
 
@@ -114,21 +97,6 @@ public class AddonBattleTalkHelper
         text = TalkUtils.NormalizePunctuation(text);
 
         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk: \"{text}\"", eventId);
-
-
-        {
-            // This entire callback executes twice in a row - once for the voice line, and then again immediately
-            // afterwards for the framework update itself. This prevents the second invocation from being spoken.
-            if (lastAddonSpeaker == speaker && lastAddonText == text)
-            {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping duplicate line: {text}", eventId);
-                LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                return;
-            }
-
-            lastAddonSpeaker = speaker;
-            lastAddonText = text;
-        }
 
         if (voiceNext)
         {

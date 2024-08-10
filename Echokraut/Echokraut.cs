@@ -90,7 +90,7 @@ public partial class Echokraut : IDalamudPlugin
         ECommonsMain.Init(pluginInterface, this, ECommons.Module.All);
         this.ConfigWindow = new ConfigWindow(this, Configuration, this.ClientState);
         this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration, new EKEventId(0, Enums.TextSource.None));
-        this.addonTalkHelper = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
+        this.addonTalkHelper = new AddonTalkHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
         this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, sigScanner, gameInterop);
         this.addonSelectStringHelper = new AddonSelectStringHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, condition, this.Configuration);
