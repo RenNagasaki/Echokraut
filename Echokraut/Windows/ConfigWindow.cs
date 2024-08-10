@@ -21,6 +21,7 @@ using System.Xml.Linq;
 using OtterGui.Widgets;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using Dalamud.Game.ClientState.Objects.SubKinds;
+using Dalamud.Game.Command;
 
 namespace Echokraut.Windows;
 
@@ -173,6 +174,33 @@ public class ConfigWindow : Window, IDisposable
                     {
                         ReloadRemoteMappings();
                     }
+
+                    ImGui.NewLine();
+                    ImGui.TextUnformatted("Available commands:");
+                    ImGui.TextUnformatted("/ekt");
+                    ImGui.SameLine();
+                    ImGui.TextUnformatted("Toggles Echokraut");
+                    ImGui.TextUnformatted("/ekttalk");
+                    ImGui.SameLine();
+                    ImGui.TextUnformatted("Toggles dialogue voicing");
+                    ImGui.TextUnformatted("/ektbtalk");
+                    ImGui.SameLine();
+                    ImGui.TextUnformatted("Toggles battle dialogue voicing");
+                    ImGui.TextUnformatted("/ektbubble");
+                    ImGui.SameLine();
+                    ImGui.TextUnformatted("Toggles bubble voicing");
+                    ImGui.TextUnformatted("/ektchat");
+                    ImGui.SameLine();
+                    ImGui.TextUnformatted("Toggles chat voicing");
+                    ImGui.TextUnformatted("/ektcutschoice");
+                    ImGui.SameLine();
+                    ImGui.TextUnformatted("Toggles cutscene choice voicing");
+                    ImGui.TextUnformatted("/ektchoice");
+                    ImGui.SameLine();
+                    ImGui.TextUnformatted("Toggles choice voicing");
+                    ImGui.TextUnformatted("/ek");
+                    ImGui.SameLine();
+                    ImGui.TextUnformatted("Opens the configuration window");
                 }
 
                 using (var disabled = ImRaii.Disabled(!Configuration.Enabled))

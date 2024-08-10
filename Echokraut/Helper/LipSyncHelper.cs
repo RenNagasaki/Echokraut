@@ -177,15 +177,20 @@ namespace Echokraut.Helper
                         }
                         catch (TaskCanceledException)
                         {
-
-
-                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was canceled.", eventId);
-
-                            animationMemory.LipsOverride = 0;
-                            MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
-                            MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
-                            cts.Dispose();
-                            taskCancellations.Remove(character);
+                            try
+                            {
+                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task canceling.", eventId);
+                                animationMemory.LipsOverride = 0;
+                                MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
+                                MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
+                                cts.Dispose();
+                                taskCancellations.Remove(character);
+                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was canceled.", eventId);
+                            }
+                            catch (Exception ex)
+                            {
+                                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while cancelling task. Exception: {ex}", eventId);
+                            }
                         }
                     }, token);
                 }
@@ -194,34 +199,34 @@ namespace Echokraut.Helper
 
         public async void StopLipSync(EKEventId eventId)
         {
-            if (Conditions.IsBoundByDuty) return;
-            if (!config.Enabled) return;
-            if (currentLipsync == null) return;
-
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Stopping Lipsync for {currentLipsync.Name}", eventId);
-            if (taskCancellations.TryGetValue(currentLipsync, out var cts))
-            {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Cancellation " + currentLipsync.Name, eventId);
-                try
-                {
-                    cts.Cancel();
-                }
-                catch (ObjectDisposedException)
-                {
-                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"CTS for {currentLipsync.Name} was called to be disposed even though it was disposed already.", eventId);
-                }
-                return;
-            }
-
             try
             {
-                //LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StopLipSync " + character.Name);
+                if (Conditions.IsBoundByDuty) return;
+                if (!config.Enabled) return;
+                if (currentLipsync == null) return;
+
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Stopping Lipsync for {currentLipsync.Name.TextValue}", eventId);
+                if (taskCancellations.TryGetValue(currentLipsync, out var cts))
+                {
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Cancellation " + currentLipsync.Name.TextValue, eventId);
+                    try
+                    {
+                        cts.Cancel();
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"CTS for {currentLipsync.Name.TextValue} was called to be disposed even though it was disposed already.", eventId);
+                    }
+                    return;
+                }
+
                 var actorMemory = new ActorMemory();
                 actorMemory.SetAddress(currentLipsync.Address);
                 var animationMemory = actorMemory.Animation;
                 animationMemory.LipsOverride = 0;
                 MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), currentIntialState, "Animation Mode Override");
                 MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
+                taskCancellations.Remove(currentLipsync);
             }
             catch (Exception ex)
             {

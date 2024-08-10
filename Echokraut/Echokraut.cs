@@ -8,23 +8,15 @@ using Echokraut.Enums;
 using System;
 using Echokraut.TextToTalk.Utils;
 using Echokraut.DataClasses;
-using System.Collections.Generic;
 using System.Linq;
 using Dalamud.Game.Text.SeStringHandling;
 using GameObject = Dalamud.Game.ClientState.Objects.Types.IGameObject;
-using Lumina.Excel.GeneratedSheets;
 using Echokraut.Helper;
-using Echokraut.Extensions;
 using Echokraut.Utils;
 using System.Reflection;
-using System.Runtime.Loader;
-using System.Windows.Forms;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Dalamud.Game.ClientState.Objects.Enums;
 using ECommons;
-using static Anamnesis.GUI.Views.FileBrowserView;
-using System.Xml.Linq;
+using FFXIVClientStructs.FFXIV.Client.UI;
 
 namespace Echokraut;
 
@@ -99,7 +91,7 @@ public partial class Echokraut : IDalamudPlugin
         this.ConfigWindow = new ConfigWindow(this, Configuration, this.ClientState);
         this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration, new EKEventId(0, Enums.TextSource.None));
         this.addonTalkHelper = new AddonTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
-        this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, this.ClientState, this.Condition, this.GameGui, this.Framework, this.ObjectTable, this.Configuration);
+        this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
         this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, sigScanner, gameInterop);
         this.addonSelectStringHelper = new AddonSelectStringHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, condition, this.Configuration);
         this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
@@ -123,6 +115,10 @@ public partial class Echokraut : IDalamudPlugin
         CommandManager.AddHandler("/ektbubble", new CommandInfo(OnCommand)
         {
             HelpMessage = "Toggles bubble voicing"
+        });
+        CommandManager.AddHandler("/ektchat", new CommandInfo(OnCommand)
+        {
+            HelpMessage = "Toggles chat voicing"
         });
         CommandManager.AddHandler("/ektcutschoice", new CommandInfo(OnCommand)
         {
@@ -355,6 +351,10 @@ public partial class Echokraut : IDalamudPlugin
                 break;
             case "/ektbubble":
                 Configuration.VoiceBubble = !Configuration.VoiceBubble;
+                Configuration.Save();
+                break;
+            case "/ektchat":
+                Configuration.VoiceChat = !Configuration.VoiceChat;
                 Configuration.Save();
                 break;
             case "/ektcutschoice":

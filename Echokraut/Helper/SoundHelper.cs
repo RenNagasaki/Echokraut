@@ -159,7 +159,8 @@ public class SoundHelper : IDisposable
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Caught playback of known voice line at address {soundDataPtr:x}", new EKEventId(0, TextSource.AddonBattleTalk));
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Caught playback of known voice line at address {soundDataPtr:x}", new EKEventId(0, TextSource.AddonTalk));
                 this.addonTalkHelper.PollAddon(AddonPollSource.VoiceLinePlayback);
-                this.addonBattleTalkHelper.PollAddon(AddonPollSource.VoiceLinePlayback);
+                this.addonBattleTalkHelper.nextIsVoice = true;
+                this.addonBattleTalkHelper.timeNextVoice = DateTime.Now;
             }
         }
         catch (Exception exc)

@@ -14,21 +14,23 @@ using static System.Net.Mime.MediaTypeNames;
 using System.Reflection;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using Dalamud.Game.Addon.Lifecycle;
+using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 
 namespace Echokraut.Helper;
 
 public class AddonBattleTalkHelper
 {
-    private record struct AddonBattleTalkState(string? Speaker, string? Text, AddonPollSource PollSource);
+    private record struct AddonBattleTalkState(string? Speaker, string? Text);
 
-    private readonly IObjectTable objects;
+    private readonly IAddonLifecycle addonLifecycle;
     private readonly IClientState clientState;
-    private readonly ICondition condition;
-    private readonly IGameGui gui;
-    private readonly IFramework framework;
+    private readonly IObjectTable objects;
     private readonly Configuration config;
     private readonly Echokraut plugin;
     private OnUpdateDelegate updateHandler;
+    public bool nextIsVoice = false;
+    public DateTime timeNextVoice = DateTime.Now;
 
     private readonly string name;
 
@@ -40,13 +42,11 @@ public class AddonBattleTalkHelper
     private string? lastAddonText;
     private AddonBattleTalkState lastValue;
 
-    public AddonBattleTalkHelper(Echokraut plugin, IClientState clientState, ICondition condition, IGameGui gui, IFramework framework, IObjectTable objects, Configuration config)
+    public AddonBattleTalkHelper(Echokraut plugin, IAddonLifecycle addonLifecycle, IClientState clientState, IObjectTable objects, Configuration config)
     {
-        this.plugin = plugin;
+        this.addonLifecycle = addonLifecycle;
         this.clientState = clientState;
-        this.condition = condition;
-        this.gui = gui;
-        this.framework = framework;
+        this.plugin = plugin;
         this.config = config;
         this.objects = objects;
 
@@ -55,77 +55,57 @@ public class AddonBattleTalkHelper
 
     private void HookIntoFrameworkUpdate()
     {
-        updateHandler = new OnUpdateDelegate(Handle);
-        framework.Update += updateHandler;
-
+        addonLifecycle.RegisterListener(AddonEvent.PostDraw, "_BattleTalk", OnPostDraw);
     }
-    void Handle(IFramework f)
+
+    private unsafe void OnPostDraw(AddonEvent type, AddonArgs args)
     {
-        UpdateAddonAddress();
+        var addonTalk = (AddonBattleTalk*)args.Addon.ToPointer();
+        Handle(addonTalk);
+    }
+    private unsafe void Handle(AddonBattleTalk* addonTalk)
+    {
         if (!config.Enabled) return;
         if (!config.VoiceBattleDialogue) return;
-        PollAddon(AddonPollSource.FrameworkUpdate);
+        var state = GetTalkAddonState(addonTalk);
+        Mutate(state);
     }
 
-    private bool Mutate(AddonBattleTalkState nextValue)
+    private unsafe AddonBattleTalkState GetTalkAddonState(AddonBattleTalk* addonTalk)
     {
-        if (lastValue.Equals(nextValue))
-        {
-            return false;
-        }
-
-        lastValue = nextValue;
-        return HandleChange(nextValue);
-    }
-
-    private void UpdateAddonAddress()
-    {
-        if (!clientState.IsLoggedIn || condition[ConditionFlag.CreatingCharacter])
-        {
-            Address = nint.Zero;
-            return;
-        }
-
-        Address = gui.GetAddonByName("_BattleTalk");
-        if (Address != nint.Zero && oldAddress != Address)
-        {
-            oldAddress = Address;
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk address found: {Address}", new EKEventId(0, TextSource.AddonBattleTalk));
-        }
-    }
-
-    private AddonBattleTalkState GetTalkAddonState(AddonPollSource pollSource)
-    {
-        if (!IsVisible())
-        {
-            return default;
-        }
-
-        var addonTalkText = ReadText();
+        var addonTalkText = ReadText(addonTalk);
         return addonTalkText != null
-            ? new AddonBattleTalkState(addonTalkText.Speaker, addonTalkText.Text, pollSource)
+            ? new AddonBattleTalkState(addonTalkText.Speaker, addonTalkText.Text)
             : default;
     }
 
-    public bool PollAddon(AddonPollSource pollSource)
+    public unsafe AddonTalkText? ReadText(AddonBattleTalk* addonTalk)
     {
-        var state = GetTalkAddonState(pollSource);
-        return Mutate(state);
+        return addonTalk == null ? null : TalkUtils.ReadTalkAddon(addonTalk);
     }
 
-    private bool HandleChange(AddonBattleTalkState state)
+    private void Mutate(AddonBattleTalkState nextValue)
     {
-        var (speaker, text, pollSource) = state;
-
-        if (state == default)
+        if (lastValue.Equals(nextValue))
         {
-            // The addon was closed
-            lastAddonSpeaker = "";
-            lastAddonText = "";
-            return false;
+            return;
         }
+
+        lastValue = nextValue;
+        HandleChange(nextValue);
+    }
+
+    private void HandleChange(AddonBattleTalkState state)
+    {
+        var (speaker, text) = state;
+        var voiceNext = nextIsVoice;
+        nextIsVoice = false;
+
+        if (voiceNext && DateTime.Now > timeNextVoice.AddSeconds(1))
+            voiceNext = false;
+
         EKEventId eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonBattleTalk);
-        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk ({pollSource}): \"{state}\"", eventId);
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk: \"{state}\"", eventId);
 
         // Notify observers that the addon state was advanced
         if (!config.VoiceBattleDialogQueued)
@@ -133,7 +113,7 @@ public class AddonBattleTalkHelper
 
         text = TalkUtils.NormalizePunctuation(text);
 
-        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk ({pollSource}): \"{text}\"", eventId);
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk: \"{text}\"", eventId);
 
 
         {
@@ -143,22 +123,22 @@ public class AddonBattleTalkHelper
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping duplicate line: {text}", eventId);
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                return false;
+                return;
             }
 
             lastAddonSpeaker = speaker;
             lastAddonText = text;
         }
 
-        if (pollSource == AddonPollSource.VoiceLinePlayback)
+        if (voiceNext)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}", eventId);
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-            return true;
+            return;
         }
 
         // Find the game object this speaker is representing
-        var speakerObj = speaker != null ? ObjectTableUtils.GetGameObjectByName(clientState, objects, speaker, eventId) : null;
+        var speakerObj = speaker != null ? ObjectTableUtils.GetGameObjectByName(this.clientState, this.objects, speaker, eventId) : null;
 
         if (speakerObj != null)
         {
@@ -169,27 +149,11 @@ public class AddonBattleTalkHelper
             plugin.Say(eventId, null, state.Speaker ?? "", text);
         }
 
-        return false;
-    }
-
-    public unsafe AddonTalkText? ReadText()
-    {
-        var addonTalk = GetAddonTalkBattle();
-        return addonTalk == null ? null : TalkUtils.ReadTalkAddon(addonTalk);
-    }
-
-    public unsafe bool IsVisible()
-    {
-        var addonTalk = GetAddonTalkBattle();
-        return addonTalk != null && addonTalk->AtkUnitBase.IsVisible;
-    }
-    private unsafe AddonBattleTalk* GetAddonTalkBattle()
-    {
-        return (AddonBattleTalk*)Address.ToPointer();
+        return;
     }
 
     public void Dispose()
     {
-        framework.Update -= updateHandler;
+        addonLifecycle.UnregisterListener(AddonEvent.PostDraw, "_BattleTalk", OnPostDraw);
     }
 }
