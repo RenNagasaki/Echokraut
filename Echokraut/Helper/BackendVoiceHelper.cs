@@ -45,6 +45,8 @@ namespace Echokraut.Helper
 
             GenderDisplay = genderDisplay.ToArray();
             RaceDisplay = raceDisplay.ToArray();
+
+            DataHelper.RefreshSelectables();
         }
     }
 }

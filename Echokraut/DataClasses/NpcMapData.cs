@@ -3,10 +3,6 @@ using Echokraut.Enums;
 using Echokraut.Helper;
 using OtterGui.Widgets;
 using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Echokraut.DataClasses
 {
@@ -27,6 +23,7 @@ namespace Echokraut.DataClasses
 
         [NonSerialized]
         public ClippedSelectableCombo<BackendVoiceItem> voicesSelectable;
+                
 
         public NpcMapData(ObjectKind objectKind) {
             this.objectKind = objectKind;

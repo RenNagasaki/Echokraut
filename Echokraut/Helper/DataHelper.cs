@@ -9,6 +9,7 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using LanguageDetection;
 using Lumina.Excel.GeneratedSheets;
 using Microsoft.VisualBasic.Logging;
+using R3;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -84,6 +85,19 @@ namespace Echokraut.Helper
             return datas;
         }
 
+        public static void RefreshSelectables()
+        {
+            try
+            {
+                Configuration.MappedNpcs.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 250, BackendVoiceHelper.Voices, g => g.ToString()));
+                Configuration.MappedPlayers.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 250, BackendVoiceHelper.Voices, g => g.ToString()));
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error Exception: {ex}", new EKEventId(0, TextSource.None));
+            }
+        }
+
         public static ClientLanguage GetTextLanguage(string text, EKEventId eventId)
         {
             //var languageString = Detector.Detect(text);
@@ -141,9 +155,9 @@ namespace Echokraut.Helper
                 if (result == null)
                 {
                     datas.Add(data);
-                    ConfigWindow.UpdateNpcData = true;
-                    ConfigWindow.UpdateBubbleData = true;
-                    ConfigWindow.UpdatePlayerData = true;
+                    ConfigWindow.UpdateDataNpcs = true;
+                    ConfigWindow.UpdateDataBubbles = true;
+                    ConfigWindow.UpdateDataPlayers = true;
                     var mapping = data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? "player" : "npc";
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Added new {mapping} to mapping: {data.ToString()}", eventId);
 

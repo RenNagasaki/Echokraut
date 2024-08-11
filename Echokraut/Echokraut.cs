@@ -82,11 +82,11 @@ public partial class Echokraut : IDalamudPlugin
         Configuration.Initialize(PluginInterface);
 
         LogHelper.Setup(log, Configuration);
+        DataHelper.Setup(Configuration, this.ClientState, this.DataManager);
         BackendHelper.Setup(Configuration, clientState, this, Configuration.BackendSelection);
         VoiceMapHelper.Setup(this.ClientState.ClientLanguage);
         NpcGenderRacesHelper.Setup();
         VolumeHelper.Setup(gameConfig);
-        DataHelper.Setup(Configuration, this.ClientState, this.DataManager);
         ECommonsMain.Init(pluginInterface, this, ECommons.Module.All);
         this.ConfigWindow = new ConfigWindow(this, Configuration, this.ClientState);
         this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration, new EKEventId(0, Enums.TextSource.None));
