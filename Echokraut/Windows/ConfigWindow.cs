@@ -653,7 +653,7 @@ public class ConfigWindow : Window, IDisposable
             {
                 if (ImGui.BeginTable("NPC Table##NPCTable", 8, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollY))
                 {
-                    ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
+                    ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
                     ImGui.TableSetupColumn("Lock", ImGuiTableColumnFlags.None, 35f);
                     ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.None, 125);
@@ -885,7 +885,7 @@ public class ConfigWindow : Window, IDisposable
             {
                 if (ImGui.BeginTable("Player Table##PlayerTable", 8, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollY))
                 {
-                    ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
+                    ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
                     ImGui.TableSetupColumn("Lock", ImGuiTableColumnFlags.None, 35f);
                     ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.None, 125);
@@ -1346,7 +1346,7 @@ public class ConfigWindow : Window, IDisposable
             {
                 if (ImGui.BeginTable("Voice Table##VoiceTable", 4, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollY))
                 {
-                    ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
+                    ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
                     ImGui.TableSetupColumn("Test", ImGuiTableColumnFlags.None, 70f);
                     ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.None, 125);
