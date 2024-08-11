@@ -154,11 +154,12 @@ namespace Echokraut.Helper
 
                 if (result == null)
                 {
-                    datas.Add(data);
+                    BackendHelper.GetVoiceOrRandom(eventId, data);
                     data.voicesSelectable = new($"##AllVoices{data.ToString()}", string.Empty, 250, BackendVoiceHelper.Voices, g => g.ToString());
                     ConfigWindow.UpdateDataNpcs = true;
                     ConfigWindow.UpdateDataBubbles = true;
                     ConfigWindow.UpdateDataPlayers = true;
+                    datas.Add(data);
                     var mapping = data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? "player" : "npc";
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Added new {mapping} to mapping: {data.ToString()}", eventId);
 
