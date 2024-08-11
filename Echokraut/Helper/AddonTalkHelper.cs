@@ -28,6 +28,7 @@ public class AddonTalkHelper
     private readonly Configuration config;
     private readonly Echokraut echokraut;
     public bool nextIsVoice = false;
+    private bool wasTalking = false;
     public DateTime timeNextVoice = DateTime.Now;
 
     public static nint Address { get; set; }
@@ -47,14 +48,23 @@ public class AddonTalkHelper
     private void HookIntoFrameworkUpdate()
     {
         addonLifecycle.RegisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
-        addonLifecycle.RegisterListener(AddonEvent.PreUpdate, "Talk", OnPreUpdate);
+        addonLifecycle.RegisterListener(AddonEvent.PostUpdate, "Talk", OnPostUpdate);
     }
 
-    private void OnPreUpdate(AddonEvent type, AddonArgs args)
+    private unsafe void OnPostUpdate(AddonEvent type, AddonArgs args)
     {
-        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Addon closed", new EKEventId(0, TextSource.AddonTalk));
-        var addonTalk = args.Addon.;
-        echokraut.Cancel(new EKEventId(0, Enums.TextSource.AddonTalk));
+        var addonTalk = (AddonTalk*)args.Addon.ToPointer();
+
+        if (addonTalk != null)
+        {
+            var visible = addonTalk->AtkUnitBase.IsVisible;
+            if (!visible && wasTalking)
+            {
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Addon closed", new EKEventId(0, TextSource.AddonTalk));
+                wasTalking = false;
+                echokraut.Cancel(new EKEventId(0, Enums.TextSource.AddonTalk));
+            }
+        }
     }
 
     private unsafe void OnPostDraw(AddonEvent type, AddonArgs args)
@@ -122,6 +132,7 @@ public class AddonTalkHelper
         PlayingHelper.InDialog = true;
         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Setting inDialog true", eventId);
 
+        wasTalking = true;
         if (speakerObj != null)
         {
             echokraut.Say(eventId, speakerObj, speakerObj.Name, text);
@@ -158,6 +169,6 @@ public class AddonTalkHelper
     public void Dispose()
     {
         addonLifecycle.UnregisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
-        addonLifecycle.UnregisterListener(AddonEvent.PreFinalize, "Talk", OnPreFinalize);
+        addonLifecycle.UnregisterListener(AddonEvent.PostUpdate, "Talk", OnPostUpdate);
     }
 }
