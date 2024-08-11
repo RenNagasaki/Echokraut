@@ -41,6 +41,8 @@ namespace Echokraut.Helper
         private Echokraut echokraut;
         private unsafe Camera* camera;
         private unsafe IPlayerCharacter localPlayer;
+        public bool nextIsVoice = false;
+        public DateTime timeNextVoice = DateTime.Now;
 
         public unsafe AddonBubbleHelper(Echokraut echokraut, IDataManager dataManager, IFramework framework, IObjectTable objectTable , ISigScanner sigScanner, IGameInteropProvider gameInteropProvider, IClientState clientState, Configuration config)
         {
@@ -132,6 +134,12 @@ namespace Echokraut.Helper
                 if (!configuration.Enabled || !configuration.VoiceBubble)
                     return mOpenChatBubbleHook.Original(pThis, pActor, pString, param3, attachmentPointID);
 
+                var voiceNext = nextIsVoice;
+                nextIsVoice = false;
+
+                if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(100))
+                    voiceNext = false;
+
                 var territoryRow = clientState.TerritoryType;
                 var territory = dataManager.GetExcelSheet<TerritoryType>()!.GetRow(territoryRow);
                 if (!configuration.VoiceBubblesInCity && !territory.Mount)
@@ -140,7 +148,7 @@ namespace Echokraut.Helper
                 if (pString != IntPtr.Zero && !clientState.IsPvPExcludingDen)
                 {
                     //	Idk if the actor can ever be null, but if it can, assume that we should print the bubble just in case.  Otherwise, only don't print if the actor is a player.
-                    if (pActor == null || (byte)pActor->ObjectKind != (byte)Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
+                    if ((pActor == null && !voiceNext) || ((byte)pActor->ObjectKind != (byte)Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player && !voiceNext))
                     {
                         EKEventId eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonBubble);
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found EntityId: {pActor->GetGameObjectId().ObjectId}", eventId);

@@ -114,21 +114,46 @@ namespace Echokraut.Helper
             NpcMapData? result = null;
             var datas = GetCharacterMapDatas(eventId.textSource);
 
-            result = datas.Find(p => p.ToString() == data.ToString());
+            if (data.race == NpcRaces.Unknown)
+            {
+                var oldResult = datas.Find(p => p.ToString() == data.ToString());
+                result = datas.Find(p => p.name == data.name && p.race != NpcRaces.Unknown);
+
+                if (result != null)
+                    datas.Remove(oldResult);
+            }
+            else if (data.race != NpcRaces.Unknown)
+            {
+                result = datas.Find(p => p.name == data.name && p.race == NpcRaces.Unknown);
+
+                if (result != null)
+                {
+                    data.voiceItem = result.voiceItem;
+                    datas.Remove(result);
+                    result = null;
+                }
+            }
 
             if (result == null)
             {
-                datas.Add(data);
-                ConfigWindow.UpdateNpcData = true;
-                ConfigWindow.UpdateBubbleData = true;
-                ConfigWindow.UpdatePlayerData = true;
-                var mapping = data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? "player" : "npc";
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Added new {mapping} to mapping: {data.ToString()}", eventId);
+                result = datas.Find(p => p.ToString() == data.ToString());
 
-                result = data;
+                if (result == null)
+                {
+                    datas.Add(data);
+                    ConfigWindow.UpdateNpcData = true;
+                    ConfigWindow.UpdateBubbleData = true;
+                    ConfigWindow.UpdatePlayerData = true;
+                    var mapping = data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? "player" : "npc";
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Added new {mapping} to mapping: {data.ToString()}", eventId);
+
+                    result = data;
+                }
+                else
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found existing mapping for: {data.ToString()} result: {result.ToString()}", eventId);
             }
             else
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found existing mapping for: {data.ToString()} result.", eventId);
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found existing mapping for: {data.ToString()} result: {result.ToString()}", eventId);
 
             return result;
         }

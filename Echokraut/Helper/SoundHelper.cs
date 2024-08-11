@@ -44,13 +44,15 @@ public class SoundHelper : IDisposable
 
     private readonly AddonTalkHelper addonTalkHelper;
     private readonly AddonBattleTalkHelper addonBattleTalkHelper;
+    private readonly AddonBubbleHelper addonBubbleHelper;
 
-    public SoundHelper(AddonTalkHelper addonTalkHelper, AddonBattleTalkHelper addonBattleTalkHelper,
+    public SoundHelper(AddonTalkHelper addonTalkHelper, AddonBattleTalkHelper addonBattleTalkHelper, AddonBubbleHelper addonBubbleHelper,
         ISigScanner sigScanner, IGameInteropProvider gameInterop)
     {
 
         this.addonTalkHelper = addonTalkHelper;
         this.addonBattleTalkHelper = addonBattleTalkHelper;
+        this.addonBubbleHelper = addonBubbleHelper;
 
         if (sigScanner.TryScanText(LoadSoundFileSig, out var loadSoundFilePtr))
         {
@@ -162,6 +164,8 @@ public class SoundHelper : IDisposable
                 this.addonTalkHelper.timeNextVoice = DateTime.Now;
                 this.addonBattleTalkHelper.nextIsVoice = true;
                 this.addonBattleTalkHelper.timeNextVoice = DateTime.Now;
+                this.addonBubbleHelper.nextIsVoice = true;
+                this.addonBubbleHelper.timeNextVoice = DateTime.Now;
             }
         }
         catch (Exception exc)

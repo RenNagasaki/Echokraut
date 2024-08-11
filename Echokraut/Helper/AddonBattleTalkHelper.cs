@@ -91,7 +91,7 @@ public class AddonBattleTalkHelper
         var voiceNext = nextIsVoice;
         nextIsVoice = false;
 
-        if (voiceNext && DateTime.Now > timeNextVoice.AddSeconds(1))
+        if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(100))
             voiceNext = false;
 
         EKEventId eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonBattleTalk);

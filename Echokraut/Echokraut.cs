@@ -92,11 +92,11 @@ public partial class Echokraut : IDalamudPlugin
         this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration, new EKEventId(0, Enums.TextSource.None));
         this.addonTalkHelper = new AddonTalkHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
-        this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, sigScanner, gameInterop);
         this.addonSelectStringHelper = new AddonSelectStringHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, condition, this.Configuration);
         this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
         this.addonBubbleHelper = new AddonBubbleHelper(this, this.DataManager, this.Framework, this.ObjectTable,sigScanner, gameInterop, this.ClientState, this.Configuration);
         this.chatTalkHelper = new ChatTalkHelper(this, this.Configuration, chatGui, objectTable, clientState);
+        this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, this.addonBubbleHelper, sigScanner, gameInterop);
 
         WindowSystem.AddWindow(ConfigWindow);
 
@@ -205,12 +205,7 @@ public partial class Echokraut : IDalamudPlugin
                 npcData.name = GetBubbleName(speaker, cleanText);
 
             var resNpcData = DataHelper.GetAddCharacterMapData(npcData, eventId);
-            if (resNpcData != null && resNpcData.race == NpcRaces.Unknown && npcData.raceStr != NpcRaces.Unknown.ToString())
-            {
-                resNpcData.race = npcData.race;
-                resNpcData.raceStr = npcData.raceStr;
-                Configuration.Save();
-            }
+            Configuration.Save();
 
             npcData = resNpcData;
 

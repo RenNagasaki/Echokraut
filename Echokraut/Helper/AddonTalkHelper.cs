@@ -93,7 +93,7 @@ public class AddonTalkHelper
         var voiceNext = nextIsVoice;
         nextIsVoice = false;
 
-        if (voiceNext && DateTime.Now > timeNextVoice.AddSeconds(1))
+        if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(100))
             voiceNext = false;
 
         var eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
