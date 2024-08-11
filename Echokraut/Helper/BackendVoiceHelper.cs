@@ -1,5 +1,6 @@
 using Echokraut.DataClasses;
 using Echokraut.Enums;
+using Echokraut.Windows;
 using ECommons;
 using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using OtterGui.Widgets;
@@ -47,6 +48,7 @@ namespace Echokraut.Helper
             RaceDisplay = raceDisplay.ToArray();
 
             DataHelper.RefreshSelectables();
+            ConfigWindow.UpdateDataVoices = true;
         }
     }
 }
