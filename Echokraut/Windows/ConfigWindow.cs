@@ -677,7 +677,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcRace", ref filterRaceNpcs, 40) || (filterRaceNpcs.Length > 0 && UpdateDataNpcs))
                     {
-                        filteredNpcs = filteredNpcs.FindAll(p => p.race.ToString().ToLower().StartsWith(filterRaceNpcs.ToLower()));
+                        filteredNpcs = filteredNpcs.FindAll(p => p.race.ToString().ToLower().Contains(filterRaceNpcs.ToLower()));
                         UpdateDataNpcs = true;
                         resetDataNpcs = true;
                     }
@@ -685,7 +685,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcName", ref filterNameNpcs, 40) || (filterNameNpcs.Length > 0 && UpdateDataNpcs))
                     {
-                        filteredNpcs = filteredNpcs.FindAll(p => p.name.ToLower().StartsWith(filterNameNpcs.ToLower()));
+                        filteredNpcs = filteredNpcs.FindAll(p => p.name.ToLower().Contains(filterNameNpcs.ToLower()));
                         UpdateDataNpcs = true;
                         resetDataNpcs = true;
                     }
@@ -693,7 +693,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcVoice", ref filterVoiceNpcs, 40) || (filterVoiceNpcs.Length > 0 && UpdateDataNpcs))
                     {
-                        filteredNpcs = filteredNpcs.FindAll(p => p.voiceItem != null && p.voiceItem.ToString().ToLower().StartsWith(filterVoiceNpcs.ToLower()));
+                        filteredNpcs = filteredNpcs.FindAll(p => p.voiceItem != null && p.voiceItem.ToString().ToLower().Contains(filterVoiceNpcs.ToLower()));
                         UpdateDataNpcs = true;
                         resetDataNpcs = true;
                     }
@@ -909,7 +909,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcRace", ref filterRacePlayers, 40) || (filterRacePlayers.Length > 0 && UpdateDataPlayers))
                     {
-                        filteredPlayers = filteredPlayers.FindAll(p => p.race.ToString().ToLower().StartsWith(filterRacePlayers.ToLower()));
+                        filteredPlayers = filteredPlayers.FindAll(p => p.race.ToString().ToLower().Contains(filterRacePlayers.ToLower()));
                         UpdateDataPlayers = true;
                         resetDataPlayers = true;
                     }
@@ -917,7 +917,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcName", ref filterNamePlayers, 40) || (filterNamePlayers.Length > 0 && UpdateDataPlayers))
                     {
-                        filteredPlayers = filteredPlayers.FindAll(p => p.name.ToLower().StartsWith(filterNamePlayers.ToLower()));
+                        filteredPlayers = filteredPlayers.FindAll(p => p.name.ToLower().Contains(filterNamePlayers.ToLower()));
                         UpdateDataPlayers = true;
                         resetDataPlayers = true;
                     }
@@ -925,7 +925,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcVoice", ref filterVoicePlayers, 40) || (filterVoicePlayers.Length > 0 && UpdateDataPlayers))
                     {
-                        filteredPlayers = filteredPlayers.FindAll(p => p.voiceItem != null && p.voiceItem.ToString().ToLower().StartsWith(filterVoicePlayers.ToLower()));
+                        filteredPlayers = filteredPlayers.FindAll(p => p.voiceItem != null && p.voiceItem.ToString().ToLower().Contains(filterVoicePlayers.ToLower()));
                         UpdateDataPlayers = true;
                         resetDataPlayers = true;
                     }
@@ -1140,7 +1140,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcRace", ref filterRaceBubbles, 40) || (filterRaceBubbles.Length > 0 && UpdateDataBubbles))
                     {
-                        filteredBubbles = filteredBubbles.FindAll(p => p.race.ToString().ToLower().StartsWith(filterRaceBubbles.ToLower()));
+                        filteredBubbles = filteredBubbles.FindAll(p => p.race.ToString().ToLower().Contains(filterRaceBubbles.ToLower()));
                         UpdateDataBubbles = true;
                         resetDataBubbles = true;
                     }
@@ -1148,7 +1148,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcName", ref filterNameBubbles, 40) || (filterNameBubbles.Length > 0 && UpdateDataBubbles))
                     {
-                        filteredBubbles = filteredBubbles.FindAll(p => p.name.ToLower().StartsWith(filterNameBubbles.ToLower()));
+                        filteredBubbles = filteredBubbles.FindAll(p => p.name.ToLower().Contains(filterNameBubbles.ToLower()));
                         UpdateDataBubbles = true;
                         resetDataBubbles = true;
                     }
@@ -1156,7 +1156,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcVoice", ref filterVoiceBubbles, 40) || (filterVoiceBubbles.Length > 0 && UpdateDataBubbles))
                     {
-                        filteredBubbles = filteredBubbles.FindAll(p => p.voiceItem != null && p.voiceItem.ToString().ToLower().StartsWith(filterVoiceBubbles.ToLower()));
+                        filteredBubbles = filteredBubbles.FindAll(p => p.voiceItem != null && p.voiceItem.ToString().ToLower().Contains(filterVoiceBubbles.ToLower()));
                         UpdateDataBubbles = true;
                         resetDataBubbles = true;
                     }
@@ -1366,7 +1366,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcRace", ref filterRaceVoices, 40) || (filterRaceVoices.Length > 0 && UpdateDataVoices))
                     {
-                        filteredVoices = filteredVoices.FindAll(p => p.race.ToString().ToLower().StartsWith(filterRaceVoices.ToLower()));
+                        filteredVoices = filteredVoices.FindAll(p => p.race.ToString().ToLower().Contains(filterRaceVoices.ToLower()));
                         UpdateDataVoices = true;
                         resetDataVoices = true;
                     }
@@ -1374,7 +1374,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcName", ref filterNameVoices, 40) || (filterNameVoices.Length > 0 && UpdateDataVoices))
                     {
-                        filteredVoices = filteredVoices.FindAll(p => p.voiceName.ToLower().StartsWith(filterNameVoices.ToLower()));
+                        filteredVoices = filteredVoices.FindAll(p => p.voiceName.ToLower().Contains(filterNameVoices.ToLower()));
                         UpdateDataVoices = true;
                         resetDataVoices = true;
                     }

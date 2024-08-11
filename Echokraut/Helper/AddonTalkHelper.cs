@@ -13,6 +13,8 @@ using Echokraut.Utils;
 using System.Reflection;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using static System.Net.Mime.MediaTypeNames;
 
 namespace Echokraut.Helper;
 
@@ -45,11 +47,13 @@ public class AddonTalkHelper
     private void HookIntoFrameworkUpdate()
     {
         addonLifecycle.RegisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
-        addonLifecycle.RegisterListener(AddonEvent.PreFinalize, "Talk", OnPreFinalize);
+        addonLifecycle.RegisterListener(AddonEvent.PreUpdate, "Talk", OnPreUpdate);
     }
 
-    private void OnPreFinalize(AddonEvent type, AddonArgs args)
+    private void OnPreUpdate(AddonEvent type, AddonArgs args)
     {
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Addon closed", new EKEventId(0, TextSource.AddonTalk));
+        var addonTalk = args.Addon.;
         echokraut.Cancel(new EKEventId(0, Enums.TextSource.AddonTalk));
     }
 
@@ -74,7 +78,6 @@ public class AddonTalkHelper
         {
             return;
         }
-
         lastValue = nextValue;
         HandleChange(nextValue);
     }

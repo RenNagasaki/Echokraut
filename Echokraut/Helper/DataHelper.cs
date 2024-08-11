@@ -155,6 +155,7 @@ namespace Echokraut.Helper
                 if (result == null)
                 {
                     datas.Add(data);
+                    data.voicesSelectable = new($"##AllVoices{data.ToString()}", string.Empty, 250, BackendVoiceHelper.Voices, g => g.ToString());
                     ConfigWindow.UpdateDataNpcs = true;
                     ConfigWindow.UpdateDataBubbles = true;
                     ConfigWindow.UpdateDataPlayers = true;
