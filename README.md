@@ -36,6 +36,7 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 ## Setup/Install
 * Setup [AllTalk_TTS](https://github.com/erew123/alltalk_tts) -> Refer to this site on how to install (Branch v2_Beta preferred. It's faster, easier to use, and more reliable).
 * (Optional) Finetune the xtts2 model to your own voices. Will sound better than simple voice cloning.
+* (Optional) To create your own trained voice model on your own FFXIV GameData, check out: [Echokraut Tools](https://github.com/RenNagasaki/Echokraut-Tools)
 * Add the following path to the experimental paths of [Dalamud](https://github.com/goatcorp/Dalamud): `https://raw.githubusercontent.com/RenNagasaki/MyDalamudPlugins/master/pluginmaster.json`
 * Search for 'Echokraut' in Dalamud and install the plugin
 * Open the settings window either via the button or by typing `/ek`
