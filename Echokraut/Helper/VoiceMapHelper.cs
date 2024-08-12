@@ -16,6 +16,8 @@ namespace Echokraut.Helper
     {
         private static string VoiceNamesDE = "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesDE.json";
         private static string VoiceNamesEN = "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesEN.json";
+        private static string VoiceNamesFR = "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesFR.json";
+        private static string VoiceNamesJA = "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesJA.json";
         public static List<VoiceMap> VoiceMaps;
 
         public static void Setup(ClientLanguage clientLanguage)
@@ -30,9 +32,13 @@ namespace Echokraut.Helper
                         url = VoiceNamesDE;
                         break;
                     case ClientLanguage.English:
-                    case ClientLanguage.Japanese:
-                    case ClientLanguage.French:
                         url = VoiceNamesEN;
+                        break;
+                    case ClientLanguage.Japanese:
+                        url = VoiceNamesJA;
+                        break;
+                    case ClientLanguage.French:
+                        url = VoiceNamesFR;
                         break;
                 }
                 WebRequest request = WebRequest.Create(url);

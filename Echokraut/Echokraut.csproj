@@ -63,6 +63,9 @@
     <None Update="Resources\Echokraut.png">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
+    <None Update="Resources\VoiceNamesFR.json">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
     <None Update="Resources\VoiceNamesDE.json">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>

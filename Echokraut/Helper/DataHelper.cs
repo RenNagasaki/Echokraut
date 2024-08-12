@@ -178,7 +178,7 @@ namespace Echokraut.Helper
         {
             var resultText = text;
 
-            resultText = Regex.Replace(resultText, "(?<=^|[^/.\\w])[a-zA-ZäöüÄÖÜ]+[\\.\\,\\!\\?](?=[a-zA-ZäöüÄÖÜ])", "$& ");
+            resultText = Regex.Replace(resultText, @"(?<=^|[^/.\w])[a-zA-ZäöüÄÖÜ]+[\.\,\!\?](?=[a-zA-ZäöüÄÖÜ])", "$& ");
 
             return resultText;
         }
