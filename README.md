@@ -43,9 +43,10 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 * In the 'Settings -> Backend' Tab enter the url of your [AllTalk_TTS](https://github.com/erew123/alltalk_tts) instance. (127.0.0.1:7851 should be default)
 * If clicking 'Test Connection' results in `ready` you're set.
 * (IMPORTANT) The naming scheme of the voices should be like this: `GENDER_RACE_NAME.wav`.
-    For example: `Male_Hyur_Thancred.wav` for a named NPC
-    and `Male_Hyur_NPC1.wav` for a random Hyur NPC. If more than one NPC voice exists then the plugin selects one randomly the first time you meet a new NPC. IMPORTANT: Number the NPCs in an increment(NPC1, NPC2 ...). Do not skip a number. This will produce problems
-    There is one exception, the so called narrator voice. It gets used for all dialogues without a speaker and all NPCs where no other voice could be found (last fallback) and should be named `Narrator.wav`.
+  For example: `Male_Hyur_Thancred.wav` for a named NPC
+  and `Male_Hyur_NPC1.wav` for a random Hyur NPC. If more than one NPC voice exists then the plugin selects one randomly the first time you meet a new NPC. IMPORTANT: Number the NPCs in an increment(NPC1, NPC2 ...). Do not skip a number. This will produce problems
+  There is one exception, the so called narrator voice. It gets used for all dialogues without a speaker and all NPCs where no other voice could be found (last fallback) and should be named `Narrator.wav` (Always should be existing).
+  For NPCs with multiple names (Nanamo Ul Namo/Lilira) or same voice actor take a look at this file: [VoiceNames](https://github.com/RenNagasaki/Echokraut/blob/master/Echokraut/Resources/VoiceNamesDE.json) or the one matching your language. If there is no entry for one you're expecting feel free to add a pull request. These files are in the works while people use the plugin. (I can't fill this for other languages)
 * Small example of how the files should be named:
 * ![grafik](https://github.com/user-attachments/assets/7a879f5d-9753-423b-a6cc-850871f6eba9)
 
