@@ -598,7 +598,7 @@ public class ConfigWindow : Window, IDisposable
             }
 
             var voiceBubbleAudibleRange = this.Configuration.VoiceBubbleAudibleRange;
-            if (ImGui.SliderFloat("3D Space audible range (shared with chat)", ref voiceBubbleAudibleRange, .1f, 2f))
+            if (ImGui.SliderFloat("3D Space audible range (shared with chat)", ref voiceBubbleAudibleRange, 0f, 2f))
             {
                 this.Configuration.VoiceBubbleAudibleRange = voiceBubbleAudibleRange;
                 this.Configuration.Save();
