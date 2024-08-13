@@ -65,24 +65,23 @@ namespace Echokraut.Helper
             return Territory;
         }
 
-        private static List<NpcMapData> GetCharacterMapDatas(TextSource textSource) {
-            List<NpcMapData> datas = new List<NpcMapData>();
-
-            switch (textSource)
+        private static List<NpcMapData> GetCharacterMapDatas(EKEventId eventId) {
+            switch (eventId.textSource)
             {
                 case TextSource.AddonTalk:
                 case TextSource.AddonBattleTalk:
                 case TextSource.AddonBubble:
-                    datas = Configuration.MappedNpcs;
-                    break;
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found mapping: {Configuration.MappedNpcs} count: {Configuration.MappedNpcs.Count()}", eventId);
+                    return Configuration.MappedNpcs;
                 case TextSource.AddonSelectString:
                 case TextSource.AddonCutSceneSelectString:
                 case TextSource.Chat:
-                    datas = Configuration.MappedPlayers;
-                    break;
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found mapping: {Configuration.MappedPlayers} count: {Configuration.MappedPlayers.Count()}", eventId);
+                    return Configuration.MappedPlayers;
             }
 
-            return datas;
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Didn't find a mapping.", eventId);
+            return new List<NpcMapData>();
         }
 
         public static void RefreshSelectables()
@@ -126,7 +125,7 @@ namespace Echokraut.Helper
         public static NpcMapData GetAddCharacterMapData(NpcMapData data, EKEventId  eventId)
         {
             NpcMapData? result = null;
-            var datas = GetCharacterMapDatas(eventId.textSource);
+            var datas = GetCharacterMapDatas(eventId);
 
             if (data.race == NpcRaces.Unknown)
             {
@@ -154,12 +153,12 @@ namespace Echokraut.Helper
 
                 if (result == null)
                 {
-                    BackendHelper.GetVoiceOrRandom(eventId, data);
+                    datas.Add(data);
                     data.voicesSelectable = new($"##AllVoices{data.ToString()}", string.Empty, 250, BackendVoiceHelper.Voices, g => g.ToString());
+                    BackendHelper.GetVoiceOrRandom(eventId, data);
                     ConfigWindow.UpdateDataNpcs = true;
                     ConfigWindow.UpdateDataBubbles = true;
                     ConfigWindow.UpdateDataPlayers = true;
-                    datas.Add(data);
                     var mapping = data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? "player" : "npc";
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Added new {mapping} to mapping: {data.ToString()}", eventId);
 

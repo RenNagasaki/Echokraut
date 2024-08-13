@@ -217,12 +217,10 @@ namespace Echokraut.Helper
                     if (npcData.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
                     {
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem} for Player: {npcName}", eventId);
-                        Configuration.MappedPlayers = Configuration.MappedPlayers.OrderBy(p => p.ToString()).ToList();
                     }
                     else
                     {
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem} for NPC: {npcName}", eventId);
-                        Configuration.MappedNpcs = Configuration.MappedNpcs.OrderBy(p => p.ToString()).ToList();
                     }
                     npcData.voiceItem = voiceItem;
                     Configuration.Save();

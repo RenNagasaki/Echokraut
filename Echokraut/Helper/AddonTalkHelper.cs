@@ -62,6 +62,7 @@ public class AddonTalkHelper
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Addon closed", new EKEventId(0, TextSource.AddonTalk));
                 wasTalking = false;
+                PlayingHelper.InDialog = false;
                 echokraut.Cancel(new EKEventId(0, Enums.TextSource.AddonTalk));
             }
         }

@@ -52,6 +52,7 @@ public static class CharacterGenderRaceUtils
 
         // Get actor gender as defined by its struct.
         var actorGender = (Gender)charaStruct->DrawData.CustomizeData.Sex;
+        LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Gender found on GameObject: {actorGender}", eventId);
 
         // Player gender overrides will be handled by a different system.
         if (speaker.ObjectKind is ObjectKind.Player)

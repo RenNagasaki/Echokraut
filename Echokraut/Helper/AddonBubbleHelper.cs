@@ -78,7 +78,7 @@ namespace Echokraut.Helper
 
         public void Update3DFactors(float audibleRange)
         {
-            ManagedBass.Bass.Set3DFactors(0.9144f, audibleRange, 1);
+            ManagedBass.Bass.Set3DFactors(1, audibleRange, 1);
             ManagedBass.Bass.Apply3D();
             LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Updated 3D factors to: {audibleRange}", new EKEventId(0, TextSource.AddonBubble));
         }

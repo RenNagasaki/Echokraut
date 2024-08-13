@@ -472,7 +472,7 @@ public class ConfigWindow : Window, IDisposable
             }
 
             var voiceBubbleAudibleRange = this.Configuration.VoiceBubbleAudibleRange;
-            if (ImGui.SliderFloat("3D Space audible range (shared with chat)", ref voiceBubbleAudibleRange, .1f, 2f))
+            if (ImGui.SliderFloat("3D Space audible range (shared with chat)", ref voiceBubbleAudibleRange, 0f, 2f))
             {
                 this.Configuration.VoiceBubbleAudibleRange = voiceBubbleAudibleRange;
                 this.Configuration.Save();
@@ -639,12 +639,12 @@ public class ConfigWindow : Window, IDisposable
         {
             if (filteredNpcs == null)
             {
-                filteredNpcs = Configuration.MappedNpcs.FindAll(p => !p.name.StartsWith("BB"));
+                UpdateDataNpcs = true;
             }
 
             if (UpdateDataNpcs || (resetDataNpcs && (filterGenderNpcs.Length == 0 || filterRaceNpcs.Length == 0 || filterNameNpcs.Length == 0)))
             {
-                filteredNpcs = Configuration.MappedNpcs;
+                filteredNpcs = Configuration.MappedNpcs.FindAll(p => !p.name.StartsWith("BB"));
                 UpdateDataNpcs = true;
                 resetDataNpcs = false;
             }
@@ -669,7 +669,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcGender", ref filterGenderNpcs, 40) || (filterGenderNpcs.Length > 0 && UpdateDataNpcs))
                     {
-                        filteredNpcs = filteredNpcs.FindAll(p => p.gender.ToString().ToLower().StartsWith(filterGenderNpcs.ToLower()));
+                        filteredNpcs = filteredNpcs.FindAll(p => !p.name.StartsWith("BB") && p.gender.ToString().ToLower().StartsWith(filterGenderNpcs.ToLower()));
                         UpdateDataNpcs = true;
                         resetDataNpcs = true;
                     }
@@ -677,7 +677,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcRace", ref filterRaceNpcs, 40) || (filterRaceNpcs.Length > 0 && UpdateDataNpcs))
                     {
-                        filteredNpcs = filteredNpcs.FindAll(p => p.race.ToString().ToLower().Contains(filterRaceNpcs.ToLower()));
+                        filteredNpcs = filteredNpcs.FindAll(p => !p.name.StartsWith("BB") && p.race.ToString().ToLower().Contains(filterRaceNpcs.ToLower()));
                         UpdateDataNpcs = true;
                         resetDataNpcs = true;
                     }
@@ -685,7 +685,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcName", ref filterNameNpcs, 40) || (filterNameNpcs.Length > 0 && UpdateDataNpcs))
                     {
-                        filteredNpcs = filteredNpcs.FindAll(p => p.name.ToLower().Contains(filterNameNpcs.ToLower()));
+                        filteredNpcs = filteredNpcs.FindAll(p => !p.name.StartsWith("BB") && p.name.ToLower().Contains(filterNameNpcs.ToLower()));
                         UpdateDataNpcs = true;
                         resetDataNpcs = true;
                     }
@@ -693,7 +693,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcVoice", ref filterVoiceNpcs, 40) || (filterVoiceNpcs.Length > 0 && UpdateDataNpcs))
                     {
-                        filteredNpcs = filteredNpcs.FindAll(p => p.voiceItem != null && p.voiceItem.ToString().ToLower().Contains(filterVoiceNpcs.ToLower()));
+                        filteredNpcs = filteredNpcs.FindAll(p => !p.name.StartsWith("BB") && p.voiceItem != null && p.voiceItem.ToString().ToLower().Contains(filterVoiceNpcs.ToLower()));
                         UpdateDataNpcs = true;
                         resetDataNpcs = true;
                     }
@@ -871,7 +871,7 @@ public class ConfigWindow : Window, IDisposable
         {
             if (filteredPlayers == null)
             {
-                filteredPlayers = Configuration.MappedPlayers;
+                UpdateDataPlayers = true;
             }
 
             if (UpdateDataPlayers || (resetDataPlayers && (filterGenderPlayers.Length == 0 || filterRacePlayers.Length == 0 || filterNamePlayers.Length == 0)))
