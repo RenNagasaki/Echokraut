@@ -150,6 +150,7 @@ namespace Echokraut.Helper
             var showInfo = false;
             var showDebug = false;
             var showError = false;
+            var showId0 = false;
             switch (textSource)
             {
                 case TextSource.None:
@@ -158,6 +159,7 @@ namespace Echokraut.Helper
                     showInfo = Config.logConfig.ShowGeneralInfoLog;
                     showDebug = Config.logConfig.ShowGeneralDebugLog;
                     showError = Config.logConfig.ShowGeneralErrorLog;
+                    showId0 = true;
                     break;
                 case TextSource.Chat:
                     ChatLogsFiltered = new List<LogMessage>(ChatLogs);
@@ -165,6 +167,7 @@ namespace Echokraut.Helper
                     showInfo = Config.logConfig.ShowChatInfoLog;
                     showDebug = Config.logConfig.ShowChatDebugLog;
                     showError = Config.logConfig.ShowChatErrorLog;
+                    showId0 = Config.logConfig.ShowChatId0;
                     break;
                 case TextSource.AddonTalk:
                     TalkLogsFiltered = new List<LogMessage>(TalkLogs);
@@ -172,6 +175,7 @@ namespace Echokraut.Helper
                     showInfo = Config.logConfig.ShowTalkInfoLog;
                     showDebug = Config.logConfig.ShowTalkDebugLog;
                     showError = Config.logConfig.ShowTalkErrorLog;
+                    showId0 = Config.logConfig.ShowTalkId0;
                     break;
                 case TextSource.AddonBattleTalk:
                     BattleTalkLogsFiltered = new List<LogMessage>(BattleTalkLogs);
@@ -179,6 +183,7 @@ namespace Echokraut.Helper
                     showInfo = Config.logConfig.ShowBattleTalkInfoLog;
                     showDebug = Config.logConfig.ShowBattleTalkDebugLog;
                     showError = Config.logConfig.ShowBattleTalkErrorLog;
+                    showId0 = Config.logConfig.ShowBattleTalkId0;
                     break;
                 case TextSource.AddonSelectString:
                     SelectStringLogsFiltered = new List<LogMessage>(SelectStringLogs);
@@ -186,6 +191,7 @@ namespace Echokraut.Helper
                     showInfo = Config.logConfig.ShowSelectStringInfoLog;
                     showDebug = Config.logConfig.ShowSelectStringDebugLog;
                     showError = Config.logConfig.ShowSelectStringErrorLog;
+                    showId0 = Config.logConfig.ShowSelectStringId0;
                     break;
                 case TextSource.AddonCutSceneSelectString:
                     CutSceneSelectStringLogsFiltered = new List<LogMessage>(CutSceneSelectStringLogs);
@@ -193,6 +199,7 @@ namespace Echokraut.Helper
                     showInfo = Config.logConfig.ShowCutSceneSelectStringInfoLog;
                     showDebug = Config.logConfig.ShowCutSceneSelectStringDebugLog;
                     showError = Config.logConfig.ShowCutSceneSelectStringErrorLog;
+                    showId0 = Config.logConfig.ShowCutSceneSelectStringId0;
                     break;
                 case TextSource.AddonBubble:
                     BubbleLogsFiltered = new List<LogMessage>(BubbleLogs);
@@ -200,6 +207,7 @@ namespace Echokraut.Helper
                     showInfo = Config.logConfig.ShowBubbleInfoLog;
                     showDebug = Config.logConfig.ShowBubbleDebugLog;
                     showError = Config.logConfig.ShowBubbleErrorLog;
+                    showId0 = Config.logConfig.ShowBubbleId0;
                     break;
             }
 
@@ -215,6 +223,11 @@ namespace Echokraut.Helper
             {
                 logListFiltered.RemoveAll(p => p.type == LogType.Error);
             }
+            if (!showId0)
+            {
+                logListFiltered.RemoveAll(p => p.eventId.Id == 0);
+            }
+
             logListFiltered.Sort((p, q) => p.timeStamp.CompareTo(q.timeStamp));
 
             return new List<LogMessage> (logListFiltered);

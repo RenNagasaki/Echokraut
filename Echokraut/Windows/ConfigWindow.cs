@@ -1631,6 +1631,13 @@ public class ConfigWindow : Window, IDisposable
                             this.Configuration.Save();
                             LogHelper.RecreateLogList(TextSource.AddonTalk);
                         }
+                        var showId0 = this.Configuration.logConfig.ShowTalkId0;
+                        if (ImGui.Checkbox("Show ID: 0", ref showId0))
+                        {
+                            this.Configuration.logConfig.ShowTalkId0 = showId0;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.AddonTalk);
+                        }
                         var jumpToBottom = this.Configuration.logConfig.TalkJumpToBottom;
                         if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
                         {
@@ -1697,6 +1704,13 @@ public class ConfigWindow : Window, IDisposable
                         if (ImGui.Checkbox("Show error logs", ref showErrorLog))
                         {
                             this.Configuration.logConfig.ShowBattleTalkErrorLog = showErrorLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.AddonBattleTalk);
+                        }
+                        var showId0 = this.Configuration.logConfig.ShowBattleTalkId0;
+                        if (ImGui.Checkbox("Show ID: 0", ref showId0))
+                        {
+                            this.Configuration.logConfig.ShowBattleTalkId0 = showId0;
                             this.Configuration.Save();
                             LogHelper.RecreateLogList(TextSource.AddonBattleTalk);
                         }
@@ -1769,6 +1783,13 @@ public class ConfigWindow : Window, IDisposable
                             this.Configuration.Save();
                             LogHelper.RecreateLogList(TextSource.Chat);
                         }
+                        var showId0 = this.Configuration.logConfig.ShowChatId0;
+                        if (ImGui.Checkbox("Show ID: 0", ref showId0))
+                        {
+                            this.Configuration.logConfig.ShowChatId0 = showId0;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.Chat);
+                        }
                         var jumpToBottom = this.Configuration.logConfig.ChatJumpToBottom;
                         if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
                         {
@@ -1835,6 +1856,13 @@ public class ConfigWindow : Window, IDisposable
                         if (ImGui.Checkbox("Show error logs", ref showErrorLog))
                         {
                             this.Configuration.logConfig.ShowBubbleErrorLog = showErrorLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.AddonBubble);
+                        }
+                        var showId0 = this.Configuration.logConfig.ShowBubbleId0;
+                        if (ImGui.Checkbox("Show ID: 0", ref showId0))
+                        {
+                            this.Configuration.logConfig.ShowBubbleId0 = showId0;
                             this.Configuration.Save();
                             LogHelper.RecreateLogList(TextSource.AddonBubble);
                         }
@@ -1907,6 +1935,13 @@ public class ConfigWindow : Window, IDisposable
                             this.Configuration.Save();
                             LogHelper.RecreateLogList(TextSource.AddonCutSceneSelectString);
                         }
+                        var showId0 = this.Configuration.logConfig.ShowCutSceneSelectStringId0;
+                        if (ImGui.Checkbox("Show ID: 0", ref showId0))
+                        {
+                            this.Configuration.logConfig.ShowCutSceneSelectStringId0 = showId0;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.AddonCutSceneSelectString);
+                        }
                         var jumpToBottom = this.Configuration.logConfig.CutSceneSelectStringJumpToBottom;
                         if (ImGui.Checkbox("Always jump to bottom", ref jumpToBottom))
                         {
@@ -1973,6 +2008,13 @@ public class ConfigWindow : Window, IDisposable
                         if (ImGui.Checkbox("Show error logs", ref showErrorLog))
                         {
                             this.Configuration.logConfig.ShowSelectStringErrorLog = showErrorLog;
+                            this.Configuration.Save();
+                            LogHelper.RecreateLogList(TextSource.AddonSelectString);
+                        }
+                        var showId0 = this.Configuration.logConfig.ShowSelectStringId0;
+                        if (ImGui.Checkbox("Show ID: 0", ref showId0))
+                        {
+                            this.Configuration.logConfig.ShowSelectStringId0 = showId0;
                             this.Configuration.Save();
                             LogHelper.RecreateLogList(TextSource.AddonSelectString);
                         }

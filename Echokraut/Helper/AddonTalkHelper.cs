@@ -80,6 +80,7 @@ public class AddonTalkHelper
     {
         if (!config.Enabled) return;
         if (!config.VoiceDialogue) return;
+        if (addonTalk == null || !addonTalk->AtkUnitBase.IsVisible) return;
         var state = GetTalkAddonState(addonTalk);
         Mutate(state);
     }
@@ -87,9 +88,8 @@ public class AddonTalkHelper
     private void Mutate(AddonTalkState nextValue)
     {
         if (lastValue.Equals(nextValue))
-        {
             return;
-        }
+
         lastValue = nextValue;
         HandleChange(nextValue);
     }
