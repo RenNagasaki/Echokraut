@@ -2,7 +2,9 @@ using Dalamud.Game;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
+using Echokraut.Utils;
 using Echokraut.Windows;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
@@ -188,6 +190,22 @@ namespace Echokraut.Helper
             name = Regex.Replace(name, "[^a-zA-Z0-9-äöüÄÖÜ' ]+", "");
 
             return name;
+        }
+
+        internal unsafe static void PrintTargetInfo(IChatGui chatGui, IClientState clientState, IDataManager dataManager)
+        {
+            var localPlayer = clientState.LocalPlayer;
+
+            if (localPlayer != null) {
+                var target = localPlayer.TargetObject;
+                if (target != null)
+                {
+                        var race = CharacterGenderRaceUtils.GetSpeakerRace(dataManager, new EKEventId(0, TextSource.None), target, out var raceStr, out var modelId);
+                        var gender = CharacterGenderRaceUtils.GetCharacterGender(dataManager, new EKEventId(0, TextSource.None), target, race, out var modelBody);
+                        var bodyType = dataManager.GetExcelSheet<ENpcBase>()!.GetRow(target.DataId)?.BodyType;
+                        chatGui.Print(new Dalamud.Game.Text.XivChatEntry() { Name = target.Name, Message = $"Echokraut Target -> Name: {target.Name}, Race: {race}, Gender: {gender}, ModelID: {modelId}, ModelBody: {modelBody}, BodyType: {bodyType}", Timestamp = 22 * 60 + 12, Type = Dalamud.Game.Text.XivChatType.Echo });
+                }
+            }
         }
     }
 }

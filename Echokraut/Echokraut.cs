@@ -132,6 +132,10 @@ public partial class Echokraut : IDalamudPlugin
         {
             HelpMessage = "Opens the configuration window"
         });
+        CommandManager.AddHandler("/ekid", new CommandInfo(OnCommand)
+        {
+            HelpMessage = "Opens the configuration window"
+        });
 
         PluginInterface.UiBuilder.Draw += DrawUI;
 
@@ -191,9 +195,9 @@ public partial class Echokraut : IDalamudPlugin
             NpcMapData npcData = new NpcMapData(objectKind);
             // Get the speaker's race if it exists.
             var raceStr = "";
-            npcData.race = CharacterGenderRaceUtils.GetSpeakerRace(this.DataManager, eventId, speaker, out raceStr);
+            npcData.race = CharacterGenderRaceUtils.GetSpeakerRace(this.DataManager, eventId, speaker, out raceStr, out var modelId);
             npcData.raceStr = raceStr;
-            npcData.gender = CharacterGenderRaceUtils.GetCharacterGender(this.DataManager, eventId, speaker, npcData.race);
+            npcData.gender = CharacterGenderRaceUtils.GetCharacterGender(this.DataManager, eventId, speaker, npcData.race, out var modelBody);
             npcData.name = DataHelper.CleanUpName(cleanSpeakerName);
 
             if (npcData.objectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
@@ -316,6 +320,7 @@ public partial class Echokraut : IDalamudPlugin
         ConfigWindow.Dispose();
         CommandManager.RemoveHandler("/ek");
         CommandManager.RemoveHandler("/ekt");
+        CommandManager.RemoveHandler("/ekid");
         CommandManager.RemoveHandler("/ekttalk");
         CommandManager.RemoveHandler("/ektbtalk");
         CommandManager.RemoveHandler("/ektbubble");
@@ -331,6 +336,9 @@ public partial class Echokraut : IDalamudPlugin
         {
             case "/ek":
                 ToggleConfigUI();
+                break;
+            case "/ekid":
+                DataHelper.PrintTargetInfo(ChatGui, ClientState, DataManager);
                 break;
             case "/ekt":
                 Configuration.Enabled = !Configuration.Enabled;

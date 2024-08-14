@@ -9,6 +9,7 @@ using System;
 using Lumina.Excel.GeneratedSheets;
 using System.Collections.Generic;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
+using Lumina.Data.Structs;
 
 namespace Echokraut.Utils;
 
@@ -40,8 +41,9 @@ public static class CharacterGenderRaceUtils
         return true;
     }
 
-    public static unsafe Gender GetCharacterGender(IDataManager dataManager, EKEventId eventId, IGameObject? speaker, NpcRaces race)
+    public static unsafe Gender GetCharacterGender(IDataManager dataManager, EKEventId eventId, IGameObject? speaker, NpcRaces race, out uint? modelBody)
     {
+        modelBody = new uint?();
         if (speaker == null || speaker.Address == nint.Zero)
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "GameObject is null; cannot check gender.", eventId);
@@ -60,13 +62,13 @@ public static class CharacterGenderRaceUtils
             return actorGender;
         }
 
-        var modelBody = new uint?();
         if (actorGender == Gender.Male && IsWildRace(race))
         {
             modelBody = dataManager.GetExcelSheet<ENpcBase>()!.GetRow(speaker.DataId)?.ModelBody;
-            var npcGenderMap = NpcGenderRacesHelper.ModelsToGenderMap.Find(p => p.race == race && (p.maleDefault && p.male != modelBody));
+            var modBody = modelBody;
+            var npcGenderMap = NpcGenderRacesHelper.ModelsToGenderMap.Find(p => p.race == race && (p.maleDefault && p.male != modBody));
             if (npcGenderMap == null)
-                npcGenderMap = NpcGenderRacesHelper.ModelsToGenderMap.Find(p => p.race == race && (!p.maleDefault && p.female == modelBody));
+                npcGenderMap = NpcGenderRacesHelper.ModelsToGenderMap.Find(p => p.race == race && (!p.maleDefault && p.female == modBody));
             else
                 actorGender = Gender.Female;
 
@@ -78,11 +80,11 @@ public static class CharacterGenderRaceUtils
         return actorGender;
     }
 
-    public static unsafe NpcRaces GetSpeakerRace(IDataManager dataManager, EKEventId eventId, IGameObject? speaker, out string raceStr)
+    public static unsafe NpcRaces GetSpeakerRace(IDataManager dataManager, EKEventId eventId, IGameObject? speaker, out string raceStr, out int modelId)
     {
         var race = dataManager.GetExcelSheet<Race>();
         var raceEnum = NpcRaces.Unknown;
-
+        modelId = 0;
         try
         {
             if (race is null || speaker is null || speaker.Address == nint.Zero)
@@ -108,6 +110,7 @@ public static class CharacterGenderRaceUtils
                     if (activeData == -1)
                         activeData = modelData2;
 
+                    modelId = activeData;
                     LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"ModelId for Race matching: {activeData}", eventId);
                     var activeNpcRace = NpcRaces.Unknown;
                     try
