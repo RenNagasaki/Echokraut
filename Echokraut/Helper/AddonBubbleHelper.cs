@@ -137,7 +137,7 @@ namespace Echokraut.Helper
                 var voiceNext = nextIsVoice;
                 nextIsVoice = false;
 
-                if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(100))
+                if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(1000))
                     voiceNext = false;
 
                 var territoryRow = clientState.TerritoryType;

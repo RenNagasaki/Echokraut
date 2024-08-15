@@ -16,7 +16,8 @@ using Echokraut.Utils;
 using System.Reflection;
 using Dalamud.Game.ClientState.Objects.Enums;
 using ECommons;
-using FFXIVClientStructs.FFXIV.Client.UI;
+using Lumina.Excel.GeneratedSheets;
+using ECommons.Reflection;
 
 namespace Echokraut;
 
@@ -80,6 +81,7 @@ public partial class Echokraut : IDalamudPlugin
 
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Configuration.Initialize(PluginInterface);
+        pluginInterface.UiBuilder.DisableCutsceneUiHide = !Configuration.HideUiInCutscenes;
 
         LogHelper.Setup(log, Configuration);
         DataHelper.Setup(Configuration, this.ClientState, this.DataManager);
@@ -88,7 +90,7 @@ public partial class Echokraut : IDalamudPlugin
         NpcGenderRacesHelper.Setup();
         VolumeHelper.Setup(gameConfig);
         ECommonsMain.Init(pluginInterface, this, ECommons.Module.All);
-        this.ConfigWindow = new ConfigWindow(this, Configuration, this.ClientState);
+        this.ConfigWindow = new ConfigWindow(this, Configuration, this.ClientState, this.PluginInterface);
         this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration, new EKEventId(0, Enums.TextSource.None));
         this.addonTalkHelper = new AddonTalkHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
@@ -96,7 +98,7 @@ public partial class Echokraut : IDalamudPlugin
         this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
         this.addonBubbleHelper = new AddonBubbleHelper(this, this.DataManager, this.Framework, this.ObjectTable,sigScanner, gameInterop, this.ClientState, this.Configuration);
         this.chatTalkHelper = new ChatTalkHelper(this, this.Configuration, chatGui, objectTable, clientState);
-        this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, this.addonBubbleHelper, sigScanner, gameInterop);
+        this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, this.addonBubbleHelper, sigScanner, gameInterop, dataManager);
 
         WindowSystem.AddWindow(ConfigWindow);
 

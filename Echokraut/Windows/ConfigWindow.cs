@@ -23,6 +23,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.Command;
 using Anamnesis.GameData;
+using Dalamud.Plugin;
 
 namespace Echokraut.Windows;
 
@@ -30,6 +31,7 @@ public class ConfigWindow : Window, IDisposable
 {
     private Configuration Configuration;
     private Echokraut echokraut;
+    private IDalamudPluginInterface pluginInterface;
     private string testConnectionRes = "";
     private FileDialogManager fileDialogManager;
     private List<NpcMapData> filteredNpcs;
@@ -71,10 +73,11 @@ public class ConfigWindow : Window, IDisposable
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
     // and the window ID will always be "###XYZ counter window" for ImGui
-    public ConfigWindow(Echokraut plugin, Configuration configuration, IClientState clientState) : base($"Echokraut configuration###EKSettings")
+    public ConfigWindow(Echokraut plugin, Configuration configuration, IClientState clientState, IDalamudPluginInterface pluginInterface) : base($"Echokraut configuration###EKSettings")
     {
         this.echokraut = plugin;
         this.clientState = clientState;
+        this.pluginInterface = pluginInterface;
 
         Flags = ImGuiWindowFlags.AlwaysVerticalScrollbar & ImGuiWindowFlags.HorizontalScrollbar & ImGuiWindowFlags.AlwaysHorizontalScrollbar;
         Size = new Vector2(540, 480);
@@ -280,7 +283,16 @@ public class ConfigWindow : Window, IDisposable
             {
                 this.Configuration.RemoveStutters = removeStutters;
                 this.Configuration.Save();
-            } 
+            }
+
+
+            var hideUiInCutscenes = this.Configuration.HideUiInCutscenes;
+            if (ImGui.Checkbox("Hide UI in Cutscenes", ref hideUiInCutscenes))
+            {
+                this.Configuration.HideUiInCutscenes = hideUiInCutscenes;
+                this.Configuration.Save();
+                pluginInterface.UiBuilder.DisableCutsceneUiHide = !hideUiInCutscenes;
+            }
         }
     }
 

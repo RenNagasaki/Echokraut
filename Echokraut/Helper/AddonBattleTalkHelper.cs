@@ -16,6 +16,8 @@ using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using FFXIVClientStructs.FFXIV.Client.Game.Fate;
+using static Lumina.Models.Models.Model;
 
 namespace Echokraut.Helper;
 
@@ -50,28 +52,29 @@ public class AddonBattleTalkHelper
 
     private unsafe void OnPostDraw(AddonEvent type, AddonArgs args)
     {
-        var addonTalk = (AddonBattleTalk*)args.Addon.ToPointer();
-        Handle(addonTalk);
+        var addonBattleTalk = (AddonBattleTalk*)args.Addon.ToPointer();
+        Handle(addonBattleTalk);
     }
-    private unsafe void Handle(AddonBattleTalk* addonTalk)
+    private unsafe void Handle(AddonBattleTalk* addonBattleTalk)
     {
         if (!config.Enabled) return;
         if (!config.VoiceBattleDialogue) return;
-        var state = GetTalkAddonState(addonTalk);
+        if (addonBattleTalk == null || !addonBattleTalk->AtkUnitBase.IsVisible) return;
+        var state = GetTalkAddonState(addonBattleTalk);
         Mutate(state);
     }
 
-    private unsafe AddonBattleTalkState GetTalkAddonState(AddonBattleTalk* addonTalk)
+    private unsafe AddonBattleTalkState GetTalkAddonState(AddonBattleTalk* addonBattleTalk)
     {
-        var addonTalkText = ReadText(addonTalk);
-        return addonTalkText != null
-            ? new AddonBattleTalkState(addonTalkText.Speaker, addonTalkText.Text)
+        var addonBattleTalkText = ReadText(addonBattleTalk);
+        return addonBattleTalkText != null
+            ? new AddonBattleTalkState(addonBattleTalkText.Speaker, addonBattleTalkText.Text)
             : default;
     }
 
-    public unsafe AddonTalkText? ReadText(AddonBattleTalk* addonTalk)
+    public unsafe AddonTalkText? ReadText(AddonBattleTalk* addonBattleTalk)
     {
-        return addonTalk == null ? null : TalkUtils.ReadTalkAddon(addonTalk);
+        return addonBattleTalk == null ? null : TalkUtils.ReadTalkAddon(addonBattleTalk);
     }
 
     private void Mutate(AddonBattleTalkState nextValue)
@@ -91,7 +94,7 @@ public class AddonBattleTalkHelper
         var voiceNext = nextIsVoice;
         nextIsVoice = false;
 
-        if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(100))
+        if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(1000))
             voiceNext = false;
 
         EKEventId eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonBattleTalk);
