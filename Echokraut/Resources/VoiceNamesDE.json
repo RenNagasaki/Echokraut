@@ -104,6 +104,10 @@
         "speakers": [ "Energetische Frau" ]
     },
     {
+        "voiceName": "Fran",
+        "speakers": [ "Grazile Frau" ]
+    },
+    {
         "voiceName": "Ilberd",
         "speakers": [ "Golbez", "Durante" ]
     },
