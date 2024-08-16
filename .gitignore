@@ -2,5 +2,4 @@
 obj/
 bin/
 *.user
-/Echokraut/Properties/Resources.Designer.cs
-/Echokraut/Properties/Resources.resx
+ApiKeys.json
