@@ -66,9 +66,9 @@ public static class CharacterGenderRaceUtils
         {
             modelBody = dataManager.GetExcelSheet<ENpcBase>()!.GetRow(speaker.DataId)?.ModelBody;
             var modBody = modelBody;
-            var npcGenderMap = NpcGenderRacesHelper.ModelsToGenderMap.Find(p => p.race == race && (p.maleDefault && p.male != modBody));
+            var npcGenderMap = JsonLoaderHelper.ModelsToGenderMap.Find(p => p.race == race && (p.maleDefault && p.male != modBody));
             if (npcGenderMap == null)
-                npcGenderMap = NpcGenderRacesHelper.ModelsToGenderMap.Find(p => p.race == race && (!p.maleDefault && p.female == modBody));
+                npcGenderMap = JsonLoaderHelper.ModelsToGenderMap.Find(p => p.race == race && (!p.maleDefault && p.female == modBody));
             else
                 actorGender = Gender.Female;
 
@@ -115,7 +115,7 @@ public static class CharacterGenderRaceUtils
                     var activeNpcRace = NpcRaces.Unknown;
                     try
                     {
-                        if (NpcGenderRacesHelper.ModelsToRaceMap.TryGetValue(activeData, out activeNpcRace))
+                        if (JsonLoaderHelper.ModelsToRaceMap.TryGetValue(activeData, out activeNpcRace))
                             raceEnum = activeNpcRace;
                         else
                         {

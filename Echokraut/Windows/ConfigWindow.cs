@@ -2176,7 +2176,7 @@ public class ConfigWindow : Window, IDisposable
     private void ReloadRemoteMappings()
     {
         VoiceMapHelper.Setup(this.clientState.ClientLanguage);
-        NpcGenderRacesHelper.Setup();
+        JsonLoaderHelper.Setup();
     }
     #endregion
 }

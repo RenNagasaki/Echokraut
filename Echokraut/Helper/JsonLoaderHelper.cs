@@ -12,17 +12,20 @@ using System.Threading.Tasks;
 
 namespace Echokraut.Helper
 {
-    public static class NpcGenderRacesHelper
+    public static class JsonLoaderHelper
     {
         private static string RacePath = "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/NpcRaces.json";
         private static string GendersPath = "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/NpcGenders.json";
+        private static string EmoticonPath = "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/Emoticons.json";
 
         public static Dictionary<int, NpcRaces> ModelsToRaceMap;
         public static List<NpcGenderRaceMap> ModelsToGenderMap;
+        public static List<string> Emoticons;
         public static void Setup()
         {
             LoadModelsToRaceMap();
             LoadModelsToGenderMap();
+            LoadEmoticons();
         }
 
         private static void LoadModelsToRaceMap()
@@ -70,6 +73,30 @@ namespace Echokraut.Helper
             catch (Exception ex)
             {
                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while loading npc gender maps: {ex}", new EKEventId(0, TextSource.None));
+            }
+        }
+
+        private static void LoadEmoticons()
+        {
+            try
+            {
+                WebRequest request = WebRequest.Create(EmoticonPath);
+                WebResponse reply;
+                reply = request.GetResponse();
+                StreamReader returninfo = new StreamReader(reply.GetResponseStream());
+                string json = returninfo.ReadToEnd();
+                if (json == null)
+                {
+                    Emoticons = new List<string>();
+                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Failed to load emoticons.", new EKEventId(0, TextSource.None));
+                    return;
+                }
+                Emoticons = System.Text.Json.JsonSerializer.Deserialize<List<string>>(json);
+                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Loaded emoticons for {Emoticons.Count} emoticons", new EKEventId(0, TextSource.None));
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while loading emoticons: {ex}", new EKEventId(0, TextSource.None));
             }
         }
     }

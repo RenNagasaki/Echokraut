@@ -88,7 +88,7 @@ public partial class Echokraut : IDalamudPlugin
         DataHelper.Setup(Configuration, this.ClientState, this.DataManager);
         BackendHelper.Setup(Configuration, clientState, this, Configuration.BackendSelection);
         VoiceMapHelper.Setup(this.ClientState.ClientLanguage);
-        NpcGenderRacesHelper.Setup();
+        JsonLoaderHelper.Setup();
         VolumeHelper.Setup(gameConfig);
         ECommonsMain.Init(pluginInterface, this, ECommons.Module.All);
         this.ConfigWindow = new ConfigWindow(this, Configuration, this.ClientState, this.PluginInterface);
@@ -178,10 +178,11 @@ public partial class Echokraut : IDalamudPlugin
                 t => this.Configuration.RemoveStutters ? TalkUtils.RemoveStutters(t) : t,
                 x => x.Trim());
 
+            cleanText = TalkUtils.ReplaceEmoticons(eventId, cleanText);
             cleanText = TalkUtils.ReplaceDate(eventId, cleanText, language);
             cleanText = TalkUtils.ReplaceTime(eventId, cleanText, language);
             cleanText = TalkUtils.ReplaceRomanNumbers(eventId, cleanText);
-            //cleanText = TalkUtils.ReplaceIntWithVerbal(eventId, cleanText, language);
+            cleanText = TalkUtils.ReplaceIntWithVerbal(eventId, cleanText, language);
             cleanText = TalkUtils.ReplacePhonetics(cleanText, Configuration.PhoneticCorrections);
             cleanText = DataHelper.AnalyzeAndImproveText(cleanText);
 

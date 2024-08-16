@@ -233,6 +233,21 @@ namespace Echokraut.TextToTalk.Utils
             return text;
         }
 
+        public static string ReplaceEmoticons(EKEventId eventId, string cleanText)
+        {
+            try
+            {
+                Regex r = new Regex(string.Join("|", JsonLoaderHelper.Emoticons.Select(s => Regex.Escape(s)).ToArray()));
+                cleanText = r.Replace(cleanText, string.Empty);
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", eventId);
+            }
+
+            return cleanText;
+        }
+
         public static string ReplaceDate(EKEventId eventId, string cleanText, ClientLanguage language)
         {
             try
