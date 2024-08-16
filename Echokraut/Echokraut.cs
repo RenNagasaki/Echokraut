@@ -84,6 +84,7 @@ public partial class Echokraut : IDalamudPlugin
         pluginInterface.UiBuilder.DisableCutsceneUiHide = !Configuration.HideUiInCutscenes;
 
         LogHelper.Setup(log, Configuration);
+        DetectLanguageHelper.Setup();
         DataHelper.Setup(Configuration, this.ClientState, this.DataManager);
         BackendHelper.Setup(Configuration, clientState, this, Configuration.BackendSelection);
         VoiceMapHelper.Setup(this.ClientState.ClientLanguage);
@@ -161,7 +162,7 @@ public partial class Echokraut : IDalamudPlugin
         lipSyncHelper.StopLipSync(eventId);
     }
 
-    public unsafe void Say(EKEventId eventId, GameObject? speaker, SeString speakerName, string textValue)
+    public async void Say(EKEventId eventId, GameObject? speaker, SeString speakerName, string textValue)
     {
         try
         {
@@ -247,14 +248,14 @@ public partial class Echokraut : IDalamudPlugin
                 case TextSource.AddonCutSceneSelectString:
                 case TextSource.AddonSelectString:
                 case TextSource.Chat:
-                    if (npcData.mutedBubble)
+                    if (npcData.muted)
                     {
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Player is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
                         return;
                     }
                     if (source == TextSource.Chat)
-                        language = DataHelper.GetTextLanguage(cleanText, eventId);
+                        language = await DetectLanguageHelper.GetTextLanguage(cleanText, eventId);
                     break;
             }
             // Say the thing
@@ -307,7 +308,8 @@ public partial class Echokraut : IDalamudPlugin
 
     public void Dispose()
     {
-        PlayingHelper.Dispose(); 
+        DetectLanguageHelper.Dispose();
+        PlayingHelper.Dispose();
         ECommonsMain.Dispose();
         this.soundHelper.Dispose();
         this.addonTalkHelper.Dispose();

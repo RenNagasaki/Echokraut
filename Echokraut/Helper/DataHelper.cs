@@ -1,27 +1,14 @@
-using Dalamud.Game;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
 using Echokraut.Utils;
 using Echokraut.Windows;
-using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using FFXIVClientStructs.FFXIV.Client.Game.Fate;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using LanguageDetection;
 using Lumina.Excel.GeneratedSheets;
-using Microsoft.VisualBasic.Logging;
-using R3;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using static FFXIVClientStructs.Havok.Animation.Deform.Skinning.hkaMeshBinding;
 
 namespace Echokraut.Helper
 {
@@ -33,7 +20,6 @@ namespace Echokraut.Helper
         private static IDataManager DataManager;
         private static ushort TerritoryRow;
         private static TerritoryType? Territory;
-        private static LanguageDetector Detector;
 
         public static void Setup(Configuration configuration, IClientState clientState, IDataManager dataManager)
         {
@@ -52,7 +38,7 @@ namespace Echokraut.Helper
             NextEventId++;
 
             LogHelper.Start(methodName, eventId);
-            return eventId;
+            return eventId; 
         }
 
         public static TerritoryType? GetTerritory()
@@ -97,31 +83,6 @@ namespace Echokraut.Helper
             {
                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error Exception: {ex}", new EKEventId(0, TextSource.None));
             }
-        }
-
-        public static ClientLanguage GetTextLanguage(string text, EKEventId eventId)
-        {
-            //var languageString = Detector.Detect(text);
-            var language = ClientLanguage.German;
-
-            //switch (languageString)
-            //{
-            //    case "deu":
-            //        language = ClientLanguage.German;
-            //        break;
-            //    case "eng":
-            //        language = ClientLanguage.English;
-            //        break;
-            //    case "jpn":
-            //        language = ClientLanguage.Japanese;
-            //        break;
-            //    case "fra":
-            //        language = ClientLanguage.French;
-            //        break;
-            //}
-
-            //LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found language for chat: {languageString}/{language.ToString()}", eventId);
-            return language;
         }
 
         public static NpcMapData GetAddCharacterMapData(NpcMapData data, EKEventId  eventId)
