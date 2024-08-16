@@ -32,26 +32,35 @@ namespace Echokraut.Helper
 
         public async static Task<ClientLanguage> GetTextLanguage(string text, EKEventId eventId)
         {
-            var detectLanguagesApiKey = JsonSerializer.Deserialize<List<string>>(Resources.ApiKeys)[0];
-            var uriBuilder = new UriBuilder(@"https://ws.detectlanguage.com/0.2/") { Path = "/0.2/detect" };
-            var detectData = new Dictionary<string, string>();
-            detectData.Add("q", text);
-            var httpRequestMessage = new HttpRequestMessage
+            string languageString = "en";
+            try
             {
-                Method = HttpMethod.Post,
-                RequestUri = uriBuilder.Uri,
+                var detectLanguagesApiKey = JsonSerializer.Deserialize<List<string>>(Resources.ApiKeys)[0];
+                var uriBuilder = new UriBuilder(@"https://ws.detectlanguage.com/0.2/") { Path = "/0.2/detect" };
+                var detectData = new Dictionary<string, string>();
+                detectData.Add("q", text);
+                var httpRequestMessage = new HttpRequestMessage
+                {
+                    Method = HttpMethod.Post,
+                    RequestUri = uriBuilder.Uri,
 
-                Headers = {
+                    Headers = {
                     { HttpRequestHeader.Authorization.ToString(), $"Bearer {detectLanguagesApiKey}" },
                     { HttpRequestHeader.Accept.ToString(), "application/json" }
                 },
-                Content = new FormUrlEncodedContent(detectData)
-            };
-            var response = httpClient.SendAsync(httpRequestMessage).Result;
-            var jsonResult = response.Content.ReadAsStringAsync().Result;
-            dynamic resultObj = JObject.Parse(jsonResult);
+                    Content = new FormUrlEncodedContent(detectData)
+                };
+                var response = httpClient.SendAsync(httpRequestMessage).Result;
+                var jsonResult = response.Content.ReadAsStringAsync().Result;
+                dynamic resultObj = JObject.Parse(jsonResult);
+                languageString = resultObj.data.detections[0].language;
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while detecting language: {ex}", eventId);
+            }
+
             var language = ClientLanguage.English;
-            string languageString = resultObj.data.detections[0].language;
             switch (languageString)
             {
                 case "de":
