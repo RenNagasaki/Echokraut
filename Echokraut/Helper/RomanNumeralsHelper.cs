@@ -1,6 +1,9 @@
+using Echokraut.DataClasses;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -8,8 +11,9 @@ namespace Echokraut.Helper
 {
     public static class RomanNumeralsHelper
     {
-        public static int RomanNumeralsToInt(string number)
+        public static int RomanNumeralsToInt(string number, EKEventId eventId)
         {
+            LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Replacing Roman: {number}", eventId);
             number = number.ToUpper();
             var result = 0;
 
@@ -27,6 +31,7 @@ namespace Echokraut.Helper
             if (number.Contains("CD") || number.Contains("CM"))
                 result -= 200;
 
+            LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Replaced Roman: {result}", eventId);
             return result;
         }
 

@@ -532,6 +532,13 @@ public class ConfigWindow : Window, IDisposable
 
         using (var disabled = ImRaii.Disabled(!voiceChat))
         {
+            var voiceChatWithout3D = this.Configuration.VoiceChatWithout3D;
+            if (ImGui.Checkbox("Voice Chat without 3D Space", ref voiceChatWithout3D))
+            {
+                this.Configuration.VoiceChatWithout3D = voiceChatWithout3D;
+                this.Configuration.Save();
+            }
+
             var voiceChatPlayer = this.Configuration.VoiceChatPlayer;
             if (ImGui.Checkbox("Voice your own Chat", ref voiceChatPlayer))
             {

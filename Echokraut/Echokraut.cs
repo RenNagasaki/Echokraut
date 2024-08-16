@@ -167,6 +167,7 @@ public partial class Echokraut : IDalamudPlugin
         try
         {
             var source = eventId.textSource;
+            var language = this.ClientState.ClientLanguage;
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Preparing for Inference: {speakerName} - {textValue} - {source}", eventId);
             // Run a preprocessing pipeline to clean the text for the speech synthesizer
             var cleanText = FunctionalUtils.Pipe(
@@ -177,7 +178,10 @@ public partial class Echokraut : IDalamudPlugin
                 t => this.Configuration.RemoveStutters ? TalkUtils.RemoveStutters(t) : t,
                 x => x.Trim());
 
+            cleanText = TalkUtils.ReplaceDate(eventId, cleanText, language);
+            cleanText = TalkUtils.ReplaceTime(eventId, cleanText, language);
             cleanText = TalkUtils.ReplaceRomanNumbers(eventId, cleanText);
+            //cleanText = TalkUtils.ReplaceIntWithVerbal(eventId, cleanText, language);
             cleanText = TalkUtils.ReplacePhonetics(cleanText, Configuration.PhoneticCorrections);
             cleanText = DataHelper.AnalyzeAndImproveText(cleanText);
 
@@ -222,7 +226,6 @@ public partial class Echokraut : IDalamudPlugin
                 Configuration.Save();
             }
 
-            var language = this.ClientState.ClientLanguage;
             switch (source)
             {
                 case TextSource.AddonBubble:
@@ -255,7 +258,13 @@ public partial class Echokraut : IDalamudPlugin
                         return;
                     }
                     if (source == TextSource.Chat)
+                    {
+                        if (!Configuration.VoiceChatWithout3D && speaker == null)
+                            return;
+                        else if (Configuration.VoiceChatWithout3D)
+                            speaker = ClientState.LocalPlayer;
                         language = await DetectLanguageHelper.GetTextLanguage(cleanText, eventId);
+                    }
                     break;
             }
             // Say the thing

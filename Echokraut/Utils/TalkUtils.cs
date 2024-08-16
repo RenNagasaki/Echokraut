@@ -9,11 +9,10 @@ using Echokraut.DataClasses;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Lumina.Data.Parsing;
-using static FFXIVClientStructs.FFXIV.Client.UI.Agent.AgentHousingPlant;
-using static System.Windows.Forms.Design.AxImporter;
 using Echokraut.Helper;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using Dalamud.Game;
+using Humanizer;
+using System.Globalization;
 
 namespace Echokraut.TextToTalk.Utils
 {
@@ -25,16 +24,28 @@ namespace Echokraut.TextToTalk.Utils
         [GeneratedRegex(@"(?<=\s|^)(\p{L}{1,2})-(?=\1)", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
         private static partial Regex StutterRegex();
 
-        [GeneratedRegex(@"(?<=[ ]+)([XILMV]+)(?=[\.]+)", RegexOptions.Compiled)]
+        [GeneratedRegex(@"(?<=(^|\s)+)([XILMV]+)(?=([ \!\?\.]|$|\n)+)", RegexOptions.Compiled)]
         private static partial Regex RomanNumeralsRegex();
+
+        [GeneratedRegex(@"(\d+)", RegexOptions.Compiled)]
+        private static partial Regex IntegerRegex();
+
+        [GeneratedRegex(@"(\b(0?[1-9]|[12]\d|30|31)[^\w\d\r\n:](0?[1-9]|1[0-2])[^\w\d\r\n:](\d{4}|\d{2})\b)|(\b(0?[1-9]|1[0-2])[^\w\d\r\n:](0?[1-9]|[12]\d|30|31)[^\w\d\r\n:](\d{4}|\d{2})\b)", RegexOptions.Compiled)]
+        private static partial Regex DateRegex();
+
+        [GeneratedRegex(@"(?<=(^|\s|[\.\?\!])+)([0-1]?[0-9]|2[0-3]):[0-5][0-9](?=([ \!\?\.]|$|\n)+)", RegexOptions.Compiled)]
+        private static partial Regex TimeRegex();
 
         [GeneratedRegex("<[^<]*>", RegexOptions.Compiled)]
         private static partial Regex BracketedRegex();
 
-        private static readonly Regex Speakable = SpeakableRegex();
-        private static readonly Regex Stutter = StutterRegex();
-        private static readonly Regex RomanNumerals = StutterRegex();
-        private static readonly Regex Bracketed = BracketedRegex();
+        private static readonly Regex SpeakableRx = SpeakableRegex();
+        private static readonly Regex StutterRx = StutterRegex();
+        private static readonly Regex RomanNumeralsRx = RomanNumeralsRegex();
+        private static readonly Regex IntegerRx = IntegerRegex();
+        private static readonly Regex DateRx = DateRegex();
+        private static readonly Regex TimeRx = TimeRegex();
+        private static readonly Regex BracketedRx = BracketedRegex();
 
         public static unsafe AddonTalkText ReadTalkAddon(AddonTalk* talkAddon)
         {
@@ -129,7 +140,7 @@ namespace Echokraut.TextToTalk.Utils
         public static string StripAngleBracketedText(string text)
         {
             // TextToTalk#17 "<sigh>"
-            return Bracketed.Replace(text, "").Trim();
+            return BracketedRx.Replace(text, "").Trim();
         }
 
         public static string ReplaceSsmlTokens(string text)
@@ -183,7 +194,7 @@ namespace Echokraut.TextToTalk.Utils
 
         public static bool TryGetEntityName(SeString input, out string name)
         {
-            name = string.Join("", Speakable.Matches(input.TextValue));
+            name = string.Join("", SpeakableRx.Matches(input.TextValue));
             foreach (var p in input.Payloads)
             {
                 if (p is PlayerPayload pp)
@@ -209,8 +220,8 @@ namespace Echokraut.TextToTalk.Utils
             var startsCapitalized = char.IsUpper(text, 0);
             while (true)
             {
-                if (!Stutter.IsMatch(text)) break;
-                text = Stutter.Replace(text, "");
+                if (!StutterRx.IsMatch(text)) break;
+                text = StutterRx.Replace(text, "");
             }
 
             var isCapitalized = char.IsUpper(text, 0);
@@ -222,17 +233,44 @@ namespace Echokraut.TextToTalk.Utils
             return text;
         }
 
-        public static string ReplaceRomanNumbers(EKEventId eventId, string text)
+        public static string ReplaceDate(EKEventId eventId, string cleanText, ClientLanguage language)
         {
             try
             {
-                var romanNumerals = RomanNumerals.Match(text);
-                if (romanNumerals.Success)
+                var culture = new CultureInfo("en-US");
+                switch (language)
                 {
-                    var romanNumeralsText = romanNumerals.Value;
-                    var value = RomanNumeralsHelper.RomanNumeralsToInt(romanNumeralsText);
+                    case ClientLanguage.English:
+                        culture = CultureInfo.CreateSpecificCulture("en-US");
+                        break;
+                    case ClientLanguage.German:
+                        culture = CultureInfo.CreateSpecificCulture("de-DE");
+                        break;
+                    case ClientLanguage.Japanese:
+                        culture = CultureInfo.CreateSpecificCulture("ja-JP");
+                        break;
+                    case ClientLanguage.French:
+                        culture = CultureInfo.CreateSpecificCulture("fr-FR");
+                        break;
+                }
+                var formats = new[] { "M-d-yyyy", "dd-MM-yyyy", "MM-dd-yyyy", "dd/MM/yyyy", "MM/dd/yyyy", "M.d.yyyy", "dd.MM.yyyy" }
+                        .Union(culture.DateTimeFormat.GetAllDateTimePatterns()).ToArray();
+                var dateRxResult = DateRx.Match(cleanText);
+                int i = 0;
+                while (dateRxResult.Success)
+                {
+                    var dateString = dateRxResult.Value;
+                    var date = DateTime.ParseExact(dateString, formats, culture, DateTimeStyles.AssumeLocal);
+                    var value = date.ToOrdinalWords();
 
-                    text = text.Replace(romanNumeralsText, value.ToString());
+                    var regex = new Regex(Regex.Escape(dateString));
+                    cleanText = regex.Replace(cleanText, value.ToString(), 1);
+
+                    dateRxResult = DateRx.Match(cleanText);
+                    i++;
+
+                    if (i > 50)
+                        break;
                 }
             }
             catch (Exception ex)
@@ -240,13 +278,164 @@ namespace Echokraut.TextToTalk.Utils
                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", eventId);
             }
 
-            return text;
+            return cleanText;
+        }
+
+        public static string ReplaceTime(EKEventId eventId, string cleanText, ClientLanguage language)
+        {
+            try
+            {
+                CultureInfo culture = CultureInfo.CreateSpecificCulture("en-US");
+                switch (language)
+                {
+                    case ClientLanguage.English:
+                        culture = CultureInfo.CreateSpecificCulture("en-US");
+                        break;
+                    case ClientLanguage.German:
+                        culture = CultureInfo.CreateSpecificCulture("de-DE");
+                        break;
+                    case ClientLanguage.Japanese:
+                        culture = CultureInfo.CreateSpecificCulture("ja-JP");
+                        break;
+                    case ClientLanguage.French:
+                        culture = CultureInfo.CreateSpecificCulture("fr-FR");
+                        break;
+                }
+                
+                var timeRxResult = TimeRx.Match(cleanText);
+                int i = 0;
+                while (timeRxResult.Success)
+                {
+                    var timeString = timeRxResult.Value;
+
+                    if (language == ClientLanguage.German)
+                    {
+                        var time = TimeOnly.ParseExact(timeString, ["HH:mm", "H:mm"], culture, System.Globalization.DateTimeStyles.None);
+                        var value = time.Hour.ToWords() + " Uhr " + time.Minute.ToWords();
+
+                        var oldCleanText = cleanText;
+                        var regex = new Regex(Regex.Escape(timeString + " (Uhr)"));
+                        cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                        if (cleanText == oldCleanText)
+                        {
+                            regex = new Regex(Regex.Escape(timeString));
+                            cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                        }
+                    }
+                    else
+                    {
+                        var time = TimeOnly.ParseExact(timeString, ["HH:mm", "H:mm"], culture, System.Globalization.DateTimeStyles.None);
+                        var value = time.ToClockNotation();
+
+                        var regex = new Regex(Regex.Escape(timeString));
+                        cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                    }
+
+                    timeRxResult = TimeRx.Match(cleanText);
+                    i++;
+
+                    if (i > 50)
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", eventId);
+            }
+
+            return cleanText;
+        }
+
+        public static string ReplaceRomanNumbers(EKEventId eventId, string cleanText)
+        {
+            try
+            {
+                var romanNumerals = RomanNumeralsRx.Match(cleanText);
+                int i = 0;
+                while (romanNumerals.Success)
+                {
+                    var romanNumeralsText = romanNumerals.Value;
+                    var value = romanNumeralsText.FromRoman();
+
+                    var regex = new Regex(Regex.Escape(romanNumeralsText));
+                    cleanText = regex.Replace(cleanText, value.ToString(), 1);
+
+                    romanNumerals = RomanNumeralsRx.Match(cleanText);
+                    i++;
+
+                    if (i > 50)
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", eventId);
+            }
+
+            return cleanText;
+        }
+
+        internal static string ReplaceIntWithVerbal(EKEventId eventId, string cleanText, ClientLanguage language)
+        {
+            try
+            {
+                CultureInfo culture = CultureInfo.CreateSpecificCulture("en-US");
+                switch (language)
+                {
+                    case ClientLanguage.English:
+                        culture = CultureInfo.CreateSpecificCulture("en-US");
+                        break;
+                    case ClientLanguage.German:
+                        culture = CultureInfo.CreateSpecificCulture("de-DE");
+                        break;
+                    case ClientLanguage.Japanese:
+                        culture = CultureInfo.CreateSpecificCulture("ja-JP");
+                        break;
+                    case ClientLanguage.French:
+                        culture = CultureInfo.CreateSpecificCulture("fr-FR");
+                        break;
+                }
+
+                var integer = IntegerRx.Match(cleanText);
+                int i = 0;
+                while (integer.Success)
+                {
+                    var integerValue = Convert.ToInt32(integer.Value);
+                    var value = "";
+
+                    if (cleanText.Length > (cleanText.IndexOf(integer.Value) + integer.Value.Length + 1) &&
+                        cleanText.Substring(cleanText.IndexOf(integer.Value) + integer.Value.Length, 1) == ".")
+                    {
+                        value = integerValue.ToOrdinalWords(culture);
+                        var regex = new Regex(Regex.Escape(integer.Value + "."));
+                        cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                    }
+                    else
+                    {
+                        value = integerValue.ToWords(culture);
+                        var regex = new Regex(Regex.Escape(integer.Value));
+                        cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                    }
+
+                    integer = IntegerRx.Match(cleanText);
+                    i++;
+
+                    if (i > 50)
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", eventId);
+            }
+
+            return cleanText;
         }
 
         public static bool IsSpeakable(string text)
         {
             // TextToTalk#41 Unspeakable text
-            return Speakable.Match(text).Success;
+            return SpeakableRx.Match(text).Success;
         }
 
         public static string GetPlayerNameWithoutWorld(SeString playerName)
