@@ -2,6 +2,8 @@ using Dalamud.Plugin.Services;
 using Echokraut.Backend;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
+using Echokraut.Helper.Data;
+using Echokraut.Helper.Functional;
 using ManagedBass;
 using System;
 using System.IO;
@@ -10,7 +12,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Config = Echokraut.DataClasses.Configuration;
 
-namespace Echokraut.Helper
+namespace Echokraut.Helper.API
 {
     public static class BackendHelper
     {
@@ -33,7 +35,7 @@ namespace Echokraut.Helper
         {
             if (backendType == TTSBackends.Alltalk)
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Creating backend instance: {backendType}", new EKEventId(0, Enums.TextSource.None));
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Creating backend instance: {backendType}", new EKEventId(0, TextSource.None));
                 backend = new AlltalkBackend(Configuration.Alltalk, Configuration);
                 GetAndMapVoices(new EKEventId(0, TextSource.None));
             }
@@ -101,7 +103,7 @@ namespace Echokraut.Helper
                 var language = message.Language;
 
                 Stream responseStream = null;
-                int i = 0;
+                var i = 0;
                 while (i < 10 && responseStream == null)
                 {
                     try
@@ -172,7 +174,7 @@ namespace Echokraut.Helper
             }
 
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Searching voice: {npcData.voiceItem} for NPC: {npcData.name}", eventId);
-            var voiceItem = BackendVoiceHelper.Voices.Find( p => p.Equals(npcData.voiceItem));
+            var voiceItem = BackendVoiceHelper.Voices.Find(p => p.Equals(npcData.voiceItem));
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found voice: {voiceItem} for NPC: {npcData.name}", eventId);
             var mappedList = npcData.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? Configuration.MappedPlayers : Configuration.MappedNpcs;
 

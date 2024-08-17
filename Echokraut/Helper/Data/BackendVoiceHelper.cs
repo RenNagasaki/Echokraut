@@ -4,7 +4,7 @@ using Echokraut.Windows;
 using System;
 using System.Collections.Generic;
 
-namespace Echokraut.Helper
+namespace Echokraut.Helper.Data
 {
     public static class BackendVoiceHelper
     {
@@ -17,13 +17,13 @@ namespace Echokraut.Helper
         public static void Setup(List<BackendVoiceItem> voices)
         {
             Voices = voices;
-            Voices.Sort((x, y) => x.ToString().CompareTo(y.ToString())); 
+            Voices.Sort((x, y) => x.ToString().CompareTo(y.ToString()));
 
             var raceDisplay = new List<string>();
             var npcRaces = Enum.GetValues(typeof(NpcRaces));
             foreach (var npcRaceObj in npcRaces)
             {
-                var npcRace = ((NpcRaces)npcRaceObj);
+                var npcRace = (NpcRaces)npcRaceObj;
                 RaceArr.Add(npcRace);
                 raceDisplay.Add(npcRace.ToString());
             }
@@ -32,7 +32,7 @@ namespace Echokraut.Helper
             var genders = Enum.GetValues(typeof(Gender));
             foreach (var genderObj in genders)
             {
-                var gender = ((Gender)genderObj);
+                var gender = (Gender)genderObj;
                 GenderArr.Add(gender);
                 genderDisplay.Add(gender.ToString());
             }
@@ -40,7 +40,7 @@ namespace Echokraut.Helper
             GenderDisplay = genderDisplay.ToArray();
             RaceDisplay = raceDisplay.ToArray();
 
-            DataHelper.RefreshSelectables();
+            NpcDataHelper.RefreshSelectables();
             ConfigWindow.UpdateDataVoices = true;
         }
     }

@@ -16,8 +16,6 @@
     <None Remove="Anamnesis\Data\ItemCategories.json" />
     <None Remove="Anamnesis\Data\NpcNames.json" />
     <None Remove="Anamnesis\Data\Tips.json" />
-    <None Remove="Utils\overridenModelIds.txt" />
-    <None Remove="Utils\VoiceNames.json" />
   </ItemGroup>
 
   <ItemGroup>

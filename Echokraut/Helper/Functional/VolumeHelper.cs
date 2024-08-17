@@ -3,8 +3,9 @@ using FFXIVClientStructs.FFXIV.Client.Sound;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using System.Reflection;
 using Echokraut.DataClasses;
+using Echokraut.Helper.Data;
 
-namespace Echokraut.Helper
+namespace Echokraut.Helper.Functional
 {
     internal static class VolumeHelper
     {

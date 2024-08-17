@@ -8,7 +8,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using Anamnesis.Memory;
 using Echokraut.DataClasses;
-using Echokraut.Helper;
+using Echokraut.Helper.Data;
 
 #pragma warning disable SA1027, SA1025
 public class AddressService : ServiceBase<AddressService>

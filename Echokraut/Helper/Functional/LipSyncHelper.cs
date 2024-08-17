@@ -18,8 +18,9 @@ using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using System.Threading;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
+using Echokraut.Helper.Data;
 
-namespace Echokraut.Helper
+namespace Echokraut.Helper.Functional
 {
     internal class LipSyncHelper
     {
@@ -29,9 +30,9 @@ namespace Echokraut.Helper
         private MemoryService _memoryService;
         private AnimationService _animationService;
         private GameDataService _gameDataService;
-        private ICharacter currentLipsync;
+        private Character currentLipsync;
         private ActorMemory.CharacterModes currentIntialState;
-        Dictionary<ICharacter, CancellationTokenSource> taskCancellations = new Dictionary<ICharacter, CancellationTokenSource>();
+        Dictionary<Character, CancellationTokenSource> taskCancellations = new Dictionary<Character, CancellationTokenSource>();
         public List<ActionTimeline> LipSyncTypes { get; private set; }
 
         public LipSyncHelper(IClientState clientState, IObjectTable objects, Configuration config, EKEventId eventId)
@@ -40,7 +41,8 @@ namespace Echokraut.Helper
             this.config = config;
             this.objects = objects;
 
-            InitializeAsync(eventId).ContinueWith(t => {
+            InitializeAsync(eventId).ContinueWith(t =>
+            {
                 if (t.Exception != null)
                     LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Initialization failed: " + t.Exception, eventId);
             });
@@ -51,32 +53,32 @@ namespace Echokraut.Helper
             if (Conditions.IsBoundByDuty) return;
             if (!config.Enabled) return;
 
-            
-            IGameObject npcObject = npc ?? DiscoverNpc(npcName);
+
+            var npcObject = npc ?? DiscoverNpc(npcName);
             ActorMemory actorMemory = null;
             AnimationMemory animationMemory = null;
             if (npcObject != null)
             {
-                var character = (ICharacter)npcObject;
+                var character = (Character)npcObject;
                 currentLipsync = character;
                 actorMemory = new ActorMemory();
                 actorMemory.SetAddress(character.Address);
                 animationMemory = actorMemory.Animation;
 
                 // Determine the duration based on the message size
-                float duration = length;
+                var duration = length;
 
-                Dictionary<int, int> mouthMovement = new Dictionary<int, int>();
+                var mouthMovement = new Dictionary<int, int>();
 
                 if (duration < 0.2f)
                     return;
 
-                int durationMs = (int)(duration * 1000);
+                var durationMs = (int)(duration * 1000);
 
 
                 // Decide on the lengths
-                int durationRounded = (int)Math.Floor(duration);
-                int remaining = durationRounded;
+                var durationRounded = (int)Math.Floor(duration);
+                var remaining = durationRounded;
                 mouthMovement[6] = remaining / 4;
                 remaining = remaining % 4;
                 mouthMovement[5] = remaining / 2;
@@ -86,8 +88,8 @@ namespace Echokraut.Helper
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"durationMs[{durationMs}] durationRounded[{durationRounded}] fours[{mouthMovement[6]}] twos[{mouthMovement[5]}] ones[{mouthMovement[4]}]", eventId);
 
                 // Decide on the Mode
-                ActorMemory.CharacterModes intialState = actorMemory.CharacterMode;
-                ActorMemory.CharacterModes mode = ActorMemory.CharacterModes.EmoteLoop;
+                var intialState = actorMemory.CharacterMode;
+                var mode = ActorMemory.CharacterModes.EmoteLoop;
                 currentIntialState = intialState;
 
 
@@ -98,7 +100,8 @@ namespace Echokraut.Helper
                     var token = cts.Token;
                     token.ThrowIfCancellationRequested();
 
-                    Task task = Task.Run(async () => {
+                    var task = Task.Run(async () =>
+                    {
                         try
                         {
                             await Task.Delay(100, token);
@@ -109,7 +112,7 @@ namespace Echokraut.Helper
                                 MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), mode, "Animation Mode Override");
                                 MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), LipSyncTypes[6].Timeline.AnimationId, "Lipsync");
 
-                                int adjustedDelay = CalculateAdjustedDelay(mouthMovement[6] * 4000, 6);
+                                var adjustedDelay = CalculateAdjustedDelay(mouthMovement[6] * 4000, 6);
 
                                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[6] durationMs[{mouthMovement[6] * 4}] delay [{adjustedDelay}]", eventId);
 
@@ -130,7 +133,7 @@ namespace Echokraut.Helper
                                 animationMemory.LipsOverride = LipSyncTypes[5].Timeline.AnimationId;
                                 MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), mode, "Animation Mode Override");
                                 MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), LipSyncTypes[5].Timeline.AnimationId, "Lipsync");
-                                int adjustedDelay = CalculateAdjustedDelay(mouthMovement[5] * 2000, 5);
+                                var adjustedDelay = CalculateAdjustedDelay(mouthMovement[5] * 2000, 5);
 
                                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[5] durationMs[{mouthMovement[5] * 2}] delay [{adjustedDelay}]", eventId);
 
@@ -151,7 +154,7 @@ namespace Echokraut.Helper
                                 animationMemory.LipsOverride = LipSyncTypes[4].Timeline.AnimationId;
                                 MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), mode, "Animation Mode Override");
                                 MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), LipSyncTypes[4].Timeline.AnimationId, "Lipsync");
-                                int adjustedDelay = CalculateAdjustedDelay(mouthMovement[4] * 1000, 4);
+                                var adjustedDelay = CalculateAdjustedDelay(mouthMovement[4] * 1000, 4);
 
                                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[4] durationMs[{mouthMovement[4]}] delay [{adjustedDelay}]", eventId);
 
@@ -279,21 +282,21 @@ namespace Echokraut.Helper
         private IEnumerable<ActionTimeline> GenerateLipList()
         {
             // Grab "no animation" and all "speak/" animations, which are the only ones valid in this slot
-            IEnumerable<ActionTimeline> lips = GameDataService.ActionTimelines.Where(x => x.AnimationId == 0 || (x.Key?.StartsWith("speak/") ?? false));
+            var lips = GameDataService.ActionTimelines.Where(x => x.AnimationId == 0 || (x.Key?.StartsWith("speak/") ?? false));
             return lips;
         }
 
         public int EstimateDurationFromMessage(string message)
         {
-            int words = message.Split(new char[] { ' ', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
-            double wordsPerSecond = 150.0 / 60; // 150 words per minute converted to words per second
+            var words = message.Split(new char[] { ' ', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+            var wordsPerSecond = 150.0 / 60; // 150 words per minute converted to words per second
 
             return (int)(words / wordsPerSecond * 1000); // duration in milliseconds
         }
 
         int CalculateAdjustedDelay(int durationMs, int lipSyncType)
         {
-            int delay = 0;
+            var delay = 0;
             int animationLoop;
             if (lipSyncType == 4)
                 animationLoop = 1000;
@@ -301,17 +304,17 @@ namespace Echokraut.Helper
                 animationLoop = 2000;
             else
                 animationLoop = 4000;
-            int halfStep = animationLoop / 2;
+            var halfStep = animationLoop / 2;
 
-            if (durationMs <= (1 * animationLoop) + halfStep)
+            if (durationMs <= 1 * animationLoop + halfStep)
             {
-                return (1 * animationLoop) - 50;
+                return 1 * animationLoop - 50;
             }
             else
-                for (int i = 2; delay < durationMs; i++)
-                    if (durationMs > (i * animationLoop) - halfStep && durationMs <= (i * animationLoop) + halfStep)
+                for (var i = 2; delay < durationMs; i++)
+                    if (durationMs > i * animationLoop - halfStep && durationMs <= i * animationLoop + halfStep)
                     {
-                        delay = (i * animationLoop) - 50;
+                        delay = i * animationLoop - 50;
                         return delay;
                     }
 

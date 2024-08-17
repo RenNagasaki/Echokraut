@@ -1,4 +1,5 @@
 using Echokraut.DataClasses;
+using Echokraut.Helper.Data;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using NAudio.Wave;
@@ -6,7 +7,7 @@ using System;
 using System.IO;
 using System.Reflection;
 
-namespace Echokraut.Helper
+namespace Echokraut.Helper.Functional
 {
     public static class FileHelper
     {
@@ -14,7 +15,7 @@ namespace Echokraut.Helper
         {
             try
             {
-                string filePath = GetLocalAudioPath(localSaveLocation, voiceMessage);
+                var filePath = GetLocalAudioPath(localSaveLocation, voiceMessage);
 
                 if (File.Exists(filePath))
                 {
@@ -43,14 +44,14 @@ namespace Echokraut.Helper
         {
             try
             {
-                string filePath = GetLocalAudioPath(localSaveLocation, voiceMessage);
+                var filePath = GetLocalAudioPath(localSaveLocation, voiceMessage);
 
                 if (File.Exists(filePath))
                 {
                     voiceMessage.loadedLocally = true;
                     PlayingHelper.PlayingBubbleQueue.Add(filePath);
                     PlayingHelper.PlayingBubbleQueueText.Add(voiceMessage);
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Local file found. Location: {filePath}", eventId); 
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Local file found. Location: {filePath}", eventId);
 
                     return true;
                 }
@@ -69,14 +70,14 @@ namespace Echokraut.Helper
 
         public static string GetLocalAudioPath(string localSaveLocation, VoiceMessage voiceMessage)
         {
-            string filePath = GetSpeakerAudioPath(localSaveLocation, voiceMessage.Speaker.name) + $"{ voiceMessage.Speaker.race.ToString()}-{voiceMessage.Speaker.voiceItem?.voiceName}\\{VoiceMessageToFileName(voiceMessage.Text)}.wav";
+            var filePath = GetSpeakerAudioPath(localSaveLocation, voiceMessage.Speaker.name) + $"{voiceMessage.Speaker.race.ToString()}-{voiceMessage.Speaker.voiceItem?.voiceName}\\{VoiceMessageToFileName(voiceMessage.Text)}.wav";
 
             return filePath;
         }
 
         public static string GetSpeakerAudioPath(string localSaveLocation, string speaker)
         {
-            string filePath = localSaveLocation;
+            var filePath = localSaveLocation;
             if (!filePath.EndsWith(@"\"))
                 filePath += @"\";
 
@@ -88,9 +89,9 @@ namespace Echokraut.Helper
 
         public static string VoiceMessageToFileName(string voiceMessage)
         {
-            string fileName = voiceMessage;
-            string[] temp = fileName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries);
-            fileName = String.Join("", temp).ToLower().Replace(" ", "").Replace(".", "").Replace("!", "").Replace(",", "").Replace("-", "").Replace("_", "");
+            var fileName = voiceMessage;
+            var temp = fileName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries);
+            fileName = string.Join("", temp).ToLower().Replace(" ", "").Replace(".", "").Replace("!", "").Replace(",", "").Replace("-", "").Replace("_", "");
             if (fileName.Length > 120)
                 fileName = fileName.Substring(0, 120);
 
@@ -103,10 +104,10 @@ namespace Echokraut.Helper
             try
             {
                 stream.Seek(0, SeekOrigin.Begin);
-                var rawStream = new RawSourceWaveStream(stream, new NAudio.Wave.WaveFormat(24000, 16, 1));
+                var rawStream = new RawSourceWaveStream(stream, new WaveFormat(24000, 16, 1));
 
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                NAudio.Wave.WaveFileWriter.CreateWaveFile(filePath, rawStream);
+                WaveFileWriter.CreateWaveFile(filePath, rawStream);
 
                 return true;
             }

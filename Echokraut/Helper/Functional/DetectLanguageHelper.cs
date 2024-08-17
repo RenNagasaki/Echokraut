@@ -11,8 +11,9 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using System.Text.Json;
+using Echokraut.Helper.Data;
 
-namespace Echokraut.Helper
+namespace Echokraut.Helper.Functional
 {
     public static class DetectLanguageHelper
     {
@@ -32,7 +33,7 @@ namespace Echokraut.Helper
 
         public async static Task<ClientLanguage> GetTextLanguage(string text, EKEventId eventId)
         {
-            string languageString = "en";
+            var languageString = "en";
             try
             {
                 var detectLanguagesApiKey = JsonSerializer.Deserialize<List<string>>(Resources.ApiKeys)[0];

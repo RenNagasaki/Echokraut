@@ -8,7 +8,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace Echokraut.Helper
+namespace Echokraut.Helper.Data
 {
     public static class LogHelper
     {
@@ -52,7 +52,7 @@ namespace Echokraut.Helper
         public static void Info(string method, string text, EKEventId eventId)
         {
             text = $"{method} - {text}";
-            SortLogEntry(new LogMessage() { type = Enums.LogType.Info, eventId =eventId, message = $"{text} - ID:{eventId.Id}", color = Constants.INFOLOGCOLOR, timeStamp = DateTime.Now });
+            SortLogEntry(new LogMessage() { type = LogType.Info, eventId = eventId, message = $"{text} - ID:{eventId.Id}", color = Constants.INFOLOGCOLOR, timeStamp = DateTime.Now });
 
             Log.Info(text);
         }
@@ -60,7 +60,7 @@ namespace Echokraut.Helper
         public static void Important(string method, string text, EKEventId eventId)
         {
             text = $"{method} - {text}";
-            SortLogEntry(new LogMessage() { type = Enums.LogType.Important, eventId = eventId, message = $"{text} - ID:{eventId.Id}", color = Constants.IMPORTANTLOGCOLOR, timeStamp = DateTime.Now });
+            SortLogEntry(new LogMessage() { type = LogType.Important, eventId = eventId, message = $"{text} - ID:{eventId.Id}", color = Constants.IMPORTANTLOGCOLOR, timeStamp = DateTime.Now });
 
             Log.Info(text);
         }
@@ -68,7 +68,7 @@ namespace Echokraut.Helper
         public static void Debug(string method, string text, EKEventId eventId)
         {
             text = $"{method} - {text}";
-            SortLogEntry(new LogMessage() { type = Enums.LogType.Debug, eventId = eventId, message = $"{text} - ID:{eventId.Id}", color = Constants.DEBUGLOGCOLOR, timeStamp = DateTime.Now });
+            SortLogEntry(new LogMessage() { type = LogType.Debug, eventId = eventId, message = $"{text} - ID:{eventId.Id}", color = Constants.DEBUGLOGCOLOR, timeStamp = DateTime.Now });
 
             Log.Debug(text);
         }
@@ -76,7 +76,7 @@ namespace Echokraut.Helper
         public static void Error(string method, string text, EKEventId eventId, bool internalLog = true)
         {
             text = $"{method} - {text}";
-            SortLogEntry(new LogMessage() { type = Enums.LogType.Error, eventId = eventId, message = $"{text} - ID:{eventId.Id}", color = Constants.ERRORLOGCOLOR, timeStamp = DateTime.Now });
+            SortLogEntry(new LogMessage() { type = LogType.Error, eventId = eventId, message = $"{text} - ID:{eventId.Id}", color = Constants.ERRORLOGCOLOR, timeStamp = DateTime.Now });
 
             Log.Error(text);
         }
@@ -87,57 +87,57 @@ namespace Echokraut.Helper
             {
                 case TextSource.None:
                     GeneralLogs.Add(logMessage);
-                    if ((logMessage.type == LogType.Info && Config.logConfig.ShowGeneralInfoLog)
-                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowGeneralDebugLog)
-                        || (logMessage.type == LogType.Error && Config.logConfig.ShowGeneralErrorLog)
+                    if (logMessage.type == LogType.Info && Config.logConfig.ShowGeneralInfoLog
+                        || logMessage.type == LogType.Debug && Config.logConfig.ShowGeneralDebugLog
+                        || logMessage.type == LogType.Error && Config.logConfig.ShowGeneralErrorLog
                         || logMessage.type == LogType.Important)
                         GeneralLogsFiltered.Add(logMessage);
                     break;
                 case TextSource.Chat:
                     ChatLogs.Add(logMessage);
-                    if ((logMessage.type == LogType.Info && Config.logConfig.ShowChatInfoLog)
-                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowChatDebugLog)
-                        || (logMessage.type == LogType.Error && Config.logConfig.ShowChatErrorLog)
+                    if (logMessage.type == LogType.Info && Config.logConfig.ShowChatInfoLog
+                        || logMessage.type == LogType.Debug && Config.logConfig.ShowChatDebugLog
+                        || logMessage.type == LogType.Error && Config.logConfig.ShowChatErrorLog
                         || logMessage.type == LogType.Important)
                         ChatLogsFiltered.Add(logMessage);
                     break;
                 case TextSource.AddonTalk:
                     TalkLogs.Add(logMessage);
-                    if ((logMessage.type == LogType.Info && Config.logConfig.ShowTalkInfoLog)
-                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowTalkDebugLog)
-                        || (logMessage.type == LogType.Error && Config.logConfig.ShowTalkErrorLog)
+                    if (logMessage.type == LogType.Info && Config.logConfig.ShowTalkInfoLog
+                        || logMessage.type == LogType.Debug && Config.logConfig.ShowTalkDebugLog
+                        || logMessage.type == LogType.Error && Config.logConfig.ShowTalkErrorLog
                         || logMessage.type == LogType.Important)
                         TalkLogsFiltered.Add(logMessage);
                     break;
                 case TextSource.AddonBattleTalk:
                     BattleTalkLogs.Add(logMessage);
-                    if ((logMessage.type == LogType.Info && Config.logConfig.ShowBattleTalkInfoLog)
-                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog)
-                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog)
+                    if (logMessage.type == LogType.Info && Config.logConfig.ShowBattleTalkInfoLog
+                        || logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog
+                        || logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog
                         || logMessage.type == LogType.Important)
                         BattleTalkLogsFiltered.Add(logMessage);
                     break;
                 case TextSource.AddonSelectString:
                     SelectStringLogs.Add(logMessage);
-                    if ((logMessage.type == LogType.Info && Config.logConfig.ShowSelectStringInfoLog)
-                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowSelectStringDebugLog)
-                        || (logMessage.type == LogType.Error && Config.logConfig.ShowSelectStringErrorLog)
+                    if (logMessage.type == LogType.Info && Config.logConfig.ShowSelectStringInfoLog
+                        || logMessage.type == LogType.Debug && Config.logConfig.ShowSelectStringDebugLog
+                        || logMessage.type == LogType.Error && Config.logConfig.ShowSelectStringErrorLog
                         || logMessage.type == LogType.Important)
                         SelectStringLogsFiltered.Add(logMessage);
                     break;
                 case TextSource.AddonCutSceneSelectString:
                     CutSceneSelectStringLogs.Add(logMessage);
-                    if ((logMessage.type == LogType.Info && Config.logConfig.ShowCutSceneSelectStringInfoLog)
-                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowCutSceneSelectStringDebugLog)
-                        || (logMessage.type == LogType.Error && Config.logConfig.ShowCutSceneSelectStringErrorLog)
+                    if (logMessage.type == LogType.Info && Config.logConfig.ShowCutSceneSelectStringInfoLog
+                        || logMessage.type == LogType.Debug && Config.logConfig.ShowCutSceneSelectStringDebugLog
+                        || logMessage.type == LogType.Error && Config.logConfig.ShowCutSceneSelectStringErrorLog
                         || logMessage.type == LogType.Important)
                         CutSceneSelectStringLogsFiltered.Add(logMessage);
                     break;
                 case TextSource.AddonBubble:
                     BubbleLogs.Add(logMessage);
-                    if ((logMessage.type == LogType.Info && Config.logConfig.ShowBubbleInfoLog)
-                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBubbleDebugLog)
-                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBubbleErrorLog)
+                    if (logMessage.type == LogType.Info && Config.logConfig.ShowBubbleInfoLog
+                        || logMessage.type == LogType.Debug && Config.logConfig.ShowBubbleDebugLog
+                        || logMessage.type == LogType.Error && Config.logConfig.ShowBubbleErrorLog
                         || logMessage.type == LogType.Important)
                         BubbleLogsFiltered.Add(logMessage);
                     break;
@@ -213,7 +213,7 @@ namespace Echokraut.Helper
 
             if (!showInfo)
             {
-                logListFiltered.RemoveAll( p => p.type == LogType.Info);
+                logListFiltered.RemoveAll(p => p.type == LogType.Info);
             }
             if (!showDebug)
             {
@@ -230,7 +230,7 @@ namespace Echokraut.Helper
 
             logListFiltered.Sort((p, q) => p.timeStamp.CompareTo(q.timeStamp));
 
-            return new List<LogMessage> (logListFiltered);
+            return new List<LogMessage>(logListFiltered);
         }
 
         public static List<LogMessage> FilterLogList(TextSource textSource, string eventId)
@@ -240,7 +240,7 @@ namespace Echokraut.Helper
             if (eventId.Length > 0)
             {
                 logListFiltered = logListFiltered.FindAll(p => p.message.EndsWith(eventId));
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Did some filtering {eventId} {logListFiltered.Count}", new EKEventId(0, TextSource.None), false);
+                Error(MethodBase.GetCurrentMethod().Name, $"Did some filtering {eventId} {logListFiltered.Count}", new EKEventId(0, TextSource.None), false);
             }
 
             switch (textSource)

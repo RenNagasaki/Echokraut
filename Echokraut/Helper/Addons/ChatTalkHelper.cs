@@ -4,8 +4,9 @@ using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
+using Echokraut.Helper.Data;
+using Echokraut.Helper.DataHelper;
 using Echokraut.TextToTalk.Utils;
-using Echokraut.Utils;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using R3;
@@ -16,12 +17,12 @@ using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 using static Dalamud.Plugin.Services.IFramework;
-using static Echokraut.Helper.ChatTalkHelper;
+using static Echokraut.Helper.Addons.ChatTalkHelper;
 using static FFXIVClientStructs.FFXIV.Component.GUI.AtkComponentNumericInput.Delegates;
 using static System.Net.Mime.MediaTypeNames;
 using static System.Windows.Forms.AxHost;
 
-namespace Echokraut.Helper
+namespace Echokraut.Helper.Addons
 {
     internal class ChatTalkHelper
     {
@@ -55,7 +56,7 @@ namespace Echokraut.Helper
             if (!config.Enabled) return;
             if (!config.VoiceChat) return;
             if (Conditions.IsWatchingCutscene78 || Conditions.IsWatchingCutscene || Conditions.IsOccupiedInCutSceneEvent || Conditions.IsDutyRecorderPlayback) return;
-            
+
             var messageObj = new ChatMessage(type, sender, message);
             ProcessChatMessage(messageObj);
         }
@@ -66,10 +67,10 @@ namespace Echokraut.Helper
             {
                 var (type, sender, message) = chatMessage;
                 var text = message.TextValue;
-                var realSender = TalkUtils.StripWorldFromNames(sender);
-                text = TalkUtils.NormalizePunctuation(text);
+                var realSender = TalkTextHelper.StripWorldFromNames(sender);
+                text = TalkTextHelper.NormalizePunctuation(text);
 
-                switch (((ushort)type))
+                switch ((ushort)type)
                 {
                     case (ushort)XivChatType.Say:
                         if (!config.VoiceChatSay)
@@ -168,11 +169,11 @@ namespace Echokraut.Helper
                         return;
                 }
 
-                var eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.Chat);
+                var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.Chat);
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chat ({type}): \"{text}\"", eventId);
 
                 // Find the game object this speaker represents
-                var speaker = ObjectTableUtils.GetGameObjectByName(clientState, this.objects, realSender, eventId);
+                var speaker = DalamudHelper.GetGameObjectByName(clientState, objects, realSender, eventId);
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chat ({type}): \"{speaker}\" {realSender}", eventId);
 
                 var localPlayer = clientState.LocalPlayer;
@@ -191,7 +192,7 @@ namespace Echokraut.Helper
             {
                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", new EKEventId(0, TextSource.Chat));
             }
-}
+        }
 
         private static SeString GetCleanSpeakerName(IGameObject? speaker, SeString sender)
         {
@@ -202,7 +203,7 @@ namespace Echokraut.Helper
             }
 
             // Parse the speaker name from chat and hope it's right
-            return TalkUtils.TryGetEntityName(sender, out var senderName) ? senderName : sender;
+            return TalkTextHelper.TryGetEntityName(sender, out var senderName) ? senderName : sender;
         }
 
         public void Dispose()

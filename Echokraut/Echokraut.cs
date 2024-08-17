@@ -11,10 +11,14 @@ using Echokraut.DataClasses;
 using System.Linq;
 using Dalamud.Game.Text.SeStringHandling;
 using GameObject = Dalamud.Game.ClientState.Objects.Types.IGameObject;
-using Echokraut.Helper;
-using Echokraut.Utils;
 using System.Reflection;
 using Dalamud.Game.ClientState.Objects.Enums;
+using Echokraut.Helper.Addons;
+using Echokraut.Helper.DataHelper;
+using Echokraut.Helper.API;
+using Echokraut.Helper.Data;
+using Echokraut.Helper.Functional;
+using System.Runtime.CompilerServices;
 
 namespace Echokraut;
 
@@ -79,15 +83,16 @@ public partial class Echokraut : IDalamudPlugin
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Configuration.Initialize(PluginInterface);
         pluginInterface.UiBuilder.DisableCutsceneUiHide = !Configuration.HideUiInCutscenes;
+        this.ConfigWindow = new ConfigWindow(this, Configuration, this.ClientState, this.PluginInterface);
 
         LogHelper.Setup(log, Configuration);
         DetectLanguageHelper.Setup();
-        DataHelper.Setup(Configuration, this.ClientState, this.DataManager);
+        NpcDataHelper.Setup(Configuration);
+        LuminaHelper.Setup(clientState, dataManager);
         BackendHelper.Setup(this, Configuration, clientState, framework, Configuration.BackendSelection);
-        VoiceMapHelper.Setup(this.ClientState.ClientLanguage);
-        JsonLoaderHelper.Setup();
+        JsonLoaderHelper.Setup(this.ClientState.ClientLanguage);
         VolumeHelper.Setup(gameConfig);
-        this.ConfigWindow = new ConfigWindow(this, Configuration, this.ClientState, this.PluginInterface);
+        CommandHelper.Setup(Configuration, chatGui, clientState, dataManager, commandManager, ConfigWindow);
         this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration, new EKEventId(0, Enums.TextSource.None));
         this.addonTalkHelper = new AddonTalkHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
@@ -99,48 +104,11 @@ public partial class Echokraut : IDalamudPlugin
 
         WindowSystem.AddWindow(ConfigWindow);
 
-        CommandManager.AddHandler("/ekt", new CommandInfo(OnCommand)
-        {
-            HelpMessage = "Toggles Echokraut"
-        });
-        CommandManager.AddHandler("/ekttalk", new CommandInfo(OnCommand)
-        {
-            HelpMessage = "Toggles dialogue voicing"
-        });
-        CommandManager.AddHandler("/ektbtalk", new CommandInfo(OnCommand)
-        {
-            HelpMessage = "Toggles battle dialogue voicing"
-        });
-        CommandManager.AddHandler("/ektbubble", new CommandInfo(OnCommand)
-        {
-            HelpMessage = "Toggles bubble voicing"
-        });
-        CommandManager.AddHandler("/ektchat", new CommandInfo(OnCommand)
-        {
-            HelpMessage = "Toggles chat voicing"
-        });
-        CommandManager.AddHandler("/ektcutschoice", new CommandInfo(OnCommand)
-        {
-            HelpMessage = "Toggles cutscene choice voicing"
-        });
-        CommandManager.AddHandler("/ektchoice", new CommandInfo(OnCommand)
-        {
-            HelpMessage = "Toggles choice voicing"
-        });
-        CommandManager.AddHandler("/ek", new CommandInfo(OnCommand)
-        {
-            HelpMessage = "Opens the configuration window"
-        });
-        CommandManager.AddHandler("/ekid", new CommandInfo(OnCommand)
-        {
-            HelpMessage = "Opens the configuration window"
-        });
-
         PluginInterface.UiBuilder.Draw += DrawUI;
 
         // This adds a button to the plugin installer entry of this plugin which allows
         // to toggle the display status of the configuration ui
-        PluginInterface.UiBuilder.OpenConfigUi += ToggleConfigUI;
+        PluginInterface.UiBuilder.OpenConfigUi += CommandHelper.ToggleConfigUI;
     }
 
     public void Cancel(EKEventId eventId)
@@ -165,26 +133,23 @@ public partial class Echokraut : IDalamudPlugin
             var source = eventId.textSource;
             var language = this.ClientState.ClientLanguage;
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Preparing for Inference: {speakerName} - {textValue} - {source}", eventId);
-            // Run a preprocessing pipeline to clean the text for the speech synthesizer
-            var cleanText = FunctionalUtils.Pipe(
-                textValue,
-                TalkUtils.StripAngleBracketedText,
-                TalkUtils.ReplaceSsmlTokens,
-                TalkUtils.NormalizePunctuation,
-                t => this.Configuration.RemoveStutters ? TalkUtils.RemoveStutters(t) : t,
-                x => x.Trim());
 
-            cleanText = TalkUtils.ReplaceEmoticons(eventId, cleanText);
-            cleanText = TalkUtils.ReplaceDate(eventId, cleanText, language);
-            cleanText = TalkUtils.ReplaceTime(eventId, cleanText, language);
-            cleanText = TalkUtils.ReplaceRomanNumbers(eventId, cleanText);
-            cleanText = TalkUtils.ReplaceIntWithVerbal(eventId, cleanText, language);
-            cleanText = TalkUtils.ReplacePhonetics(cleanText, Configuration.PhoneticCorrections);
-            cleanText = DataHelper.AnalyzeAndImproveText(cleanText);
+            var cleanText = TalkTextHelper.StripAngleBracketedText(textValue);
+            cleanText = TalkTextHelper.ReplaceSsmlTokens(cleanText);
+            cleanText = TalkTextHelper.NormalizePunctuation(cleanText);
+            cleanText = this.Configuration.RemoveStutters ? TalkTextHelper.RemoveStutters(cleanText) : cleanText;
+            cleanText = TalkTextHelper.ReplaceEmoticons(eventId, cleanText);
+            cleanText = TalkTextHelper.ReplaceDate(eventId, cleanText, language);
+            cleanText = TalkTextHelper.ReplaceTime(eventId, cleanText, language);
+            cleanText = TalkTextHelper.ReplaceRomanNumbers(eventId, cleanText);
+            cleanText = TalkTextHelper.ReplaceIntWithVerbal(eventId, cleanText, language);
+            cleanText = TalkTextHelper.ReplacePhonetics(cleanText, Configuration.PhoneticCorrections);
+            cleanText = TalkTextHelper.AnalyzeAndImproveText(cleanText);
+            cleanText = cleanText.Trim();
 
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleantext: {cleanText}", eventId);
             // Ensure that the result is clean; ignore it otherwise
-            if (!cleanText.Any() || !TalkUtils.IsSpeakable(cleanText) || cleanText.Length == 0)
+            if (!cleanText.Any() || !TalkTextHelper.IsSpeakable(cleanText) || cleanText.Length == 0)
             {
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text not speakable: {cleanText}", eventId);
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
@@ -193,26 +158,26 @@ public partial class Echokraut : IDalamudPlugin
 
             // Some characters have emdashes in their names, which should be treated
             // as hyphens for the sake of the plugin.
-            var cleanSpeakerName = TalkUtils.NormalizePunctuation(speakerName.TextValue);
+            var cleanSpeakerName = TalkTextHelper.NormalizePunctuation(speakerName.TextValue);
 
             var objectKind = speaker == null ? ObjectKind.None : speaker.ObjectKind;
             NpcMapData npcData = new NpcMapData(objectKind);
             // Get the speaker's race if it exists.
             var raceStr = "";
-            npcData.race = CharacterGenderRaceUtils.GetSpeakerRace(this.DataManager, eventId, speaker, out raceStr, out var modelId);
+            npcData.race = CharacterDataHelper.GetSpeakerRace(this.DataManager, eventId, speaker, out raceStr, out var modelId);
             npcData.raceStr = raceStr;
-            npcData.gender = CharacterGenderRaceUtils.GetCharacterGender(this.DataManager, eventId, speaker, npcData.race, out var modelBody);
-            npcData.name = DataHelper.CleanUpName(cleanSpeakerName);
+            npcData.gender = CharacterDataHelper.GetCharacterGender(this.DataManager, eventId, speaker, npcData.race, out var modelBody);
+            npcData.name = TalkTextHelper.CleanUpName(cleanSpeakerName);
 
             if (npcData.objectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
-                npcData.name = VoiceMapHelper.GetNpcName(npcData.name);
+                npcData.name = JsonLoaderHelper.GetNpcName(npcData.name);
 
             if (npcData.name == "PLAYER")
                 npcData.name = this.ClientState.LocalPlayer?.Name.ToString() ?? "PLAYER";
             else if (string.IsNullOrWhiteSpace(npcData.name) && source == TextSource.AddonBubble)
-                npcData.name = GetBubbleName(speaker, cleanText);
+                npcData.name = TalkTextHelper.GetBubbleName(speaker, cleanText);
 
-            var resNpcData = DataHelper.GetAddCharacterMapData(npcData, eventId);
+            var resNpcData = NpcDataHelper.GetAddCharacterMapData(npcData, eventId);
             Configuration.Save();
 
             npcData = resNpcData;
@@ -296,22 +261,6 @@ public partial class Echokraut : IDalamudPlugin
         }
     }
 
-    private unsafe string GetBubbleName(GameObject? speaker, string text)
-    {
-        var territory = DataHelper.GetTerritory();
-        var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker.Address;
-        var modelData = charaStruct->CharacterData.ModelSkeletonId;
-        var modelData2 = charaStruct->CharacterData.ModelSkeletonId_2;
-
-        var activeData = modelData;
-        if (activeData == -1)
-            activeData = modelData2;
-
-        text = FileHelper.VoiceMessageToFileName(text);
-        var textSubstring = text.Length > 20 ? text.Substring(0, 20) : text;
-        return $"BB-{territory.PlaceName.Value.Name.ToString()}-{activeData}-{textSubstring}";
-    }
-
     public void Dispose()
     {
         DetectLanguageHelper.Dispose();
@@ -327,62 +276,8 @@ public partial class Echokraut : IDalamudPlugin
         this.Configuration.Save();
         WindowSystem.RemoveAllWindows();
         ConfigWindow.Dispose();
-        CommandManager.RemoveHandler("/ek");
-        CommandManager.RemoveHandler("/ekt");
-        CommandManager.RemoveHandler("/ekid");
-        CommandManager.RemoveHandler("/ekttalk");
-        CommandManager.RemoveHandler("/ektbtalk");
-        CommandManager.RemoveHandler("/ektbubble");
-        CommandManager.RemoveHandler("/ektcutschoice");
-        CommandManager.RemoveHandler("/ektchoice");
-    }
-
-    private void OnCommand(string command, string args)
-    {
-        // in response to the slash command, just toggle the display status of our config ui
-
-        switch (command)
-        {
-            case "/ek":
-                ToggleConfigUI();
-                break;
-            case "/ekid":
-                DataHelper.PrintTargetInfo(ChatGui, ClientState, DataManager);
-                break;
-            case "/ekt":
-                Configuration.Enabled = !Configuration.Enabled;
-                Configuration.Save();
-                break;
-            case "/ekttalk":
-                Configuration.VoiceDialogue = !Configuration.VoiceDialogue;
-                Configuration.Save();
-                break;
-            case "/ektbtalk":
-                Configuration.VoiceBattleDialogue = !Configuration.VoiceBattleDialogue;
-                Configuration.Save();
-                break;
-            case "/ektbubble":
-                Configuration.VoiceBubble = !Configuration.VoiceBubble;
-                Configuration.Save();
-                break;
-            case "/ektchat":
-                Configuration.VoiceChat = !Configuration.VoiceChat;
-                Configuration.Save();
-                break;
-            case "/ektcutschoice":
-                Configuration.VoicePlayerChoicesCutscene = !Configuration.VoicePlayerChoicesCutscene;
-                Configuration.Save();
-                break;
-            case "/ektchoice":
-                Configuration.VoicePlayerChoices = !Configuration.VoicePlayerChoices;
-                Configuration.Save();
-                break;
-        }
-
-        LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"New Command triggered: {command}", new EKEventId(0, TextSource.None));
+        CommandHelper.Dispose();
     }
 
     private void DrawUI() => WindowSystem.Draw();
-
-    public void ToggleConfigUI() => ConfigWindow.Toggle();
 }

@@ -10,13 +10,13 @@ using Echokraut.DataClasses;
 using Echokraut.Exceptions;
 using Echokraut.Enums;
 using Dalamud.Plugin.Services;
-using Echokraut.Helper;
 using System.Reflection;
 using System.Threading;
 using NAudio.Wave;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Dalamud.Game;
+using Echokraut.Helper.Data;
 
 namespace Echokraut.Backend
 {

@@ -1,35 +1,23 @@
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
-using Echokraut.Utils;
+using Echokraut.Helper.API;
 using Echokraut.Windows;
-using Lumina.Excel.GeneratedSheets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
-using System.Text.RegularExpressions;
 
-namespace Echokraut.Helper
+namespace Echokraut.Helper.Data
 {
-    public static class DataHelper
+    public static class NpcDataHelper
     {
         static int NextEventId = 1;
         private static Configuration Configuration;
-        private static IClientState ClientState;
-        private static IDataManager DataManager;
-        private static ushort TerritoryRow;
-        private static TerritoryType? Territory;
 
-        public static void Setup(Configuration configuration, IClientState clientState, IDataManager dataManager)
+        public static void Setup(Configuration configuration)
         {
             Configuration = configuration;
-            ClientState = clientState;
-            DataManager = dataManager;
-
-            //Detector = new LanguageDetector();
-
-            //Detector.AddLanguages(new string[]{ "en", "de", "fr", "ja" });
         }
 
         public static EKEventId EventId(string methodName, TextSource textSource)
@@ -38,22 +26,11 @@ namespace Echokraut.Helper
             NextEventId++;
 
             LogHelper.Start(methodName, eventId);
-            return eventId; 
+            return eventId;
         }
 
-        public static TerritoryType? GetTerritory()
+        private static List<NpcMapData> GetCharacterMapDatas(EKEventId eventId)
         {
-            var territoryRow = ClientState.TerritoryType;
-            if (territoryRow != TerritoryRow)
-            {
-                TerritoryRow = territoryRow;
-                Territory = DataManager.GetExcelSheet<TerritoryType>()!.GetRow(territoryRow);
-            }
-
-            return Territory;
-        }
-
-        private static List<NpcMapData> GetCharacterMapDatas(EKEventId eventId) {
             switch (eventId.textSource)
             {
                 case TextSource.AddonTalk:
@@ -85,7 +62,7 @@ namespace Echokraut.Helper
             }
         }
 
-        public static NpcMapData GetAddCharacterMapData(NpcMapData data, EKEventId  eventId)
+        public static NpcMapData GetAddCharacterMapData(NpcMapData data, EKEventId eventId)
         {
             NpcMapData? result = null;
             var datas = GetCharacterMapDatas(eventId);
@@ -134,39 +111,6 @@ namespace Echokraut.Helper
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found existing mapping for: {data.ToString()} result: {result.ToString()}", eventId);
 
             return result;
-        }
-
-        public static string AnalyzeAndImproveText(string text)
-        {
-            var resultText = text;
-
-            resultText = Regex.Replace(resultText, @"(?<=^|[^/.\w])[a-zA-ZäöüÄÖÜ]+[\.\,\!\?](?=[a-zA-ZäöüÄÖÜ])", "$& ");
-
-            return resultText;
-        }
-
-        public static string CleanUpName(string name)
-        {
-            name = name.Replace("[a]", "");
-            name = Regex.Replace(name, "[^a-zA-Z0-9-äöüÄÖÜ' ]+", "");
-
-            return name;
-        }
-
-        internal unsafe static void PrintTargetInfo(IChatGui chatGui, IClientState clientState, IDataManager dataManager)
-        {
-            var localPlayer = clientState.LocalPlayer;
-
-            if (localPlayer != null) {
-                var target = localPlayer.TargetObject;
-                if (target != null)
-                {
-                        var race = CharacterGenderRaceUtils.GetSpeakerRace(dataManager, new EKEventId(0, TextSource.None), target, out var raceStr, out var modelId);
-                        var gender = CharacterGenderRaceUtils.GetCharacterGender(dataManager, new EKEventId(0, TextSource.None), target, race, out var modelBody);
-                        var bodyType = dataManager.GetExcelSheet<ENpcBase>()!.GetRow(target.DataId)?.BodyType;
-                        chatGui.Print(new Dalamud.Game.Text.XivChatEntry() { Name = target.Name, Message = $"Echokraut Target -> Name: {target.Name}, Race: {race}, Gender: {gender}, ModelID: {modelId}, ModelBody: {modelBody}, BodyType: {bodyType}", Timestamp = 22 * 60 + 12, Type = Dalamud.Game.Text.XivChatType.Echo });
-                }
-            }
         }
     }
 }

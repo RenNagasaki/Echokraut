@@ -9,7 +9,6 @@ using System.IO;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Echokraut.Enums;
-using Echokraut.Utils;
 using static System.Net.Mime.MediaTypeNames;
 using System.Reflection;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
@@ -18,8 +17,10 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using static Lumina.Models.Models.Model;
+using Echokraut.Helper.DataHelper;
+using Echokraut.Helper.Data;
 
-namespace Echokraut.Helper;
+namespace Echokraut.Helper.Addons;
 
 public class AddonBattleTalkHelper
 {
@@ -74,7 +75,7 @@ public class AddonBattleTalkHelper
 
     public unsafe AddonTalkText? ReadText(AddonBattleTalk* addonBattleTalk)
     {
-        return addonBattleTalk == null ? null : TalkUtils.ReadTalkAddon(addonBattleTalk);
+        return addonBattleTalk == null ? null : TalkTextHelper.ReadTalkAddon(addonBattleTalk);
     }
 
     private void Mutate(AddonBattleTalkState nextValue)
@@ -97,14 +98,14 @@ public class AddonBattleTalkHelper
         if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(1000))
             voiceNext = false;
 
-        EKEventId eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonBattleTalk);
+        var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonBattleTalk);
         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk: \"{state}\"", eventId);
 
         // Notify observers that the addon state was advanced
         if (!config.VoiceBattleDialogQueued)
             plugin.Cancel(eventId);
 
-        text = TalkUtils.NormalizePunctuation(text);
+        text = TalkTextHelper.NormalizePunctuation(text);
 
         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk: \"{text}\"", eventId);
 
@@ -116,7 +117,7 @@ public class AddonBattleTalkHelper
         }
 
         // Find the game object this speaker is representing
-        var speakerObj = speaker != null ? ObjectTableUtils.GetGameObjectByName(this.clientState, this.objects, speaker, eventId) : null;
+        var speakerObj = speaker != null ? DalamudHelper.GetGameObjectByName(clientState, objects, speaker, eventId) : null;
 
         if (speakerObj != null)
         {

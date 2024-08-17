@@ -2,18 +2,16 @@ using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin.Services;
 using Echokraut.Enums;
-using Echokraut.Helper;
 using Echokraut.DataClasses;
 using System.Reflection;
 using System;
-using Lumina.Excel.GeneratedSheets;
 using System.Collections.Generic;
-using FFXIVClientStructs.FFXIV.Client.Game.Fate;
-using Lumina.Data.Structs;
+using Echokraut.Helper.DataHelper;
+using Echokraut.Helper.API;
 
-namespace Echokraut.Utils;
+namespace Echokraut.Helper.Data;
 
-public static class CharacterGenderRaceUtils
+public static class CharacterDataHelper
 {
     public static Dictionary<string, string> NpcRacesMap = new Dictionary<string, string>()
     {
@@ -64,11 +62,11 @@ public static class CharacterGenderRaceUtils
 
         if (actorGender == Gender.Male && IsWildRace(race))
         {
-            modelBody = dataManager.GetExcelSheet<ENpcBase>()!.GetRow(speaker.DataId)?.ModelBody;
+            modelBody = LuminaHelper.GetENpcBase(speaker.DataId)?.ModelBody;
             var modBody = modelBody;
-            var npcGenderMap = JsonLoaderHelper.ModelsToGenderMap.Find(p => p.race == race && (p.maleDefault && p.male != modBody));
+            var npcGenderMap = JsonLoaderHelper.ModelGenderMap.Find(p => p.race == race && p.maleDefault && p.male != modBody);
             if (npcGenderMap == null)
-                npcGenderMap = JsonLoaderHelper.ModelsToGenderMap.Find(p => p.race == race && (!p.maleDefault && p.female == modBody));
+                npcGenderMap = JsonLoaderHelper.ModelGenderMap.Find(p => p.race == race && !p.maleDefault && p.female == modBody);
             else
                 actorGender = Gender.Female;
 
@@ -82,12 +80,11 @@ public static class CharacterGenderRaceUtils
 
     public static unsafe NpcRaces GetSpeakerRace(IDataManager dataManager, EKEventId eventId, IGameObject? speaker, out string raceStr, out int modelId)
     {
-        var race = dataManager.GetExcelSheet<Race>();
         var raceEnum = NpcRaces.Unknown;
         modelId = 0;
         try
         {
-            if (race is null || speaker is null || speaker.Address == nint.Zero)
+            if (speaker is null || speaker.Address == nint.Zero)
             {
                 raceStr = raceEnum.ToString();
                 return raceEnum;
@@ -95,13 +92,13 @@ public static class CharacterGenderRaceUtils
 
             var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker.Address;
             var speakerRace = charaStruct->DrawData.CustomizeData.Race;
-            var row = race.GetRow(speakerRace);
+            var race = LuminaHelper.GetRace(speakerRace);
 
-            if (!(row is null))
+            if (!(race is null))
             {
-                raceStr = GetRaceEng(row.Masculine.RawString);
+                raceStr = GetRaceEng(race.Masculine.RawString);
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found Race: {raceStr}", eventId);
-                if (!Enum.TryParse<NpcRaces>(raceStr.Replace(" ", ""), out raceEnum))
+                if (!Enum.TryParse(raceStr.Replace(" ", ""), out raceEnum))
                 {
                     var modelData = charaStruct->CharacterData.ModelSkeletonId;
                     var modelData2 = charaStruct->CharacterData.ModelSkeletonId_2;
@@ -143,7 +140,7 @@ public static class CharacterGenderRaceUtils
 
     public static string GetRaceEng(string nationalRace)
     {
-        string engRace = nationalRace.Replace("'", "");
+        var engRace = nationalRace.Replace("'", "");
 
         if (NpcRacesMap.ContainsKey(engRace))
             engRace = NpcRacesMap[engRace];

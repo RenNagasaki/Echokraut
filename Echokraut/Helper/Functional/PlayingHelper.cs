@@ -1,6 +1,8 @@
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
+using Echokraut.Helper.API;
+using Echokraut.Helper.Data;
 using ManagedBass;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
@@ -12,7 +14,7 @@ using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace Echokraut.Helper
+namespace Echokraut.Helper.Functional
 {
     public static class PlayingHelper
     {
@@ -86,7 +88,7 @@ namespace Echokraut.Helper
 
         static void WorkPlayingQueue()
         {
-            var eventId = new EKEventId(-1, Enums.TextSource.None);
+            var eventId = new EKEventId(-1, TextSource.None);
             if ((ActivePlayer == null || ActivePlayer.PlaybackState != NAudio.Wave.PlaybackState.Playing) && PlayingQueue.Count > 0)
             {
                 try
@@ -108,7 +110,7 @@ namespace Echokraut.Helper
                     ActivePlayer.PlaybackStopped += SoundOut_PlaybackStopped;
                     ActivePlayer.Init(volumeSampleProvider);
                     ActivePlayer.Play();
-                    char[] delimiters = new char[] { ' ' };
+                    var delimiters = new char[] { ' ' };
 
                     var estimatedLength = 10f;
                     if (!string.IsNullOrEmpty(queueItemText.Text))
@@ -133,7 +135,7 @@ namespace Echokraut.Helper
 
         static void WorkPlayingBubbleQueue()
         {
-            var eventId = new EKEventId(-1, Enums.TextSource.None);
+            var eventId = new EKEventId(-1, TextSource.None);
             if (PlayingBubbleQueue.Count > 0)
             {
                 try
@@ -247,7 +249,7 @@ namespace Echokraut.Helper
         }
         private static void SoundOut_PlaybackStopped(object? sender, StoppedEventArgs e)
         {
-            var eventId = new EKEventId(-1, TextSource.None); 
+            var eventId = new EKEventId(-1, TextSource.None);
             if (CurrentlyPlayingStreamText != null)
                 eventId = CurrentlyPlayingStreamText.eventId;
 

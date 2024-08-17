@@ -2,7 +2,7 @@ using System.Runtime.InteropServices;
 using FFXIVClientStructs.Attributes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
-namespace Echokraut.Helper;
+namespace Echokraut.Helper.Addons;
 
 [StructLayout(LayoutKind.Explicit, Size = 0x290)]
 //[Addon(new string[] { "_BattleTalk" })]

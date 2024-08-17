@@ -7,7 +7,6 @@ using ImGuiNET;
 using Echokraut.Enums;
 using System.Linq;
 using Dalamud.Interface;
-using Echokraut.Helper;
 using System.Reflection;
 using System.IO;
 using Dalamud.Interface.ImGuiFileDialog;
@@ -24,6 +23,9 @@ using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.Command;
 using Anamnesis.GameData;
 using Dalamud.Plugin;
+using Echokraut.Helper.API;
+using Echokraut.Helper.Data;
+using Echokraut.Helper.Functional;
 
 namespace Echokraut.Windows;
 
@@ -2144,7 +2146,7 @@ public class ConfigWindow : Window, IDisposable
 
     private async void BackendTestVoice(BackendVoiceItem voice)
     {
-        var eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
+        var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Testing voice: {voice.ToString()}", eventId);
         // Say the thing
         var voiceMessage = new VoiceMessage

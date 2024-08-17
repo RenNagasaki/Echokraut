@@ -9,14 +9,16 @@ using System.IO;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Echokraut.Enums;
-using Echokraut.Utils;
 using System.Reflection;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using static System.Net.Mime.MediaTypeNames;
+using Echokraut.Helper.DataHelper;
+using Echokraut.Helper.Data;
+using Echokraut.Helper.Functional;
 
-namespace Echokraut.Helper;
+namespace Echokraut.Helper.Addons;
 
 public class AddonTalkHelper
 {
@@ -36,7 +38,7 @@ public class AddonTalkHelper
 
     public AddonTalkHelper(Echokraut plugin, IAddonLifecycle addonLifecycle, IClientState clientState, IObjectTable objects, Configuration config)
     {
-        this.echokraut = plugin;
+        echokraut = plugin;
         this.addonLifecycle = addonLifecycle;
         this.clientState = clientState;
         this.config = config;
@@ -64,7 +66,7 @@ public class AddonTalkHelper
                 wasTalking = false;
                 PlayingHelper.InDialog = false;
                 lastValue = new AddonTalkState();
-                echokraut.Cancel(new EKEventId(0, Enums.TextSource.AddonTalk));
+                echokraut.Cancel(new EKEventId(0, TextSource.AddonTalk));
             }
         }
     }
@@ -111,12 +113,12 @@ public class AddonTalkHelper
         if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(100))
             voiceNext = false;
 
-        var eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
+        var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
 
         // Notify observers that the addon state was advanced
         echokraut.Cancel(eventId);
 
-        text = TalkUtils.NormalizePunctuation(text);
+        text = TalkTextHelper.NormalizePunctuation(text);
 
         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonTalk: \"{text}\"", eventId);
 
@@ -129,7 +131,7 @@ public class AddonTalkHelper
         }
 
         // Find the game object this speaker is representing
-        var speakerObj = speaker != null ? ObjectTableUtils.GetGameObjectByName(clientState, objects, speaker, eventId) : null;
+        var speakerObj = speaker != null ? DalamudHelper.GetGameObjectByName(clientState, objects, speaker, eventId) : null;
 
         PlayingHelper.InDialog = true;
         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Setting inDialog true", eventId);
@@ -148,7 +150,7 @@ public class AddonTalkHelper
     public unsafe AddonTalkText? ReadText()
     {
         var addonTalk = GetAddonTalk();
-        return addonTalk == null ? null : TalkUtils.ReadTalkAddon(addonTalk);
+        return addonTalk == null ? null : TalkTextHelper.ReadTalkAddon(addonTalk);
     }
 
     public unsafe bool IsVisible()
@@ -165,7 +167,7 @@ public class AddonTalkHelper
     public void Click(EKEventId eventId)
     {
         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Auto advancing...", eventId);
-        ClickHelper.Click(Address);
+        ClickHelper.ClickDialogue(Address);
     }
 
     public void Dispose()

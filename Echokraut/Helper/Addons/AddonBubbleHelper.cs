@@ -12,18 +12,19 @@ using System;
 using System.Collections.Generic;
 using static Dalamud.Plugin.Services.IFramework;
 using Dalamud.Game.ClientState.Objects.SubKinds;
-using Lumina.Excel.GeneratedSheets;
 using System.Reflection;
 using Echokraut.Enums;
+using Echokraut.Helper.DataHelper;
+using Echokraut.Helper.Data;
 
-namespace Echokraut.Helper
+namespace Echokraut.Helper.Addons
 {
     public class AddonBubbleHelper
     {
 
-        private unsafe delegate IntPtr OpenChatBubbleDelegate(IntPtr self, GameObject* actor, IntPtr textPtr, bool notSure, int attachmentPointID);
+        private unsafe delegate nint OpenChatBubbleDelegate(nint self, GameObject* actor, nint textPtr, bool notSure, int attachmentPointID);
         private readonly Hook<OpenChatBubbleDelegate> mOpenChatBubbleHook;
-        private readonly Object mSpeechBubbleInfoLockObj = new();
+        private readonly object mSpeechBubbleInfoLockObj = new();
         private readonly List<SpeechBubbleInfo> mSpeechBubbleInfo = new();
         private OnUpdateDelegate updateHandler;
         private IObjectTable objects;
@@ -39,24 +40,24 @@ namespace Echokraut.Helper
         public bool nextIsVoice = false;
         public DateTime timeNextVoice = DateTime.Now;
 
-        public unsafe AddonBubbleHelper(Echokraut echokraut, IDataManager dataManager, IFramework framework, IObjectTable objectTable , ISigScanner sigScanner, IGameInteropProvider gameInteropProvider, IClientState clientState, Configuration config)
+        public unsafe AddonBubbleHelper(Echokraut echokraut, IDataManager dataManager, IFramework framework, IObjectTable objectTable, ISigScanner sigScanner, IGameInteropProvider gameInteropProvider, IClientState clientState, Configuration config)
         {
-            this.objects = objectTable;
+            objects = objectTable;
             this.echokraut = echokraut;
             this.sigScanner = sigScanner;
             this.gameInteropProvider = gameInteropProvider;
             this.clientState = clientState;
             this.framework = framework;
             this.dataManager = dataManager;
-            this.configuration = config;
+            configuration = config;
             ManagedBass.Bass.Init(Flags: ManagedBass.DeviceInitFlags.Device3D);
             //ManagedBass.Bass.CurrentDevice = 1;
             Update3DFactors(config.VoiceBubbleAudibleRange);
 
             unsafe
             {
-                IntPtr fpOpenChatBubble = sigScanner.ScanText("E8 ?? ?? ?? FF 48 8B 7C 24 48 C7 46 0C 01 00 00 00");
-                if (fpOpenChatBubble != IntPtr.Zero)
+                var fpOpenChatBubble = sigScanner.ScanText("E8 ?? ?? ?? FF 48 8B 7C 24 48 C7 46 0C 01 00 00 00");
+                if (fpOpenChatBubble != nint.Zero)
                 {
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"OpenChatBubble function signature found at 0x{fpOpenChatBubble:X}", new EKEventId(0, TextSource.AddonBubble));
                     mOpenChatBubbleHook = gameInteropProvider.HookFromAddress<OpenChatBubbleDelegate>(fpOpenChatBubble, OpenChatBubbleDetour);
@@ -91,15 +92,15 @@ namespace Echokraut.Helper
                 if (!configuration.Enabled) return;
                 if (!configuration.VoiceBubble) return;
 
-                var territory = DataHelper.GetTerritory();
-                if (territory == null || (!configuration.VoiceBubblesInCity && !territory.Mount)) return;
+                var territory = LuminaHelper.GetTerritory();
+                if (territory == null || !configuration.VoiceBubblesInCity && !territory.Mount) return;
 
                 if (camera == null && CameraManager.Instance() != null)
                     camera = CameraManager.Instance()->GetActiveCamera();
 
                 localPlayer = clientState.LocalPlayer!;
 
-                if (camera != null &&localPlayer != null)
+                if (camera != null && localPlayer != null)
                 {
                     var position = new Vector3();
                     if (configuration.VoiceSourceCam)
@@ -122,7 +123,7 @@ namespace Echokraut.Helper
             }
         }
 
-        unsafe private IntPtr OpenChatBubbleDetour(IntPtr pThis, GameObject* pActor, IntPtr pString, bool param3, int attachmentPointID)
+        unsafe private nint OpenChatBubbleDetour(nint pThis, GameObject* pActor, nint pString, bool param3, int attachmentPointID)
         {
             try
             {
@@ -135,24 +136,23 @@ namespace Echokraut.Helper
                 if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(1000))
                     voiceNext = false;
 
-                var territoryRow = clientState.TerritoryType;
-                var territory = dataManager.GetExcelSheet<TerritoryType>()!.GetRow(territoryRow);
+                var territory = LuminaHelper.GetTerritory();
                 if (!configuration.VoiceBubblesInCity && !territory.Mount)
                     return mOpenChatBubbleHook.Original(pThis, pActor, pString, param3, attachmentPointID);
 
-                if (pString != IntPtr.Zero && !clientState.IsPvPExcludingDen)
+                if (pString != nint.Zero && !clientState.IsPvPExcludingDen)
                 {
                     //	Idk if the actor can ever be null, but if it can, assume that we should print the bubble just in case.  Otherwise, only don't print if the actor is a player.
-                    if ((pActor == null && !voiceNext) || ((byte)pActor->ObjectKind != (byte)Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player && !voiceNext))
+                    if (pActor == null && !voiceNext || (byte)pActor->ObjectKind != (byte)Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player && !voiceNext)
                     {
-                        EKEventId eventId = DataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonBubble);
+                        var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonBubble);
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found EntityId: {pActor->GetGameObjectId().ObjectId}", eventId);
-                        long currentTime_mSec = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+                        var currentTime_mSec = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
-                        SeString speakerName = SeString.Empty;
+                        var speakerName = SeString.Empty;
                         if (pActor != null && pActor->Name != null)
                         {
-                            speakerName = MemoryHelper.ReadSeStringNullTerminated((IntPtr)pActor->GetName());
+                            speakerName = MemoryHelper.ReadSeStringNullTerminated((nint)pActor->GetName());
                         }
 
                         var text = MemoryHelper.ReadSeStringNullTerminated(pString);
@@ -166,7 +166,7 @@ namespace Echokraut.Helper
                                 if (currentTime_mSec - extantMatch.TimeLastSeen_mSec > 5000)
                                 {
                                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Found bubble: {speakerName} - {text}", eventId);
-                                    var actorObject = objects.CreateObjectReference((IntPtr)pActor);
+                                    var actorObject = objects.CreateObjectReference((nint)pActor);
                                     echokraut.Say(eventId, actorObject, speakerName, text.ToString());
                                 }
                                 else
@@ -182,7 +182,7 @@ namespace Echokraut.Helper
                             {
                                 mSpeechBubbleInfo.Add(bubbleInfo);
                                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Found bubble: {speakerName} - {text}", eventId);
-                                var actorObject = objects.CreateObjectReference((IntPtr)pActor);
+                                var actorObject = objects.CreateObjectReference((nint)pActor);
                                 echokraut.Say(eventId, actorObject, speakerName, text.ToString());
                             }
                         }

@@ -9,14 +9,19 @@ using Echokraut.DataClasses;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using Echokraut.Helper;
 using Dalamud.Game;
 using Humanizer;
 using System.Globalization;
+using GameObject = Dalamud.Game.ClientState.Objects.Types.IGameObject;
+using Echokraut.Helper.DataHelper;
+using Echokraut.Helper.Addons;
+using Echokraut.Helper.API;
+using Echokraut.Helper.Data;
+using Echokraut.Helper.Functional;
 
 namespace Echokraut.TextToTalk.Utils
 {
-    public static partial class TalkUtils
+    public static partial class TalkTextHelper
     {
         [GeneratedRegex(@"\p{L}+|\p{M}+|\p{N}+|\s+", RegexOptions.Compiled)]
         private static partial Regex SpeakableRegex();
@@ -453,6 +458,23 @@ namespace Echokraut.TextToTalk.Utils
             return SpeakableRx.Match(text).Success;
         }
 
+        public static string AnalyzeAndImproveText(string text)
+        {
+            var resultText = text;
+
+            resultText = Regex.Replace(resultText, @"(?<=^|[^/.\w])[a-zA-ZäöüÄÖÜ]+[\.\,\!\?](?=[a-zA-ZäöüÄÖÜ])", "$& ");
+
+            return resultText;
+        }
+
+        public static string CleanUpName(string name)
+        {
+            name = name.Replace("[a]", "");
+            name = Regex.Replace(name, "[^a-zA-Z0-9-äöüÄÖÜ' ]+", "");
+
+            return name;
+        }
+
         public static string GetPlayerNameWithoutWorld(SeString playerName)
         {
             if (playerName.Payloads.FirstOrDefault(p => p is PlayerPayload) is PlayerPayload player)
@@ -461,6 +483,22 @@ namespace Echokraut.TextToTalk.Utils
             }
 
             return playerName.TextValue;
+        }
+
+        public static unsafe string GetBubbleName(GameObject? speaker, string text)
+        {
+            var territory = LuminaHelper.GetTerritory();
+            var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker.Address;
+            var modelData = charaStruct->CharacterData.ModelSkeletonId;
+            var modelData2 = charaStruct->CharacterData.ModelSkeletonId_2;
+
+            var activeData = modelData;
+            if (activeData == -1)
+                activeData = modelData2;
+
+            text = FileHelper.VoiceMessageToFileName(text);
+            var textSubstring = text.Length > 20 ? text.Substring(0, 20) : text;
+            return $"BB-{territory.PlaceName.Value.Name.ToString()}-{activeData}-{textSubstring}";
         }
 
         public static string ExtractTokens(string text, IReadOnlyDictionary<string, string?> tokenMap)
