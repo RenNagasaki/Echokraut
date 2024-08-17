@@ -1,15 +1,4 @@
-using Echokraut.DataClasses;
-using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using static Echokraut.Helper.Addons.AddonTalkHelper;
-using System.Runtime.InteropServices;
-using System;
-using static FFXIVClientStructs.FFXIV.Client.Game.UI.PublicInstance;
-using Echokraut.Enums;
-using Echokraut.Utils;
-using Dalamud.Game.Addon.Lifecycle;
-using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using FFXIVClientStructs.FFXIV.Application.Network.WorkDefinitions;
 
 namespace Echokraut.Helper.Functional
 {
