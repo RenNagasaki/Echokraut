@@ -112,6 +112,10 @@
         "speakers": [ "Golbez", "Durante" ]
     },
     {
+        "voiceName": "Tobli",
+        "speakers": [ "Redseliger Pelupelu" ]
+    },
+    {
         "voiceName": "Coph-coodg",
         "speakers": [ "Rundliche Lebensform" ]
     }
