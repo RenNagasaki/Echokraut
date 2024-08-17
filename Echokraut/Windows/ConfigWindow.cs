@@ -2177,8 +2177,7 @@ public class ConfigWindow : Window, IDisposable
 
     private void ReloadRemoteMappings()
     {
-        VoiceMapHelper.Setup(this.clientState.ClientLanguage);
-        JsonLoaderHelper.Setup();
+        JsonLoaderHelper.Setup(this.clientState.ClientLanguage);
     }
     #endregion
 }
