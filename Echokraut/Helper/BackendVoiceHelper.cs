@@ -1,15 +1,8 @@
 using Echokraut.DataClasses;
 using Echokraut.Enums;
 using Echokraut.Windows;
-using ECommons;
-using FFXIVClientStructs.FFXIV.Client.Game.UI;
-using OtterGui.Widgets;
 using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Echokraut.Helper
 {

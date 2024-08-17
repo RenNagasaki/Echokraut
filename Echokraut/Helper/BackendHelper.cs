@@ -2,15 +2,9 @@ using Dalamud.Plugin.Services;
 using Echokraut.Backend;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
-using ECommons.Configuration;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using ManagedBass;
-using NAudio.Wave;
 using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -26,13 +20,13 @@ namespace Echokraut.Helper
         static ITTSBackend backend;
         static Echokraut Echokraut;
 
-        public static void Setup(Config configuration, IClientState clientState, Echokraut echokraut, TTSBackends backendType)
+        public static void Setup(Echokraut echokraut, Config configuration, IClientState clientState, IFramework framework, TTSBackends backendType)
         {
             Configuration = configuration;
             ClientState = clientState;
             Echokraut = echokraut;
             SetBackendType(backendType);
-            PlayingHelper.Setup(echokraut, configuration);
+            PlayingHelper.Setup(echokraut, configuration, framework);
         }
 
         public static void SetBackendType(TTSBackends backendType)

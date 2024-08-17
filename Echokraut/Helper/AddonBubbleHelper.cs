@@ -10,15 +10,10 @@ using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using System;
 using System.Collections.Generic;
-using System.Runtime.InteropServices;
 using static Dalamud.Plugin.Services.IFramework;
-using static System.Net.Mime.MediaTypeNames;
 using Dalamud.Game.ClientState.Objects.SubKinds;
-using ECommons.Configuration;
 using Lumina.Excel.GeneratedSheets;
 using System.Reflection;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Echokraut.Enums;
 
 namespace Echokraut.Helper

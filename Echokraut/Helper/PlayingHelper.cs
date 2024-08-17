@@ -1,8 +1,6 @@
+using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
-using ECommons.DalamudServices;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using ManagedBass;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
@@ -34,14 +32,16 @@ namespace Echokraut.Helper
         private static Stream CurrentlyPlayingStream = null;
         private static VoiceMessage CurrentlyPlayingStreamText = null;
         private static WasapiOut ActivePlayer = null;
-        private static DataClasses.Configuration Configuration;
         private static bool StopThread = false;
         private static Echokraut Echokraut;
+        private static DataClasses.Configuration Configuration;
+        private static IFramework Framework;
 
-        public static void Setup(Echokraut echokraut, DataClasses.Configuration config)
+        public static void Setup(Echokraut echokraut, DataClasses.Configuration config, IFramework framework)
         {
-            Configuration = config;
             Echokraut = echokraut;
+            Configuration = config;
+            Framework = framework;
 
             PlayingQueueThread.Start();
             RequestingQueueThread.Start();
@@ -282,7 +282,7 @@ namespace Echokraut.Helper
                 try
                 {
                     if (InDialog)
-                        Svc.Framework.RunOnFrameworkThread(() => Echokraut.addonTalkHelper.Click(eventId));
+                        Framework.RunOnFrameworkThread(() => Echokraut.addonTalkHelper.Click(eventId));
                     else
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Not inDialog", eventId);
                 }

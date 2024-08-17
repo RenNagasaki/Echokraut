@@ -15,9 +15,6 @@ using Echokraut.Helper;
 using Echokraut.Utils;
 using System.Reflection;
 using Dalamud.Game.ClientState.Objects.Enums;
-using ECommons;
-using Lumina.Excel.GeneratedSheets;
-using ECommons.Reflection;
 
 namespace Echokraut;
 
@@ -86,11 +83,10 @@ public partial class Echokraut : IDalamudPlugin
         LogHelper.Setup(log, Configuration);
         DetectLanguageHelper.Setup();
         DataHelper.Setup(Configuration, this.ClientState, this.DataManager);
-        BackendHelper.Setup(Configuration, clientState, this, Configuration.BackendSelection);
+        BackendHelper.Setup(this, Configuration, clientState, framework, Configuration.BackendSelection);
         VoiceMapHelper.Setup(this.ClientState.ClientLanguage);
         JsonLoaderHelper.Setup();
         VolumeHelper.Setup(gameConfig);
-        ECommonsMain.Init(pluginInterface, this, ECommons.Module.All);
         this.ConfigWindow = new ConfigWindow(this, Configuration, this.ClientState, this.PluginInterface);
         this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration, new EKEventId(0, Enums.TextSource.None));
         this.addonTalkHelper = new AddonTalkHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
@@ -320,7 +316,6 @@ public partial class Echokraut : IDalamudPlugin
     {
         DetectLanguageHelper.Dispose();
         PlayingHelper.Dispose();
-        ECommonsMain.Dispose();
         this.soundHelper.Dispose();
         this.addonTalkHelper.Dispose();
         this.addonBattleTalkHelper.Dispose();
