@@ -138,11 +138,12 @@ public partial class Echokraut : IDalamudPlugin
             cleanText = TalkTextHelper.ReplaceSsmlTokens(cleanText);
             cleanText = TalkTextHelper.NormalizePunctuation(cleanText);
             cleanText = this.Configuration.RemoveStutters ? TalkTextHelper.RemoveStutters(cleanText) : cleanText;
-            cleanText = TalkTextHelper.ReplaceEmoticons(eventId, cleanText);
             cleanText = TalkTextHelper.ReplaceDate(eventId, cleanText, language);
             cleanText = TalkTextHelper.ReplaceTime(eventId, cleanText, language);
             cleanText = TalkTextHelper.ReplaceRomanNumbers(eventId, cleanText);
+            cleanText = TalkTextHelper.ReplaceCurrency(eventId, cleanText);
             cleanText = TalkTextHelper.ReplaceIntWithVerbal(eventId, cleanText, language);
+            cleanText = TalkTextHelper.ReplaceEmoticons(eventId, cleanText);
             cleanText = TalkTextHelper.ReplacePhonetics(cleanText, Configuration.PhoneticCorrections);
             cleanText = TalkTextHelper.AnalyzeAndImproveText(cleanText);
             cleanText = cleanText.Trim();
@@ -222,14 +223,18 @@ public partial class Echokraut : IDalamudPlugin
                     if (source == TextSource.Chat)
                     {
                         if (!Configuration.VoiceChatWithout3D && speaker == null)
+                        {
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Player is not on the same map: {npcData.ToString()}. Can't voice", eventId);
+                            LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
                             return;
+                        }
                         else if (Configuration.VoiceChatWithout3D)
                             speaker = ClientState.LocalPlayer;
                         language = await DetectLanguageHelper.GetTextLanguage(cleanText, eventId);
                     }
                     break;
             }
-            // Say the thing
+
             var voiceMessage = new VoiceMessage
             {
                 pActor = speaker,

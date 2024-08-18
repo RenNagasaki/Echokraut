@@ -1365,15 +1365,17 @@ public class ConfigWindow : Window, IDisposable
 
             if (ImGui.BeginChild("VoicesChild"))
             {
-                if (ImGui.BeginTable("Voice Table##VoiceTable", 4, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollY))
+                if (ImGui.BeginTable("Voice Table##VoiceTable", 5, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollY))
                 {
                     ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
                     ImGui.TableSetupColumn("Test", ImGuiTableColumnFlags.None, 70f);
+                    ImGui.TableSetupColumn("Stop", ImGuiTableColumnFlags.None, 70f);
                     ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.None, 125);
                     ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.None, 150);
                     ImGui.TableHeadersRow();
                     ImGui.TableNextRow();
+                    ImGui.TableNextColumn();
                     ImGui.TableNextColumn();
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1436,6 +1438,10 @@ public class ConfigWindow : Window, IDisposable
                         {
                             BackendTestVoice(voice);
                         }
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.ThumbsUp.ToIconString()}##stopvoice{voice.ToString()}", new Vector2(25, 25), "Stop Voice", false, true))
+                        {
+                            BackendStopVoice();
+                        }
 
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1467,7 +1473,7 @@ public class ConfigWindow : Window, IDisposable
         {
             if (Configuration.PhoneticCorrections.Count == 0)
             {
-                Configuration.PhoneticCorrections.Add(new PhoneticCorrection("C'mi", "Kami"));
+                Configuration.PhoneticCorrections.Add(new PhoneticCorrection("C'ami", "Kami"));
                 Configuration.PhoneticCorrections.Add(new PhoneticCorrection("/", "Schrägstrich"));
                 Configuration.PhoneticCorrections.Sort();
                 Configuration.Save();
@@ -1488,6 +1494,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.TableNextColumn();
                     ImGui.TableNextRow();
                     PhoneticCorrection toBeRemoved = null;
+                    int i = 0;
                     foreach (PhoneticCorrection phoneticCorrection in Configuration.PhoneticCorrections)
                     {
                         ImGui.TableNextColumn();
@@ -1498,12 +1505,15 @@ public class ConfigWindow : Window, IDisposable
                         }
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        ImGui.InputText($"##origText{phoneticCorrection.ToString()}", ref phoneticCorrection.OriginalText, 25);
+                        if (ImGui.InputText($"##origText{i}", ref phoneticCorrection.OriginalText, 25))
+                            Configuration.Save();
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        ImGui.InputText($"##correctText{phoneticCorrection.ToString()}", ref phoneticCorrection.CorrectedText, 25);
+                        if (ImGui.InputText($"##correctText{i}", ref phoneticCorrection.CorrectedText, 25))
+                            Configuration.Save();
 
                         ImGui.TableNextRow();
+                        i++;
                     }
 
                     ImGui.TableNextColumn();
@@ -2146,6 +2156,7 @@ public class ConfigWindow : Window, IDisposable
 
     private async void BackendTestVoice(BackendVoiceItem voice)
     {
+        BackendStopVoice();
         var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Testing voice: {voice.ToString()}", eventId);
         // Say the thing
@@ -2173,6 +2184,12 @@ public class ConfigWindow : Window, IDisposable
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
         }
+    }
+
+    private async void BackendStopVoice()
+    {
+        BackendHelper.OnCancel(new EKEventId(0, TextSource.AddonTalk));
+        LogHelper.End(MethodBase.GetCurrentMethod().Name, new EKEventId(0, TextSource.AddonTalk));
     }
 
     private void ReloadRemoteMappings()

@@ -18,6 +18,8 @@ using Echokraut.Helper.Addons;
 using Echokraut.Helper.API;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
+using FFXIVClientStructs.FFXIV.Common.Lua;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.TaskbarClock;
 
 namespace Echokraut.TextToTalk.Utils
 {
@@ -31,6 +33,9 @@ namespace Echokraut.TextToTalk.Utils
 
         [GeneratedRegex(@"(?<=(^|\s)+)([XILMV]+)(?=([ \!\?\.]|$|\n)+)", RegexOptions.Compiled)]
         private static partial Regex RomanNumeralsRegex();
+
+        [GeneratedRegex(@"(\d+)+([\.])+(\d+)", RegexOptions.Compiled)]
+        private static partial Regex CurrencyRegex();
 
         [GeneratedRegex(@"(\d+)", RegexOptions.Compiled)]
         private static partial Regex IntegerRegex();
@@ -47,6 +52,7 @@ namespace Echokraut.TextToTalk.Utils
         private static readonly Regex SpeakableRx = SpeakableRegex();
         private static readonly Regex StutterRx = StutterRegex();
         private static readonly Regex RomanNumeralsRx = RomanNumeralsRegex();
+        private static readonly Regex CurrencyRx = CurrencyRegex();
         private static readonly Regex IntegerRx = IntegerRegex();
         private static readonly Regex DateRx = DateRegex();
         private static readonly Regex TimeRx = TimeRegex();
@@ -321,20 +327,25 @@ namespace Echokraut.TextToTalk.Utils
                         culture = CultureInfo.CreateSpecificCulture("fr-FR");
                         break;
                 }
-                
+
+                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"{cleanText}", eventId);
                 var timeRxResult = TimeRx.Match(cleanText);
                 int i = 0;
                 while (timeRxResult.Success)
                 {
                     var timeString = timeRxResult.Value;
+                    LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"{timeString}", eventId);
 
                     if (language == ClientLanguage.German)
                     {
-                        var time = TimeOnly.ParseExact(timeString, ["HH:mm", "H:mm"], culture, System.Globalization.DateTimeStyles.None);
-                        var value = time.Hour.ToWords() + " Uhr " + time.Minute.ToWords();
+                        var time = TimeOnly.ParseExact(timeString, ["HH:mm"], culture, System.Globalization.DateTimeStyles.None);
+                        var value = time.Hour.ToWords() + " Uhr " + (time.Minute == 0 ? "" : time.Minute.ToWords());
+                        LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"{time} {value}", eventId);
 
                         var oldCleanText = cleanText;
                         var regex = new Regex(Regex.Escape(timeString + " (Uhr)"));
+                        cleanText = regex.Replace(cleanText, value.ToString(), 1); 
+                        regex = new Regex(Regex.Escape(timeString + " Uhr"));
                         cleanText = regex.Replace(cleanText, value.ToString(), 1);
                         if (cleanText == oldCleanText)
                         {
@@ -344,7 +355,7 @@ namespace Echokraut.TextToTalk.Utils
                     }
                     else
                     {
-                        var time = TimeOnly.ParseExact(timeString, ["HH:mm", "H:mm"], culture, System.Globalization.DateTimeStyles.None);
+                        var time = TimeOnly.ParseExact(timeString, ["HH:mm"], culture, System.Globalization.DateTimeStyles.None);
                         var value = time.ToClockNotation();
 
                         var regex = new Regex(Regex.Escape(timeString));
@@ -381,6 +392,35 @@ namespace Echokraut.TextToTalk.Utils
                     cleanText = regex.Replace(cleanText, value.ToString(), 1);
 
                     romanNumerals = RomanNumeralsRx.Match(cleanText);
+                    i++;
+
+                    if (i > 50)
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", eventId);
+            }
+
+            return cleanText;
+        }
+
+        public static string ReplaceCurrency(EKEventId eventId, string cleanText)
+        {
+            try
+            {
+                var currencyNumerals = CurrencyRx.Match(cleanText);
+                int i = 0;
+                while (currencyNumerals.Success)
+                {
+                    var currencyNumeralsText = currencyNumerals.Value;
+                    var value = currencyNumeralsText.Replace(".", "");
+
+                    var regex = new Regex(Regex.Escape(currencyNumeralsText));
+                    cleanText = regex.Replace(cleanText, value.ToString(), 1);
+
+                    currencyNumerals = CurrencyRx.Match(cleanText);
                     i++;
 
                     if (i > 50)
