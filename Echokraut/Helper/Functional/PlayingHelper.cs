@@ -3,6 +3,8 @@ using Echokraut.DataClasses;
 using Echokraut.Enums;
 using Echokraut.Helper.API;
 using Echokraut.Helper.Data;
+using FFXIVClientStructs.FFXIV.Client.Game.Event;
+using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using ManagedBass;
 using NAudio.CoreAudioApi;
 using NAudio.Wave;
@@ -98,30 +100,7 @@ namespace Echokraut.Helper.Functional
                     PlayingQueueText.RemoveAt(0);
                     PlayingQueue.RemoveAt(0);
                     eventId = queueItemText.eventId;
-                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Playing next queue item", eventId);
-                    CurrentlyPlayingStream = queueItem;
-                    CurrentlyPlayingStreamText = queueItemText;
-                    var stream = new RawSourceWaveStream(queueItem, new NAudio.Wave.WaveFormat(24000, 16, 1));
-                    var volumeSampleProvider = new VolumeSampleProvider(stream.ToSampleProvider());
-                    volumeSampleProvider.Volume = Volume; // double the amplitude of every sample - may go above 0dB
-
-                    ActivePlayer = new WasapiOut(AudioClientShareMode.Shared, 0);
-                    //activePlayer.Volume = volume;
-                    ActivePlayer.PlaybackStopped += SoundOut_PlaybackStopped;
-                    ActivePlayer.Init(volumeSampleProvider);
-                    ActivePlayer.Play();
-                    var delimiters = new char[] { ' ' };
-
-                    var estimatedLength = 10f;
-                    if (!string.IsNullOrEmpty(queueItemText.Text))
-                    {
-                        var count = queueItemText.Text.Split(delimiters, StringSplitOptions.RemoveEmptyEntries).Length;
-                        estimatedLength = count / 2.1f;
-                        LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Text} length: {estimatedLength}", eventId);
-                    }
-                    Echokraut.lipSyncHelper.TriggerLipSync(eventId, queueItemText.Speaker.name, estimatedLength);
-                    LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Speaker.name} length: {estimatedLength}", eventId);
-                    Playing = true;
+                    PlayAudio(queueItem, queueItemText, eventId);
                 }
                 catch (Exception ex)
                 {
@@ -131,6 +110,33 @@ namespace Echokraut.Helper.Functional
                         ActivePlayer.Stop();
                 }
             }
+        }
+
+        static void PlayAudio(Stream queueItem, VoiceMessage queueItemText, EKEventId eventId)
+        {
+            CurrentlyPlayingStream = queueItem;
+            CurrentlyPlayingStreamText = queueItemText;
+            var stream = new RawSourceWaveStream(queueItem, new NAudio.Wave.WaveFormat(24000, 16, 1));
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Playing next queue item", eventId);
+            var volumeSampleProvider = new VolumeSampleProvider(stream.ToSampleProvider());
+            volumeSampleProvider.Volume = Volume;
+
+            ActivePlayer = new WasapiOut(AudioClientShareMode.Shared, 3);
+            ActivePlayer.PlaybackStopped += SoundOut_PlaybackStopped;
+            ActivePlayer.Init(volumeSampleProvider);
+            ActivePlayer.Play();
+            var delimiters = new char[] { ' ' };
+
+            var estimatedLength = 10f;
+            if (!string.IsNullOrEmpty(queueItemText.Text))
+            {
+                var count = queueItemText.Text.Split(delimiters, StringSplitOptions.RemoveEmptyEntries).Length;
+                estimatedLength = count / 2.1f;
+                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Text} length: {estimatedLength}", eventId);
+            }
+            Echokraut.lipSyncHelper.TriggerLipSync(eventId, queueItemText.Speaker.name, estimatedLength);
+            LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Speaker.name} length: {estimatedLength}", eventId);
+            Playing = true;
         }
 
         static void WorkPlayingBubbleQueue()
@@ -145,42 +151,47 @@ namespace Echokraut.Helper.Functional
                     PlayingBubbleQueueText.RemoveAt(0);
                     PlayingBubbleQueue.RemoveAt(0);
                     eventId = queueItemText.eventId;
-                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Playing next bubble queue item", eventId);
-                    var volume10k = Volume * 15000;
-                    Bass.GlobalSampleVolume = Convert.ToInt32(volume10k > 10000 ? 10000 : volume10k);
-
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Starting 3D Audio for {queueItemText}", eventId);
-                    var pActor = queueItemText.pActor;
-                    if (pActor != null)
-                    {
-                        var channel = Bass.SampleLoad(queueItem, 0, 0, 1, Flags: BassFlags.Bass3D);
-                        Bass.ChannelSet3DPosition(channel, new Vector3D(pActor.Position.X, pActor.Position.Z, -pActor.Position.Y), null, new Vector3D());
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Setup parameters", eventId);
-
-                        var thread = new Thread(() =>
-                        {
-                            while (Bass.ChannelIsActive(channel) == ManagedBass.PlaybackState.Playing)
-                            {
-                                //LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Updating 3D Position of source");
-                                Bass.ChannelSet3DPosition(channel, new Vector3D(pActor.Position.X, pActor.Position.Z, -pActor.Position.Y), null, new Vector3D());
-                            }
-
-                            Bass.SampleFree(channel);
-                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Done playing", eventId);
-                            LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                        });
-
-                        channel = Bass.SampleGetChannel(channel);
-
-                        Bass.ChannelPlay(channel);
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Started playing", eventId);
-                        thread.Start();
-                    }
+                    PlayAudio3D(queueItem, queueItemText, eventId);
                 }
                 catch (Exception ex)
                 {
                     LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while working queue: {ex}", eventId);
                 }
+            }
+        }
+
+        static void PlayAudio3D(string queueItem, VoiceMessage queueItemText, EKEventId eventId)
+        {
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Playing next bubble queue item", eventId);
+            var volume10k = Volume * 15000;
+            Bass.GlobalSampleVolume = Convert.ToInt32(volume10k > 10000 ? 10000 : volume10k);
+
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Starting 3D Audio for {queueItemText}", eventId);
+            var pActor = queueItemText.pActor;
+            if (pActor != null)
+            {
+                var channel = Bass.SampleLoad(queueItem, 0, 0, 1, Flags: BassFlags.Bass3D);
+                Bass.ChannelSet3DPosition(channel, new Vector3D(pActor.Position.X, pActor.Position.Z, -pActor.Position.Y), null, new Vector3D());
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Setup parameters", eventId);
+
+                var thread = new Thread(() =>
+                {
+                    while (Bass.ChannelIsActive(channel) == ManagedBass.PlaybackState.Playing)
+                    {
+                        //LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Updating 3D Position of source");
+                        Bass.ChannelSet3DPosition(channel, new Vector3D(pActor.Position.X, pActor.Position.Z, -pActor.Position.Y), null, new Vector3D());
+                    }
+
+                    Bass.SampleFree(channel);
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Done playing", eventId);
+                    LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                });
+
+                channel = Bass.SampleGetChannel(channel);
+
+                Bass.ChannelPlay(channel);
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Started playing", eventId);
+                thread.Start();
             }
         }
 
@@ -190,6 +201,7 @@ namespace Echokraut.Helper.Functional
             {
                 var queueItem = RequestingQueue[0];
                 RequestingQueue.RemoveAt(0);
+
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating next queued audio", queueItem.eventId);
                 AddRequestedToQueue(queueItem);
 
@@ -266,7 +278,7 @@ namespace Echokraut.Helper.Functional
                     {
                         var filePath = FileHelper.GetLocalAudioPath(Configuration.LocalSaveLocation, playedText);
                         var stream = CurrentlyPlayingStream;
-                        FileHelper.WriteStreamToFile(eventId, filePath, stream as ReadSeekableStream);
+                        FileHelper.WriteStreamToFile(eventId, filePath, stream);
                     }
                 }
                 else
@@ -278,6 +290,7 @@ namespace Echokraut.Helper.Functional
             var soundOut = sender as WasapiOut;
             soundOut?.Dispose();
             Playing = false;
+            CurrentlyPlayingStream.Dispose();
 
             if (Configuration.AutoAdvanceTextAfterSpeechCompleted)
             {

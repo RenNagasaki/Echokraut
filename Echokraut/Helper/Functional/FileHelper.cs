@@ -98,7 +98,7 @@ namespace Echokraut.Helper.Functional
             return fileName;
         }
 
-        public static bool WriteStreamToFile(EKEventId eventId, string filePath, ReadSeekableStream stream)
+        public static bool WriteStreamToFile(EKEventId eventId, string filePath, Stream stream)
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Saving audio locally: {filePath}", eventId);
             try

@@ -128,7 +128,7 @@ namespace Echokraut.Helper.API
                         if (!string.IsNullOrWhiteSpace(playedText.Text))
                         {
                             var filePath = FileHelper.GetLocalAudioPath(Configuration.LocalSaveLocation, playedText);
-                            if (FileHelper.WriteStreamToFile(eventId, filePath, responseStream as ReadSeekableStream))
+                            if (FileHelper.WriteStreamToFile(eventId, filePath, responseStream))
                             {
                                 PlayingHelper.PlayingBubbleQueue.Add(filePath);
                                 PlayingHelper.PlayingBubbleQueueText.Add(message);
