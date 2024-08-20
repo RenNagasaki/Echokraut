@@ -373,7 +373,7 @@ public class ConfigWindow : Window, IDisposable
 
         if (this.Configuration.BackendSelection == TTSBackends.Alltalk)
         {
-            if (ImGui.InputText($"Base Url##EKBaseUrl", ref this.Configuration.Alltalk.BaseUrl, 40))
+            if (ImGui.InputText($"Base Url##EKBaseUrl", ref this.Configuration.Alltalk.BaseUrl, 80))
                 this.Configuration.Save();
             ImGui.SameLine();
             if (ImGui.Button($"Test Connection##EKTestConnection"))
@@ -1438,7 +1438,9 @@ public class ConfigWindow : Window, IDisposable
                         {
                             BackendTestVoice(voice);
                         }
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.ThumbsUp.ToIconString()}##stopvoice{voice.ToString()}", new Vector2(25, 25), "Stop Voice", false, true))
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.ThumbsDown.ToIconString()}##stopvoice{voice.ToString()}", new Vector2(25, 25), "Stop Voice", false, true))
                         {
                             BackendStopVoice();
                         }
