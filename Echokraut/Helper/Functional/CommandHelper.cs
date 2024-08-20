@@ -1,3 +1,4 @@
+using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Command;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
@@ -19,15 +20,17 @@ namespace Echokraut.Helper.Functional
         private static IClientState ClientState;
         private static IDataManager DataManager;
         private static ICommandManager CommandManager;
+        private static ICondition Condition;
         private static ConfigWindow ConfigWindow;
 
-        public static void Setup(Configuration configuration, IChatGui chatGui, IClientState clientState, IDataManager dataManager, ICommandManager commandManager, ConfigWindow configWindow)
+        public static void Setup(Configuration configuration, IChatGui chatGui, IClientState clientState, IDataManager dataManager, ICommandManager commandManager, ICondition condition, ConfigWindow configWindow)
         {
             Configuration = configuration;
             ChatGui = chatGui;
             ClientState = clientState;
             DataManager = dataManager;
             CommandManager = commandManager;
+            Condition = condition;
             ConfigWindow = configWindow;
 
             RegisterCommands();
@@ -69,7 +72,11 @@ namespace Echokraut.Helper.Functional
             });
             CommandManager.AddHandler("/ekid", new CommandInfo(CommandHelper.OnCommand)
             {
-                HelpMessage = "Opens the configuration window"
+                HelpMessage = "Echoes info about current target"
+            });
+            CommandManager.AddHandler("/ekdb", new CommandInfo(CommandHelper.OnCommand)
+            {
+                HelpMessage = "Echoes current debug info"
             });
         }
 
@@ -86,6 +93,9 @@ namespace Echokraut.Helper.Functional
                     break;
                 case "/ekid":
                     PrintTargetInfo();
+                    break;
+                case "/ekdb":
+                    PrintDebugInfo();
                     break;
                 case "/ekt":
                     Configuration.Enabled = !Configuration.Enabled;
@@ -157,6 +167,31 @@ namespace Echokraut.Helper.Functional
                 }
             }
         }
+        
+        public static void PrintDebugInfo()
+        {
+            var cond1 = Condition[ConditionFlag.OccupiedInQuestEvent];
+            var cond2 = Condition[ConditionFlag.Occupied];
+            var cond3 = Condition[ConditionFlag.Occupied30];
+            var cond4 = Condition[ConditionFlag.Occupied33];
+            var cond5 = Condition[ConditionFlag.Occupied38];
+            var cond6 = Condition[ConditionFlag.Occupied39];
+            var cond7 = Condition[ConditionFlag.OccupiedInCutSceneEvent];
+            var cond8 = Condition[ConditionFlag.OccupiedInEvent];
+            var cond9 = Condition[ConditionFlag.OccupiedSummoningBell];
+            PrintText("Debug", $"Echokraut Debug -> ---Start---");
+            PrintText("Debug", $"Echokraut Debug -> OccupiedInQuestEvent: {cond1}");
+            PrintText("Debug", $"Echokraut Debug -> Occupied: {cond2}");
+            PrintText("Debug", $"Echokraut Debug -> Occupied30: {cond3}");
+            PrintText("Debug", $"Echokraut Debug -> Occupied33: {cond4}");
+            PrintText("Debug", $"Echokraut Debug -> Occupied38: {cond5}");
+            PrintText("Debug", $"Echokraut Debug -> Occupied39: {cond6}");
+            PrintText("Debug", $"Echokraut Debug -> OccupiedInCutSceneEvent: {cond7}");
+            PrintText("Debug", $"Echokraut Debug -> OccupiedInEvent: {cond8}");
+            PrintText("Debug", $"Echokraut Debug -> OccupiedSummoningBell: {cond9}");
+            PrintText("Debug", $"Echokraut Debug -> ---End---");
+        }
+
         public static void PrintText(string name, string text)
         {
             ChatGui.Print(new Dalamud.Game.Text.XivChatEntry() { Name = name, Message = text, Timestamp = DateTime.Now.Hour * 60 + DateTime.Now.Minute, Type = Dalamud.Game.Text.XivChatType.Echo });
@@ -166,6 +201,7 @@ namespace Echokraut.Helper.Functional
         {
             CommandManager.RemoveHandler("/ek");
             CommandManager.RemoveHandler("/ekt");
+            CommandManager.RemoveHandler("/ekdb");
             CommandManager.RemoveHandler("/ekid");
             CommandManager.RemoveHandler("/ekttalk");
             CommandManager.RemoveHandler("/ektbtalk");

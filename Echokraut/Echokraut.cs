@@ -92,7 +92,7 @@ public partial class Echokraut : IDalamudPlugin
         BackendHelper.Setup(this, Configuration, clientState, framework, Configuration.BackendSelection);
         JsonLoaderHelper.Setup(this.ClientState.ClientLanguage);
         VolumeHelper.Setup(gameConfig);
-        CommandHelper.Setup(Configuration, chatGui, clientState, dataManager, commandManager, ConfigWindow);
+        CommandHelper.Setup(Configuration, chatGui, clientState, dataManager, commandManager, condition, ConfigWindow);
         this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration, new EKEventId(0, Enums.TextSource.None));
         this.addonTalkHelper = new AddonTalkHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
