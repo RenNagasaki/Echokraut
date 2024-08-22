@@ -33,7 +33,7 @@
     },
     {
         "voiceName": "Gaius",
-        "speakers": [ "Gaius Van Baelsar" ]
+        "speakers": [ "Gaius Van Baelsar", "Gaius van Baelsar" ]
     },
     {
         "voiceName": "Nero",
@@ -96,6 +96,30 @@
         "speakers": [ "Galuf Baldesion" ]
     },
     {
+        "voiceName": "Apyaahi",
+        "speakers": [ "Gut gelaunte Frau" ]
+    },
+    {
+        "voiceName": "?",
+        "speakers": [ "Irritierte Frau" ]
+    },
+    {
+        "voiceName": "??",
+        "speakers": [ "Begeisterte Frau" ]
+    },
+    {
+        "voiceName": "???",
+        "speakers": [ "Kriecherischer Mann" ]
+    },
+    {
+        "voiceName": "????",
+        "speakers": [ "Wortkarger Mann" ]
+    },
+    {
+        "voiceName": "?????",
+        "speakers": [ "Teuer gekleideter Mann" ]
+    },
+    {
         "voiceName": "Hydaelyn",
         "speakers": [ "Venat", "Amaurotanerin Venat" ]
     },
@@ -110,6 +134,10 @@
     {
         "voiceName": "Ilberd",
         "speakers": [ "Golbez", "Durante" ]
+    },
+    {
+        "voiceName": "Rediroq",
+        "speakers": [ "Gealterte Moblin-Dame" ]
     },
     {
         "voiceName": "Tobli",
