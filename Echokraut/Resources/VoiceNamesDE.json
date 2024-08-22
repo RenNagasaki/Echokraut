@@ -112,6 +112,10 @@
         "speakers": [ "Golbez", "Durante" ]
     },
     {
+        "voiceName": "Rediroq",
+        "speakers": [ "Gealterte Moblin-Dame" ]
+    },
+    {
         "voiceName": "Tobli",
         "speakers": [ "Redseliger Pelupelu" ]
     },
