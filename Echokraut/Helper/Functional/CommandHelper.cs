@@ -179,6 +179,7 @@ namespace Echokraut.Helper.Functional
             var cond7 = Condition[ConditionFlag.OccupiedInCutSceneEvent];
             var cond8 = Condition[ConditionFlag.OccupiedInEvent];
             var cond9 = Condition[ConditionFlag.OccupiedSummoningBell];
+            var cond10 = Condition[ConditionFlag.BoundByDuty];
             PrintText("Debug", $"Echokraut Debug -> ---Start---");
             PrintText("Debug", $"Echokraut Debug -> OccupiedInQuestEvent: {cond1}");
             PrintText("Debug", $"Echokraut Debug -> Occupied: {cond2}");
@@ -189,6 +190,7 @@ namespace Echokraut.Helper.Functional
             PrintText("Debug", $"Echokraut Debug -> OccupiedInCutSceneEvent: {cond7}");
             PrintText("Debug", $"Echokraut Debug -> OccupiedInEvent: {cond8}");
             PrintText("Debug", $"Echokraut Debug -> OccupiedSummoningBell: {cond9}");
+            PrintText("Debug", $"Echokraut Debug -> BoundByDuty: {cond10}");
             PrintText("Debug", $"Echokraut Debug -> ---End---");
         }
 

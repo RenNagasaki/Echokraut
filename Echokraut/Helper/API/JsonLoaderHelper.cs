@@ -150,7 +150,7 @@ namespace Echokraut.Helper.API
 
         public static string GetNpcName(string npcName)
         {
-            var voiceMap = VoiceMaps.Find(p => p.speakers.Contains(npcName));
+            var voiceMap = VoiceMaps.Find(p => p.speakers.Contains(npcName, StringComparer.OrdinalIgnoreCase));
             if (voiceMap != null)
                 npcName = voiceMap.voiceName;
 

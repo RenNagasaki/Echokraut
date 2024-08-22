@@ -98,7 +98,7 @@ public partial class Echokraut : IDalamudPlugin
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
         this.addonSelectStringHelper = new AddonSelectStringHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, condition, this.Configuration);
         this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
-        this.addonBubbleHelper = new AddonBubbleHelper(this, this.DataManager, this.Framework, this.ObjectTable,sigScanner, gameInterop, this.ClientState, this.Configuration);
+        this.addonBubbleHelper = new AddonBubbleHelper(this, this.Condition, this.DataManager, this.Framework, this.ObjectTable,sigScanner, gameInterop, this.ClientState, this.Configuration);
         this.chatTalkHelper = new ChatTalkHelper(this, this.Configuration, chatGui, objectTable, clientState);
         this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, this.addonBubbleHelper, sigScanner, gameInterop, dataManager);
 
@@ -143,7 +143,6 @@ public partial class Echokraut : IDalamudPlugin
             cleanText = TalkTextHelper.ReplaceRomanNumbers(eventId, cleanText);
             cleanText = TalkTextHelper.ReplaceCurrency(eventId, cleanText);
             cleanText = TalkTextHelper.ReplaceIntWithVerbal(eventId, cleanText, language);
-            cleanText = TalkTextHelper.ReplaceEmoticons(eventId, cleanText);
             cleanText = TalkTextHelper.ReplacePhonetics(cleanText, Configuration.PhoneticCorrections);
             cleanText = TalkTextHelper.AnalyzeAndImproveText(cleanText);
             cleanText = cleanText.Trim();
@@ -230,6 +229,7 @@ public partial class Echokraut : IDalamudPlugin
                         }
                         else if (Configuration.VoiceChatWithout3D)
                             speaker = ClientState.LocalPlayer;
+                        cleanText = TalkTextHelper.ReplaceEmoticons(eventId, cleanText);
                         language = await DetectLanguageHelper.GetTextLanguage(cleanText, eventId);
                     }
                     break;

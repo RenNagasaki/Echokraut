@@ -27,6 +27,7 @@ namespace Echokraut.Helper.Addons
         private readonly object mSpeechBubbleInfoLockObj = new();
         private readonly List<SpeechBubbleInfo> mSpeechBubbleInfo = new();
         private OnUpdateDelegate updateHandler;
+        private ICondition condition;
         private IObjectTable objects;
         private ISigScanner sigScanner;
         private IGameInteropProvider gameInteropProvider;
@@ -40,15 +41,16 @@ namespace Echokraut.Helper.Addons
         public bool nextIsVoice = false;
         public DateTime timeNextVoice = DateTime.Now;
 
-        public unsafe AddonBubbleHelper(Echokraut echokraut, IDataManager dataManager, IFramework framework, IObjectTable objectTable, ISigScanner sigScanner, IGameInteropProvider gameInteropProvider, IClientState clientState, Configuration config)
+        public unsafe AddonBubbleHelper(Echokraut echokraut, ICondition condition, IDataManager dataManager, IFramework framework, IObjectTable objectTable, ISigScanner sigScanner, IGameInteropProvider gameInteropProvider, IClientState clientState, Configuration config)
         {
-            objects = objectTable;
             this.echokraut = echokraut;
+            this.condition = condition;
+            this.dataManager = dataManager;
+            this.framework = framework;
+            this.objects = objectTable;
             this.sigScanner = sigScanner;
             this.gameInteropProvider = gameInteropProvider;
             this.clientState = clientState;
-            this.framework = framework;
-            this.dataManager = dataManager;
             configuration = config;
             ManagedBass.Bass.Init(Flags: ManagedBass.DeviceInitFlags.Device3D);
             //ManagedBass.Bass.CurrentDevice = 1;
@@ -127,7 +129,7 @@ namespace Echokraut.Helper.Addons
         {
             try
             {
-                if (!configuration.Enabled || !configuration.VoiceBubble)
+                if (!configuration.Enabled || !configuration.VoiceBubble || condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.WatchingCutscene] || condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.OccupiedInCutSceneEvent])
                     return mOpenChatBubbleHook.Original(pThis, pActor, pString, param3, attachmentPointID);
 
                 var voiceNext = nextIsVoice;
