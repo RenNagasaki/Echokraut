@@ -129,7 +129,11 @@
     },
     {
         "voiceName": "Hunmu Rruk",
-        "speakers": [ "Besonnener Xbr'aal", "Gelassener Xbr'aal" ]
+        "speakers": [ "Gelassener Xbr'aal" ]
+    },
+    {
+        "voiceName": "Ty'at Evu",
+        "speakers": [ "Besonnener Xbr'aal" ]
     },
     {
         "voiceName": "Fran",
