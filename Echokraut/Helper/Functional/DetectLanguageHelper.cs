@@ -54,7 +54,11 @@ namespace Echokraut.Helper.Functional
                 var response = httpClient.SendAsync(httpRequestMessage).Result;
                 var jsonResult = response.Content.ReadAsStringAsync().Result;
                 dynamic resultObj = JObject.Parse(jsonResult);
-                languageString = resultObj.data.detections[0].language;
+
+                if (resultObj.data.detections.Count > 0)
+                    languageString = resultObj.data.detections[0].language;
+                else
+                    languageString = "en";
             }
             catch (Exception ex)
             {

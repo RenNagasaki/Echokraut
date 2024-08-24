@@ -291,6 +291,7 @@ namespace Echokraut.TextToTalk.Utils
 
                     var regex = new Regex(Regex.Escape(dateString));
                     cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Replaced '{dateString}' with '{value}'", eventId);
 
                     dateRxResult = DateRx.Match(cleanText);
                     i++;
@@ -328,19 +329,16 @@ namespace Echokraut.TextToTalk.Utils
                         break;
                 }
 
-                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"{cleanText}", eventId);
                 var timeRxResult = TimeRx.Match(cleanText);
                 int i = 0;
                 while (timeRxResult.Success)
-                {
+                {                    
                     var timeString = timeRxResult.Value;
-                    LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"{timeString}", eventId);
 
                     if (language == ClientLanguage.German)
                     {
-                        var time = TimeOnly.ParseExact(timeString, ["HH:mm"], culture, System.Globalization.DateTimeStyles.None);
-                        var value = time.Hour.ToWords() + " Uhr " + (time.Minute == 0 ? "" : time.Minute.ToWords());
-                        LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"{time} {value}", eventId);
+                        var time = TimeOnly.ParseExact(timeString, ["HH:mm", "H:mm"], culture, System.Globalization.DateTimeStyles.None);
+                        var value = time.Hour.ToWords(culture) + " Uhr " + (time.Minute == 0 ? "" : time.Minute.ToWords(culture));
 
                         var oldCleanText = cleanText;
                         var regex = new Regex(Regex.Escape(timeString + " (Uhr)"));
@@ -352,14 +350,16 @@ namespace Echokraut.TextToTalk.Utils
                             regex = new Regex(Regex.Escape(timeString));
                             cleanText = regex.Replace(cleanText, value.ToString(), 1);
                         }
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Replaced '{timeString}' with '{value}'", eventId);
                     }
                     else
                     {
-                        var time = TimeOnly.ParseExact(timeString, ["HH:mm"], culture, System.Globalization.DateTimeStyles.None);
+                        var time = TimeOnly.ParseExact(timeString, ["HH:mm", "H:mm"], culture, System.Globalization.DateTimeStyles.None);
                         var value = time.ToClockNotation();
 
                         var regex = new Regex(Regex.Escape(timeString));
                         cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Replaced '{timeString}' with '{value}'", eventId);
                     }
 
                     timeRxResult = TimeRx.Match(cleanText);
@@ -390,6 +390,7 @@ namespace Echokraut.TextToTalk.Utils
 
                     var regex = new Regex(Regex.Escape(romanNumeralsText));
                     cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Replaced '{romanNumeralsText}' with '{value}'", eventId);
 
                     romanNumerals = RomanNumeralsRx.Match(cleanText);
                     i++;
@@ -419,6 +420,7 @@ namespace Echokraut.TextToTalk.Utils
 
                     var regex = new Regex(Regex.Escape(currencyNumeralsText));
                     cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Replaced '{currencyNumeralsText}' with '{value}'", eventId);
 
                     currencyNumerals = CurrencyRx.Match(cleanText);
                     i++;
@@ -463,18 +465,20 @@ namespace Echokraut.TextToTalk.Utils
                     var integerValue = Convert.ToInt32(integer.Value);
                     var value = "";
 
-                    if (cleanText.Length > (cleanText.IndexOf(integer.Value) + integer.Value.Length + 1) &&
+                    if (cleanText.Length >= (cleanText.IndexOf(integer.Value) + integer.Value.Length + 1) &&
                         cleanText.Substring(cleanText.IndexOf(integer.Value) + integer.Value.Length, 1) == ".")
                     {
                         value = integerValue.ToOrdinalWords(culture);
                         var regex = new Regex(Regex.Escape(integer.Value + "."));
                         cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Replaced '{integer.Value}' with '{value}'", eventId);
                     }
                     else
                     {
                         value = integerValue.ToWords(culture);
                         var regex = new Regex(Regex.Escape(integer.Value));
                         cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Replaced '{integer.Value}' with '{value}'", eventId);
                     }
 
                     integer = IntegerRx.Match(cleanText);

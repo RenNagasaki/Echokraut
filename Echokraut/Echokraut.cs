@@ -138,6 +138,10 @@ public partial class Echokraut : IDalamudPlugin
             cleanText = TalkTextHelper.ReplaceSsmlTokens(cleanText);
             cleanText = TalkTextHelper.NormalizePunctuation(cleanText);
             cleanText = this.Configuration.RemoveStutters ? TalkTextHelper.RemoveStutters(cleanText) : cleanText;
+
+            if (source == TextSource.Chat)
+                language = await DetectLanguageHelper.GetTextLanguage(cleanText, eventId);
+
             cleanText = TalkTextHelper.ReplaceDate(eventId, cleanText, language);
             cleanText = TalkTextHelper.ReplaceTime(eventId, cleanText, language);
             cleanText = TalkTextHelper.ReplaceRomanNumbers(eventId, cleanText);
@@ -210,7 +214,7 @@ public partial class Echokraut : IDalamudPlugin
                         return;
                     }
                     break;
-                case TextSource.AddonCutSceneSelectString:
+                case TextSource.AddonCutsceneSelectString:
                 case TextSource.AddonSelectString:
                 case TextSource.Chat:
                     if (npcData.muted)
@@ -230,7 +234,6 @@ public partial class Echokraut : IDalamudPlugin
                         else if (Configuration.VoiceChatWithout3D)
                             speaker = ClientState.LocalPlayer;
                         cleanText = TalkTextHelper.ReplaceEmoticons(eventId, cleanText);
-                        language = await DetectLanguageHelper.GetTextLanguage(cleanText, eventId);
                     }
                     break;
             }

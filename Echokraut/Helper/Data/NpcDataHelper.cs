@@ -39,7 +39,7 @@ namespace Echokraut.Helper.Data
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found mapping: {Configuration.MappedNpcs} count: {Configuration.MappedNpcs.Count()}", eventId);
                     return Configuration.MappedNpcs;
                 case TextSource.AddonSelectString:
-                case TextSource.AddonCutSceneSelectString:
+                case TextSource.AddonCutsceneSelectString:
                 case TextSource.Chat:
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found mapping: {Configuration.MappedPlayers} count: {Configuration.MappedPlayers.Count()}", eventId);
                     return Configuration.MappedPlayers;

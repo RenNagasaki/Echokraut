@@ -61,7 +61,7 @@ namespace Echokraut.Helper.API
                     break;
                 case TextSource.AddonTalk:
                 case TextSource.AddonBattleTalk:
-                case TextSource.AddonCutSceneSelectString:
+                case TextSource.AddonCutsceneSelectString:
                 case TextSource.AddonSelectString:
                 case TextSource.VoiceTest:
                     PlayingHelper.AddRequestToQueue(voiceMessage);

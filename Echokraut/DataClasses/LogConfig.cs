@@ -43,9 +43,9 @@ namespace Echokraut.DataClasses
         public bool BubbleJumpToBottom { get; set; } = true;
         #endregion
         #region CutSceneSelectString
-        public bool ShowCutSceneSelectStringInfoLog { get; set; } = true;
-        public bool ShowCutSceneSelectStringDebugLog { get; set; } = true;
-        public bool ShowCutSceneSelectStringErrorLog { get; set; } = true;
+        public bool ShowCutsceneSelectStringInfoLog { get; set; } = true;
+        public bool ShowCutsceneSelectStringDebugLog { get; set; } = true;
+        public bool ShowCutsceneSelectStringErrorLog { get; set; } = true;
         public bool ShowCutSceneSelectStringId0 { get; set; } = true;
         public bool CutSceneSelectStringJumpToBottom { get; set; } = true;
         #endregion

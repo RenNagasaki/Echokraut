@@ -114,7 +114,7 @@ public class AddonCutSceneSelectStringHelper
             return;
         }
 
-        var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonCutSceneSelectString);
+        var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonCutsceneSelectString);
         // Notify observers that the addon state was advanced
         plugin.Cancel(eventId);
 
