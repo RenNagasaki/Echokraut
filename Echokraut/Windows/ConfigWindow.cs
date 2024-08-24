@@ -26,6 +26,7 @@ using Dalamud.Plugin;
 using Echokraut.Helper.API;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
+using System.Runtime.CompilerServices;
 
 namespace Echokraut.Windows;
 
@@ -246,30 +247,13 @@ public class ConfigWindow : Window, IDisposable
 
                     ImGui.NewLine();
                     ImGui.TextUnformatted("Available commands:");
-                    ImGui.TextUnformatted("/ekt");
-                    ImGui.SameLine();
-                    ImGui.TextUnformatted("Toggles Echokraut");
-                    ImGui.TextUnformatted("/ekttalk");
-                    ImGui.SameLine();
-                    ImGui.TextUnformatted("Toggles dialogue voicing");
-                    ImGui.TextUnformatted("/ektbtalk");
-                    ImGui.SameLine();
-                    ImGui.TextUnformatted("Toggles battle dialogue voicing");
-                    ImGui.TextUnformatted("/ektbubble");
-                    ImGui.SameLine();
-                    ImGui.TextUnformatted("Toggles bubble voicing");
-                    ImGui.TextUnformatted("/ektchat");
-                    ImGui.SameLine();
-                    ImGui.TextUnformatted("Toggles chat voicing");
-                    ImGui.TextUnformatted("/ektcutschoice");
-                    ImGui.SameLine();
-                    ImGui.TextUnformatted("Toggles cutscene choice voicing");
-                    ImGui.TextUnformatted("/ektchoice");
-                    ImGui.SameLine();
-                    ImGui.TextUnformatted("Toggles choice voicing");
-                    ImGui.TextUnformatted("/ek");
-                    ImGui.SameLine();
-                    ImGui.TextUnformatted("Opens the configuration window");
+                    foreach (var commandKey in CommandHelper.CommandKeys)
+                    {
+                        var command = CommandHelper.CommandManager.Commands[commandKey];
+                        ImGui.TextUnformatted(commandKey);
+                        ImGui.SameLine();
+                        ImGui.TextUnformatted(command.HelpMessage);
+                    }
                 }
 
                 using (var disabled = ImRaii.Disabled(!Configuration.Enabled))
@@ -1594,9 +1578,9 @@ public class ConfigWindow : Window, IDisposable
                     {
                         case 0:
                             if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
-                                filteredLogs.Sort((a, b) => DateTime.Compare(b.timeStamp, a.timeStamp));
-                            else
                                 filteredLogs.Sort((a, b) => DateTime.Compare(a.timeStamp, b.timeStamp));
+                            else
+                                filteredLogs.Sort((a, b) => DateTime.Compare(b.timeStamp, a.timeStamp));
                             break;
                         case 1:
                             if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)

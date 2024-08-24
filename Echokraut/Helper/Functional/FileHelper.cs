@@ -4,13 +4,16 @@ using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using NAudio.Wave;
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 
 namespace Echokraut.Helper.Functional
 {
     public static class FileHelper
     {
+        public static Dictionary<DateTime, string> SavedFiles = new Dictionary<DateTime, string>();
         public static bool LoadLocalAudio(EKEventId eventId, string localSaveLocation, VoiceMessage voiceMessage)
         {
             try
@@ -108,6 +111,7 @@ namespace Echokraut.Helper.Functional
 
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
                 WaveFileWriter.CreateWaveFile(filePath, rawStream);
+                SavedFiles.Add(DateTime.Now, filePath);
 
                 return true;
             }
@@ -117,6 +121,73 @@ namespace Echokraut.Helper.Functional
             }
 
             return false;
+        }
+
+        public static int DeleteLastNFiles(int nFilesToDelete = 10)
+        {
+            var timeStamps = SavedFiles.Keys.ToList();
+            timeStamps.Sort((a, b) => DateTime.Compare(b, a));
+            var file = "";
+            var deletedFiles = 0;
+
+            for (int i = 0; i < nFilesToDelete; i++)
+            {
+                if (SavedFiles.Count > 0)
+                {
+                    try
+                    {
+                        file = SavedFiles[timeStamps[0]];
+                        File.Delete(file);
+                        deletedFiles++;
+                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Deleted local saved file: {file}", new EKEventId(0, Enums.TextSource.None));
+                    }
+                    catch (FileNotFoundException ex)
+                    { }
+                    catch (Exception ex)
+                    {
+                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while deleting local saved file: {file} - {ex.ToString()}", new EKEventId(0, Enums.TextSource.None));
+                    }
+                    SavedFiles.Remove(timeStamps[0]);
+                    timeStamps.RemoveAt(0);
+                }
+                else
+                    break;
+            }
+
+            return deletedFiles;
+        }
+
+        public static int DeleteLastNMinutesFiles(int nMinutesFilesToDelete = 10)
+        {
+            var timeStamps = SavedFiles.Keys.ToList().FindAll(p => p >= DateTime.Now.AddMinutes(-nMinutesFilesToDelete));
+            var file = "";
+            var deletedFiles = 0;
+
+            foreach (var timeStamp in timeStamps)
+            {
+                if (SavedFiles.Count > 0)
+                {
+                    try
+                    {
+                        file = SavedFiles[timeStamp];
+                        File.Delete(file);
+                        deletedFiles++;
+                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Deleted local saved file: {file}", new EKEventId(0, Enums.TextSource.None));
+
+                    }
+                    catch (FileNotFoundException ex)
+                    { }
+                    catch (Exception ex)
+                    {
+                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while deleting local saved file: {file} - {ex.ToString()}", new EKEventId(0, Enums.TextSource.None));
+                    }
+                    SavedFiles.Remove(timeStamp);
+                }
+                else
+                    break;
+            }
+
+            return deletedFiles;
         }
 
         public static bool RemoveSavedNpcFiles(string localSaveLocation, string speaker)

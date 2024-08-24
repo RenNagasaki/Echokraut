@@ -6,10 +6,10 @@ using Echokraut.Enums;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.DataHelper;
 using Echokraut.Windows;
-using FFXIVClientStructs.FFXIV.Component.GUI;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Reflection;
-using static Lumina.Models.Models.Model;
 
 namespace Echokraut.Helper.Functional
 {
@@ -19,9 +19,10 @@ namespace Echokraut.Helper.Functional
         private static IChatGui ChatGui;
         private static IClientState ClientState;
         private static IDataManager DataManager;
-        private static ICommandManager CommandManager;
+        public static ICommandManager CommandManager;
         private static ICondition Condition;
         private static ConfigWindow ConfigWindow;
+        public static List<string> CommandKeys;
 
         public static void Setup(Configuration configuration, IChatGui chatGui, IClientState clientState, IDataManager dataManager, ICommandManager commandManager, ICondition condition, ConfigWindow configWindow)
         {
@@ -78,6 +79,17 @@ namespace Echokraut.Helper.Functional
             {
                 HelpMessage = "Echoes current debug info"
             });
+            CommandManager.AddHandler("/ekdel", new CommandInfo(CommandHelper.OnCommand)
+            {
+                HelpMessage = "/ekdel n -> Deletes last 'n' local saved files. Default 10"
+            });
+            CommandManager.AddHandler("/ekdelmin", new CommandInfo(CommandHelper.OnCommand)
+            {
+                HelpMessage = "/ekdelmin n -> Deletes last 'n' minutes generated local saved files. Default 10"
+            });
+
+            CommandKeys = CommandHelper.CommandManager.Commands.Keys.ToList().FindAll(p => p.StartsWith("/ek"));
+            CommandKeys.Sort();
         }
 
         public static void OnCommand(string command, string args)
@@ -86,6 +98,7 @@ namespace Echokraut.Helper.Functional
 
             var activationText = "";
             var activationType = "";
+            var errorText = "";
             switch (command)
             {
                 case "/ek":
@@ -97,11 +110,41 @@ namespace Echokraut.Helper.Functional
                 case "/ekdb":
                     PrintDebugInfo();
                     break;
+                case "/ekdel":
+                    try
+                    {
+                        var deleteNFiles = 10;
+                        if (args.Trim().Length > 0)
+                            deleteNFiles = Convert.ToInt32(args);
+
+                        var deletedFiles = FileHelper.DeleteLastNFiles(deleteNFiles);
+                        PrintText("", $"Deleted {deletedFiles} generated audio files");
+                    }
+                    catch (Exception ex)
+                    {
+                        errorText = $"Please enter a valid number or leave empty";
+                    }
+                    break;
+                case "/ekdelmin":
+                    try
+                    {
+                        var deleteNMinutesFiles = 10;
+                        if (args.Trim().Length > 0)
+                            deleteNMinutesFiles = Convert.ToInt32(args);
+
+                        var deletedFiles = FileHelper.DeleteLastNMinutesFiles(deleteNMinutesFiles);
+                        PrintText("", $"Deleted {deletedFiles} generated audio files");
+                    }
+                    catch (Exception ex)
+                    {
+                        errorText = $"Please enter a valid number or leave empty";
+                    }
+                    break;
                 case "/ekt":
                     Configuration.Enabled = !Configuration.Enabled;
                     Configuration.Save();
                     activationText = (Configuration.Enabled ? "Enabled" : "Disabled");
-                    activationType = "echokraut";
+                    activationType = "plugin";
                     break;
                 case "/ekttalk":
                     Configuration.VoiceDialogue = !Configuration.VoiceDialogue;
@@ -146,6 +189,9 @@ namespace Echokraut.Helper.Functional
                 PrintText("", $"{activationText} {activationType} voicing");
 
                 LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"New Command triggered: {command}", new EKEventId(0, TextSource.None));
+
+                if (!string.IsNullOrWhiteSpace(errorText))
+                    PrintText("", errorText);
             }
         }
 
@@ -163,7 +209,7 @@ namespace Echokraut.Helper.Functional
                     var race = CharacterDataHelper.GetSpeakerRace(DataManager, new EKEventId(0, TextSource.None), target, out var raceStr, out var modelId);
                     var gender = CharacterDataHelper.GetCharacterGender(DataManager, new EKEventId(0, TextSource.None), target, race, out var modelBody);
                     var bodyType = LuminaHelper.GetENpcBase(target.DataId)?.BodyType;
-                    PrintText(target.Name.TextValue, $"Echokraut Target -> Name: {target.Name}, Race: {race}, Gender: {gender}, ModelID: {modelId}, ModelBody: {modelBody}, BodyType: {bodyType}");
+                    PrintText(target.Name.TextValue, $"Target -> Name: {target.Name}, Race: {race}, Gender: {gender}, ModelID: {modelId}, ModelBody: {modelBody}, BodyType: {bodyType}");
                 }
             }
         }
@@ -180,23 +226,23 @@ namespace Echokraut.Helper.Functional
             var cond8 = Condition[ConditionFlag.OccupiedInEvent];
             var cond9 = Condition[ConditionFlag.OccupiedSummoningBell];
             var cond10 = Condition[ConditionFlag.BoundByDuty];
-            PrintText("Debug", $"Echokraut Debug -> ---Start---");
-            PrintText("Debug", $"Echokraut Debug -> OccupiedInQuestEvent: {cond1}");
-            PrintText("Debug", $"Echokraut Debug -> Occupied: {cond2}");
-            PrintText("Debug", $"Echokraut Debug -> Occupied30: {cond3}");
-            PrintText("Debug", $"Echokraut Debug -> Occupied33: {cond4}");
-            PrintText("Debug", $"Echokraut Debug -> Occupied38: {cond5}");
-            PrintText("Debug", $"Echokraut Debug -> Occupied39: {cond6}");
-            PrintText("Debug", $"Echokraut Debug -> OccupiedInCutSceneEvent: {cond7}");
-            PrintText("Debug", $"Echokraut Debug -> OccupiedInEvent: {cond8}");
-            PrintText("Debug", $"Echokraut Debug -> OccupiedSummoningBell: {cond9}");
-            PrintText("Debug", $"Echokraut Debug -> BoundByDuty: {cond10}");
-            PrintText("Debug", $"Echokraut Debug -> ---End---");
+            PrintText("Debug", $"Debug -> ---Start---");
+            PrintText("Debug", $"Debug -> OccupiedInQuestEvent: {cond1}");
+            PrintText("Debug", $"Debug -> Occupied: {cond2}");
+            PrintText("Debug", $"Debug -> Occupied30: {cond3}");
+            PrintText("Debug", $"Debug -> Occupied33: {cond4}");
+            PrintText("Debug", $"Debug -> Occupied38: {cond5}");
+            PrintText("Debug", $"Debug -> Occupied39: {cond6}");
+            PrintText("Debug", $"Debug -> OccupiedInCutSceneEvent: {cond7}");
+            PrintText("Debug", $"Debug -> OccupiedInEvent: {cond8}");
+            PrintText("Debug", $"Debug -> OccupiedSummoningBell: {cond9}");
+            PrintText("Debug", $"Debug -> BoundByDuty: {cond10}");
+            PrintText("Debug", $"Debug -> ---End---");
         }
 
         public static void PrintText(string name, string text)
         {
-            ChatGui.Print(new Dalamud.Game.Text.XivChatEntry() { Name = name, Message = text, Timestamp = DateTime.Now.Hour * 60 + DateTime.Now.Minute, Type = Dalamud.Game.Text.XivChatType.Echo });
+            ChatGui.Print(new Dalamud.Game.Text.XivChatEntry() { Name = name, Message = "Echokraut: " + text, Timestamp = DateTime.Now.Hour * 60 + DateTime.Now.Minute, Type = Dalamud.Game.Text.XivChatType.Echo });
         }
 
         internal static void Dispose()
@@ -210,6 +256,8 @@ namespace Echokraut.Helper.Functional
             CommandManager.RemoveHandler("/ektbubble");
             CommandManager.RemoveHandler("/ektcutschoice");
             CommandManager.RemoveHandler("/ektchoice");
+            CommandManager.RemoveHandler("/ekdel");
+            CommandManager.RemoveHandler("/ekdelmin");
         }
     }
 }
