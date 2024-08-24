@@ -128,6 +128,14 @@
         "speakers": [ "Energetische Frau" ]
     },
     {
+        "voiceName": "Hunmu Rruk",
+        "speakers": [ "Gelassener Xbr'aal" ]
+    },
+    {
+        "voiceName": "Ty'at Evu",
+        "speakers": [ "Besonnener Xbr'aal" ]
+    },
+    {
         "voiceName": "Fran",
         "speakers": [ "Grazile Frau" ]
     },
