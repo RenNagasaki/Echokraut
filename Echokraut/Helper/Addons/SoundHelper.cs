@@ -160,7 +160,7 @@ public class SoundHelper : IDisposable
             if (knownVoiceLinePtrs.Remove(soundDataPtr))
             {
                 knownVoiceLinesMap.TryGetValue(soundDataPtr, out var fileName);
-                knownVoiceLinePtrs.Remove(soundDataPtr);
+                knownVoiceLinesMap.Remove(soundDataPtr);
 
                 if (Path.GetFileNameWithoutExtension(fileName).Length == 10)
                 {
