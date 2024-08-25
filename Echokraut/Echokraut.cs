@@ -140,7 +140,18 @@ public partial class Echokraut : IDalamudPlugin
             cleanText = this.Configuration.RemoveStutters ? TalkTextHelper.RemoveStutters(cleanText) : cleanText;
 
             if (source == TextSource.Chat)
+            {
+                if (!Configuration.VoiceChatWithout3D && speaker == null)
+                {
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Player is not on the same map: {speakerName.TextValue}. Can't voice", eventId);
+                    LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                    return;
+                }
+                else if (Configuration.VoiceChatWithout3D)
+                    speaker = ClientState.LocalPlayer;
+
                 language = await DetectLanguageHelper.GetTextLanguage(cleanText, eventId);
+            }
 
             cleanText = TalkTextHelper.ReplaceDate(eventId, cleanText, language);
             cleanText = TalkTextHelper.ReplaceTime(eventId, cleanText, language);
@@ -149,6 +160,9 @@ public partial class Echokraut : IDalamudPlugin
             cleanText = TalkTextHelper.ReplaceIntWithVerbal(eventId, cleanText, language);
             cleanText = TalkTextHelper.ReplacePhonetics(cleanText, Configuration.PhoneticCorrections);
             cleanText = TalkTextHelper.AnalyzeAndImproveText(cleanText);
+
+            if (source == TextSource.Chat)
+                cleanText = TalkTextHelper.ReplaceEmoticons(eventId, cleanText);
             cleanText = cleanText.Trim();
 
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleantext: {cleanText}", eventId);
@@ -222,18 +236,6 @@ public partial class Echokraut : IDalamudPlugin
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Player is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
                         return;
-                    }
-                    if (source == TextSource.Chat)
-                    {
-                        if (!Configuration.VoiceChatWithout3D && speaker == null)
-                        {
-                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Player is not on the same map: {npcData.ToString()}. Can't voice", eventId);
-                            LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                            return;
-                        }
-                        else if (Configuration.VoiceChatWithout3D)
-                            speaker = ClientState.LocalPlayer;
-                        cleanText = TalkTextHelper.ReplaceEmoticons(eventId, cleanText);
                     }
                     break;
             }

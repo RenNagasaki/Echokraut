@@ -157,9 +157,10 @@ public class SoundHelper : IDisposable
             var soundDataPtr = Marshal.ReadIntPtr(soundPtr + SoundDataOffset);
             // Assume that a voice line will be played only once after it's loaded. Then the set can be pruned as voice
             // lines are played.
-            if (knownVoiceLinePtrs.Contains(soundDataPtr))
+            if (knownVoiceLinePtrs.Remove(soundDataPtr))
             {
                 knownVoiceLinesMap.TryGetValue(soundDataPtr, out var fileName);
+                knownVoiceLinePtrs.Remove(soundDataPtr);
 
                 if (Path.GetFileNameWithoutExtension(fileName).Length == 10)
                 {

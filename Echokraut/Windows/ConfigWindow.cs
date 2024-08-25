@@ -1076,7 +1076,7 @@ public class ConfigWindow : Window, IDisposable
                 updatePhonData = true;
             }
 
-            if (updatePhonData || resetPhonFilter && (filterPhonOriginal.Length == 0 || filterPhonCorrected.Length == 0))
+            if (updatePhonData || (resetPhonFilter && (filterPhonOriginal.Length == 0 || filterPhonCorrected.Length == 0)))
             {
                 filteredPhon = Configuration.PhoneticCorrections;
                 updatePhonData = true;
@@ -1085,7 +1085,7 @@ public class ConfigWindow : Window, IDisposable
 
             if (ImGui.BeginTable("Phonetics Table##NPCTable", 3, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY))
             {
-                ImGui.TableSetupScrollFreeze(0, 1); // Make top row always visible
+                ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
                 ImGui.TableSetupColumn("##delete", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25f);
                 ImGui.TableSetupColumn("Original", ImGuiTableColumnFlags.WidthStretch, 150);
                 ImGui.TableSetupColumn("Corrected", ImGuiTableColumnFlags.WidthStretch, 150);
@@ -1099,7 +1099,7 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                 if (ImGui.InputText($"##EKFilterPhonOriginal", ref filterPhonOriginal, 40) || (filterPhonOriginal.Length > 0 && updatePhonData))
                 {
-                    filteredPhon = Configuration.PhoneticCorrections.FindAll(p => p.OriginalText.ToLower().StartsWith(filterPhonOriginal.ToLower()));
+                    filteredPhon = filteredPhon.FindAll(p => p.OriginalText.ToLower().Contains(filterPhonOriginal.ToLower()));
                     updatePhonData = true;
                     resetPhonFilter = true;
                 }
@@ -1107,7 +1107,7 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                 if (ImGui.InputText($"##EKFilterPhonCorrected", ref filterPhonCorrected, 40) || (filterPhonCorrected.Length > 0 && updatePhonData))
                 {
-                    filteredPhon = Configuration.PhoneticCorrections.FindAll(p => p.CorrectedText.ToLower().Contains(filterPhonCorrected.ToLower()));
+                    filteredPhon = filteredPhon.FindAll(p => p.CorrectedText.ToLower().Contains(filterPhonCorrected.ToLower()));
                     updatePhonData = true;
                     resetPhonFilter = true;
                 }
@@ -1163,7 +1163,7 @@ public class ConfigWindow : Window, IDisposable
 
                 PhoneticCorrection toBeRemoved = null;
                 int i = 0;
-                foreach (PhoneticCorrection phoneticCorrection in Configuration.PhoneticCorrections)
+                foreach (PhoneticCorrection phoneticCorrection in filteredPhon)
                 {
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
