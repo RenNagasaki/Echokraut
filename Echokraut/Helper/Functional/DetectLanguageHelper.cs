@@ -12,16 +12,21 @@ using System.Text;
 using System.Threading.Tasks;
 using System.Text.Json;
 using Echokraut.Helper.Data;
+using Dalamud.Plugin.Services;
 
 namespace Echokraut.Helper.Functional
 {
     public static class DetectLanguageHelper
     {
 
-        static HttpClient httpClient;
+        private static HttpClient httpClient;
+        private static Configuration configuration;
+        private static IClientState clientState;
 
-        public static void Setup()
+        public static void Setup(Configuration configuration, IClientState clientState)
         {
+            DetectLanguageHelper.configuration = configuration;
+            DetectLanguageHelper.clientState = clientState;
             httpClient = new HttpClient();
             httpClient.Timeout = TimeSpan.FromSeconds(5);
         }
@@ -34,56 +39,66 @@ namespace Echokraut.Helper.Functional
         public async static Task<ClientLanguage> GetTextLanguage(string text, EKEventId eventId)
         {
             var languageString = "en";
-            try
+            if (configuration.VoiceChatLanguageAPIKey.Length == 32)
             {
-                var detectLanguagesApiKey = JsonSerializer.Deserialize<List<string>>(Resources.ApiKeys)[0];
-                var uriBuilder = new UriBuilder(@"https://ws.detectlanguage.com/0.2/") { Path = "/0.2/detect" };
-                var detectData = new Dictionary<string, string>();
-                detectData.Add("q", text);
-                var httpRequestMessage = new HttpRequestMessage
+                try
                 {
-                    Method = HttpMethod.Post,
-                    RequestUri = uriBuilder.Uri,
+                    var detectLanguagesApiKey = configuration.VoiceChatLanguageAPIKey;
+                    var uriBuilder = new UriBuilder(@"https://ws.detectlanguage.com/0.2/") { Path = "/0.2/detect" };
+                    var detectData = new Dictionary<string, string>();
+                    detectData.Add("q", text);
+                    var httpRequestMessage = new HttpRequestMessage
+                    {
+                        Method = HttpMethod.Post,
+                        RequestUri = uriBuilder.Uri,
 
-                    Headers = {
-                    { HttpRequestHeader.Authorization.ToString(), $"Bearer {detectLanguagesApiKey}" },
-                    { HttpRequestHeader.Accept.ToString(), "application/json" }
-                },
-                    Content = new FormUrlEncodedContent(detectData)
-                };
-                var response = httpClient.SendAsync(httpRequestMessage).Result;
-                var jsonResult = response.Content.ReadAsStringAsync().Result;
-                dynamic resultObj = JObject.Parse(jsonResult);
+                        Headers = {
+                            { HttpRequestHeader.Authorization.ToString(), $"Bearer {detectLanguagesApiKey}" },
+                            { HttpRequestHeader.Accept.ToString(), "application/json" }
+                        },
+                        Content = new FormUrlEncodedContent(detectData)
+                    };
+                    var response = httpClient.SendAsync(httpRequestMessage).Result;
+                    var jsonResult = response.Content.ReadAsStringAsync().Result;
+                    dynamic resultObj = JObject.Parse(jsonResult);
 
-                if (resultObj.data.detections.Count > 0)
-                    languageString = resultObj.data.detections[0].language;
-                else
-                    languageString = "en";
+                    if (resultObj.data.detections.Count > 0)
+                        languageString = resultObj.data.detections[0].language;
+                    else
+                        languageString = "en";
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while detecting language. Using client language. Exception: {ex}", eventId);
+                    return clientState.ClientLanguage;
+                }
+
+                var language = ClientLanguage.English;
+                switch (languageString)
+                {
+                    case "de":
+                        language = ClientLanguage.German;
+                        break;
+                    case "en":
+                        language = ClientLanguage.English;
+                        break;
+                    case "ja":
+                        language = ClientLanguage.Japanese;
+                        break;
+                    case "fr":
+                        language = ClientLanguage.French;
+                        break;
+                }
+
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found language for chat: {languageString}/{language.ToString()}", eventId);
+                return language;
             }
-            catch (Exception ex)
+            else
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while detecting language: {ex}", eventId);
-            }
+                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Skipping language detection for chat. Using client language.", eventId);
 
-            var language = ClientLanguage.English;
-            switch (languageString)
-            {
-                case "de":
-                    language = ClientLanguage.German;
-                    break;
-                case "en":
-                    language = ClientLanguage.English;
-                    break;
-                case "ja":
-                    language = ClientLanguage.Japanese;
-                    break;
-                case "fr":
-                    language = ClientLanguage.French;
-                    break;
+                return clientState.ClientLanguage;
             }
-
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found language for chat: {languageString}/{language.ToString()}", eventId);
-            return language;
         }
     }
 }

@@ -17,6 +17,7 @@ using static System.Net.Mime.MediaTypeNames;
 using Echokraut.Helper.DataHelper;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
+using FFXIVClientStructs.FFXIV.Client.System.Framework;
 
 namespace Echokraut.Helper.Addons;
 
@@ -24,6 +25,8 @@ public class AddonTalkHelper
 {
     private record struct AddonTalkState(string? Speaker, string? Text);
 
+    private OnUpdateDelegate updateHandler;
+    private readonly ICondition condition;
     private readonly IAddonLifecycle addonLifecycle;
     private readonly IClientState clientState;
     private readonly IObjectTable objects;
@@ -31,14 +34,16 @@ public class AddonTalkHelper
     private readonly Echokraut echokraut;
     public bool nextIsVoice = false;
     private bool wasTalking = false;
+    private bool wasWatchingCutscene = false;
     public DateTime timeNextVoice = DateTime.Now;
 
     public static nint Address { get; set; }
     private AddonTalkState lastValue;
 
-    public AddonTalkHelper(Echokraut plugin, IAddonLifecycle addonLifecycle, IClientState clientState, IObjectTable objects, Configuration config)
+    public AddonTalkHelper(Echokraut plugin, ICondition condition, IAddonLifecycle addonLifecycle, IClientState clientState, IObjectTable objects, Configuration config)
     {
         echokraut = plugin;
+        this.condition = condition;
         this.addonLifecycle = addonLifecycle;
         this.clientState = clientState;
         this.config = config;
@@ -120,7 +125,7 @@ public class AddonTalkHelper
 
         text = TalkTextHelper.NormalizePunctuation(text);
 
-        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonTalk: \"{text}\"", eventId);
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"\"{text}\"", eventId);
 
         //ObjectTableUtils.TryGetUnnamedObject(clientState, objects, speaker, eventId);
         if (voiceNext)
@@ -128,6 +133,20 @@ public class AddonTalkHelper
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}", eventId);
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
             return;
+        }
+
+        if (condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.WatchingCutscene])
+        {
+            wasWatchingCutscene = true;
+            DalamudHelper.TryGetNextUnkownCharacter(clientState, objects, eventId);
+            if (speaker == "???")
+                speaker = DalamudHelper.nextUnknownCharacter?.Name.TextValue ?? "???";
+            LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Got ??? speaker: \"{speaker}\"", eventId);
+        }
+        else if (wasWatchingCutscene)
+        {
+            DalamudHelper.ClearLastUnknownState();
+            wasWatchingCutscene = false;
         }
 
         // Find the game object this speaker is representing

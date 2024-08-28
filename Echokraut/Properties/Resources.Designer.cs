@@ -59,15 +59,5 @@ namespace Echokraut.Properties {
                 resourceCulture = value;
             }
         }
-        
-        /// <summary>
-        ///   Sucht eine lokalisierte Zeichenfolge, die [&quot;62955553f8772992abb684c9c98449a0&quot;]
-        /// ähnelt.
-        /// </summary>
-        public static string ApiKeys {
-            get {
-                return ResourceManager.GetString("ApiKeys", resourceCulture);
-            }
-        }
     }
 }

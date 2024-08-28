@@ -37,6 +37,7 @@ public class Configuration : IPluginConfiguration
     public bool VoiceSourceCam { get; set; } = false;
     public float VoiceBubbleAudibleRange { get; set; } = 1f;
     public bool VoiceChat { get; set; } = false;
+    public string VoiceChatLanguageAPIKey { get; set; } = "";
     public bool VoiceChatWithout3D { get; set; } = false;
     public bool VoiceChatPlayer { get; set; } = false;
     public bool VoiceChatSay { get; set; } = false;

@@ -86,20 +86,20 @@ public partial class Echokraut : IDalamudPlugin
         this.ConfigWindow = new ConfigWindow(this, Configuration, this.ClientState, this.PluginInterface);
 
         LogHelper.Setup(log, Configuration);
-        DetectLanguageHelper.Setup();
+        DetectLanguageHelper.Setup(Configuration, clientState);
         NpcDataHelper.Setup(Configuration);
         LuminaHelper.Setup(clientState, dataManager);
         BackendHelper.Setup(this, Configuration, clientState, framework, Configuration.BackendSelection);
         JsonLoaderHelper.Setup(this.ClientState.ClientLanguage);
         VolumeHelper.Setup(gameConfig);
         CommandHelper.Setup(Configuration, chatGui, clientState, dataManager, commandManager, condition, ConfigWindow);
-        this.lipSyncHelper = new LipSyncHelper(this.ClientState, this.ObjectTable, this.Configuration, new EKEventId(0, Enums.TextSource.None));
-        this.addonTalkHelper = new AddonTalkHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
-        this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
-        this.addonSelectStringHelper = new AddonSelectStringHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, condition, this.Configuration);
-        this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, addonLifecycle, this.ClientState, this.ObjectTable, this.Configuration);
-        this.addonBubbleHelper = new AddonBubbleHelper(this, this.Condition, this.DataManager, this.Framework, this.ObjectTable,sigScanner, gameInterop, this.ClientState, this.Configuration);
-        this.chatTalkHelper = new ChatTalkHelper(this, this.Configuration, chatGui, objectTable, clientState);
+        this.lipSyncHelper = new LipSyncHelper(clientState, objectTable, Configuration, new EKEventId(0, Enums.TextSource.None));
+        this.addonTalkHelper = new AddonTalkHelper(this, condition, addonLifecycle, clientState, objectTable, Configuration);
+        this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, addonLifecycle, clientState, objectTable, Configuration);
+        this.addonSelectStringHelper = new AddonSelectStringHelper(this, addonLifecycle, clientState, objectTable, condition, Configuration);
+        this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, addonLifecycle, clientState, objectTable, Configuration);
+        this.addonBubbleHelper = new AddonBubbleHelper(this, condition, dataManager, framework, objectTable,sigScanner, gameInterop, clientState, Configuration);
+        this.chatTalkHelper = new ChatTalkHelper(this, Configuration, chatGui, objectTable, clientState);
         this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, this.addonBubbleHelper, sigScanner, gameInterop, dataManager);
 
         WindowSystem.AddWindow(ConfigWindow);

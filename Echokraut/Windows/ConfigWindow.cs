@@ -569,6 +569,21 @@ public class ConfigWindow : Window, IDisposable
 
         using (var disabled = ImRaii.Disabled(!voiceChat))
         {
+            if (voiceChat)
+            {
+                ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                ImGui.TextUnformatted("Detect Language is the service used for automatically detecting the language of the written chat, it's not perfect but works well. To register for free visit: ");
+                ImGui.SameLine();
+                if (ImGui.Button("DetectLanguage.com"))
+                    System.Diagnostics.Process.Start("https://detectlanguage.com/");
+            }
+            var voiceChatLanguageAPIKey = this.Configuration.VoiceChatLanguageAPIKey;
+            if (ImGui.InputText("Detect Language API Key", ref voiceChatLanguageAPIKey, 32))
+            {
+                this.Configuration.VoiceChatLanguageAPIKey = voiceChatLanguageAPIKey;
+                this.Configuration.Save();
+            }
+
             var voiceChatWithout3D = this.Configuration.VoiceChatWithout3D;
             if (ImGui.Checkbox("Voice Chat without 3D Space", ref voiceChatWithout3D))
             {
