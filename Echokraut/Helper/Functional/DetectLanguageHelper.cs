@@ -95,7 +95,7 @@ namespace Echokraut.Helper.Functional
             }
             else
             {
-                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Skipping language detection for chat. Using client language.", eventId);
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping language detection for chat. Using client language.", eventId);
 
                 return clientState.ClientLanguage;
             }

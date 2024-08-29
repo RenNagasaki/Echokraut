@@ -51,7 +51,7 @@ namespace Echokraut.Helper.API
                     return;
                 }
                 ModelsToRaceMap = System.Text.Json.JsonSerializer.Deserialize<Dictionary<int, NpcRaces>>(json);
-                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Loaded npc race maps for {ModelsToRaceMap.Keys.Count} races", new EKEventId(0, TextSource.None));
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Loaded npc race maps for {ModelsToRaceMap.Keys.Count} races", new EKEventId(0, TextSource.None));
             }
             catch (Exception ex)
             {
@@ -75,7 +75,7 @@ namespace Echokraut.Helper.API
                     return;
                 }
                 ModelGenderMap = System.Text.Json.JsonSerializer.Deserialize<List<NpcGenderRaceMap>>(json);
-                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Loaded npc gender maps for {ModelGenderMap.Count} races", new EKEventId(0, TextSource.None));
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Loaded npc gender maps for {ModelGenderMap.Count} races", new EKEventId(0, TextSource.None));
             }
             catch (Exception ex)
             {
@@ -99,7 +99,7 @@ namespace Echokraut.Helper.API
                     return;
                 }
                 Emoticons = System.Text.Json.JsonSerializer.Deserialize<List<string>>(json);
-                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Loaded emoticons for {Emoticons.Count} emoticons", new EKEventId(0, TextSource.None));
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Loaded emoticons for {Emoticons.Count} emoticons", new EKEventId(0, TextSource.None));
             }
             catch (Exception ex)
             {
@@ -140,7 +140,7 @@ namespace Echokraut.Helper.API
                     return;
                 }
                 VoiceMaps = System.Text.Json.JsonSerializer.Deserialize<List<VoiceMap>>(json);
-                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Loaded voice name maps for {VoiceMaps?.Count} npcs", new EKEventId(0, TextSource.None));
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Loaded voice name maps for {VoiceMaps?.Count} npcs", new EKEventId(0, TextSource.None));
             }
             catch (Exception ex)
             {

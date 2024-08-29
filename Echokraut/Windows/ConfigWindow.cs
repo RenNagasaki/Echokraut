@@ -737,7 +737,7 @@ public class ConfigWindow : Window, IDisposable
 
             if (ImGui.BeginChild("VoicesChild"))
             {
-                if (ImGui.BeginTable("Voice Table##VoiceTable", 5, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY))
+                if (ImGui.BeginTable("Voice Table##VoiceTable", 5, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY))
                 {
                     ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
                     ImGui.TableSetupColumn("##Play", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
@@ -801,10 +801,10 @@ public class ConfigWindow : Window, IDisposable
                         UpdateDataVoices = false;
                         sortSpecs.SpecsDirty = false;
                     }
-                    ImGui.TableNextRow();
 
                     foreach (var voice in filteredVoices)
                     {
+                        ImGui.TableNextRow();
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##testvoice{voice.ToString()}", new Vector2(25, 25), "Test Voice", false, true))
@@ -827,7 +827,6 @@ public class ConfigWindow : Window, IDisposable
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                         ImGui.TextUnformatted(voice.voiceName);
-                        ImGui.TableNextRow();
                     }
 
                     ImGui.EndTable();
@@ -857,7 +856,7 @@ public class ConfigWindow : Window, IDisposable
             resetData = false;
         }
 
-        if (ImGui.BeginTable($"{dataType} Table##{dataType}Table", 8, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY))
+        if (ImGui.BeginTable($"{dataType} Table##{dataType}Table", 8, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY))
         {
             ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
             ImGui.TableSetupColumn("Lock", ImGuiTableColumnFlags.WidthFixed, 40f);
@@ -869,7 +868,6 @@ public class ConfigWindow : Window, IDisposable
             ImGui.TableSetupColumn($"##{dataType}saves", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25f);
             ImGui.TableSetupColumn($"##{dataType}mapping", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25f);
             ImGui.TableHeadersRow();
-            ImGui.TableNextRow();
             ImGui.TableNextColumn();
             ImGui.TableNextColumn();
             ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -907,7 +905,7 @@ public class ConfigWindow : Window, IDisposable
                 updateData = true;
                 resetData = true;
             }
-            ImGui.TableNextRow();
+
             var sortSpecs = ImGui.TableGetSortSpecs();
             if (sortSpecs.SpecsDirty || updateData)
             {
@@ -954,11 +952,11 @@ public class ConfigWindow : Window, IDisposable
                 sortSpecs.SpecsDirty = false;
                 updateData = false;
             }
-            ImGui.TableNextRow();
 
             NpcMapData toBeRemoved = null;
             foreach (NpcMapData mapData in filteredData)
             {
+                ImGui.TableNextRow();
                 ImGui.TableNextColumn();
                 var doNotDelete = mapData.doNotDelete;
                 if (ImGui.Checkbox($"##EKNpcDoNotDelete{mapData.ToString()}", ref doNotDelete))
@@ -1057,8 +1055,6 @@ public class ConfigWindow : Window, IDisposable
                         toBeRemoved = mapData;
                     }
                 }
-
-                ImGui.TableNextRow();
             }
 
             if (toBeRemoved != null)
@@ -1098,17 +1094,13 @@ public class ConfigWindow : Window, IDisposable
                 resetPhonFilter = false;
             }
 
-            if (ImGui.BeginTable("Phonetics Table##NPCTable", 3, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY))
+            if (ImGui.BeginTable("Phonetics Table##NPCTable", 3, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY))
             {
-                ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
+                ImGui.TableSetupScrollFreeze(0, 3); // Make top row always visible
                 ImGui.TableSetupColumn("##delete", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25f);
                 ImGui.TableSetupColumn("Original", ImGuiTableColumnFlags.WidthStretch, 150);
                 ImGui.TableSetupColumn("Corrected", ImGuiTableColumnFlags.WidthStretch, 150);
                 ImGui.TableHeadersRow();
-                ImGui.TableNextColumn();
-                ImGui.TableNextColumn();
-                ImGui.TableNextColumn();
-                ImGui.TableNextRow();
                 ImGui.TableNextColumn();
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1126,7 +1118,6 @@ public class ConfigWindow : Window, IDisposable
                     updatePhonData = true;
                     resetPhonFilter = true;
                 }
-                ImGui.TableNextRow();
                 var sortSpecs = ImGui.TableGetSortSpecs();
                 if (sortSpecs.SpecsDirty || updatePhonData)
                 {
@@ -1149,7 +1140,7 @@ public class ConfigWindow : Window, IDisposable
                     sortSpecs.SpecsDirty = false;
                     updatePhonData = false;
                 }
-
+                ImGui.TableNextRow();
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                 if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Plus.ToIconString()}##addphoncorr", new Vector2(25, 25), "Add phonetic correction", false, true))
@@ -1174,12 +1165,12 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                 ImGui.InputText("##correctText", ref correctedText, 25);
-                ImGui.TableNextRow();
 
                 PhoneticCorrection toBeRemoved = null;
                 int i = 0;
                 foreach (PhoneticCorrection phoneticCorrection in filteredPhon)
                 {
+                    ImGui.TableNextRow();
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Trash.ToIconString()}##delphoncorr{phoneticCorrection.ToString()}", new Vector2(25, 25), "Remove phonetic correction", false, true))
@@ -1195,7 +1186,6 @@ public class ConfigWindow : Window, IDisposable
                     if (ImGui.InputText($"##correctText{i}", ref phoneticCorrection.CorrectedText, 25))
                         Configuration.Save();
 
-                    ImGui.TableNextRow();
                     i++;
                 }
                            
@@ -1228,13 +1218,6 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (ImGui.CollapsingHeader("Options:"))
                     {
-                        var showInfoLog = this.Configuration.logConfig.ShowGeneralInfoLog;
-                        if (ImGui.Checkbox("Show info logs", ref showInfoLog))
-                        {
-                            this.Configuration.logConfig.ShowGeneralInfoLog = showInfoLog;
-                            this.Configuration.Save();
-                            UpdateLogGeneralFilter = true;
-                        }
                         var showDebugLog = this.Configuration.logConfig.ShowGeneralDebugLog;
                         if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
                         {
@@ -1264,13 +1247,6 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (ImGui.CollapsingHeader("Options:"))
                     {
-                        var showInfoLog = this.Configuration.logConfig.ShowTalkInfoLog;
-                        if (ImGui.Checkbox("Show info logs", ref showInfoLog))
-                        {
-                            this.Configuration.logConfig.ShowTalkInfoLog = showInfoLog;
-                            this.Configuration.Save();
-                            UpdateLogTalkFilter = true;
-                        }
                         var showDebugLog = this.Configuration.logConfig.ShowTalkDebugLog;
                         if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
                         {
@@ -1307,13 +1283,6 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (ImGui.CollapsingHeader("Options:"))
                     {
-                        var showInfoLog = this.Configuration.logConfig.ShowBattleTalkInfoLog;
-                        if (ImGui.Checkbox("Show info logs", ref showInfoLog))
-                        {
-                            this.Configuration.logConfig.ShowBattleTalkInfoLog = showInfoLog;
-                            this.Configuration.Save();
-                            UpdateLogBattleTalkFilter = true;
-                        }
                         var showDebugLog = this.Configuration.logConfig.ShowBattleTalkDebugLog;
                         if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
                         {
@@ -1350,13 +1319,6 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (ImGui.CollapsingHeader("Options:"))
                     {
-                        var showInfoLog = this.Configuration.logConfig.ShowChatInfoLog;
-                        if (ImGui.Checkbox("Show info logs", ref showInfoLog))
-                        {
-                            this.Configuration.logConfig.ShowChatInfoLog = showInfoLog;
-                            this.Configuration.Save();
-                            UpdateLogChatFilter = true;
-                        }
                         var showDebugLog = this.Configuration.logConfig.ShowChatDebugLog;
                         if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
                         {
@@ -1393,13 +1355,6 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (ImGui.CollapsingHeader("Options:"))
                     {
-                        var showInfoLog = this.Configuration.logConfig.ShowBubbleInfoLog;
-                        if (ImGui.Checkbox("Show info logs", ref showInfoLog))
-                        {
-                            this.Configuration.logConfig.ShowBubbleInfoLog = showInfoLog;
-                            this.Configuration.Save();
-                            UpdateLogBubblesFilter = true;
-                        }
                         var showDebugLog = this.Configuration.logConfig.ShowBubbleDebugLog;
                         if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
                         {
@@ -1436,13 +1391,6 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (ImGui.CollapsingHeader("Options:"))
                     {
-                        var showInfoLog = this.Configuration.logConfig.ShowCutsceneSelectStringInfoLog;
-                        if (ImGui.Checkbox("Show info logs", ref showInfoLog))
-                        {
-                            this.Configuration.logConfig.ShowCutsceneSelectStringInfoLog = showInfoLog;
-                            this.Configuration.Save();
-                            UpdateLogCutsceneSelectStringFilter = true;
-                        }
                         var showDebugLog = this.Configuration.logConfig.ShowCutsceneSelectStringDebugLog;
                         if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
                         {
@@ -1479,13 +1427,6 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (ImGui.CollapsingHeader("Options:"))
                     {
-                        var showInfoLog = this.Configuration.logConfig.ShowSelectStringInfoLog;
-                        if (ImGui.Checkbox("Show info logs", ref showInfoLog))
-                        {
-                            this.Configuration.logConfig.ShowSelectStringInfoLog = showInfoLog;
-                            this.Configuration.Save();
-                            UpdateLogSelectStringFilter = true;
-                        }
                         var showDebugLog = this.Configuration.logConfig.ShowSelectStringDebugLog;
                         if (ImGui.Checkbox("Show debug logs", ref showDebugLog))
                         {
@@ -1545,15 +1486,14 @@ public class ConfigWindow : Window, IDisposable
                 resetLogs = false;
                 newData = true;
             }
-            if (ImGui.BeginTable("Log Table##{logType}LogTable", 4, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollY))
+            if (ImGui.BeginTable($"Log Table##{logType}LogTable", 4, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollY))
             {
                 ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
-                ImGui.TableSetupColumn("Timestamp", ImGuiTableColumnFlags.None, 125f);
-                ImGui.TableSetupColumn("Method", ImGuiTableColumnFlags.None, 125);
-                ImGui.TableSetupColumn("Message", ImGuiTableColumnFlags.None, 500);
-                ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.None, 35f);
+                ImGui.TableSetupColumn("Timestamp", ImGuiTableColumnFlags.WidthFixed, 75f);
+                ImGui.TableSetupColumn("Method", ImGuiTableColumnFlags.WidthFixed, 150f);
+                ImGui.TableSetupColumn("Message", ImGuiTableColumnFlags.None, 500f);
+                ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthFixed, 40f);
                 ImGui.TableHeadersRow();
-                ImGui.TableNextRow();
                 ImGui.TableNextColumn();
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1585,7 +1525,6 @@ public class ConfigWindow : Window, IDisposable
                     resetLogs = true;
                     newData = true;
                 }
-                ImGui.TableNextRow();
                 var sortSpecs = ImGui.TableGetSortSpecs();
                 if (sortSpecs.SpecsDirty || updateLogs)
                 {
@@ -1620,9 +1559,9 @@ public class ConfigWindow : Window, IDisposable
                     updateLogs = false;
                     sortSpecs.SpecsDirty = false;
                 }
-                ImGui.TableNextRow();
                 foreach (var logMessage in filteredLogs)
                 {
+                    ImGui.TableNextRow();
                     ImGui.PushStyleColor(ImGuiCol.Text, logMessage.color);
                     ImGui.PushTextWrapPos();
                     ImGui.TableNextColumn();
@@ -1634,7 +1573,6 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.TableNextColumn();
                     ImGui.TextUnformatted(logMessage.eventId.Id.ToString());
                     ImGui.PopStyleColor();
-                    ImGui.TableNextRow();
                 }
 
                 if (scrollToBottom && newData)
@@ -1690,7 +1628,7 @@ public class ConfigWindow : Window, IDisposable
             else
                 testConnectionRes = "Error while service reload. Please check logs.";
 
-            LogHelper.Important(MethodBase.GetCurrentMethod().Name, testConnectionRes, new EKEventId(0, TextSource.None));
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, testConnectionRes, new EKEventId(0, TextSource.None));
         }
         catch (Exception ex)
         {

@@ -115,7 +115,6 @@ public partial class Echokraut : IDalamudPlugin
     {
         if (Configuration.CancelSpeechOnTextAdvance)
         {
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Stopping Inference", eventId);
             BackendHelper.OnCancel(eventId);
             StopLipSync(eventId);
         }
@@ -143,7 +142,7 @@ public partial class Echokraut : IDalamudPlugin
             {
                 if (!Configuration.VoiceChatWithout3D && speaker == null)
                 {
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Player is not on the same map: {speakerName.TextValue}. Can't voice", eventId);
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Player is not on the same map: {speakerName.TextValue}. Can't voice", eventId);
                     LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
                     return;
                 }
@@ -169,7 +168,7 @@ public partial class Echokraut : IDalamudPlugin
             // Ensure that the result is clean; ignore it otherwise
             if (!cleanText.Any() || !TalkTextHelper.IsSpeakable(cleanText) || cleanText.Length == 0)
             {
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text not speakable: {cleanText}", eventId);
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Text not speakable: {cleanText}", eventId);
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
                 return;
             }
@@ -214,7 +213,7 @@ public partial class Echokraut : IDalamudPlugin
 
                     if (npcData.mutedBubble)
                     {
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Bubble is muted: {npcData.ToString()}", eventId);
+                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Bubble is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
                         return;
                     }
@@ -223,7 +222,7 @@ public partial class Echokraut : IDalamudPlugin
                 case TextSource.AddonTalk:
                     if (npcData.muted)
                     {
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Npc is muted: {npcData.ToString()}", eventId);
+                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Npc is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
                         return;
                     }
@@ -233,7 +232,7 @@ public partial class Echokraut : IDalamudPlugin
                 case TextSource.Chat:
                     if (npcData.muted)
                     {
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Player is muted: {npcData.ToString()}", eventId);
+                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Player is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
                         return;
                     }
@@ -255,11 +254,11 @@ public partial class Echokraut : IDalamudPlugin
                 BackendHelper.OnSay(voiceMessage, volume);
             else
             {
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);
 
                 if (voiceMessage.Speaker.voiceItem == null)
                 {
-                    LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Getting voice since not set.", eventId);
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Getting voice since not set.", eventId);
                     BackendHelper.GetVoiceOrRandom(eventId, voiceMessage.Speaker);
                 }
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);

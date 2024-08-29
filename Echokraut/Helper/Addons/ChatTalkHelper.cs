@@ -70,6 +70,7 @@ namespace Echokraut.Helper.Addons
                 var realSender = TalkTextHelper.StripWorldFromNames(sender);
                 text = TalkTextHelper.NormalizePunctuation(text);
 
+                var localPlayer = clientState.LocalPlayer;
                 switch ((ushort)type)
                 {
                     case (ushort)XivChatType.Say:
@@ -85,11 +86,17 @@ namespace Echokraut.Helper.Addons
                         }
                         break;
                     case (ushort)XivChatType.TellIncoming:
+                        if (!config.VoiceChatTell)
+                        {
+                            return;
+                        }
+                        break;
                     case (ushort)XivChatType.TellOutgoing:
                         if (!config.VoiceChatTell)
                         {
                             return;
                         }
+                        realSender = localPlayer?.Name.TextValue ?? "PLAYER";
                         break;
                     case (ushort)XivChatType.Party:
                     case (ushort)XivChatType.CrossParty:
@@ -170,13 +177,12 @@ namespace Echokraut.Helper.Addons
                 }
 
                 var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.Chat);
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chat ({type}): \"{text}\"", eventId);
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"{type.ToString()}: \"{text}\"", eventId);
 
                 // Find the game object this speaker represents
                 var speaker = DalamudHelper.GetGameObjectByName(clientState, objects, realSender, eventId);
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chat ({type}): \"{speaker}\" {realSender}", eventId);
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"{type.ToString()}: \"{speaker}\" {realSender}", eventId);
 
-                var localPlayer = clientState.LocalPlayer;
                 if (!config.VoiceChatPlayer && localPlayer != null && localPlayer.Name.TextValue == realSender) return;
 
                 if (speaker != null)

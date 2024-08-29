@@ -53,8 +53,8 @@ namespace Echokraut.Helper.Data
         {
             try
             {
-                Configuration.MappedNpcs.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 250, BackendVoiceHelper.Voices, g => g.ToString()));
-                Configuration.MappedPlayers.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 250, BackendVoiceHelper.Voices, g => g.ToString()));
+                Configuration.MappedNpcs.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 300, BackendVoiceHelper.Voices, g => g.ToString()));
+                Configuration.MappedPlayers.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 300, BackendVoiceHelper.Voices, g => g.ToString()));
             }
             catch (Exception ex)
             {

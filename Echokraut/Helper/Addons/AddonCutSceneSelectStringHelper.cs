@@ -120,7 +120,7 @@ public class AddonCutSceneSelectStringHelper
 
         text = TalkTextHelper.NormalizePunctuation(text);
 
-        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonCutSceneSelectString ({pollSource}): \"{text}\"", eventId);
+        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"\"{text}\"", eventId);
 
 
         // Find the game object this speaker is representing
@@ -128,12 +128,12 @@ public class AddonCutSceneSelectStringHelper
 
         if (speakerObj != null)
         {
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonSelectString for speakerobject: ({speakerObj.Name})", eventId);
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"speakerobject: ({speakerObj.Name})", eventId);
             plugin.Say(eventId, speakerObj, speakerObj.Name, text);
         }
         else
         {
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"AddonSelectString for object: ({state.Speaker})", eventId);
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"object: ({state.Speaker})", eventId);
             plugin.Say(eventId, null, state.Speaker ?? "PLAYER", text);
         }
     }

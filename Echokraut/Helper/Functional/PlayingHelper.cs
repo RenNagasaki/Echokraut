@@ -132,10 +132,10 @@ namespace Echokraut.Helper.Functional
             {
                 var count = queueItemText.Text.Split(delimiters, StringSplitOptions.RemoveEmptyEntries).Length;
                 estimatedLength = count / 2.1f;
-                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Text} length: {estimatedLength}", eventId);
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Text} length: {estimatedLength}", eventId);
             }
             Echokraut.lipSyncHelper.TriggerLipSync(eventId, queueItemText.Speaker.name, estimatedLength);
-            LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Speaker.name} length: {estimatedLength}", eventId);
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Speaker.name} length: {estimatedLength}", eventId);
             Playing = true;
         }
 

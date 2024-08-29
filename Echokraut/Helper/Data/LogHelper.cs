@@ -40,28 +40,20 @@ namespace Echokraut.Helper.Data
         {
             var text = $"---------------------------Start----------------------------------";
 
-            Important(method, text, eventId);
+            Info(method, text, eventId);
         }
 
         public static void End(string method, EKEventId eventId)
         {
             var text = $"----------------------------End-----------------------------------";
 
-            Important(method, text, eventId);
+            Info(method, text, eventId);
         }
 
         public static void Info(string method, string text, EKEventId eventId)
         {
             text = $"{text}";
             SortLogEntry(new LogMessage() { type = LogType.Info, eventId = eventId, method = method, message = $"{text}", color = Constants.INFOLOGCOLOR, timeStamp = DateTime.Now });
-
-            Log.Info($"{method} - {text} - ID: {eventId.Id}");
-        }
-
-        public static void Important(string method, string text, EKEventId eventId)
-        {
-            text = $"{text}";
-            SortLogEntry(new LogMessage() { type = LogType.Important, eventId = eventId, method = method, message = $"{text}", color = Constants.IMPORTANTLOGCOLOR, timeStamp = DateTime.Now });
 
             Log.Info($"{method} - {text} - ID: {eventId.Id}");
         }
@@ -88,64 +80,57 @@ namespace Echokraut.Helper.Data
             {
                 case TextSource.None:
                     GeneralLogs.Add(logMessage);
-                    if (logMessage.type == LogType.Info && Config.logConfig.ShowGeneralInfoLog
-                        || logMessage.type == LogType.Debug && Config.logConfig.ShowGeneralDebugLog
-                        || logMessage.type == LogType.Error && Config.logConfig.ShowGeneralErrorLog
-                        || logMessage.type == LogType.Important)
+                    if ((logMessage.type == LogType.Info)
+                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog)
+                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog))
                         GeneralLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogGeneralFilter = true;
                     break;
                 case TextSource.Chat:
                     ChatLogs.Add(logMessage);
-                    if (logMessage.type == LogType.Info && Config.logConfig.ShowChatInfoLog
-                        || logMessage.type == LogType.Debug && Config.logConfig.ShowChatDebugLog
-                        || logMessage.type == LogType.Error && Config.logConfig.ShowChatErrorLog
-                        || logMessage.type == LogType.Important)
+                    if ((logMessage.type == LogType.Info)
+                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog)
+                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog))
                         ChatLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogChatFilter = true;
                     break;
                 case TextSource.AddonTalk:
                     TalkLogs.Add(logMessage);
-                    if (logMessage.type == LogType.Info && Config.logConfig.ShowTalkInfoLog
-                        || logMessage.type == LogType.Debug && Config.logConfig.ShowTalkDebugLog
-                        || logMessage.type == LogType.Error && Config.logConfig.ShowTalkErrorLog
-                        || logMessage.type == LogType.Important)
+                    if ((logMessage.type == LogType.Info)
+                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog)
+                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog))
                         TalkLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogTalkFilter = true;
                     break;
                 case TextSource.AddonBattleTalk:
                     BattleTalkLogs.Add(logMessage);
-                    if (logMessage.type == LogType.Info && Config.logConfig.ShowBattleTalkInfoLog
-                        || logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog
-                        || logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog
-                        || logMessage.type == LogType.Important)
+                    if ((logMessage.type == LogType.Info)
+                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog)
+                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog))
                         BattleTalkLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogBattleTalkFilter = true;
                     break;
                 case TextSource.AddonSelectString:
                     SelectStringLogs.Add(logMessage);
-                    if (logMessage.type == LogType.Info && Config.logConfig.ShowSelectStringInfoLog
-                        || logMessage.type == LogType.Debug && Config.logConfig.ShowSelectStringDebugLog
-                        || logMessage.type == LogType.Error && Config.logConfig.ShowSelectStringErrorLog
-                        || logMessage.type == LogType.Important)
+                    if ((logMessage.type == LogType.Info)
+                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog)
+                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog))
                         SelectStringLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogSelectStringFilter = true;
                     break;
                 case TextSource.AddonCutsceneSelectString:
                     CutsceneSelectStringLogs.Add(logMessage);
-                    if (logMessage.type == LogType.Info && Config.logConfig.ShowCutsceneSelectStringInfoLog
-                        || logMessage.type == LogType.Debug && Config.logConfig.ShowCutsceneSelectStringDebugLog
-                        || logMessage.type == LogType.Error && Config.logConfig.ShowCutsceneSelectStringErrorLog
-                        || logMessage.type == LogType.Important)
+                    if ((logMessage.type == LogType.Info)
+                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog)
+                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog))
                         CutsceneSelectStringLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogCutsceneSelectStringFilter = true;
                     break;
                 case TextSource.AddonBubble:
                     BubbleLogs.Add(logMessage);
-                    if (logMessage.type == LogType.Info && Config.logConfig.ShowBubbleInfoLog
-                        || logMessage.type == LogType.Debug && Config.logConfig.ShowBubbleDebugLog
-                        || logMessage.type == LogType.Error && Config.logConfig.ShowBubbleErrorLog
-                        || logMessage.type == LogType.Important)
+                    if ((logMessage.type == LogType.Info)
+                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog)
+                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog))
                         BubbleLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogBubblesFilter = true;
                     break;
@@ -155,7 +140,6 @@ namespace Echokraut.Helper.Data
         public static List<LogMessage> RecreateLogList(TextSource textSource)
         {
             var logListFiltered = new List<LogMessage>();
-            var showInfo = false;
             var showDebug = false;
             var showError = false;
             var showId0 = false;
@@ -164,7 +148,6 @@ namespace Echokraut.Helper.Data
                 case TextSource.None:
                     GeneralLogsFiltered = new List<LogMessage>(GeneralLogs);
                     logListFiltered = GeneralLogsFiltered;
-                    showInfo = Config.logConfig.ShowGeneralInfoLog;
                     showDebug = Config.logConfig.ShowGeneralDebugLog;
                     showError = Config.logConfig.ShowGeneralErrorLog;
                     showId0 = true;
@@ -172,7 +155,6 @@ namespace Echokraut.Helper.Data
                 case TextSource.Chat:
                     ChatLogsFiltered = new List<LogMessage>(ChatLogs);
                     logListFiltered = ChatLogsFiltered;
-                    showInfo = Config.logConfig.ShowChatInfoLog;
                     showDebug = Config.logConfig.ShowChatDebugLog;
                     showError = Config.logConfig.ShowChatErrorLog;
                     showId0 = Config.logConfig.ShowChatId0;
@@ -180,7 +162,6 @@ namespace Echokraut.Helper.Data
                 case TextSource.AddonTalk:
                     TalkLogsFiltered = new List<LogMessage>(TalkLogs);
                     logListFiltered = TalkLogsFiltered;
-                    showInfo = Config.logConfig.ShowTalkInfoLog;
                     showDebug = Config.logConfig.ShowTalkDebugLog;
                     showError = Config.logConfig.ShowTalkErrorLog;
                     showId0 = Config.logConfig.ShowTalkId0;
@@ -188,7 +169,6 @@ namespace Echokraut.Helper.Data
                 case TextSource.AddonBattleTalk:
                     BattleTalkLogsFiltered = new List<LogMessage>(BattleTalkLogs);
                     logListFiltered = BattleTalkLogsFiltered;
-                    showInfo = Config.logConfig.ShowBattleTalkInfoLog;
                     showDebug = Config.logConfig.ShowBattleTalkDebugLog;
                     showError = Config.logConfig.ShowBattleTalkErrorLog;
                     showId0 = Config.logConfig.ShowBattleTalkId0;
@@ -196,7 +176,6 @@ namespace Echokraut.Helper.Data
                 case TextSource.AddonSelectString:
                     SelectStringLogsFiltered = new List<LogMessage>(SelectStringLogs);
                     logListFiltered = SelectStringLogsFiltered;
-                    showInfo = Config.logConfig.ShowSelectStringInfoLog;
                     showDebug = Config.logConfig.ShowSelectStringDebugLog;
                     showError = Config.logConfig.ShowSelectStringErrorLog;
                     showId0 = Config.logConfig.ShowSelectStringId0;
@@ -204,7 +183,6 @@ namespace Echokraut.Helper.Data
                 case TextSource.AddonCutsceneSelectString:
                     CutsceneSelectStringLogsFiltered = new List<LogMessage>(CutsceneSelectStringLogs);
                     logListFiltered = CutsceneSelectStringLogsFiltered;
-                    showInfo = Config.logConfig.ShowCutsceneSelectStringInfoLog;
                     showDebug = Config.logConfig.ShowCutsceneSelectStringDebugLog;
                     showError = Config.logConfig.ShowCutsceneSelectStringErrorLog;
                     showId0 = Config.logConfig.ShowCutSceneSelectStringId0;
@@ -212,16 +190,10 @@ namespace Echokraut.Helper.Data
                 case TextSource.AddonBubble:
                     BubbleLogsFiltered = new List<LogMessage>(BubbleLogs);
                     logListFiltered = BubbleLogsFiltered;
-                    showInfo = Config.logConfig.ShowBubbleInfoLog;
                     showDebug = Config.logConfig.ShowBubbleDebugLog;
                     showError = Config.logConfig.ShowBubbleErrorLog;
                     showId0 = Config.logConfig.ShowBubbleId0;
                     break;
-            }
-
-            if (!showInfo)
-            {
-                logListFiltered.RemoveAll(p => p.type == LogType.Info);
             }
             if (!showDebug)
             {

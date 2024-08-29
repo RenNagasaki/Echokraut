@@ -99,7 +99,7 @@ public class AddonBattleTalkHelper
             voiceNext = false;
 
         var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonBattleTalk);
-        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk: \"{state}\"", eventId);
+        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"\"{state}\"", eventId);
 
         // Notify observers that the addon state was advanced
         if (!config.VoiceBattleDialogQueued)
@@ -107,7 +107,7 @@ public class AddonBattleTalkHelper
 
         text = TalkTextHelper.NormalizePunctuation(text);
 
-        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"AddonBattleTalk: \"{text}\"", eventId);
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"\"{text}\"", eventId);
 
         if (voiceNext)
         {

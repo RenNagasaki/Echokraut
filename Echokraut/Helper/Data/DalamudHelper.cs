@@ -26,7 +26,7 @@ public static class DalamudHelper
         if (!TalkTextHelper.TryGetEntityName(name, out var parsedName)) return null;
         var obj =  objects.FirstOrDefault(gObj =>
             TalkTextHelper.TryGetEntityName(gObj.Name, out var gObjName) && gObjName == parsedName);
-        LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Found Gameobject: {obj} by name: {name.TextValue} and parsedName: {parsedName}", eventId);
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Found Gameobject: {obj} by name: {name.TextValue} and parsedName: {parsedName}", eventId);
 
         return obj;
     }
@@ -46,8 +46,6 @@ public static class DalamudHelper
             {
                 nextUnknownCharacter = character;
                 lastUnknownState[character.Name.TextValue] = true;
-
-                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Found next ??? character (if needed): {character.Name} - {character.Position.X}/{character.Position.Y}/{character.Position.Z}", eventId);
             }
 
             lastUnknownState[character.Name.TextValue] = character.IsTargetable;

@@ -4,7 +4,6 @@ namespace Echokraut.Enums
     {
         Info = 0,
         Debug = 1,
-        Error = 3,
-        Important = 4
+        Error = 3
     }
 }

@@ -188,7 +188,7 @@ namespace Echokraut.Helper.Functional
             {
                 PrintText("", $"{activationText} {activationType} voicing");
 
-                LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"New Command triggered: {command}", new EKEventId(0, TextSource.None));
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"New Command triggered: {command}", new EKEventId(0, TextSource.None));
 
                 if (!string.IsNullOrWhiteSpace(errorText))
                     PrintText("", errorText);

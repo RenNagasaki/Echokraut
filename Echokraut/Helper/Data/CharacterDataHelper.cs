@@ -52,7 +52,7 @@ public static class CharacterDataHelper
 
         // Get actor gender as defined by its struct.
         var actorGender = (Gender)charaStruct->DrawData.CustomizeData.Sex;
-        LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Gender found on GameObject: {actorGender}", eventId);
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Gender found on GameObject: {actorGender}", eventId);
 
         // Player gender overrides will be handled by a different system.
         if (speaker.ObjectKind is ObjectKind.Player)
@@ -74,7 +74,7 @@ public static class CharacterDataHelper
                 actorGender = Gender.Female;
         }
 
-        LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Got ModelBody: {modelBody ?? 0} for {speaker.ObjectKind} \"{speaker.Name}\" - ID:{speaker.DataId} (gender read as: {actorGender})", eventId);
+        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Got ModelBody: {modelBody ?? 0} for {speaker.ObjectKind} \"{speaker.Name}\" - ID:{speaker.DataId} (gender read as: {actorGender})", eventId);
         return actorGender;
     }
 
@@ -108,7 +108,7 @@ public static class CharacterDataHelper
                         activeData = modelData2;
 
                     modelId = activeData;
-                    LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"ModelId for Race matching: {activeData}", eventId);
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"ModelId for Race matching: {activeData}", eventId);
                     var activeNpcRace = NpcRaces.Unknown;
                     try
                     {

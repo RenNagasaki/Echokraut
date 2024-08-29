@@ -165,9 +165,9 @@ public class SoundHelper : IDisposable
                 if (Path.GetFileNameWithoutExtension(fileName).Length == 10)
                 {
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Caught playback of known voice line at address {soundDataPtr:x}", new EKEventId(0, TextSource.AddonBattleTalk));
-                    LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Filename: {fileName}", new EKEventId(0, TextSource.AddonBattleTalk));
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Filename: {fileName}", new EKEventId(0, TextSource.AddonBattleTalk));
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Caught playback of known voice line at address {soundDataPtr:x}", new EKEventId(0, TextSource.AddonBubble));
-                    LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Filename: {fileName}", new EKEventId(0, TextSource.AddonBubble));
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Filename: {fileName}", new EKEventId(0, TextSource.AddonBubble));
                     addonBattleTalkHelper.nextIsVoice = true;
                     addonBattleTalkHelper.timeNextVoice = DateTime.Now;
                     addonBubbleHelper.nextIsVoice = true;
@@ -176,7 +176,7 @@ public class SoundHelper : IDisposable
                 else
                 {
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Caught playback of known voice line at address {soundDataPtr:x}", new EKEventId(0, TextSource.AddonTalk));
-                    LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Filename: {fileName}", new EKEventId(0, TextSource.AddonTalk));
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Filename: {fileName}", new EKEventId(0, TextSource.AddonTalk));
                     addonTalkHelper.nextIsVoice = true;
                     addonTalkHelper.timeNextVoice = DateTime.Now;
 

@@ -115,7 +115,7 @@ public class AddonTalkHelper
         var voiceNext = nextIsVoice;
         nextIsVoice = false;
 
-        if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(100))
+        if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(500))
             voiceNext = false;
 
         var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
@@ -135,13 +135,13 @@ public class AddonTalkHelper
             return;
         }
 
-        if (condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.WatchingCutscene])
+        if (condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.WatchingCutscene] || condition[ConditionFlag.OccupiedInCutSceneEvent] || condition[ConditionFlag.OccupiedInQuestEvent])
         {
             wasWatchingCutscene = true;
             DalamudHelper.TryGetNextUnkownCharacter(clientState, objects, eventId);
             if (speaker == "???")
                 speaker = DalamudHelper.nextUnknownCharacter?.Name.TextValue ?? "???";
-            LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Got ??? speaker: \"{speaker}\"", eventId);
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Got ??? speaker: \"{speaker}\"", eventId);
         }
         else if (wasWatchingCutscene)
         {
@@ -153,7 +153,6 @@ public class AddonTalkHelper
         var speakerObj = speaker != null ? DalamudHelper.GetGameObjectByName(clientState, objects, speaker, eventId) : null;
 
         PlayingHelper.InDialog = true;
-        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Setting inDialog true", eventId);
 
         wasTalking = true;
         if (speakerObj != null)
@@ -185,8 +184,7 @@ public class AddonTalkHelper
 
     public void Click(EKEventId eventId)
     {
-        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Auto advancing...", eventId);
-        ClickHelper.ClickDialogue(Address);
+        ClickHelper.ClickDialogue(Address, eventId);
     }
 
     public void Dispose()

@@ -78,7 +78,7 @@ namespace Echokraut.Helper.Addons
         {
             ManagedBass.Bass.Set3DFactors(1, audibleRange, 1);
             ManagedBass.Bass.Apply3D();
-            LogHelper.Important(MethodBase.GetCurrentMethod().Name, $"Updated 3D factors to: {audibleRange}", new EKEventId(0, TextSource.AddonBubble));
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated 3D factors to: {audibleRange}", new EKEventId(0, TextSource.AddonBubble));
         }
 
         private void HookIntoFrameworkUpdate()
@@ -174,7 +174,7 @@ namespace Echokraut.Helper.Addons
                                 else
                                 {
 
-                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Bubble already played in the last <5 seconds: {speakerName} - {text}", eventId);
+                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Bubble already played in the last <5 seconds. Skipping: {speakerName} - {text}", eventId);
                                     LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
                                 }
 
