@@ -144,6 +144,10 @@
         "speakers": [ "Golbez", "Durante" ]
     },
     {
+        "voiceName": "Zekowa",
+        "speakers": [ "Zekowas Stimme", "Bekannte Stimme" ]
+    },
+    {
         "voiceName": "Rediroq",
         "speakers": [ "Gealterte Moblin-Dame" ]
     },
