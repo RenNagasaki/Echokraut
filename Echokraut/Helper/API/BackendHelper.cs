@@ -175,10 +175,9 @@ namespace Echokraut.Helper.API
 
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Searching voice: {npcData.voiceItem} for NPC: {npcData.name}", eventId);
             var voiceItem = BackendVoiceHelper.Voices.Find(p => p.Equals(npcData.voiceItem));
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found voice: {voiceItem} for NPC: {npcData.name}", eventId);
             var mappedList = npcData.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? Configuration.MappedPlayers : Configuration.MappedNpcs;
 
-            if (voiceItem == null)
+            if (voiceItem == null || voiceItem.voiceName.ToLower() == "narrator")
             {
                 var npcName = npcData.name;
 
@@ -222,6 +221,7 @@ namespace Echokraut.Helper.API
                     Configuration.Save();
                 }
             }
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found voice: {voiceItem} for NPC: {npcData.name}", eventId);
         }
 
         static string getVoice(EKEventId eventId, NpcMapData npcData)
