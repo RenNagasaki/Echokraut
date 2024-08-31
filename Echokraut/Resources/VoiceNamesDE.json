@@ -148,6 +148,10 @@
         "speakers": [ "Zekowas Stimme", "Bekannte Stimme" ]
     },
     {
+        "voiceName": "Theobald",
+        "speakers": [ "Maskierter Mann" ]
+    },
+    {
         "voiceName": "O'tchakha",
         "speakers": [ "O'tchakha des Endlosen Tages" ]
     },
