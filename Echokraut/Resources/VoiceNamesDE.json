@@ -148,6 +148,14 @@
         "speakers": [ "Zekowas Stimme", "Bekannte Stimme" ]
     },
     {
+        "voiceName": "O'tchakha",
+        "speakers": [ "O'tchakha des Endlosen Tages" ]
+    },
+    {
+        "voiceName": "D'zentsa",
+        "speakers": [ "D'zentsa der Endlosen Nacht" ]
+    },
+    {
         "voiceName": "Rediroq",
         "speakers": [ "Gealterte Moblin-Dame" ]
     },
