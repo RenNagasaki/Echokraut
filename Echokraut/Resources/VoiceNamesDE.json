@@ -160,6 +160,10 @@
         "speakers": [ "D'zentsa der Endlosen Nacht" ]
     },
     {
+        "voiceName": "Estinien",
+        "speakers": [ "Estinien Drachenblut" ]
+    },
+    {
         "voiceName": "Rediroq",
         "speakers": [ "Gealterte Moblin-Dame" ]
     },
