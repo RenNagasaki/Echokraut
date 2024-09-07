@@ -18,8 +18,6 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 * `/ektcutschoice` - Toggles cutscene choice voicing
 * `/ektchoice` - Toggles choice voicing
 * `/ek` - Opens the configuration window
-* `/ekid` - Echoes info about current target
-* `/ekdb` - Echoes current debug info
 * `/ekdel` - /ekdel n -> Deletes last 'n' local saved files. Default 10
 * `/ekdelmin` - /ekdelmin n -> Deletes last 'n' minutes generated local saved files. Default 10
 
