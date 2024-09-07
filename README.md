@@ -54,6 +54,7 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 I started this whole project as a way for me to enjoy replaying the game without having to read all of 2.0 again. It evolved from there so please bear with many features still missing. You can always request more. 😊
 
 ## Thanks
+* Everyone contributing on the plugin-dev and dalamud-dev channels on the official [Dalamud](https://github.com/goatcorp/Dalamud) discord!
 * Some parts of the code are taken from/inspired by:
     [TextToTalk](https://github.com/karashiiro/TextToTalk).
     [XivVoices](https://github.com/arcsidian/XivVoices).
