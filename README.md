@@ -7,6 +7,7 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 * Since this plugin is dependent on [AllTalk_TTS](https://github.com/erew123/alltalk_tts) it is important to note that at the moment on Windows only Nvidia GPUs are supported. On Linux AMD should work as well. In the future this will expand.
 * The plugin is only tested in german, but should work in every client language. (Report an issue if not 😘)
 * Self hosted TTS is currently heavily dependent on a strong GPU. It's recommended to have at least a RTX 3060 (or AMD equivalent on Linux) with 6+GB VRAM built into the system hosting [AllTalk_TTS](https://github.com/erew123/alltalk_tts) for inference. (Keep in mind thats just for inference. If you want to play FFXIV on the same machine I guess 3080 is minimum) For training I'd recommend at least 12 GB of VRAM but the more the better.
+* This plugin is still in it's early stages of development, feel free to report any issues here or on my [![Discord](https://img.shields.io/badge/Join-Discord-blue)](https://discord.gg/5gesjDfDBr) (preferred)
 
 ## Commands
 * `/ek`: Opens the configuration window.
