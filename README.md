@@ -10,7 +10,18 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 * This plugin is still in it's early stages of development, feel free to report any issues here or on my [![Discord](https://img.shields.io/badge/Join-Discord-blue)](https://discord.gg/5gesjDfDBr) (preferred)
 
 ## Commands
-* `/ek`: Opens the configuration window.
+* `/ek` - Opens the configuration window.
+* `/ekttalk` - Toggles dialogue voicing
+* `/ektbtalk` - Toggles battle dialogue voicing
+* `/ektbubble` - Toggles bubble voicing
+* `/ektchat` - Toggles chat voicing
+* `/ektcutschoice` - Toggles cutscene choice voicing
+* `/ektchoice` - Toggles choice voicing
+* `/ek` - Opens the configuration window
+* `/ekid` - Echoes info about current target
+* `/ekdb` - Echoes current debug info
+* `/ekdel` - /ekdel n -> Deletes last 'n' local saved files. Default 10
+* `/ekdelmin` - /ekdelmin n -> Deletes last 'n' minutes generated local saved files. Default 10
 
 ## Features - Each feature is on/off toggleable
 * Dialogue TTS: All unvoiced Dialogues get voiced via the TTS Engine.
