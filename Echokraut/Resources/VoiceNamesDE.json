@@ -120,6 +120,10 @@
         "speakers": [ "Teuer gekleideter Mann" ]
     },
     {
+        "voiceName": "Themis",
+        "speakers": [ "Sanftäugiger Jüngling" ]
+    },
+    {
         "voiceName": "Hydaelyn",
         "speakers": [ "Venat", "Amaurotanerin Venat" ]
     },
@@ -146,6 +150,22 @@
     {
         "voiceName": "Zekowa",
         "speakers": [ "Zekowas Stimme", "Bekannte Stimme" ]
+    },
+    {
+        "voiceName": "Theobald",
+        "speakers": [ "Maskierter Mann" ]
+    },
+    {
+        "voiceName": "O'tchakha",
+        "speakers": [ "O'tchakha des Endlosen Tages" ]
+    },
+    {
+        "voiceName": "D'zentsa",
+        "speakers": [ "D'zentsa der Endlosen Nacht" ]
+    },
+    {
+        "voiceName": "Estinien",
+        "speakers": [ "Estinien Drachenblut" ]
     },
     {
         "voiceName": "Rediroq",
