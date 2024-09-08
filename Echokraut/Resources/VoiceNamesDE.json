@@ -120,6 +120,10 @@
         "speakers": [ "Teuer gekleideter Mann" ]
     },
     {
+        "voiceName": "Themis",
+        "speakers": [ "Sanftäugiger Jüngling" ]
+    },
+    {
         "voiceName": "Hydaelyn",
         "speakers": [ "Venat", "Amaurotanerin Venat" ]
     },
