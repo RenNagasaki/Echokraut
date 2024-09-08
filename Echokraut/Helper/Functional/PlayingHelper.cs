@@ -171,7 +171,7 @@ namespace Echokraut.Helper.Functional
             if (pActor != null)
             {
                 var channel = Bass.SampleLoad(queueItem, 0, 0, 1, Flags: BassFlags.Bass3D);
-                Bass.ChannelSet3DPosition(channel, new Vector3D(pActor.Position.X, pActor.Position.Z, -pActor.Position.Y), null, new Vector3D());
+                Bass.ChannelSet3DPosition(channel, new Vector3D(pActor.Position.X, pActor.Position.Y, pActor.Position.Z), null, new Vector3D());
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Setup parameters", eventId);
 
                 var thread = new Thread(() =>
@@ -179,7 +179,7 @@ namespace Echokraut.Helper.Functional
                     while (Bass.ChannelIsActive(channel) == ManagedBass.PlaybackState.Playing)
                     {
                         //LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Updating 3D Position of source");
-                        Bass.ChannelSet3DPosition(channel, new Vector3D(pActor.Position.X, pActor.Position.Z, -pActor.Position.Y), null, new Vector3D());
+                        Bass.ChannelSet3DPosition(channel, new Vector3D(pActor.Position.X, pActor.Position.Y, pActor.Position.Z), null, new Vector3D());
                     }
 
                     Bass.SampleFree(channel);

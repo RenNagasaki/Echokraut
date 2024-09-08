@@ -81,24 +81,24 @@ namespace Echokraut.Helper.Data
                 case TextSource.None:
                     GeneralLogs.Add(logMessage);
                     if ((logMessage.type == LogType.Info)
-                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog)
-                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog))
+                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowGeneralDebugLog)
+                        || (logMessage.type == LogType.Error && Config.logConfig.ShowGeneralErrorLog))
                         GeneralLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogGeneralFilter = true;
                     break;
                 case TextSource.Chat:
                     ChatLogs.Add(logMessage);
                     if ((logMessage.type == LogType.Info)
-                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog)
-                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog))
+                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowChatDebugLog)
+                        || (logMessage.type == LogType.Error && Config.logConfig.ShowChatErrorLog))
                         ChatLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogChatFilter = true;
                     break;
                 case TextSource.AddonTalk:
                     TalkLogs.Add(logMessage);
                     if ((logMessage.type == LogType.Info)
-                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog)
-                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog))
+                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowTalkDebugLog)
+                        || (logMessage.type == LogType.Error && Config.logConfig.ShowTalkErrorLog))
                         TalkLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogTalkFilter = true;
                     break;
@@ -113,24 +113,24 @@ namespace Echokraut.Helper.Data
                 case TextSource.AddonSelectString:
                     SelectStringLogs.Add(logMessage);
                     if ((logMessage.type == LogType.Info)
-                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog)
-                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog))
+                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowSelectStringDebugLog)
+                        || (logMessage.type == LogType.Error && Config.logConfig.ShowSelectStringErrorLog))
                         SelectStringLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogSelectStringFilter = true;
                     break;
                 case TextSource.AddonCutsceneSelectString:
                     CutsceneSelectStringLogs.Add(logMessage);
                     if ((logMessage.type == LogType.Info)
-                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog)
-                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog))
+                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowCutsceneSelectStringDebugLog)
+                        || (logMessage.type == LogType.Error && Config.logConfig.ShowCutsceneSelectStringErrorLog))
                         CutsceneSelectStringLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogCutsceneSelectStringFilter = true;
                     break;
                 case TextSource.AddonBubble:
                     BubbleLogs.Add(logMessage);
                     if ((logMessage.type == LogType.Info)
-                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBattleTalkDebugLog)
-                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBattleTalkErrorLog))
+                        || (logMessage.type == LogType.Debug && Config.logConfig.ShowBubbleDebugLog)
+                        || (logMessage.type == LogType.Error && Config.logConfig.ShowBubbleErrorLog))
                         BubbleLogsFiltered.Add(logMessage);
                     ConfigWindow.UpdateLogBubblesFilter = true;
                     break;

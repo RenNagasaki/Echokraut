@@ -112,7 +112,7 @@ namespace Echokraut.Helper.Addons
 
                     var matrix = camera->CameraBase.SceneCamera.ViewMatrix;
                     ManagedBass.Bass.Set3DPosition(
-                        new ManagedBass.Vector3D(position.X, position.Z, -position.Y),
+                        new ManagedBass.Vector3D(position.X, position.Y, position.Z),
                         new ManagedBass.Vector3D(),
                         new ManagedBass.Vector3D(matrix[2], matrix[1], matrix[0]),
                         new ManagedBass.Vector3D(0, 1, 0));
