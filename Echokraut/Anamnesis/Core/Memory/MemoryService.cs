@@ -12,6 +12,7 @@ using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using Anamnesis.Core.Memory;
+using Anamnesis.Services;
 
 public class MemoryService : ServiceBase<MemoryService>
 {
@@ -265,8 +266,8 @@ public class MemoryService : ServiceBase<MemoryService>
 			throw new Exception("Process has no main module");
 
 		// checke the game version as soon as we can
-		//string file = Path.GetDirectoryName(MemoryService.GamePath) + "\\ffxivgame.ver";
-		//string gameVer = File.ReadAllText(file);
+		string file = Path.GetDirectoryName(MemoryService.GamePath) + "\\ffxivgame.ver";
+		string gameVer = File.ReadAllText(file);
 
 		Handle = OpenProcess(0x001F0FFF, true, process.Id);
 		if (Handle == IntPtr.Zero)
@@ -348,7 +349,7 @@ public class MemoryService : ServiceBase<MemoryService>
 	{
 		while (this.IsAlive && Process != null)
 		{
-			await Task.Delay(100);
+			await Task.Delay(10000);
 
 			DoesProcessHaveFocus = GetDoesProcessHaveFocus();
 			IsProcessAlive = GetIsProcessAlive();

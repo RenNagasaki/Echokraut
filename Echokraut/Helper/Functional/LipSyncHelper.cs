@@ -19,6 +19,9 @@ using System.Threading;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Echokraut.Helper.Data;
+using Lumina.Excel.Sheets;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using System.Globalization;
 
 namespace Echokraut.Helper.Functional
 {
@@ -32,7 +35,7 @@ namespace Echokraut.Helper.Functional
         private GameDataService _gameDataService;
         private Character currentLipsync;
         private ActorMemory.CharacterModes currentIntialState;
-        Dictionary<Character, CancellationTokenSource> taskCancellations = new Dictionary<Character, CancellationTokenSource>();
+        Dictionary<string, CancellationTokenSource> taskCancellations = new Dictionary<string, CancellationTokenSource>();
         public List<ActionTimeline> LipSyncTypes { get; private set; }
 
         public LipSyncHelper(IClientState clientState, IObjectTable objects, Configuration config, EKEventId eventId)
@@ -50,35 +53,36 @@ namespace Echokraut.Helper.Functional
 
         public async void TriggerLipSync(EKEventId eventId, string npcName, float length, IGameObject npc = null)
         {
-            if (Conditions.IsBoundByDuty) return;
+
+
+            if (Conditions.IsBoundByDuty && !Conditions.IsWatchingCutscene) return;
             if (!config.Enabled) return;
 
-
             var npcObject = npc ?? DiscoverNpc(npcName);
+
             ActorMemory actorMemory = null;
             AnimationMemory animationMemory = null;
             if (npcObject != null)
             {
-                var character = (Character)npcObject;
-                currentLipsync = character;
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Starting LipSync", eventId);
                 actorMemory = new ActorMemory();
-                actorMemory.SetAddress(character.Address);
+                actorMemory.SetAddress(npcObject.Address);
                 animationMemory = actorMemory.Animation;
 
                 // Determine the duration based on the message size
-                var duration = length;
+                float duration = length;
 
-                var mouthMovement = new Dictionary<int, int>();
+                Dictionary<int, int> mouthMovement = new Dictionary<int, int>();
 
                 if (duration < 0.2f)
                     return;
 
-                var durationMs = (int)(duration * 1000);
+                int durationMs = (int)(duration * 1000);
 
 
                 // Decide on the lengths
-                var durationRounded = (int)Math.Floor(duration);
-                var remaining = durationRounded;
+                int durationRounded = (int)Math.Floor(duration);
+                int remaining = durationRounded;
                 mouthMovement[6] = remaining / 4;
                 remaining = remaining % 4;
                 mouthMovement[5] = remaining / 2;
@@ -88,38 +92,34 @@ namespace Echokraut.Helper.Functional
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"durationMs[{durationMs}] durationRounded[{durationRounded}] fours[{mouthMovement[6]}] twos[{mouthMovement[5]}] ones[{mouthMovement[4]}]", eventId);
 
                 // Decide on the Mode
-                var intialState = actorMemory.CharacterMode;
-                var mode = ActorMemory.CharacterModes.EmoteLoop;
-                currentIntialState = intialState;
+                ActorMemory.CharacterModes intialState = actorMemory.CharacterMode;
+                ActorMemory.CharacterModes mode = ActorMemory.CharacterModes.EmoteLoop;
 
-
-                if (!taskCancellations.ContainsKey(character))
+                if (!taskCancellations.ContainsKey(npcObject.ToString()))
                 {
                     var cts = new CancellationTokenSource();
-                    taskCancellations.Add(character, cts);
+                    taskCancellations.Add(npcObject.ToString(), cts);
                     var token = cts.Token;
-                    token.ThrowIfCancellationRequested();
 
-                    var task = Task.Run(async () =>
-                    {
+                    Task task = Task.Run(async () => {
                         try
                         {
                             await Task.Delay(100, token);
 
-                            if (!token.IsCancellationRequested && mouthMovement[6] > 0 && character != null && actorMemory != null && actorMemory != null)
+                            // 4-Second Lips Movement Animation
+                            if (!token.IsCancellationRequested && mouthMovement[6] > 0 && npcObject != null && actorMemory != null && actorMemory != null)
                             {
-                                animationMemory.LipsOverride = LipSyncTypes[6].Timeline.AnimationId;
+                                animationMemory.LipsOverride = false ? 0 : (ushort)631;
                                 MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), mode, "Animation Mode Override");
-                                MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), LipSyncTypes[6].Timeline.AnimationId, "Lipsync");
+                                MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), false ? 0 : (ushort)631, "Lipsync");
 
-                                var adjustedDelay = CalculateAdjustedDelay(mouthMovement[6] * 4000, 6);
-
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[6] durationMs[{mouthMovement[6] * 4}] delay [{adjustedDelay}]", eventId);
-
+                                int adjustedDelay = CalculateAdjustedDelay(mouthMovement[6] * 4000, 6);
+                                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[6] durationMs[{mouthMovement[6] * 4}] delay [{adjustedDelay}]", eventId);
                                 await Task.Delay(adjustedDelay, token);
-                                if (!token.IsCancellationRequested && character != null && actorMemory != null)
+
+                                if (!token.IsCancellationRequested && npcObject != null && actorMemory != null)
                                 {
-                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[6] was finished", eventId);
+                                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[6] was finished", eventId);
 
                                     animationMemory.LipsOverride = 0;
                                     MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
@@ -128,19 +128,19 @@ namespace Echokraut.Helper.Functional
 
                             }
 
-                            if (!token.IsCancellationRequested && mouthMovement[5] > 0 && character != null && actorMemory != null)
+                            // 2-Second Lips Movement Animation
+                            if (!token.IsCancellationRequested && mouthMovement[5] > 0 && npcObject != null && actorMemory != null)
                             {
-                                animationMemory.LipsOverride = LipSyncTypes[5].Timeline.AnimationId;
+                                animationMemory.LipsOverride = false ? 0 : (ushort)630;
                                 MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), mode, "Animation Mode Override");
-                                MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), LipSyncTypes[5].Timeline.AnimationId, "Lipsync");
-                                var adjustedDelay = CalculateAdjustedDelay(mouthMovement[5] * 2000, 5);
-
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[5] durationMs[{mouthMovement[5] * 2}] delay [{adjustedDelay}]", eventId);
+                                MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), false ? 0 : (ushort)630, "Lipsync");
+                                int adjustedDelay = CalculateAdjustedDelay(mouthMovement[5] * 2000, 5);
+                                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[5] durationMs[{mouthMovement[5] * 2}] delay [{adjustedDelay}]", eventId);
 
                                 await Task.Delay(adjustedDelay, token);
-                                if (!token.IsCancellationRequested && character != null && actorMemory != null)
+                                if (!token.IsCancellationRequested && npcObject != null && actorMemory != null)
                                 {
-                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[5] was finished", eventId);
+                                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[5] was finished", eventId);
 
                                     animationMemory.LipsOverride = 0;
                                     MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
@@ -149,19 +149,20 @@ namespace Echokraut.Helper.Functional
 
                             }
 
-                            if (!token.IsCancellationRequested && mouthMovement[4] > 0 && character != null && actorMemory != null)
+                            // 1-Second Lips Movement Animation
+                            if (!token.IsCancellationRequested && mouthMovement[4] > 0 && npcObject != null && actorMemory != null)
                             {
-                                animationMemory.LipsOverride = LipSyncTypes[4].Timeline.AnimationId;
+                                animationMemory.LipsOverride = false ? 0 : (ushort)632;
                                 MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), mode, "Animation Mode Override");
-                                MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), LipSyncTypes[4].Timeline.AnimationId, "Lipsync");
-                                var adjustedDelay = CalculateAdjustedDelay(mouthMovement[4] * 1000, 4);
+                                MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), false ? 0 : (ushort)632, "Lipsync");
+                                int adjustedDelay = CalculateAdjustedDelay(mouthMovement[4] * 1000, 4);
+                                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[4] durationMs[{mouthMovement[4]}] delay [{adjustedDelay}]", eventId);
 
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[4] durationMs[{mouthMovement[4]}] delay [{adjustedDelay}]", eventId);
 
                                 await Task.Delay(adjustedDelay, token);
-                                if (!token.IsCancellationRequested && character != null && actorMemory != null)
+                                if (!token.IsCancellationRequested && npcObject != null && actorMemory != null)
                                 {
-                                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[4] was finished", eventId);
+                                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[4] was finished", eventId);
 
                                     animationMemory.LipsOverride = 0;
                                     MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
@@ -171,29 +172,36 @@ namespace Echokraut.Helper.Functional
 
                             if (!token.IsCancellationRequested)
                             {
-
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was Completed", eventId);
+                                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task was Completed", eventId);
+                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "LipSync was completed", eventId);
 
                                 cts.Dispose();
-                                taskCancellations.Remove(character);
+                                if (taskCancellations.ContainsKey(npcObject.ToString()))
+                                    taskCancellations.Remove(npcObject.ToString());
                             }
                         }
                         catch (TaskCanceledException)
                         {
-                            try
-                            {
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task canceling.", eventId);
-                                animationMemory.LipsOverride = 0;
-                                MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
-                                MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
-                                cts.Dispose();
-                                taskCancellations.Remove(character);
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Task was canceled.", eventId);
-                            }
-                            catch (Exception ex)
-                            {
-                                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while cancelling task. Exception: {ex}", eventId);
-                            }
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task was canceled.", eventId);
+                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "LipSync was canceled", eventId);
+
+                            animationMemory.LipsOverride = 0;
+                            MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
+                            MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
+                            cts.Dispose();
+                            if (taskCancellations.ContainsKey(npcObject.ToString()))
+                                taskCancellations.Remove(npcObject.ToString());
+                        }
+                        catch (Exception ex)
+                        {
+                            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Unhandled exception in TriggerLipSync task: {ex}", eventId);
+
+                            animationMemory.LipsOverride = 0;
+                            MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
+                            MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
+                            cts.Dispose();
+                            if (taskCancellations.ContainsKey(npcObject.ToString()))
+                                taskCancellations.Remove(npcObject.ToString());
                         }
                     }, token);
                 }
@@ -209,7 +217,7 @@ namespace Echokraut.Helper.Functional
                 if (currentLipsync == null) return;
 
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Stopping Lipsync for {currentLipsync.Name.TextValue}", eventId);
-                if (taskCancellations.TryGetValue(currentLipsync, out var cts))
+                if (taskCancellations.TryGetValue(currentLipsync.ToString(), out var cts))
                 {
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Cancellation " + currentLipsync.Name.TextValue, eventId);
                     try
@@ -229,7 +237,7 @@ namespace Echokraut.Helper.Functional
                 animationMemory.LipsOverride = 0;
                 MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), currentIntialState, "Animation Mode Override");
                 MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
-                taskCancellations.Remove(currentLipsync);
+                taskCancellations.Remove(currentLipsync.ToString());
             }
             catch (Exception ex)
             {
@@ -273,18 +281,18 @@ namespace Echokraut.Helper.Functional
             await _memoryService.OpenProcess(Process.GetCurrentProcess());
             await _gameDataService.Initialize();
 
-            LipSyncTypes = GenerateLipList().ToList();
+            //LipSyncTypes = GenerateLipList().ToList();
             await _animationService.Initialize();
             await _animationService.Start();
             await _memoryService.Start();
         }
 
-        private IEnumerable<ActionTimeline> GenerateLipList()
-        {
-            // Grab "no animation" and all "speak/" animations, which are the only ones valid in this slot
-            var lips = GameDataService.ActionTimelines.Where(x => x.AnimationId == 0 || (x.Key?.StartsWith("speak/") ?? false));
-            return lips;
-        }
+        //private IEnumerable<ActionTimeline> GenerateLipList()
+        //{
+        //    // Grab "no animation" and all "speak/" animations, which are the only ones valid in this slot
+        //    var lips = GameDataService.ActionTimelines.Where(x => x.AnimationId == 0 || (x.Key?.StartsWith("speak/") ?? false));
+        //    return lips;
+        //}
 
         public int EstimateDurationFromMessage(string message)
         {

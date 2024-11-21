@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Threading.Tasks;
+using Anamnesis.Actor;
 using Anamnesis.Actor.Refresh;
 using Anamnesis.Core.Memory;
 using Anamnesis.Memory;
@@ -14,7 +15,7 @@ using Anamnesis.Memory;
 
 
 public class ActorService : ServiceBase<ActorService> {
-    private const int TickDelay = 10;
+    private const int TickDelay = 10000;
     private const int ActorTableSize = 424;
     private const int GPoseIndexStart = 200;
     private const int GPoseIndexEnd = 244;
@@ -171,9 +172,9 @@ public class ActorService : ServiceBase<ActorService> {
     }
 
     public override Task Start() {
-        this.UpdateActorTable();
+        //this.UpdateActorTable();
 
-        _ = Task.Run(this.TickTask);
+        //_ = Task.Run(this.TickTask);
         return base.Start();
     }
 

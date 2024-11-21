@@ -96,12 +96,12 @@ public static class CharacterDataHelper
 
             if (!(race is null))
             {
-                raceStr = GetRaceEng(race.Masculine.RawString);
+                raceStr = GetRaceEng(race.Value.Masculine.ExtractText());
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found Race: {raceStr}", eventId);
                 if (!Enum.TryParse(raceStr.Replace(" ", ""), out raceEnum))
                 {
-                    var modelData = charaStruct->CharacterData.ModelSkeletonId;
-                    var modelData2 = charaStruct->CharacterData.ModelSkeletonId_2;
+                    var modelData = charaStruct->ModelContainer.ModelSkeletonId;
+                    var modelData2 = charaStruct->ModelContainer.ModelSkeletonId_2;
 
                     var activeData = modelData;
                     if (activeData == -1)

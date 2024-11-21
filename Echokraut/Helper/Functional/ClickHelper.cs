@@ -2,6 +2,7 @@ using Echokraut.DataClasses;
 using Echokraut.Helper.Data;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Component.GUI;
+using System;
 using System.Reflection;
 
 namespace Echokraut.Helper.Functional
@@ -20,7 +21,9 @@ namespace Echokraut.Helper.Functional
                     new()
                     {
                         Listener = (AtkEventListener*)unitBase,
-                        Flags = 132,
+                        State = new AtkEventState() {
+                            StateFlags = AtkEventStateFlags.Completed | AtkEventStateFlags.Unk3,
+                        },
                         Target = &AtkStage.Instance()->AtkEventTarget
                     }
                 };

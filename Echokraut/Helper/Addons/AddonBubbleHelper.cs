@@ -58,7 +58,7 @@ namespace Echokraut.Helper.Addons
 
             unsafe
             {
-                var fpOpenChatBubble = sigScanner.ScanText("E8 ?? ?? ?? FF 48 8B 7C 24 48 C7 46 0C 01 00 00 00");
+                var fpOpenChatBubble = sigScanner.ScanText("E8 ?? ?? ?? ?? F6 86 ?? ?? ?? ?? ?? C7 46 ?? ?? ?? ?? ??");
                 if (fpOpenChatBubble != nint.Zero)
                 {
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"OpenChatBubble function signature found at 0x{fpOpenChatBubble:X}", new EKEventId(0, TextSource.AddonBubble));
@@ -95,7 +95,7 @@ namespace Echokraut.Helper.Addons
                 if (!configuration.VoiceBubble) return;
 
                 var territory = LuminaHelper.GetTerritory();
-                if (territory == null || !configuration.VoiceBubblesInCity && !territory.Mount) return;
+                if (territory == null || !configuration.VoiceBubblesInCity && !territory.Value.Mount) return;
 
                 if (camera == null && CameraManager.Instance() != null)
                     camera = CameraManager.Instance()->GetActiveCamera();
@@ -139,7 +139,7 @@ namespace Echokraut.Helper.Addons
                     voiceNext = false;
 
                 var territory = LuminaHelper.GetTerritory();
-                if (!configuration.VoiceBubblesInCity && !territory.Mount)
+                if (!configuration.VoiceBubblesInCity && !territory.Value.Mount)
                     return mOpenChatBubbleHook.Original(pThis, pActor, pString, param3, attachmentPointID);
 
                 if (pString != nint.Zero && !clientState.IsPvPExcludingDen)

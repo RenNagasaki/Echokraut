@@ -189,7 +189,7 @@ namespace Echokraut.TextToTalk.Utils
                 switch (p)
                 {
                     case PlayerPayload pp:
-                        world = pp.World.Name;
+                        world = pp.World.Value.Name.ToString();
                         break;
                     case TextPayload tp when world != "" && tp.Text != null && tp.Text.Contains(world):
                         cleanString.AddText(tp.Text.Replace(world, ""));
@@ -533,8 +533,8 @@ namespace Echokraut.TextToTalk.Utils
         {
             var territory = LuminaHelper.GetTerritory();
             var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker.Address;
-            var modelData = charaStruct->CharacterData.ModelSkeletonId;
-            var modelData2 = charaStruct->CharacterData.ModelSkeletonId_2;
+            var modelData = charaStruct->ModelContainer.ModelSkeletonId;
+            var modelData2 = charaStruct->ModelContainer.ModelSkeletonId_2;
 
             var activeData = modelData;
             if (activeData == -1)
@@ -542,7 +542,7 @@ namespace Echokraut.TextToTalk.Utils
 
             text = FileHelper.VoiceMessageToFileName(text);
             var textSubstring = text.Length > 20 ? text.Substring(0, 20) : text;
-            return $"BB-{territory.PlaceName.Value.Name.ToString()}-{activeData}-{textSubstring}";
+            return $"BB-{territory.Value.PlaceName.Value.Name.ToString()}-{activeData}-{textSubstring}";
         }
 
         public static string ExtractTokens(string text, IReadOnlyDictionary<string, string?> tokenMap)
