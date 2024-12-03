@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Echokraut", "Echokraut\Echo
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OtterGui", "OtterGui\OtterGui.csproj", "{41C81EA1-3F66-4CAA-87AD-E1ED4B1BF301}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Echokraut-Server", "Echokraut-Server\Echokraut-Server.csproj", "{6293A87A-99A4-4822-8E87-05D6F1BD5810}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -51,6 +53,22 @@ Global
 		{41C81EA1-3F66-4CAA-87AD-E1ED4B1BF301}.ReleaseForms|Any CPU.Build.0 = Release|Any CPU
 		{41C81EA1-3F66-4CAA-87AD-E1ED4B1BF301}.ReleaseForms|x64.ActiveCfg = Release|Any CPU
 		{41C81EA1-3F66-4CAA-87AD-E1ED4B1BF301}.ReleaseForms|x64.Build.0 = Release|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.Debug|x64.Build.0 = Debug|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.DebugForms|Any CPU.ActiveCfg = Debug|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.DebugForms|Any CPU.Build.0 = Debug|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.DebugForms|x64.ActiveCfg = Debug|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.DebugForms|x64.Build.0 = Debug|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.Release|Any CPU.Build.0 = Release|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.Release|x64.ActiveCfg = Release|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.Release|x64.Build.0 = Release|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.ReleaseForms|Any CPU.ActiveCfg = Release|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.ReleaseForms|Any CPU.Build.0 = Release|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.ReleaseForms|x64.ActiveCfg = Release|Any CPU
+		{6293A87A-99A4-4822-8E87-05D6F1BD5810}.ReleaseForms|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
