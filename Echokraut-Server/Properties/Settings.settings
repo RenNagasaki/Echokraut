@@ -8,5 +8,14 @@
     <Setting Name="shutdownIdle" Type="System.Boolean" Scope="User">
       <Value Profile="(Default)">False</Value>
     </Setting>
+    <Setting Name="prepareDone" Type="System.Boolean" Scope="User">
+      <Value Profile="(Default)">False</Value>
+    </Setting>
+    <Setting Name="modelName" Type="System.String" Scope="User">
+      <Value Profile="(Default)">xtts - xttsv2_2.0.3</Value>
+    </Setting>
+    <Setting Name="modelData" Type="System.String" Scope="User">
+      <Value Profile="(Default)" />
+    </Setting>
   </Settings>
 </SettingsFile>

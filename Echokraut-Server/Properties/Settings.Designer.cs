@@ -46,5 +46,41 @@ namespace Echokraut_Server.Properties {
                 this["shutdownIdle"] = value;
             }
         }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("False")]
+        public bool prepareDone {
+            get {
+                return ((bool)(this["prepareDone"]));
+            }
+            set {
+                this["prepareDone"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("xtts - xttsv2_2.0.3")]
+        public string modelName {
+            get {
+                return ((string)(this["modelName"]));
+            }
+            set {
+                this["modelName"] = value;
+            }
+        }
+        
+        [global::System.Configuration.UserScopedSettingAttribute()]
+        [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
+        [global::System.Configuration.DefaultSettingValueAttribute("")]
+        public string modelData {
+            get {
+                return ((string)(this["modelData"]));
+            }
+            set {
+                this["modelData"] = value;
+            }
+        }
     }
 }
