@@ -205,13 +205,15 @@ public partial class Echokraut : IDalamudPlugin
                 Configuration.Save();
             }
 
+            var npcVolume = npcData.volume;
             switch (source)
             {
                 case TextSource.AddonBubble:
                     if (!npcData.hasBubbles)
                         npcData.hasBubbles = true;
 
-                    if (npcData.mutedBubble)
+                    npcVolume = npcData.volumeBubble;
+                    if (npcData.volumeBubble == 0f)
                     {
                         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Bubble is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
@@ -220,7 +222,7 @@ public partial class Echokraut : IDalamudPlugin
                     break;
                 case TextSource.AddonBattleTalk:
                 case TextSource.AddonTalk:
-                    if (npcData.muted)
+                    if (npcData.volume == 0f)
                     {
                         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Npc is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
@@ -230,7 +232,7 @@ public partial class Echokraut : IDalamudPlugin
                 case TextSource.AddonCutsceneSelectString:
                 case TextSource.AddonSelectString:
                 case TextSource.Chat:
-                    if (npcData.muted)
+                    if (npcData.volume == 0f)
                     {
                         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Player is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
@@ -248,7 +250,7 @@ public partial class Echokraut : IDalamudPlugin
                 Language = language,
                 eventId = eventId
             };
-            var volume = VolumeHelper.GetVoiceVolume(eventId);
+            var volume = VolumeHelper.GetVoiceVolume(eventId) * npcData.voiceItem.volume * npcVolume;
 
             if (volume > 0)
                 BackendHelper.OnSay(voiceMessage, volume);

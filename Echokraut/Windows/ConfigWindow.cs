@@ -27,6 +27,7 @@ using Echokraut.Helper.API;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
 using System.Runtime.CompilerServices;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Echokraut.Windows;
 
@@ -737,14 +738,15 @@ public class ConfigWindow : Window, IDisposable
 
             if (ImGui.BeginChild("VoicesChild"))
             {
-                if (ImGui.BeginTable("Voice Table##VoiceTable", 5, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY))
+                if (ImGui.BeginTable("Voice Table##VoiceTable", 6, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY))
                 {
                     ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
                     ImGui.TableSetupColumn("##Play", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
                     ImGui.TableSetupColumn("##Stop", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
                     ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.WidthFixed, 125);
                     ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.WidthFixed, 125);
-                    ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthStretch, 200);
+                    ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthFixed, 200);
+                    ImGui.TableSetupColumn("Volume", ImGuiTableColumnFlags.WidthStretch, 200);
                     ImGui.TableHeadersRow();
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
@@ -801,6 +803,7 @@ public class ConfigWindow : Window, IDisposable
                         UpdateDataVoices = false;
                         sortSpecs.SpecsDirty = false;
                     }
+                    ImGui.TableNextColumn();
 
                     foreach (var voice in filteredVoices)
                     {
@@ -827,6 +830,14 @@ public class ConfigWindow : Window, IDisposable
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                         ImGui.TextUnformatted(voice.voiceName);
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        var voiceVolume = voice.volume;
+                        if (ImGui.SliderFloat($"##EKVoiceVolumeSlider{voice.ToString()}", ref voiceVolume, 0f, 2f))
+                        {
+                            voice.volume = voiceVolume;
+                            this.Configuration.Save();
+                        }
                     }
 
                     ImGui.EndTable();
@@ -864,7 +875,7 @@ public class ConfigWindow : Window, IDisposable
             ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.WidthFixed, 125);
             ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthFixed, 200);
             ImGui.TableSetupColumn("Voice", ImGuiTableColumnFlags.WidthStretch, 250);
-            ImGui.TableSetupColumn("Mute", ImGuiTableColumnFlags.WidthFixed, 40f);
+            ImGui.TableSetupColumn("Volume", ImGuiTableColumnFlags.WidthStretch, 200f);
             ImGui.TableSetupColumn($"##{dataType}saves", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25f);
             ImGui.TableSetupColumn($"##{dataType}mapping", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25f);
             ImGui.TableHeadersRow();
@@ -943,9 +954,9 @@ public class ConfigWindow : Window, IDisposable
                         break;
                     case 5:
                         if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
-                            filteredData.Sort((a, b) => string.Compare(isBubble ? b.mutedBubble.ToString() : b.muted.ToString(), isBubble ? a.mutedBubble.ToString() : a.muted.ToString()));
+                            filteredData.Sort((a, b) => string.Compare(isBubble ? b.volumeBubble.ToString() : b.volume.ToString(), isBubble ? a.volumeBubble.ToString() : a.volume.ToString()));
                         else
-                            filteredData.Sort((a, b) => string.Compare(isBubble ? a.mutedBubble.ToString() : a.muted.ToString(), isBubble ? b.mutedBubble.ToString() : b.muted.ToString()));
+                            filteredData.Sort((a, b) => string.Compare(isBubble ? a.volumeBubble.ToString() : a.volume.ToString(), isBubble ? b.volumeBubble.ToString() : b.volume.ToString()));
                         break;
                 }
 
@@ -1029,15 +1040,18 @@ public class ConfigWindow : Window, IDisposable
                         LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Voice for {dataType}: {mapData}", new EKEventId(0, TextSource.None));
                 }
                 ImGui.TableNextColumn();
-                var muted = mapData.muted;
+                ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                var voiceVolume = 1f;
                 if (isBubble)
-                    muted = mapData.mutedBubble;
-                if (ImGui.Checkbox($"##EK{dataType}Mute{mapData.ToString()}", ref muted))
+                    voiceVolume = mapData.volumeBubble;
+                else
+                    voiceVolume = mapData.volume;
+                if (ImGui.SliderFloat($"##EKNPCVolumeSlider{mapData.ToString()}", ref voiceVolume, 0f, 2f))
                 {
                     if (isBubble)
-                        mapData.mutedBubble = muted;
+                        mapData.volumeBubble = voiceVolume;
                     else
-                        mapData.muted = muted;
+                        mapData.volume = voiceVolume;
                     this.Configuration.Save();
                 }
                 ImGui.TableNextColumn();
@@ -1657,10 +1671,10 @@ public class ConfigWindow : Window, IDisposable
             Language = this.clientState.ClientLanguage,
             eventId = eventId
         };
-        var volume = VolumeHelper.GetVoiceVolume(eventId);
+        var volume = VolumeHelper.GetVoiceVolume(eventId) * voice.volume;
 
         if (volume > 0)
-            BackendHelper.OnSay(voiceMessage, volume);
+            BackendHelper.OnSay(voiceMessage, volume) ;
         else
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);
