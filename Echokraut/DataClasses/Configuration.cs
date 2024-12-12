@@ -16,6 +16,8 @@ public class Configuration : IPluginConfiguration
     public AlltalkData Alltalk { get; set; } = new AlltalkData();
     public List<NpcMapData> MappedNpcs { get; set; } = new List<NpcMapData>();
     public List<NpcMapData> MappedPlayers { get; set; } = new List<NpcMapData>();
+
+    public List<BackendVoiceItem> BackendVoices { get; set; }
     public bool Enabled { get; set; } = true;
     public bool VoiceDialogue { get; set; } = true;
     public bool VoiceBattleDialogue { get; set; } = true;

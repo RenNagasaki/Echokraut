@@ -19,6 +19,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using static Lumina.Models.Models.Model;
 using Echokraut.Helper.DataHelper;
 using Echokraut.Helper.Data;
+using FFXIVClientStructs.FFXIV.Client.UI;
 
 namespace Echokraut.Helper.Addons;
 
@@ -60,7 +61,7 @@ public class AddonBattleTalkHelper
     {
         if (!config.Enabled) return;
         if (!config.VoiceBattleDialogue) return;
-        if (addonBattleTalk == null || !addonBattleTalk->AtkUnitBase.IsVisible) return;
+        if (addonBattleTalk == null || !addonBattleTalk->Base.IsVisible) return;
         var state = GetTalkAddonState(addonBattleTalk);
         Mutate(state);
     }

@@ -73,8 +73,8 @@ namespace Echokraut.TextToTalk.Utils
             if (talkAddon is null) return null;
             return new AddonTalkText
             {
-                Speaker = ReadTextNode(talkAddon->AtkTextNode230),
-                Text = ReadTextNode(talkAddon->AtkTextNode238),
+                Speaker = ReadTextNode(talkAddon->Speaker),
+                Text = ReadTextNode(talkAddon->Text),
             };
         }
 

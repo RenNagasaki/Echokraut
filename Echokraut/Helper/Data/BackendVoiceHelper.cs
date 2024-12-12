@@ -8,16 +8,37 @@ namespace Echokraut.Helper.Data
 {
     public static class BackendVoiceHelper
     {
-        public static List<BackendVoiceItem> Voices = new List<BackendVoiceItem>();
+        private static Configuration Configuration;
+        public static List<BackendVoiceItem> Voices
+        {
+            get { return Configuration.BackendVoices; }
+            set
+            {
+                if (Configuration.BackendVoices != null)
+                {
+                    foreach (BackendVoiceItem item in value)
+                    {
+                        var savedVoice = Configuration.BackendVoices.Find(p => p.voiceName == item.voiceName);
+                        if (savedVoice != null)
+                        {
+                            item.volume = savedVoice.volume;
+                        }
+                    }
+                }
+
+                Configuration.BackendVoices = value;
+            }
+        }
         public static string[] GenderDisplay = new string[0];
         public static string[] RaceDisplay = new string[0];
         public static List<Gender> GenderArr = new List<Gender>();
         public static List<NpcRaces> RaceArr = new List<NpcRaces>();
 
-        public static void Setup(List<BackendVoiceItem> voices)
+        public static void Setup(List<BackendVoiceItem> voices, Configuration configuration)
         {
+            Configuration = configuration;
+            voices.Sort((x, y) => x.ToString().CompareTo(y.ToString()));
             Voices = voices;
-            Voices.Sort((x, y) => x.ToString().CompareTo(y.ToString()));
 
             var raceDisplay = new List<string>();
             var npcRaces = Enum.GetValues(typeof(NpcRaces));

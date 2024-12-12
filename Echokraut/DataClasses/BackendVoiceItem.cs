@@ -11,6 +11,8 @@ namespace Echokraut.DataClasses
         public Gender gender { get; set; }
         public NpcRaces race { get; set; }
 
+        public float volume { get; set; } = 1f;
+
         public override string ToString()
         {
             return $"{gender} - {race} - {voiceName}";

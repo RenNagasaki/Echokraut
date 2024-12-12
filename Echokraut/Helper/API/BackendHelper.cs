@@ -87,7 +87,7 @@ namespace Echokraut.Helper.API
         static void GetAndMapVoices(EKEventId eventId)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Loading and mapping voices", eventId);
-            BackendVoiceHelper.Setup(backend.GetAvailableVoices(eventId));
+            BackendVoiceHelper.Setup(backend.GetAvailableVoices(eventId), Configuration);
 
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Success", eventId);
         }
