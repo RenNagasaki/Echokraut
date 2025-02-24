@@ -1,6 +1,7 @@
 using Dalamud.Game.ClientState.Objects.Enums;
 using Echokraut.Enums;
 using Echokraut.Helper;
+using Echokraut.Helper.Data;
 using OtterGui.Widgets;
 using System;
 
@@ -8,31 +9,38 @@ namespace Echokraut.DataClasses
 {
     public class NpcMapData : IComparable
     {
-        public string name { get; set; }
-        public NpcRaces race { get; set; }
-        public string raceStr { get; set; }
-        public Gender gender { get; set; }
+        public string Name { get; set; }
+        public NpcRaces Race { get; set; }
+        public string RaceStr { get; set; }
+        public Genders Gender { get; set; }
+
+        public string voice = "";
+        internal EchokrautVoice Voice 
+        { 
+            get { return NpcDataHelper.GetVoiceByBackendVoice(voice); }
+            set { voice = value != null ? value.BackendVoice : string.Empty; }
+        }
         public BackendVoiceItem voiceItem { get; set; }
 
-        public bool doNotDelete { get; set; }
-        public float volume { get; set; } = 1f;
-        public float volumeBubble { get; set; } = 1f;
-        public bool hasBubbles { get; set; }
+        public bool DoNotDelete { get; set; }
+        public float Volume { get; set; } = 1f;
+        public float VolumeBubble { get; set; } = 1f;
+        public bool HasBubbles { get; set; }
 
-        public ObjectKind objectKind { get; set; }
+        public ObjectKind ObjectKind { get; set; }
 
         [NonSerialized]
-        public ClippedSelectableCombo<BackendVoiceItem> voicesSelectable;
+        public ClippedSelectableCombo<EchokrautVoice> voicesSelectable;
                 
 
         public NpcMapData(ObjectKind objectKind) {
-            this.objectKind = objectKind;
+            this.ObjectKind = objectKind;
         }
 
         public override string ToString()
         {
-            var raceString = race == NpcRaces.Unknown ? raceStr : race.ToString();
-            return $"{gender} - {raceString} - {name}";
+            var raceString = Race == NpcRaces.Unknown ? RaceStr : Race.ToString();
+            return $"{Gender} - {raceString} - {Name}";
         }
         public override bool Equals(object obj)
         {

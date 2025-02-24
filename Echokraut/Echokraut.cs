@@ -181,39 +181,39 @@ public partial class Echokraut : IDalamudPlugin
             NpcMapData npcData = new NpcMapData(objectKind);
             // Get the speaker's race if it exists.
             var raceStr = "";
-            npcData.race = CharacterDataHelper.GetSpeakerRace(this.DataManager, eventId, speaker, out raceStr, out var modelId);
-            npcData.raceStr = raceStr;
-            npcData.gender = CharacterDataHelper.GetCharacterGender(this.DataManager, eventId, speaker, npcData.race, out var modelBody);
-            npcData.name = TalkTextHelper.CleanUpName(cleanSpeakerName);
+            npcData.Race = CharacterDataHelper.GetSpeakerRace(this.DataManager, eventId, speaker, out raceStr, out var modelId);
+            npcData.RaceStr = raceStr;
+            npcData.Gender = CharacterDataHelper.GetCharacterGender(this.DataManager, eventId, speaker, npcData.Race, out var modelBody);
+            npcData.Name = TalkTextHelper.CleanUpName(cleanSpeakerName);
 
-            if (npcData.objectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
-                npcData.name = JsonLoaderHelper.GetNpcName(npcData.name);
+            if (npcData.ObjectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
+                npcData.Name = JsonLoaderHelper.GetNpcName(npcData.Name);
 
-            if (npcData.name == "PLAYER")
-                npcData.name = this.ClientState.LocalPlayer?.Name.ToString() ?? "PLAYER";
-            else if (string.IsNullOrWhiteSpace(npcData.name) && source == TextSource.AddonBubble)
-                npcData.name = TalkTextHelper.GetBubbleName(speaker, cleanText);
+            if (npcData.Name == "PLAYER")
+                npcData.Name = this.ClientState.LocalPlayer?.Name.ToString() ?? "PLAYER";
+            else if (string.IsNullOrWhiteSpace(npcData.Name) && source == TextSource.AddonBubble)
+                npcData.Name = TalkTextHelper.GetBubbleName(speaker, cleanText);
 
             var resNpcData = NpcDataHelper.GetAddCharacterMapData(npcData, eventId);
             Configuration.Save();
 
             npcData = resNpcData;
 
-            if (npcData.objectKind != objectKind && objectKind != ObjectKind.None)
+            if (npcData.ObjectKind != objectKind && objectKind != ObjectKind.None)
             {
-                npcData.objectKind = objectKind;
+                npcData.ObjectKind = objectKind;
                 Configuration.Save();
             }
 
-            var npcVolume = npcData.volume;
+            var npcVolume = npcData.Volume;
             switch (source)
             {
                 case TextSource.AddonBubble:
-                    if (!npcData.hasBubbles)
-                        npcData.hasBubbles = true;
+                    if (!npcData.HasBubbles)
+                        npcData.HasBubbles = true;
 
-                    npcVolume = npcData.volumeBubble;
-                    if (npcData.volumeBubble == 0f)
+                    npcVolume = npcData.VolumeBubble;
+                    if (npcData.VolumeBubble == 0f)
                     {
                         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Bubble is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
@@ -222,7 +222,7 @@ public partial class Echokraut : IDalamudPlugin
                     break;
                 case TextSource.AddonBattleTalk:
                 case TextSource.AddonTalk:
-                    if (npcData.volume == 0f)
+                    if (npcData.Volume == 0f)
                     {
                         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Npc is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
@@ -232,13 +232,20 @@ public partial class Echokraut : IDalamudPlugin
                 case TextSource.AddonCutsceneSelectString:
                 case TextSource.AddonSelectString:
                 case TextSource.Chat:
-                    if (npcData.volume == 0f)
+                    if (npcData.Volume == 0f)
                     {
                         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Player is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
                         return;
                     }
                     break;
+            }
+
+            if (npcData.Voice.Volume == 0f)
+            {
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Voice is muted: {npcData.ToString()}", eventId);
+                LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                return;
             }
 
             var voiceMessage = new VoiceMessage
@@ -250,7 +257,7 @@ public partial class Echokraut : IDalamudPlugin
                 Language = language,
                 eventId = eventId
             };
-            var volume = VolumeHelper.GetVoiceVolume(eventId) * npcData.voiceItem.volume * npcVolume;
+            var volume = VolumeHelper.GetVoiceVolume(eventId) * npcData.Voice.Volume * npcVolume;
 
             if (volume > 0)
                 BackendHelper.OnSay(voiceMessage, volume);
@@ -258,7 +265,7 @@ public partial class Echokraut : IDalamudPlugin
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);
 
-                if (voiceMessage.Speaker.voiceItem == null)
+                if (voiceMessage.Speaker.Voice == null)
                 {
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Getting voice since not set.", eventId);
                     BackendHelper.GetVoiceOrRandom(eventId, voiceMessage.Speaker);

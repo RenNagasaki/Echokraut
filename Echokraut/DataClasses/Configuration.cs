@@ -17,7 +17,7 @@ public class Configuration : IPluginConfiguration
     public List<NpcMapData> MappedNpcs { get; set; } = new List<NpcMapData>();
     public List<NpcMapData> MappedPlayers { get; set; } = new List<NpcMapData>();
 
-    public List<BackendVoiceItem> BackendVoices { get; set; }
+    public List<EchokrautVoice> EchokrautVoices { get; set; } = new List<EchokrautVoice>();
     public bool Enabled { get; set; } = true;
     public bool VoiceDialogue { get; set; } = true;
     public bool VoiceBattleDialogue { get; set; } = true;

@@ -39,19 +39,19 @@ public static class CharacterDataHelper
         return true;
     }
 
-    public static unsafe Gender GetCharacterGender(IDataManager dataManager, EKEventId eventId, IGameObject? speaker, NpcRaces race, out uint? modelBody)
+    public static unsafe Genders GetCharacterGender(IDataManager dataManager, EKEventId eventId, IGameObject? speaker, NpcRaces race, out uint? modelBody)
     {
         modelBody = new uint?();
         if (speaker == null || speaker.Address == nint.Zero)
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "GameObject is null; cannot check gender.", eventId);
-            return Gender.None;
+            return Genders.None;
         }
 
         var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker.Address;
 
         // Get actor gender as defined by its struct.
-        var actorGender = (Gender)charaStruct->DrawData.CustomizeData.Sex;
+        var actorGender = (Genders)charaStruct->DrawData.CustomizeData.Sex;
         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Gender found on GameObject: {actorGender}", eventId);
 
         // Player gender overrides will be handled by a different system.
@@ -60,7 +60,7 @@ public static class CharacterDataHelper
             return actorGender;
         }
 
-        if (actorGender == Gender.Male && IsWildRace(race))
+        if (actorGender == Genders.Male && IsWildRace(race))
         {
             modelBody = LuminaHelper.GetENpcBase(speaker.DataId)?.ModelBody;
             var modBody = modelBody;
@@ -68,10 +68,10 @@ public static class CharacterDataHelper
             if (npcGenderMap == null)
                 npcGenderMap = JsonLoaderHelper.ModelGenderMap.Find(p => p.race == race && !p.maleDefault && p.female == modBody);
             else
-                actorGender = Gender.Female;
+                actorGender = Genders.Female;
 
             if (npcGenderMap != null)
-                actorGender = Gender.Female;
+                actorGender = Genders.Female;
         }
 
         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Got ModelBody: {modelBody ?? 0} for {speaker.ObjectKind} \"{speaker.Name}\" - ID:{speaker.DataId} (gender read as: {actorGender})", eventId);

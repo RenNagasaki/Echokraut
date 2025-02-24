@@ -18,7 +18,6 @@ namespace Echokraut.Enums
         Viera = 6,
         AuRa = 7,
         Hrothgar = 8,
-        Child = 9,
         Amaljaa = 10,
         Ixal = 11,
         Sylph = 12,

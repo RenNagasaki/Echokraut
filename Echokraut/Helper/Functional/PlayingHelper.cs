@@ -134,8 +134,8 @@ namespace Echokraut.Helper.Functional
                 estimatedLength = count / 2.1f;
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Text} length: {estimatedLength}", eventId);
             }
-            Echokraut.lipSyncHelper.TriggerLipSync(eventId, queueItemText.Speaker.name, estimatedLength);
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Speaker.name} length: {estimatedLength}", eventId);
+            Echokraut.lipSyncHelper.TriggerLipSync(eventId, queueItemText.Speaker.Name, estimatedLength);
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Speaker.Name} length: {estimatedLength}", eventId);
             Playing = true;
         }
 
@@ -225,7 +225,7 @@ namespace Echokraut.Helper.Functional
                     {
                         if (Directory.Exists(Configuration.LocalSaveLocation))
                         {
-                            if (voiceMessage != null && voiceMessage.Speaker != null && voiceMessage.Speaker.voiceItem != null)
+                            if (voiceMessage != null && voiceMessage.Speaker != null && voiceMessage.Speaker.Voice != null)
                             {
                                 var result = FileHelper.LoadLocalBubbleAudio(eventId, Configuration.LocalSaveLocation, voiceMessage);
 
@@ -314,7 +314,7 @@ namespace Echokraut.Helper.Functional
 
         public static void AddRequestToQueue(VoiceMessage voiceMessage)
         {
-            if (Configuration.LoadFromLocalFirst && Directory.Exists(Configuration.LocalSaveLocation) && voiceMessage.Speaker.voiceItem != null && voiceMessage.Source != TextSource.VoiceTest)
+            if (Configuration.LoadFromLocalFirst && Directory.Exists(Configuration.LocalSaveLocation) && voiceMessage.Speaker.Voice != null && voiceMessage.Source != TextSource.VoiceTest)
             {
                 var result = FileHelper.LoadLocalAudio(voiceMessage.eventId, Configuration.LocalSaveLocation, voiceMessage);
 

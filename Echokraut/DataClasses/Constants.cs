@@ -13,6 +13,10 @@ namespace Echokraut.DataClasses
         public static readonly Vector4 INFOLOGCOLOR = new Vector4(.3f, 1.0f, 1.0f, 1f);
         public static readonly Vector4 DEBUGLOGCOLOR = new Vector4(0.0f, 1.0f, 0.0f, 1f);
         public static readonly Vector4 ERRORLOGCOLOR = new Vector4(1.0f, 0.0f, 0.0f, 1f);
+        public static readonly List<Genders> GENDERLIST = Enum.GetValues(typeof(Genders)).Cast<Genders>().ToList();
+        public static readonly List<NpcRaces> RACELIST = Enum.GetValues(typeof(NpcRaces)).Cast<NpcRaces>().ToList();
+        public static readonly string[] GENDERNAMESLIST = Enum.GetNames(typeof(Genders)).ToArray();
+        public static readonly string[] RACENAMESLIST = Enum.GetNames(typeof(NpcRaces)).ToArray();
         public const int MASTERVOLUMEOFFSET = 47392;
         public const int VOICEVOLUMEOFFSET = 47440;
         public static readonly char[] SENTENCESEPARATORS = { '.', '!', '?' };

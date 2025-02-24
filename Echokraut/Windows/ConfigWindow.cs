@@ -13,21 +13,13 @@ using Dalamud.Interface.ImGuiFileDialog;
 using OtterGui;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using static System.Net.Mime.MediaTypeNames;
 using Dalamud.Plugin.Services;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using System.Xml.Linq;
-using OtterGui.Widgets;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using Dalamud.Game.ClientState.Objects.SubKinds;
-using Dalamud.Game.Command;
-using Anamnesis.GameData;
 using Dalamud.Plugin;
 using Echokraut.Helper.API;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
-using System.Runtime.CompilerServices;
-using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Echokraut.Windows;
 
@@ -39,6 +31,8 @@ public class ConfigWindow : Window, IDisposable
     private string testConnectionRes = "";
     private FileDialogManager fileDialogManager;
     #region Voice Selection
+    private List<Genders> gendersList;
+    private List<NpcRaces> racesList;
     private List<NpcMapData> filteredNpcs;
     public static bool UpdateDataNpcs = false;
     public bool resetDataNpcs = false;
@@ -60,7 +54,7 @@ public class ConfigWindow : Window, IDisposable
     private string filterRaceBubbles = "";
     private string filterNameBubbles = "";
     private string filterVoiceBubbles = "";
-    private List<BackendVoiceItem> filteredVoices;
+    private List<EchokrautVoice> filteredVoices;
     public static bool UpdateDataVoices = false;
     public bool resetDataVoices = false;
     private string filterGenderVoices = "";
@@ -209,9 +203,9 @@ public class ConfigWindow : Window, IDisposable
 
                     if (ImGui.Button("Clear mapped npcs##clearnpc"))
                     {
-                        foreach (NpcMapData npcMapData in this.Configuration.MappedNpcs.FindAll(p => !p.name.StartsWith("BB") && !p.doNotDelete))
+                        foreach (NpcMapData npcMapData in this.Configuration.MappedNpcs.FindAll(p => !p.Name.StartsWith("BB") && !p.DoNotDelete))
                         {
-                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, npcMapData.name);
+                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, npcMapData.Name);
                             this.Configuration.MappedNpcs.Remove(npcMapData);
                         }
                         UpdateDataNpcs = true;
@@ -220,9 +214,9 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SameLine();
                     if (ImGui.Button("Clear mapped players##clearplayers"))
                     {
-                        foreach (NpcMapData playerMapData in this.Configuration.MappedPlayers.FindAll(p => !p.doNotDelete))
+                        foreach (NpcMapData playerMapData in this.Configuration.MappedPlayers.FindAll(p => !p.DoNotDelete))
                         {
-                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, playerMapData.name);
+                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, playerMapData.Name);
                             this.Configuration.MappedPlayers.Remove(playerMapData);
                         }
                         UpdateDataPlayers = true;
@@ -231,9 +225,9 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SameLine();
                     if (ImGui.Button("Clear mapped bubbles##clearbubblenpc"))
                     {
-                        foreach (NpcMapData npcMapData in this.Configuration.MappedNpcs.FindAll(p => p.name.StartsWith("BB") && !p.doNotDelete))
+                        foreach (NpcMapData npcMapData in this.Configuration.MappedNpcs.FindAll(p => p.Name.StartsWith("BB") && !p.DoNotDelete))
                         {
-                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, npcMapData.name);
+                            FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, npcMapData.Name);
                             this.Configuration.MappedNpcs.Remove(npcMapData);
                         }
                         UpdateDataBubbles = true;
@@ -722,8 +716,30 @@ public class ConfigWindow : Window, IDisposable
 
     private void DrawVoicesTab()
     {
+        if (gendersList == null)
+        {
+            gendersList = Constants.GENDERLIST;
+            gendersList.Sort();
+        }
+
+        if (racesList == null)
+        {
+            racesList = Constants.RACELIST;
+            racesList.Sort();
+        }
+
         if (ImGui.BeginTabItem("Voices"))
         {
+            var voiceArr = Configuration.EchokrautVoices.ConvertAll(p => p.ToString()).ToArray();
+            var defaultVoiceIndexOld = Configuration.EchokrautVoices.FindIndex(p => p.IsDefault);
+            var defaultVoiceIndex = defaultVoiceIndexOld;
+            if (ImGui.Combo($"Default Voice:##EKDefaultVoice", ref defaultVoiceIndex, voiceArr, voiceArr.Length))
+            {
+                Configuration.EchokrautVoices[defaultVoiceIndexOld].IsDefault = false;
+                Configuration.EchokrautVoices[defaultVoiceIndex].IsDefault = true;
+                this.Configuration.Save();
+            }
+
             if (filteredVoices == null)
             {
                 UpdateDataVoices = true;
@@ -731,47 +747,51 @@ public class ConfigWindow : Window, IDisposable
 
             if (UpdateDataVoices || (resetDataVoices && (filterGenderVoices.Length == 0 || filterRaceVoices.Length == 0 || filterNameVoices.Length == 0)))
             {
-                filteredVoices = BackendVoiceHelper.Voices.FindAll(p => !(p.race == NpcRaces.Unknown && p.voiceName.Contains("NPC")));
+                filteredVoices = Configuration.EchokrautVoices;
                 UpdateDataVoices = true;
                 resetDataVoices = false;
             }
 
             if (ImGui.BeginChild("VoicesChild"))
             {
-                if (ImGui.BeginTable("Voice Table##VoiceTable", 6, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY))
+                if (ImGui.BeginTable("Voice Table##VoiceTable", 7, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY))
                 {
                     ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
                     ImGui.TableSetupColumn("##Play", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
                     ImGui.TableSetupColumn("##Stop", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
-                    ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.WidthFixed, 125);
-                    ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.WidthFixed, 125);
+                    ImGui.TableSetupColumn("Use##Enabled", ImGuiTableColumnFlags.WidthFixed, 35);
                     ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthFixed, 200);
+                    ImGui.TableSetupColumn("Genders", ImGuiTableColumnFlags.WidthFixed, 100);
+                    ImGui.TableSetupColumn("Races", ImGuiTableColumnFlags.WidthFixed, 100);
                     ImGui.TableSetupColumn("Volume", ImGuiTableColumnFlags.WidthStretch, 200);
                     ImGui.TableHeadersRow();
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
                     ImGui.TableNextColumn();
                     ImGui.TableNextColumn();
-                    ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                    if (ImGui.InputText($"##EKFilterNpcGender", ref filterGenderVoices, 40) || (filterGenderVoices.Length > 0 && UpdateDataVoices))
-                    {
-                        filteredVoices = filteredVoices.FindAll(p => p.gender.ToString().ToLower().StartsWith(filterGenderVoices.ToLower()));
-                        UpdateDataVoices = true;
-                        resetDataVoices = true;
-                    }
-                    ImGui.TableNextColumn();
-                    ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                    if (ImGui.InputText($"##EKFilterNpcRace", ref filterRaceVoices, 40) || (filterRaceVoices.Length > 0 && UpdateDataVoices))
-                    {
-                        filteredVoices = filteredVoices.FindAll(p => p.race.ToString().ToLower().Contains(filterRaceVoices.ToLower()));
-                        UpdateDataVoices = true;
-                        resetDataVoices = true;
-                    }
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcName", ref filterNameVoices, 40) || (filterNameVoices.Length > 0 && UpdateDataVoices))
                     {
-                        filteredVoices = filteredVoices.FindAll(p => p.voiceName.ToLower().Contains(filterNameVoices.ToLower()));
+                        filteredVoices = filteredVoices.FindAll(p => p.VoiceName.ToLower().Contains(filterNameVoices.ToLower()));
+                        UpdateDataVoices = true;
+                        resetDataVoices = true;
+                    }
+                    ImGui.TableNextColumn();
+                    ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                    if (ImGui.InputText($"##EKFilterNpcGenders", ref filterGenderVoices, 40) || (filterGenderVoices.Length > 0 && UpdateDataVoices))
+                    {
+                        var foundGenderIndex = gendersList.FindIndex(p => p.ToString().Contains(filterGenderVoices));
+                        filteredVoices = foundGenderIndex >= 0 ? filteredVoices.FindAll(p => p.AllowedGenders.Contains(gendersList[foundGenderIndex])): filteredVoices.FindAll(p => p.AllowedGenders.Count == 0);
+                        UpdateDataVoices = true;
+                        resetDataVoices = true;
+                    }
+                    ImGui.TableNextColumn();
+                    ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                    if (ImGui.InputText($"##EKFilterNpcRaces", ref filterRaceVoices, 40) || (filterRaceVoices.Length > 0 && UpdateDataVoices))
+                    {
+                        var foundRaceIndex = racesList.FindIndex(p => p.ToString().Contains(filterRaceVoices));
+                        filteredVoices = foundRaceIndex >= 0 ? filteredVoices.FindAll(p => p.AllowedRaces.Contains(racesList[foundRaceIndex])) : filteredVoices.FindAll(p => p.AllowedRaces.Count == 0);
                         UpdateDataVoices = true;
                         resetDataVoices = true;
                     }
@@ -782,21 +802,15 @@ public class ConfigWindow : Window, IDisposable
                         {
                             case 2:
                                 if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
-                                    filteredVoices.Sort((a, b) => string.Compare(a.gender.ToString(), b.gender.ToString()));
+                                    filteredVoices.Sort((a, b) => string.Compare(b.IsEnabled.ToString(), a.IsEnabled.ToString()));
                                 else
-                                    filteredVoices.Sort((a, b) => string.Compare(b.gender.ToString(), a.gender.ToString()));
+                                    filteredVoices.Sort((a, b) => string.Compare(a.IsEnabled.ToString(), b.IsEnabled.ToString()));
                                 break;
                             case 3:
                                 if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
-                                    filteredVoices.Sort((a, b) => string.Compare(a.race.ToString(), b.race.ToString()));
+                                    filteredVoices.Sort((a, b) => string.Compare(a.VoiceName, b.VoiceName));
                                 else
-                                    filteredVoices.Sort((a, b) => string.Compare(b.race.ToString(), a.race.ToString()));
-                                break;
-                            case 4:
-                                if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
-                                    filteredVoices.Sort((a, b) => string.Compare(a.voiceName, b.voiceName));
-                                else
-                                    filteredVoices.Sort((a, b) => string.Compare(b.voiceName, a.voiceName));
+                                    filteredVoices.Sort((a, b) => string.Compare(b.VoiceName, a.VoiceName));
                                 break;
                         }
 
@@ -810,32 +824,73 @@ public class ConfigWindow : Window, IDisposable
                         ImGui.TableNextRow();
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##testvoice{voice.ToString()}", new Vector2(25, 25), "Test Voice", false, true))
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##testvoice{voice}", new Vector2(25, 25), "Test Voice", false, true))
                         {
                             BackendTestVoice(voice);
                         }
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Stop.ToIconString()}##stopvoice{voice.ToString()}", new Vector2(25, 25), "Stop Voice", false, true))
+                        if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Stop.ToIconString()}##stopvoice{voice}", new Vector2(25, 25), "Stop Voice", false, true))
                         {
                             BackendStopVoice();
                         }
 
                         ImGui.TableNextColumn();
-                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        ImGui.TextUnformatted(voice.gender.ToString());
-                        ImGui.TableNextColumn();
-                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        ImGui.TextUnformatted(voice.race.ToString());
-                        ImGui.TableNextColumn();
-                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        ImGui.TextUnformatted(voice.voiceName);
-                        ImGui.TableNextColumn();
-                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        var voiceVolume = voice.volume;
-                        if (ImGui.SliderFloat($"##EKVoiceVolumeSlider{voice.ToString()}", ref voiceVolume, 0f, 2f))
+                        var isEnabled = voice.IsEnabled;
+                        if (ImGui.Checkbox($"##EKVoiceIsEnabled{voice.ToString()}", ref isEnabled))
                         {
-                            voice.volume = voiceVolume;
+                            voice.IsEnabled = isEnabled;
+                            this.Configuration.Save();
+                        }
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        ImGui.TextUnformatted(voice.VoiceName);
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        if (ImGui.CollapsingHeader($"Details:##EKVoiceAllowedGenders{voice}"))
+                        {
+                            foreach (var gender in gendersList)
+                            {
+                                var isAllowed = voice.AllowedGenders.Contains(gender);
+                                if (ImGui.Checkbox($"{gender}##EKVoiceAllowedGender{voice}{gender}", ref isAllowed))
+                                {
+                                    if (isAllowed && !voice.AllowedGenders.Contains(gender))
+                                        voice.AllowedGenders.Add(gender);
+                                    else if (!isAllowed && voice.AllowedGenders.Contains(gender))
+                                        voice.AllowedGenders.Remove(gender);
+
+                                    NpcDataHelper.RefreshSelectables();
+                                    this.Configuration.Save();
+                                }
+                            }
+                        }
+
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        if (ImGui.CollapsingHeader($"Details:##EKVoiceAllowedRaces{voice}"))
+                        {
+                            foreach (var race in racesList)
+                            {
+                                var isAllowed = voice.AllowedRaces.Contains(race);
+                                if (ImGui.Checkbox($"{race}##EKVoiceAllowedRace{voice}{race}", ref isAllowed))
+                                {
+                                    if (isAllowed && !voice.AllowedRaces.Contains(race))
+                                        voice.AllowedRaces.Add(race);
+                                    else if (!isAllowed && voice.AllowedRaces.Contains(race))
+                                        voice.AllowedRaces.Remove(race);
+
+                                    NpcDataHelper.RefreshSelectables();
+                                    this.Configuration.Save();
+                                }
+                            }
+                        }
+
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        var voiceVolume = voice.Volume;
+                        if (ImGui.SliderFloat($"##EKVoiceVolumeSlider{voice}", ref voiceVolume, 0f, 2f))
+                        {
+                            voice.Volume = voiceVolume;
                             this.Configuration.Save();
                         }
                     }
@@ -860,9 +915,9 @@ public class ConfigWindow : Window, IDisposable
         if (updateData || (resetData && (filterGender.Length == 0 || filterRace.Length == 0 || filterName.Length == 0 || filterVoice.Length == 0)))
         {
             if (isBubble)
-                filteredData = realData.FindAll(p => p.hasBubbles);
+                filteredData = realData.FindAll(p => p.HasBubbles);
             else
-                filteredData = realData.FindAll(p => !p.name.StartsWith("BB-"));
+                filteredData = realData.FindAll(p => !p.Name.StartsWith("BB-"));
             updateData = true;
             resetData = false;
         }
@@ -885,7 +940,7 @@ public class ConfigWindow : Window, IDisposable
             if (ImGui.InputText($"##EKFilterNpcGender", ref filterGender, 40) || (filterGender.Length > 0 && updateData))
             {
                 var gender = filterGender;
-                filteredData = filteredData.FindAll(p => p.gender.ToString().ToLower().StartsWith(gender.ToLower()));
+                filteredData = filteredData.FindAll(p => p.Gender.ToString().ToLower().StartsWith(gender.ToLower()));
                 updateData = true;
                 resetData = true;
             }
@@ -894,7 +949,7 @@ public class ConfigWindow : Window, IDisposable
             if (ImGui.InputText($"##EKFilterNpcRace", ref filterRace, 40) || (filterRace.Length > 0 && updateData))
             {
                 var race = filterRace;
-                filteredData = filteredData.FindAll(p => p.race.ToString().ToLower().Contains(race.ToLower()));
+                filteredData = filteredData.FindAll(p => p.Race.ToString().ToLower().Contains(race.ToLower()));
                 updateData = true;
                 resetData = true;
             }
@@ -903,7 +958,7 @@ public class ConfigWindow : Window, IDisposable
             if (ImGui.InputText($"##EKFilterNpcName", ref filterName, 40) || (filterName.Length > 0 && updateData))
             {
                 var name = filterName;
-                filteredData = filteredData.FindAll(p => p.name.ToLower().Contains(name.ToLower()));
+                filteredData = filteredData.FindAll(p => p.Name.ToLower().Contains(name.ToLower()));
                 updateData = true;
                 resetData = true;
             }
@@ -912,7 +967,7 @@ public class ConfigWindow : Window, IDisposable
             if (ImGui.InputText($"##EKFilterNpcVoice", ref filterVoice, 40) || (filterVoice.Length > 0 && updateData))
             {
                 var voice = filterVoice;
-                filteredData = filteredData.FindAll(p => p.voiceItem != null && p.voiceItem.ToString().ToLower().Contains(voice.ToLower()));
+                filteredData = filteredData.FindAll(p => p.Voice != null && p.Voice.ToString().ToLower().Contains(voice.ToLower()));
                 updateData = true;
                 resetData = true;
             }
@@ -924,39 +979,39 @@ public class ConfigWindow : Window, IDisposable
                 {
                     case 0:
                         if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
-                            filteredData.Sort((a, b) => string.Compare(b.doNotDelete.ToString(), a.doNotDelete.ToString()));
+                            filteredData.Sort((a, b) => string.Compare(b.DoNotDelete.ToString(), a.DoNotDelete.ToString()));
                         else
-                            filteredData.Sort((a, b) => string.Compare(a.doNotDelete.ToString(), b.doNotDelete.ToString()));
+                            filteredData.Sort((a, b) => string.Compare(a.DoNotDelete.ToString(), b.DoNotDelete.ToString()));
                         break;
                     case 1:
                         if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
-                            filteredData.Sort((a, b) => string.Compare(a.gender.ToString(), b.gender.ToString()));
+                            filteredData.Sort((a, b) => string.Compare(a.Gender.ToString(), b.Gender.ToString()));
                         else
-                            filteredData.Sort((a, b) => string.Compare(b.gender.ToString(), a.gender.ToString()));
+                            filteredData.Sort((a, b) => string.Compare(b.Gender.ToString(), a.Gender.ToString()));
                         break;
                     case 2:
                         if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
-                            filteredData.Sort((a, b) => string.Compare(a.race.ToString(), b.race.ToString()));
+                            filteredData.Sort((a, b) => string.Compare(a.Race.ToString(), b.Race.ToString()));
                         else
-                            filteredData.Sort((a, b) => string.Compare(b.race.ToString(), a.race.ToString()));
+                            filteredData.Sort((a, b) => string.Compare(b.Race.ToString(), a.Race.ToString()));
                         break;
                     case 3:
                         if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
-                            filteredData.Sort((a, b) => string.Compare(a.name, b.name));
+                            filteredData.Sort((a, b) => string.Compare(a.Name, b.Name));
                         else
-                            filteredData.Sort((a, b) => string.Compare(b.name, a.name));
+                            filteredData.Sort((a, b) => string.Compare(b.Name, a.Name));
                         break;
                     case 4:
                         if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
-                            filteredData.Sort((a, b) => string.Compare(a.voiceItem?.ToString(), b.voiceItem?.ToString()));
+                            filteredData.Sort((a, b) => string.Compare(a.Voice?.ToString(), b.Voice?.ToString()));
                         else
-                            filteredData.Sort((a, b) => string.Compare(b.voiceItem?.ToString(), a.voiceItem?.ToString()));
+                            filteredData.Sort((a, b) => string.Compare(b.Voice?.ToString(), a.Voice?.ToString()));
                         break;
                     case 5:
                         if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
-                            filteredData.Sort((a, b) => string.Compare(isBubble ? b.volumeBubble.ToString() : b.volume.ToString(), isBubble ? a.volumeBubble.ToString() : a.volume.ToString()));
+                            filteredData.Sort((a, b) => string.Compare(isBubble ? b.VolumeBubble.ToString() : b.Volume.ToString(), isBubble ? a.VolumeBubble.ToString() : a.Volume.ToString()));
                         else
-                            filteredData.Sort((a, b) => string.Compare(isBubble ? a.volumeBubble.ToString() : a.volume.ToString(), isBubble ? b.volumeBubble.ToString() : b.volume.ToString()));
+                            filteredData.Sort((a, b) => string.Compare(isBubble ? a.VolumeBubble.ToString() : a.Volume.ToString(), isBubble ? b.VolumeBubble.ToString() : b.Volume.ToString()));
                         break;
                 }
 
@@ -969,27 +1024,28 @@ public class ConfigWindow : Window, IDisposable
             {
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
-                var doNotDelete = mapData.doNotDelete;
+                var doNotDelete = mapData.DoNotDelete;
                 if (ImGui.Checkbox($"##EKNpcDoNotDelete{mapData.ToString()}", ref doNotDelete))
                 {
-                    mapData.doNotDelete = doNotDelete;
+                    mapData.DoNotDelete = doNotDelete;
                     this.Configuration.Save();
                 }
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                var presetIndexGender = BackendVoiceHelper.GenderDisplay.IndexOf(p => p.Contains(mapData.gender.ToString()));
-                if (ImGui.Combo($"##EKCBox{dataType}{mapData.ToString()}1", ref presetIndexGender, BackendVoiceHelper.GenderDisplay, BackendVoiceHelper.GenderDisplay.Length))
+                var presetIndexGender = Constants.GENDERLIST.FindIndex(p => p == mapData.Gender);
+                if (ImGui.Combo($"##EKCBox{dataType}{mapData.ToString()}1", ref presetIndexGender, Constants.GENDERNAMESLIST, Constants.GENDERNAMESLIST.Length))
                 {
-                    var newGender = BackendVoiceHelper.GenderArr[presetIndexGender];
-                    if (newGender != mapData.gender)
+                    var newGender = Constants.GENDERLIST[presetIndexGender];
+                    if (newGender != mapData.Gender)
                     {
-                        if (realData.Contains(new NpcMapData(mapData.objectKind) { gender = newGender, race = mapData.race, name = mapData.name }))
+                        if (realData.Contains(new NpcMapData(mapData.ObjectKind) { Gender = newGender, Race = mapData.Race, Name = mapData.Name }))
                             toBeRemoved = mapData;
                         else
                         {
-                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Gender for {dataType}: {mapData.ToString()} from: {mapData.gender} to: {newGender}", new EKEventId(0, TextSource.None));
+                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Gender for {dataType}: {mapData.ToString()} from: {mapData.Gender} to: {newGender}", new EKEventId(0, TextSource.None));
 
-                            mapData.gender = newGender;
+                            mapData.Gender = newGender;
+                            mapData.DoNotDelete = true;
                             updateData = true;
                             this.Configuration.Save();
                         }
@@ -999,19 +1055,20 @@ public class ConfigWindow : Window, IDisposable
                 }
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                var presetIndexRace = BackendVoiceHelper.RaceDisplay.IndexOf(p => p.Contains(mapData.race.ToString()));
-                if (ImGui.Combo($"##EKCBoxPlayer{mapData.ToString()}2", ref presetIndexRace, BackendVoiceHelper.RaceDisplay, BackendVoiceHelper.RaceDisplay.Length))
+                var presetIndexRace = Constants.RACELIST.FindIndex(p => p == mapData.Race);
+                if (ImGui.Combo($"##EKCBoxPlayer{mapData.ToString()}2", ref presetIndexRace, Constants.RACENAMESLIST, Constants.RACENAMESLIST.Length))
                 {
-                    var newRace = BackendVoiceHelper.RaceArr[presetIndexRace];
-                    if (newRace != mapData.race)
+                    var newRace = Constants.RACELIST[presetIndexRace];
+                    if (newRace != mapData.Race)
                     {
-                        if (realData.Contains(new NpcMapData(mapData.objectKind) { gender = mapData.gender, race = newRace, name = mapData.name }))
+                        if (realData.Contains(new NpcMapData(mapData.ObjectKind) { Gender = mapData.Gender, Race = newRace, Name = mapData.Name }))
                             toBeRemoved = mapData;
                         else
                         {
-                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Race for {dataType}: {mapData.ToString()} from: {mapData.race} to: {newRace}", new EKEventId(0, TextSource.None));
+                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Race for {dataType}: {mapData.ToString()} from: {mapData.Race} to: {newRace}", new EKEventId(0, TextSource.None));
 
-                            mapData.race = newRace;
+                            mapData.Race = newRace;
+                            mapData.DoNotDelete = true;
                             updateData = true;
                             this.Configuration.Save();
                         }
@@ -1020,19 +1077,20 @@ public class ConfigWindow : Window, IDisposable
                         LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Race for {dataType}: {mapData}", new EKEventId(0, TextSource.None));
                 }
                 ImGui.TableNextColumn();
-                ImGui.TextUnformatted(mapData.name);
+                ImGui.TextUnformatted(mapData.Name);
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
 
-                if (mapData.voicesSelectable.Draw(mapData.voiceItem?.ToString() ?? "", out var selectedIndexVoice))
+                if (mapData.voicesSelectable.Draw(mapData.Voice?.ToString() ?? "", out var selectedIndexVoice))
                 {
-                    var newVoiceItem = BackendVoiceHelper.Voices[selectedIndexVoice];
+                    var newVoiceItem = Configuration.EchokrautVoices.FindAll(f => f.IsDefault || (f.IsEnabled && f.AllowedGenders.Contains(mapData.Gender) && f.AllowedRaces.Contains(mapData.Race)))[selectedIndexVoice];
 
                     if (newVoiceItem != null)
                     {
-                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for {dataType}: {mapData.ToString()} from: {mapData.voiceItem} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
+                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for {dataType}: {mapData.ToString()} from: {mapData.Voice} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
 
-                        mapData.voiceItem = newVoiceItem;
+                        mapData.Voice = newVoiceItem;
+                        mapData.DoNotDelete = true;
                         updateData = true;
                         this.Configuration.Save();
                     }
@@ -1043,25 +1101,26 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                 var voiceVolume = 1f;
                 if (isBubble)
-                    voiceVolume = mapData.volumeBubble;
+                    voiceVolume = mapData.VolumeBubble;
                 else
-                    voiceVolume = mapData.volume;
+                    voiceVolume = mapData.Volume;
                 if (ImGui.SliderFloat($"##EKNPCVolumeSlider{mapData.ToString()}", ref voiceVolume, 0f, 2f))
                 {
                     if (isBubble)
-                        mapData.volumeBubble = voiceVolume;
+                        mapData.VolumeBubble = voiceVolume;
                     else
-                        mapData.volume = voiceVolume;
+                        mapData.Volume = voiceVolume;
+                    mapData.DoNotDelete = true;
                     this.Configuration.Save();
                 }
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                 if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.TrashAlt.ToIconString()}##del{dataType}saves{mapData.ToString()}", new Vector2(25, 25), "Will remove all local saved audio files for this character", false, true))
                 {
-                    FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, mapData.name);
+                    FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, mapData.Name);
                 }
                 ImGui.TableNextColumn();
-                if (!mapData.doNotDelete)
+                if (!mapData.DoNotDelete)
                 {
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.SquareXmark.ToIconString()}##del{dataType}{mapData.ToString()}", new Vector2(25, 25), $"Will remove {dataType} mapping and all local saved audio files for this character", false, true))
@@ -1073,7 +1132,7 @@ public class ConfigWindow : Window, IDisposable
 
             if (toBeRemoved != null)
             {
-                FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, toBeRemoved.name);
+                FileHelper.RemoveSavedNpcFiles(Configuration.LocalSaveLocation, toBeRemoved.Name);
                 realData.Remove(toBeRemoved);
                 updateData = true;
                 Configuration.Save();
@@ -1650,7 +1709,7 @@ public class ConfigWindow : Window, IDisposable
         }
     }
 
-    private async void BackendTestVoice(BackendVoiceItem voice)
+    private async void BackendTestVoice(EchokrautVoice voice)
     {
         BackendStopVoice();
         var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
@@ -1662,16 +1721,16 @@ public class ConfigWindow : Window, IDisposable
             Source = TextSource.VoiceTest,
             Speaker = new NpcMapData(Dalamud.Game.ClientState.Objects.Enums.ObjectKind.None)
             {
-                gender = voice.gender,
-                race = voice.race,
-                name = voice.voiceName,
-                voiceItem = voice
+                Gender = voice.AllowedGenders[0],
+                Race = voice.AllowedRaces[0],
+                Name = voice.VoiceName,
+                Voice = voice
             },
             Text = Constants.TESTMESSAGEDE,
             Language = this.clientState.ClientLanguage,
             eventId = eventId
         };
-        var volume = VolumeHelper.GetVoiceVolume(eventId) * voice.volume;
+        var volume = VolumeHelper.GetVoiceVolume(eventId) * voice.Volume;
 
         if (volume > 0)
             BackendHelper.OnSay(voiceMessage, volume) ;

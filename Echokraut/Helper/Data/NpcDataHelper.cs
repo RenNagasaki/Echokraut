@@ -7,6 +7,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace Echokraut.Helper.Data
 {
@@ -18,6 +19,39 @@ namespace Echokraut.Helper.Data
         public static void Setup(Configuration configuration)
         {
             Configuration = configuration;
+        }
+
+        public static void MigrateOldData()
+        {
+            var oldPlayerMapData = Configuration.MappedPlayers.FindAll(p => p.voiceItem != null);
+            var oldNpcMapData = Configuration.MappedNpcs.FindAll(p => p.voiceItem != null);
+
+            if (oldPlayerMapData.Count > 0 || oldNpcMapData.Count > 0)
+            {
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Migrating old npcdata", new EKEventId(0, TextSource.None));
+
+                foreach (var player in oldPlayerMapData)
+                {
+                    player.Voice = Configuration.EchokrautVoices.Find(p => p.BackendVoice == player.voiceItem.voice);
+
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Migrated old npcdata from -> {player.voiceItem} to -> {player.Voice}", new EKEventId(0, TextSource.None));
+
+                    if (player.Voice != null)
+                        player.voiceItem = null;
+                }
+
+                foreach (var npc in oldNpcMapData)
+                {
+                    npc.Voice = Configuration.EchokrautVoices.Find(p => p.BackendVoice == npc.voiceItem.voice);
+
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Migrated old npcdata from -> {npc.voiceItem} to -> {npc.Voice}", new EKEventId(0, TextSource.None));
+
+                    if (npc.Voice != null)
+                        npc.voiceItem = null;
+                }
+
+                Configuration.Save();
+            }
         }
 
         public static EKEventId EventId(string methodName, TextSource textSource)
@@ -49,12 +83,17 @@ namespace Echokraut.Helper.Data
             return new List<NpcMapData>();
         }
 
+        public static EchokrautVoice GetVoiceByBackendVoice(string backendVoice)
+        {
+            return Configuration.EchokrautVoices.Find(p => p.BackendVoice == backendVoice);
+        }
+
         public static void RefreshSelectables()
         {
             try
             {
-                Configuration.MappedNpcs.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 300, BackendVoiceHelper.Voices, g => g.ToString()));
-                Configuration.MappedPlayers.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 300, BackendVoiceHelper.Voices, g => g.ToString()));
+                Configuration.MappedNpcs.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 300, Configuration.EchokrautVoices.FindAll(f => f.IsDefault || (f.IsEnabled && f.AllowedGenders.Contains(p.Gender) && f.AllowedRaces.Contains(p.Race))), g => g.ToString()));
+                Configuration.MappedPlayers.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 300, Configuration.EchokrautVoices.FindAll(f => f.IsDefault || (f.IsEnabled && f.AllowedGenders.Contains(p.Gender) && f.AllowedRaces.Contains(p.Race))), g => g.ToString()));
             }
             catch (Exception ex)
             {
@@ -67,21 +106,21 @@ namespace Echokraut.Helper.Data
             NpcMapData? result = null;
             var datas = GetCharacterMapDatas(eventId);
 
-            if (data.race == NpcRaces.Unknown)
+            if (data.Race == NpcRaces.Unknown)
             {
                 var oldResult = datas.Find(p => p.ToString() == data.ToString());
-                result = datas.Find(p => p.name == data.name && p.race != NpcRaces.Unknown);
+                result = datas.Find(p => p.Name == data.Name && p.Race != NpcRaces.Unknown);
 
                 if (result != null)
                     datas.Remove(oldResult);
             }
-            else if (data.race != NpcRaces.Unknown)
+            else if (data.Race != NpcRaces.Unknown)
             {
-                result = datas.Find(p => p.name == data.name && p.race == NpcRaces.Unknown);
+                result = datas.Find(p => p.Name == data.Name && p.Race == NpcRaces.Unknown);
 
                 if (result != null)
                 {
-                    data.voiceItem = result.voiceItem;
+                    data.Voice = result.Voice;
                     datas.Remove(result);
                     result = null;
                 }
@@ -94,12 +133,12 @@ namespace Echokraut.Helper.Data
                 if (result == null)
                 {
                     datas.Add(data);
-                    data.voicesSelectable = new($"##AllVoices{data.ToString()}", string.Empty, 250, BackendVoiceHelper.Voices, g => g.ToString());
+                    data.voicesSelectable = new($"##AllVoices{data.ToString()}", string.Empty, 250, Configuration.EchokrautVoices, g => g.ToString());
                     BackendHelper.GetVoiceOrRandom(eventId, data);
                     ConfigWindow.UpdateDataNpcs = true;
                     ConfigWindow.UpdateDataBubbles = true;
                     ConfigWindow.UpdateDataPlayers = true;
-                    var mapping = data.objectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? "player" : "npc";
+                    var mapping = data.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? "player" : "npc";
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Added new {mapping} to mapping: {data.ToString()}", eventId);
 
                     result = data;

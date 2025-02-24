@@ -30,7 +30,7 @@ public class AddonTalkHelper
     private readonly IAddonLifecycle addonLifecycle;
     private readonly IClientState clientState;
     private readonly IObjectTable objects;
-    private readonly Configuration config;
+    private readonly Configuration configuration;
     private readonly Echokraut echokraut;
     public bool nextIsVoice = false;
     private bool wasTalking = false;
@@ -46,7 +46,7 @@ public class AddonTalkHelper
         this.condition = condition;
         this.addonLifecycle = addonLifecycle;
         this.clientState = clientState;
-        this.config = config;
+        this.configuration = config;
         this.objects = objects;
 
         HookIntoFrameworkUpdate();
@@ -54,8 +54,18 @@ public class AddonTalkHelper
 
     private void HookIntoFrameworkUpdate()
     {
+        addonLifecycle.RegisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
         addonLifecycle.RegisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
         addonLifecycle.RegisterListener(AddonEvent.PostUpdate, "Talk", OnPostUpdate);
+    }
+
+    private unsafe void OnPreReceiveEvent(AddonEvent type, AddonArgs args)
+    {
+        if (!configuration.Enabled) return;
+        if (args is not AddonReceiveEventArgs receiveEventArgs) return;
+
+        // Notify observers that the addon state was advanced
+        echokraut.Cancel(new EKEventId(0, TextSource.AddonTalk));
     }
 
     private unsafe void OnPostUpdate(AddonEvent type, AddonArgs args)
@@ -85,8 +95,8 @@ public class AddonTalkHelper
 
     private unsafe void Handle(AddonTalk* addonTalk)
     {
-        if (!config.Enabled) return;
-        if (!config.VoiceDialogue) return;
+        if (!configuration.Enabled) return;
+        if (!configuration.VoiceDialogue) return;
         if (addonTalk == null || !addonTalk->AtkUnitBase.IsVisible) return;
         var state = GetTalkAddonState(addonTalk);
         Mutate(state);
@@ -135,7 +145,7 @@ public class AddonTalkHelper
             return;
         }
 
-        if (condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.WatchingCutscene] || condition[ConditionFlag.OccupiedInCutSceneEvent] || condition[ConditionFlag.OccupiedInQuestEvent])
+        if (condition[ConditionFlag.WatchingCutscene] || condition[ConditionFlag.OccupiedInCutSceneEvent] || condition[ConditionFlag.OccupiedInQuestEvent])
         {
             wasWatchingCutscene = true;
             DalamudHelper.TryGetNextUnkownCharacter(clientState, objects, eventId);
@@ -189,6 +199,7 @@ public class AddonTalkHelper
 
     public void Dispose()
     {
+        addonLifecycle.UnregisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
         addonLifecycle.UnregisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
         addonLifecycle.UnregisterListener(AddonEvent.PostUpdate, "Talk", OnPostUpdate);
     }

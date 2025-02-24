@@ -1,6 +1,6 @@
-﻿namespace Echokraut.Enums
+namespace Echokraut.Enums
 {
-    public enum Gender : sbyte
+    public enum Genders : sbyte
     {
         None = -1,
         Male,

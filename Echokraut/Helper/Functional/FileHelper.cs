@@ -73,7 +73,7 @@ namespace Echokraut.Helper.Functional
 
         public static string GetLocalAudioPath(string localSaveLocation, VoiceMessage voiceMessage)
         {
-            var filePath = GetSpeakerAudioPath(localSaveLocation, voiceMessage.Speaker.name) + $"{voiceMessage.Speaker.race.ToString()}-{voiceMessage.Speaker.voiceItem?.voiceName}\\{VoiceMessageToFileName(voiceMessage.Text)}.wav";
+            var filePath = GetSpeakerAudioPath(localSaveLocation, voiceMessage.Speaker.Name) + $"{voiceMessage.Speaker.Race.ToString()}-{voiceMessage.Speaker.Voice?.VoiceName}\\{VoiceMessageToFileName(voiceMessage.Text)}.wav";
 
             return filePath;
         }

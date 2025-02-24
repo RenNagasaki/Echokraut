@@ -8,7 +8,7 @@ namespace Echokraut.DataClasses
     {
         public string voiceName { get; set; }
         public string voice { get; set; }
-        public Gender gender { get; set; }
+        public Genders gender { get; set; }
         public NpcRaces race { get; set; }
 
         public float volume { get; set; } = 1f;

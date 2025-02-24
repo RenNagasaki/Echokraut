@@ -17,6 +17,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Dalamud.Game;
 using Echokraut.Helper.Data;
+using System.Net;
 
 namespace Echokraut.Backend
 {
@@ -50,6 +51,7 @@ namespace Echokraut.Backend
                 uriBuilder.Query = query.ToString();
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Requesting... {uriBuilder.Uri}", eventId);
                 using var req = new HttpRequestMessage(HttpMethod.Get, uriBuilder.Uri);
+                req.Version = HttpVersion.Version30;
 
                 res = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
                 EnsureSuccessStatusCode(res);
@@ -70,10 +72,10 @@ namespace Echokraut.Backend
             return null;
         }
 
-        public List<BackendVoiceItem> GetAvailableVoices(EKEventId eventId)
+        public List<string> GetAvailableVoices(EKEventId eventId)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Loading Alltalk Voices", eventId);
-            var mappedVoices = new List<BackendVoiceItem>();
+            var mappedVoices = new List<string>();
             try
             {
                 HttpClient httpClient = new HttpClient();
@@ -87,47 +89,7 @@ namespace Echokraut.Backend
 
                 foreach (string voice in voices.voices)
                 {
-                    if (voice.Equals(Constants.NARRATORVOICE, StringComparison.OrdinalIgnoreCase))
-                    {
-                        var voiceItem = new BackendVoiceItem()
-                        {
-                            voiceName = Constants.NARRATORVOICE.Replace(".wav", ""),
-                            voice = voice
-                        };
-                        mappedVoices.Add(voiceItem);
-                    }
-                    else
-                    {
-                        string[] splitVoice = voice.Split('_');
-                        var genderStr = splitVoice[0];
-                        var raceStr = splitVoice[1];
-                        string voiceName = splitVoice[2].Replace(".wav", "");
-
-                        object gender = Gender.Male;
-                        object race = NpcRaces.Unknown;
-                        var voiceItem = new BackendVoiceItem()
-                        {
-                            gender = (Gender)gender,
-                            race = (NpcRaces)race,
-                            voiceName = voiceName,
-                            voice = voice
-                        };
-
-                        if (Enum.TryParse(typeof(Gender), genderStr, true, out gender))
-                        {
-                            if (Enum.TryParse(typeof(NpcRaces), raceStr, true, out race))
-                            {
-                                voiceItem.gender = (Gender)gender;
-                                voiceItem.race = (NpcRaces)race;
-                            }
-                            else
-                                race = NpcRaces.Unknown;
-                        }
-                        else
-                            gender = Gender.Male;
-
-                        mappedVoices.Add(voiceItem);
-                    }
+                    mappedVoices.Add(voice);
                 }
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Done", eventId);
             }
