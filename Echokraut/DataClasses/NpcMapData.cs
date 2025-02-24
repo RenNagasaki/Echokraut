@@ -23,6 +23,8 @@ namespace Echokraut.DataClasses
         public BackendVoiceItem voiceItem { get; set; }
 
         public bool DoNotDelete { get; set; }
+        public bool IsEnabled { get; set; } = true;
+        public bool IsEnabledBubble { get; set; } = true;
         public float Volume { get; set; } = 1f;
         public float VolumeBubble { get; set; } = 1f;
         public bool HasBubbles { get; set; }

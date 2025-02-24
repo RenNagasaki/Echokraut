@@ -213,7 +213,7 @@ public partial class Echokraut : IDalamudPlugin
                         npcData.HasBubbles = true;
 
                     npcVolume = npcData.VolumeBubble;
-                    if (npcData.VolumeBubble == 0f)
+                    if (npcData.VolumeBubble == 0f || !npcData.IsEnabledBubble)
                     {
                         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Bubble is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
@@ -222,7 +222,7 @@ public partial class Echokraut : IDalamudPlugin
                     break;
                 case TextSource.AddonBattleTalk:
                 case TextSource.AddonTalk:
-                    if (npcData.Volume == 0f)
+                    if (npcData.Volume == 0f || !npcData.IsEnabled)
                     {
                         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Npc is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
@@ -232,7 +232,7 @@ public partial class Echokraut : IDalamudPlugin
                 case TextSource.AddonCutsceneSelectString:
                 case TextSource.AddonSelectString:
                 case TextSource.Chat:
-                    if (npcData.Volume == 0f)
+                    if (npcData.Volume == 0f || !npcData.IsEnabled)
                     {
                         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Player is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);

@@ -217,7 +217,7 @@ namespace Echokraut.Helper.API
 
         public static void GetVoiceOrRandom(EKEventId eventId, NpcMapData npcData)
         {
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Searching voice: {npcData.Voice.VoiceName} for NPC: {npcData.Name}", eventId);
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Searching voice: {npcData.Voice?.VoiceName ?? ""} for NPC: {npcData.Name}", eventId);
             var voiceItem = npcData.Voice;
             var mappedList = npcData.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? Configuration.MappedPlayers : Configuration.MappedNpcs;
 

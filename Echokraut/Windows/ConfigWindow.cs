@@ -31,8 +31,6 @@ public class ConfigWindow : Window, IDisposable
     private string testConnectionRes = "";
     private FileDialogManager fileDialogManager;
     #region Voice Selection
-    private List<Genders> gendersList;
-    private List<NpcRaces> racesList;
     private List<NpcMapData> filteredNpcs;
     public static bool UpdateDataNpcs = false;
     public bool resetDataNpcs = false;
@@ -716,17 +714,6 @@ public class ConfigWindow : Window, IDisposable
 
     private void DrawVoicesTab()
     {
-        if (gendersList == null)
-        {
-            gendersList = Constants.GENDERLIST;
-            gendersList.Sort();
-        }
-
-        if (racesList == null)
-        {
-            racesList = Constants.RACELIST;
-            racesList.Sort();
-        }
 
         if (ImGui.BeginTabItem("Voices"))
         {
@@ -781,8 +768,8 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcGenders", ref filterGenderVoices, 40) || (filterGenderVoices.Length > 0 && UpdateDataVoices))
                     {
-                        var foundGenderIndex = gendersList.FindIndex(p => p.ToString().Contains(filterGenderVoices));
-                        filteredVoices = foundGenderIndex >= 0 ? filteredVoices.FindAll(p => p.AllowedGenders.Contains(gendersList[foundGenderIndex])): filteredVoices.FindAll(p => p.AllowedGenders.Count == 0);
+                        var foundGenderIndex = Constants.GENDERLIST.FindIndex(p => p.ToString().Contains(filterGenderVoices));
+                        filteredVoices = foundGenderIndex >= 0 ? filteredVoices.FindAll(p => p.AllowedGenders.Contains(Constants.GENDERLIST[foundGenderIndex])): filteredVoices.FindAll(p => p.AllowedGenders.Count == 0);
                         UpdateDataVoices = true;
                         resetDataVoices = true;
                     }
@@ -790,8 +777,8 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcRaces", ref filterRaceVoices, 40) || (filterRaceVoices.Length > 0 && UpdateDataVoices))
                     {
-                        var foundRaceIndex = racesList.FindIndex(p => p.ToString().Contains(filterRaceVoices));
-                        filteredVoices = foundRaceIndex >= 0 ? filteredVoices.FindAll(p => p.AllowedRaces.Contains(racesList[foundRaceIndex])) : filteredVoices.FindAll(p => p.AllowedRaces.Count == 0);
+                        var foundRaceIndex = Constants.RACELIST.FindIndex(p => p.ToString().Contains(filterRaceVoices));
+                        filteredVoices = foundRaceIndex >= 0 ? filteredVoices.FindAll(p => p.AllowedRaces.Contains(Constants.RACELIST[foundRaceIndex])) : filteredVoices.FindAll(p => p.AllowedRaces.Count == 0);
                         UpdateDataVoices = true;
                         resetDataVoices = true;
                     }
@@ -849,7 +836,7 @@ public class ConfigWindow : Window, IDisposable
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                         if (ImGui.CollapsingHeader($"Details:##EKVoiceAllowedGenders{voice}"))
                         {
-                            foreach (var gender in gendersList)
+                            foreach (var gender in Constants.GENDERLIST)
                             {
                                 var isAllowed = voice.AllowedGenders.Contains(gender);
                                 if (ImGui.Checkbox($"{gender}##EKVoiceAllowedGender{voice}{gender}", ref isAllowed))
@@ -869,7 +856,7 @@ public class ConfigWindow : Window, IDisposable
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                         if (ImGui.CollapsingHeader($"Details:##EKVoiceAllowedRaces{voice}"))
                         {
-                            foreach (var race in racesList)
+                            foreach (var race in Constants.RACELIST)
                             {
                                 var isAllowed = voice.AllowedRaces.Contains(race);
                                 if (ImGui.Checkbox($"{race}##EKVoiceAllowedRace{voice}{race}", ref isAllowed))
@@ -922,10 +909,11 @@ public class ConfigWindow : Window, IDisposable
             resetData = false;
         }
 
-        if (ImGui.BeginTable($"{dataType} Table##{dataType}Table", 8, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY))
+        if (ImGui.BeginTable($"{dataType} Table##{dataType}Table", 9, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY))
         {
             ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
             ImGui.TableSetupColumn("Lock", ImGuiTableColumnFlags.WidthFixed, 40f);
+            ImGui.TableSetupColumn("Use", ImGuiTableColumnFlags.WidthFixed, 35f);
             ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.WidthFixed, 125);
             ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.WidthFixed, 125);
             ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthFixed, 200);
@@ -934,6 +922,7 @@ public class ConfigWindow : Window, IDisposable
             ImGui.TableSetupColumn($"##{dataType}saves", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25f);
             ImGui.TableSetupColumn($"##{dataType}mapping", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25f);
             ImGui.TableHeadersRow();
+            ImGui.TableNextColumn();
             ImGui.TableNextColumn();
             ImGui.TableNextColumn();
             ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -985,29 +974,35 @@ public class ConfigWindow : Window, IDisposable
                         break;
                     case 1:
                         if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
+                            filteredData.Sort((a, b) => string.Compare(isBubble ? b.IsEnabledBubble.ToString() : b.IsEnabled.ToString(), isBubble ? a.IsEnabledBubble.ToString() : a.IsEnabled.ToString()));
+                        else
+                            filteredData.Sort((a, b) => string.Compare(isBubble ? a.IsEnabledBubble.ToString() : a.IsEnabled.ToString(), isBubble ? b.IsEnabledBubble.ToString() : b.IsEnabled.ToString()));
+                        break;
+                    case 2:
+                        if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
                             filteredData.Sort((a, b) => string.Compare(a.Gender.ToString(), b.Gender.ToString()));
                         else
                             filteredData.Sort((a, b) => string.Compare(b.Gender.ToString(), a.Gender.ToString()));
                         break;
-                    case 2:
+                    case 3:
                         if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
                             filteredData.Sort((a, b) => string.Compare(a.Race.ToString(), b.Race.ToString()));
                         else
                             filteredData.Sort((a, b) => string.Compare(b.Race.ToString(), a.Race.ToString()));
                         break;
-                    case 3:
+                    case 4:
                         if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
                             filteredData.Sort((a, b) => string.Compare(a.Name, b.Name));
                         else
                             filteredData.Sort((a, b) => string.Compare(b.Name, a.Name));
                         break;
-                    case 4:
+                    case 5:
                         if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
                             filteredData.Sort((a, b) => string.Compare(a.Voice?.ToString(), b.Voice?.ToString()));
                         else
                             filteredData.Sort((a, b) => string.Compare(b.Voice?.ToString(), a.Voice?.ToString()));
                         break;
-                    case 5:
+                    case 6:
                         if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
                             filteredData.Sort((a, b) => string.Compare(isBubble ? b.VolumeBubble.ToString() : b.Volume.ToString(), isBubble ? a.VolumeBubble.ToString() : a.Volume.ToString()));
                         else
@@ -1028,6 +1023,16 @@ public class ConfigWindow : Window, IDisposable
                 if (ImGui.Checkbox($"##EKNpcDoNotDelete{mapData.ToString()}", ref doNotDelete))
                 {
                     mapData.DoNotDelete = doNotDelete;
+                    this.Configuration.Save();
+                }
+                ImGui.TableNextColumn();
+                var isEnabled = isBubble ? mapData.IsEnabledBubble : mapData.IsEnabled;
+                if (ImGui.Checkbox($"##EKNpcEnabled{mapData.ToString()}", ref isEnabled))
+                {
+                    if (isBubble)
+                        mapData.IsEnabledBubble = isEnabled;
+                    else
+                        mapData.IsEnabled = isEnabled;
                     this.Configuration.Save();
                 }
                 ImGui.TableNextColumn();
