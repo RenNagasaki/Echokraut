@@ -52,9 +52,9 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 * Open the settings window either via the button or by typing `/ek`
 * In the 'Settings -> Backend' Tab enter the url of your [AllTalk_TTS](https://github.com/erew123/alltalk_tts) instance. (127.0.0.1:7851 should be default)
 * If clicking 'Test Connection' results in `ready` you're set.
-* (Optional) The naming scheme of the voices can be like this: `GENDER_RACE_NAME.wav`. That way the plugin can auto interpret how to use the voice.
+* (Optional) The naming scheme of the voices can be like this: `GENDER_RACES_NAME.wav`. That way the plugin can auto interpret how to use the voice.
   For example: `Male_Hyur_Thancred.wav` for a named NPC
-  and `Male_Hyur_NPC1.wav` for a random Hyur NPC. If more than one NPC voice exists then the plugin selects one randomly the first time you meet a new NPC.
+  and `Male_Hyur-Elezen-Miqote_NPC1.wav` for a random NPC which is from Hyur, Elezen or Miqote race. If more than one NPC voice exists then the plugin selects one randomly the first time you meet a new NPC.
 * There is one exception, the so called narrator voice. It gets used for all dialogues without a speaker and all NPCs where no other voice could be found (last fallback) and should be named `Narrator.wav`.
 * For NPCs with multiple names (Nanamo Ul Namo/Lilira) or same voice actor take a look at this file: [VoiceNames](https://github.com/RenNagasaki/Echokraut/blob/master/Echokraut/Resources/VoiceNamesDE.json) or the one matching your language. If there is no entry for one you're expecting feel free to add a pull request. These files are in the works while people use the plugin. (I can't fill this for other languages)
 * Small example of how the files could be named:
