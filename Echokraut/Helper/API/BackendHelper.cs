@@ -136,20 +136,28 @@ namespace Echokraut.Helper.API
                     if (oldVoice.BackendVoice.Contains("NPC"))
                     {
                         if (oldVoice.AllowedRaces.Count > 0 && NpcDataHelper.IsGenderedRace(oldVoice.AllowedRaces[0]))
-                            newEkVoice = Configuration.EchokrautVoices.Find(
+                        {
+                            var newEkVoices = Configuration.EchokrautVoices.FindAll(
                                 f => !oldVoices.Contains(f) &&
                                      f.VoiceName.Contains("NPC") &&
                                      f.IsChildVoice == oldVoice.IsChildVoice &&
                                      !oldVoice.AllowedGenders.Except(f.AllowedGenders).Any() &&
                                      !oldVoice.AllowedRaces.Except(f.AllowedRaces).Any()
                             );
+                            
+                            newEkVoice = newEkVoices.Count > 0 ? newEkVoices[Rand.Next(0, newEkVoices.Count)] : null;
+                        }
                         else
-                            newEkVoice = Configuration.EchokrautVoices.Find(
+                        {
+                            var newEkVoices = Configuration.EchokrautVoices.FindAll(
                                 f => !oldVoices.Contains(f) &&
                                      f.VoiceName.Contains("NPC") &&
                                      f.IsChildVoice == oldVoice.IsChildVoice &&
                                      !oldVoice.AllowedRaces.Except(f.AllowedRaces).Any()
                             );
+                            
+                            newEkVoice = newEkVoices.Count > 0 ? newEkVoices[Rand.Next(0, newEkVoices.Count)] : null;
+                        }
                     }
                     else
                     {
@@ -158,16 +166,15 @@ namespace Echokraut.Helper.API
                                  f.VoiceName == oldVoice.VoiceName);
                     }
 
+                    NpcDataHelper.MigrateOldData(oldVoice, newEkVoice);
+                    Configuration.EchokrautVoices.Remove(oldVoice);
                     if (newEkVoice != null)
                     {
-                        NpcDataHelper.MigrateOldData(oldVoice, newEkVoice);
-                        Configuration.EchokrautVoices.Remove(oldVoice);
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
                                         $"Replaced {oldVoice} with {newEkVoice}", eventId);
                         continue;
                     }
 
-                    Configuration.EchokrautVoices.Remove(oldVoice);
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Failed to replace {oldVoice}", eventId);
                 }
 

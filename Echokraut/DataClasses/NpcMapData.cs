@@ -17,7 +17,7 @@ namespace Echokraut.DataClasses
         public bool IsChild { get; set; }
 
         public string voice = "";
-        internal EchokrautVoice Voice 
+        internal EchokrautVoice? Voice 
         { 
             get { return NpcDataHelper.GetVoiceByBackendVoice(voice); }
             set { voice = value != null ? value.BackendVoice : string.Empty; }

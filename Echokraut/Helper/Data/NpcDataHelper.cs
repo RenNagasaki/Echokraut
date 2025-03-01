@@ -86,7 +86,7 @@ namespace Echokraut.Helper.Data
             }
         }
 
-        public static void MigrateOldData(EchokrautVoice oldVoice = null, EchokrautVoice newEKVoice = null)
+        public static void MigrateOldData(EchokrautVoice? oldVoice = null, EchokrautVoice? newEkVoice = null)
         {
             if (oldVoice == null)
             {
@@ -126,32 +126,60 @@ namespace Echokraut.Helper.Data
                     Configuration.Save();
                 }
             }
-            else
+            else 
             {
                 var oldPlayerMapData = Configuration.MappedPlayers.FindAll(p => p.Voice == oldVoice);
                 var oldNpcMapData = Configuration.MappedNpcs.FindAll(p => p.Voice == oldVoice);
 
                 if (oldPlayerMapData.Count > 0 || oldNpcMapData.Count > 0)
                 {
-                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Migrating old npcdata from {oldVoice} to {newEKVoice}",
-                                   new EKEventId(0, TextSource.None));
-
-                    foreach (var player in oldPlayerMapData)
+                    if (newEkVoice != null)
                     {
-                        player.Voice = newEKVoice;
+                        LogHelper.Info(MethodBase.GetCurrentMethod().Name,
+                                       $"Migrating old npcdata from {oldVoice} to {newEkVoice}",
+                                       new EKEventId(0, TextSource.None));
 
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
-                                        $"Migrated player {player.Name} from -> {oldVoice} to -> {newEKVoice}",
-                                        new EKEventId(0, TextSource.None));
+                        foreach (var player in oldPlayerMapData)
+                        {
+                            player.Voice = newEkVoice;
+
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                            $"Migrated player {player.Name} from -> {oldVoice} to -> {newEkVoice}",
+                                            new EKEventId(0, TextSource.None));
+                        }
+
+                        foreach (var npc in oldNpcMapData)
+                        {
+                            npc.Voice = newEkVoice;
+
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                            $"Migrated npc {npc.Name} from -> {oldVoice} to -> {newEkVoice}",
+                                            new EKEventId(0, TextSource.None));
+                        }
                     }
-
-                    foreach (var npc in oldNpcMapData)
+                    else
                     {
-                        npc.Voice = newEKVoice;
+                        LogHelper.Info(MethodBase.GetCurrentMethod().Name,
+                                       $"Migrating old npcdata from {oldVoice} to NO VOICE",
+                                       new EKEventId(0, TextSource.None));
 
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
-                                        $"Migrated npc {npc.Name} from -> {oldVoice} to -> {newEKVoice}",
-                                        new EKEventId(0, TextSource.None));
+                        foreach (var player in oldPlayerMapData)
+                        {
+                            player.Voice = null;
+
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                            $"Migrated player {player.Name} from -> {oldVoice} to -> NO VOICE",
+                                            new EKEventId(0, TextSource.None));
+                        }
+
+                        foreach (var npc in oldNpcMapData)
+                        {
+                            npc.Voice = null;
+
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                            $"Migrated npc {npc.Name} from -> {oldVoice} to -> NO VOICE",
+                                            new EKEventId(0, TextSource.None));
+                        }
                     }
 
                     Configuration.Save();
