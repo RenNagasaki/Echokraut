@@ -27,7 +27,8 @@ namespace Echokraut.DataClasses
                 if (string.IsNullOrWhiteSpace(voiceNameShort))
                 {
                     var voiceNameArr = voiceName.Split('_');
-                    voiceNameShort = voiceNameArr[voiceNameArr.Length - 1];
+                    if (voiceNameArr.Length > 0)
+                        voiceNameShort = voiceNameArr[voiceNameArr.Length - 1];
                 }
                 
                 return voiceNameShort;
@@ -68,6 +69,12 @@ namespace Echokraut.DataClasses
                    ((isGenderedRace && AllowedGenders.Contains(gender)) || !isGenderedRace) && 
                     AllowedRaces.Contains(race) &&
                     IsChildVoice == isChild;
+        }
+
+        public bool IsSelectable(Genders gender, NpcRaces race, bool isChild)
+        {
+            return IsDefault || (IsEnabled && AllowedGenders.Contains(gender) && AllowedRaces.Contains(race) &&
+                                 IsChildVoice == isChild);
         }
     }
 }

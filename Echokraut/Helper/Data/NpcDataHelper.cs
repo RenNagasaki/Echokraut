@@ -197,8 +197,8 @@ namespace Echokraut.Helper.Data
         {
             try
             {
-                Configuration.MappedNpcs.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 300, Configuration.EchokrautVoices.FindAll(f => f.IsDefault || (f.IsEnabled && f.AllowedGenders.Contains(p.Gender) && f.AllowedRaces.Contains(p.Race))), g => g.ToString()));
-                Configuration.MappedPlayers.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 300, Configuration.EchokrautVoices.FindAll(f => f.IsDefault || (f.IsEnabled && f.AllowedGenders.Contains(p.Gender) && f.AllowedRaces.Contains(p.Race))), g => g.ToString()));
+                Configuration.MappedNpcs.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 300, Configuration.EchokrautVoices.FindAll(f => f.IsSelectable(p.Gender, p.Race, p.IsChild)), g => g.VoiceName));
+                Configuration.MappedPlayers.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 300, Configuration.EchokrautVoices.FindAll(f => f.IsSelectable(p.Gender, p.Race, p.IsChild)), g => g.VoiceName));
             }
             catch (Exception ex)
             {

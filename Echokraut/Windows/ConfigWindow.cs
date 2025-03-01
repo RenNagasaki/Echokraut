@@ -1217,7 +1217,7 @@ public class ConfigWindow : Window, IDisposable
 
                 if (mapData.voicesSelectable.Draw(mapData.Voice?.ToString() ?? "", out var selectedIndexVoice))
                 {
-                    var newVoiceItem = Configuration.EchokrautVoices.FindAll(f => f.IsDefault || (f.IsEnabled && f.AllowedGenders.Contains(mapData.Gender) && f.AllowedRaces.Contains(mapData.Race)))[selectedIndexVoice];
+                    var newVoiceItem = Configuration.EchokrautVoices.FindAll(f => f.IsSelectable(mapData.Gender, mapData.Race, mapData.IsChild))[selectedIndexVoice];
 
                     if (newVoiceItem != null)
                     {

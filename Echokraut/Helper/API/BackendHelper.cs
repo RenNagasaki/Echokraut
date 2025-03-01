@@ -133,27 +133,29 @@ namespace Echokraut.Helper.API
                 {
                     EchokrautVoice? newEkVoice = null;
 
-                    if (oldVoice.AllowedRaces.Count > 0 && NpcDataHelper.IsGenderedRace(oldVoice.AllowedRaces[0]))
-                        newEkVoice = Configuration.EchokrautVoices.Find(
-                            f => !oldVoices.Contains(f) &&
-                                 f.VoiceName.Contains("NPC") &&
-                                 !oldVoice.AllowedGenders.Except(f.AllowedGenders).Any() &&
-                                 !oldVoice.AllowedRaces.Except(f.AllowedRaces).Any()
-                        );
-                    else
-                        newEkVoice = Configuration.EchokrautVoices.Find(
-                            f => !oldVoices.Contains(f) &&
-                                 f.VoiceName.Contains("NPC") &&
-                                 !oldVoice.AllowedRaces.Except(f.AllowedRaces).Any()
-                        );
-
-                    foreach (var newVoice in Configuration.EchokrautVoices)
+                    if (oldVoice.BackendVoice.Contains("NPC"))
                     {
-                        if (oldVoices.Contains(newVoice)) continue;
-                        if (!newVoice.VoiceName.Contains("NPC")) continue;
-                        
-                        var res = oldVoice.AllowedRaces.Except(newVoice.AllowedRaces);
-                        //LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Res Races {res.Count()} for {oldVoice} - {oldVoice.BackendVoice} - {newVoice.BackendVoice}", eventId);
+                        if (oldVoice.AllowedRaces.Count > 0 && NpcDataHelper.IsGenderedRace(oldVoice.AllowedRaces[0]))
+                            newEkVoice = Configuration.EchokrautVoices.Find(
+                                f => !oldVoices.Contains(f) &&
+                                     f.VoiceName.Contains("NPC") &&
+                                     f.IsChildVoice == oldVoice.IsChildVoice &&
+                                     !oldVoice.AllowedGenders.Except(f.AllowedGenders).Any() &&
+                                     !oldVoice.AllowedRaces.Except(f.AllowedRaces).Any()
+                            );
+                        else
+                            newEkVoice = Configuration.EchokrautVoices.Find(
+                                f => !oldVoices.Contains(f) &&
+                                     f.VoiceName.Contains("NPC") &&
+                                     f.IsChildVoice == oldVoice.IsChildVoice &&
+                                     !oldVoice.AllowedRaces.Except(f.AllowedRaces).Any()
+                            );
+                    }
+                    else
+                    {
+                        newEkVoice = Configuration.EchokrautVoices.Find(
+                            f => !oldVoices.Contains(f) &&
+                                 f.VoiceName == oldVoice.VoiceName);
                     }
 
                     if (newEkVoice != null)
