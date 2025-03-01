@@ -21,36 +21,141 @@ namespace Echokraut.Helper.Data
             Configuration = configuration;
         }
 
-        public static void MigrateOldData()
+        public static bool IsGenderedRace(NpcRaces race)
         {
-            var oldPlayerMapData = Configuration.MappedPlayers.FindAll(p => p.voiceItem != null);
-            var oldNpcMapData = Configuration.MappedNpcs.FindAll(p => p.voiceItem != null);
+            if (((int)race > 0 && (int)race < 9) || JsonLoaderHelper.ModelGenderMap.Find(p => p.race == race) != null)
+                return true;
+                
+            return false;
+        }
 
-            if (oldPlayerMapData.Count > 0 || oldNpcMapData.Count > 0)
+        public static void ReSetVoiceRaces(EchokrautVoice voice, EKEventId? eventId = null)
+        {
+            if (eventId == null)
+                eventId = new EKEventId(0, TextSource.None);
+            
+            voice.AllowedRaces.Clear();
+            string[] splitVoice = voice.voiceName.Split('_');
+
+            if (splitVoice.Length == 3)
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Migrating old npcdata", new EKEventId(0, TextSource.None));
-
-                foreach (var player in oldPlayerMapData)
+                var racesStr = splitVoice[1];
+                var raceStrArr = racesStr.Split('-');
+                foreach (var raceStr in raceStrArr)
                 {
-                    player.Voice = Configuration.EchokrautVoices.Find(p => p.BackendVoice == player.voiceItem.voice);
-
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Migrated old npcdata from -> {player.voiceItem} to -> {player.Voice}", new EKEventId(0, TextSource.None));
-
-                    if (player.Voice != null)
-                        player.voiceItem = null;
+                    if (Enum.TryParse(typeof(NpcRaces), raceStr, true, out object? race))
+                    {
+                        voice.AllowedRaces.Add((NpcRaces)race);
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found {race} race", eventId);
+                    }
+                    else if (raceStr.Equals("Child", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        voice.IsChildVoice = true;
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found Child option", eventId);
+                    }
+                    else if (raceStr.Equals("All", StringComparison.InvariantCultureIgnoreCase))
+                    {
+                        foreach (var raceObj in Constants.RACELIST)
+                        {
+                            voice.AllowedRaces.Add(raceObj);
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found {raceObj} race", eventId);
+                        }
+                    }
+                    else
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Did not Find race", eventId);
                 }
+            }
+        }
 
-                foreach (var npc in oldNpcMapData)
+        public static void ReSetVoiceGenders(EchokrautVoice voice, EKEventId? eventId = null)
+        {
+            if (eventId == null)
+                eventId = new EKEventId(0, TextSource.None);
+            
+            voice.AllowedGenders.Clear();
+            string[] splitVoice = voice.voiceName.Split('_');
+
+            if (splitVoice.Length == 3)
+            {
+                var genderStr = splitVoice[0];
+                if (Enum.TryParse(typeof(Genders), genderStr, true, out object? gender))
                 {
-                    npc.Voice = Configuration.EchokrautVoices.Find(p => p.BackendVoice == npc.voiceItem.voice);
-
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Migrated old npcdata from -> {npc.voiceItem} to -> {npc.Voice}", new EKEventId(0, TextSource.None));
-
-                    if (npc.Voice != null)
-                        npc.voiceItem = null;
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found {gender} gender", eventId);
+                    voice.AllowedGenders.Add((Genders)gender);
                 }
+            }
+        }
 
-                Configuration.Save();
+        public static void MigrateOldData(EchokrautVoice oldVoice = null, EchokrautVoice newEKVoice = null)
+        {
+            if (oldVoice == null)
+            {
+                var oldPlayerMapData = Configuration.MappedPlayers.FindAll(p => p.voiceItem != null);
+                var oldNpcMapData = Configuration.MappedNpcs.FindAll(p => p.voiceItem != null);
+
+                if (oldPlayerMapData.Count > 0 || oldNpcMapData.Count > 0)
+                {
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Migrating old npcdata",
+                                   new EKEventId(0, TextSource.None));
+
+                    foreach (var player in oldPlayerMapData)
+                    {
+                        player.Voice =
+                            Configuration.EchokrautVoices.Find(p => p.BackendVoice == player.voiceItem.Voice);
+
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                        $"Migrated player {player.Name} from -> {player.voiceItem} to -> {player.Voice}",
+                                        new EKEventId(0, TextSource.None));
+
+                        if (player.Voice != null)
+                            player.voiceItem = null;
+                    }
+
+                    foreach (var npc in oldNpcMapData)
+                    {
+                        npc.Voice = Configuration.EchokrautVoices.Find(p => p.BackendVoice == npc.voiceItem.Voice);
+
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                        $"Migrated npc {npc.Name} from -> {npc.voiceItem} to -> {npc.Voice}",
+                                        new EKEventId(0, TextSource.None));
+
+                        if (npc.Voice != null)
+                            npc.voiceItem = null;
+                    }
+
+                    Configuration.Save();
+                }
+            }
+            else
+            {
+                var oldPlayerMapData = Configuration.MappedPlayers.FindAll(p => p.Voice == oldVoice);
+                var oldNpcMapData = Configuration.MappedNpcs.FindAll(p => p.Voice == oldVoice);
+
+                if (oldPlayerMapData.Count > 0 || oldNpcMapData.Count > 0)
+                {
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Migrating old npcdata from {oldVoice} to {newEKVoice}",
+                                   new EKEventId(0, TextSource.None));
+
+                    foreach (var player in oldPlayerMapData)
+                    {
+                        player.Voice = newEKVoice;
+
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                        $"Migrated player {player.Name} from -> {oldVoice} to -> {newEKVoice}",
+                                        new EKEventId(0, TextSource.None));
+                    }
+
+                    foreach (var npc in oldNpcMapData)
+                    {
+                        npc.Voice = newEKVoice;
+
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                        $"Migrated npc {npc.Name} from -> {oldVoice} to -> {newEKVoice}",
+                                        new EKEventId(0, TextSource.None));
+                    }
+
+                    Configuration.Save();
+                }
             }
         }
 

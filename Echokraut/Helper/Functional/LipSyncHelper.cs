@@ -22,6 +22,7 @@ using Echokraut.Helper.Data;
 using Lumina.Excel.Sheets;
 using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using System.Globalization;
+using Dalamud.Game.ClientState.Conditions;
 
 namespace Echokraut.Helper.Functional
 {
@@ -30,16 +31,17 @@ namespace Echokraut.Helper.Functional
         private readonly IObjectTable objects;
         private readonly IClientState clientState;
         private readonly Configuration config;
-        private MemoryService _memoryService;
-        private AnimationService _animationService;
-        private GameDataService _gameDataService;
-        private Character currentLipsync;
-        private ActorMemory.CharacterModes currentIntialState;
-        Dictionary<string, CancellationTokenSource> taskCancellations = new Dictionary<string, CancellationTokenSource>();
+        private readonly ICondition condition;
+        private MemoryService memoryService;
+        private AnimationService animationService;
+        private GameDataService gameDataService;
+        private IGameObject? currentLipsync;
+        private readonly Dictionary<string, CancellationTokenSource> taskCancellations = new Dictionary<string, CancellationTokenSource>();
         public List<ActionTimeline> LipSyncTypes { get; private set; }
 
-        public LipSyncHelper(IClientState clientState, IObjectTable objects, Configuration config, EKEventId eventId)
+        public LipSyncHelper(ICondition condition, IClientState clientState, IObjectTable objects, Configuration config, EKEventId eventId)
         {
+            this.condition = condition;
             this.clientState = clientState;
             this.config = config;
             this.objects = objects;
@@ -51,17 +53,15 @@ namespace Echokraut.Helper.Functional
             });
         }
 
-        public async void TriggerLipSync(EKEventId eventId, string npcName, float length, IGameObject npc = null)
+        public async void TriggerLipSync(EKEventId eventId, string npcName, float length, IGameObject? npc = null)
         {
-
-
-            if (Conditions.IsBoundByDuty && !Conditions.IsWatchingCutscene) return;
+            if (condition[ConditionFlag.BoundByDuty] && !condition[ConditionFlag.WatchingCutscene]) return;
             if (!config.Enabled) return;
 
             var npcObject = npc ?? DiscoverNpc(npcName);
 
-            ActorMemory actorMemory = null;
-            AnimationMemory animationMemory = null;
+            ActorMemory? actorMemory = null;
+            AnimationMemory? animationMemory = null;
             if (npcObject != null)
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Starting LipSync", eventId);
@@ -99,6 +99,7 @@ namespace Echokraut.Helper.Functional
                 {
                     var cts = new CancellationTokenSource();
                     taskCancellations.Add(npcObject.ToString(), cts);
+                    currentLipsync = npcObject;
                     var token = cts.Token;
 
                     Task task = Task.Run(async () => {
@@ -212,7 +213,7 @@ namespace Echokraut.Helper.Functional
         {
             try
             {
-                if (Conditions.IsBoundByDuty) return;
+                if (condition[ConditionFlag.BoundByDuty]) return;
                 if (!config.Enabled) return;
                 if (currentLipsync == null) return;
 
@@ -235,9 +236,10 @@ namespace Echokraut.Helper.Functional
                 actorMemory.SetAddress(currentLipsync.Address);
                 var animationMemory = actorMemory.Animation;
                 animationMemory.LipsOverride = 0;
-                MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), currentIntialState, "Animation Mode Override");
+                MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), 0, "Animation Mode Override");
                 MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
                 taskCancellations.Remove(currentLipsync.ToString());
+                currentLipsync = null;
             }
             catch (Exception ex)
             {
@@ -256,9 +258,9 @@ namespace Echokraut.Helper.Functional
         private void InitializeServices()
         {
             // Initialize all services that depend on the game process
-            _memoryService = new MemoryService();
-            _gameDataService = new GameDataService();
-            _animationService = new AnimationService();
+            memoryService = new MemoryService();
+            gameDataService = new GameDataService();
+            animationService = new AnimationService();
             StartServices();
         }
 
@@ -273,18 +275,18 @@ namespace Echokraut.Helper.Functional
 
         private async void StartServices()
         {
-            await _memoryService.Initialize();
+            await memoryService.Initialize();
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StartServices --> Waiting for Process Response", new EKEventId(0, Enums.TextSource.None));
             while (!Process.GetCurrentProcess().Responding)
                 await Task.Delay(100);
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StartServices --> Done waiting", new EKEventId(0, Enums.TextSource.None));
-            await _memoryService.OpenProcess(Process.GetCurrentProcess());
-            await _gameDataService.Initialize();
+            await memoryService.OpenProcess(Process.GetCurrentProcess());
+            await gameDataService.Initialize();
 
             //LipSyncTypes = GenerateLipList().ToList();
-            await _animationService.Initialize();
-            await _animationService.Start();
-            await _memoryService.Start();
+            await animationService.Initialize();
+            await animationService.Start();
+            await memoryService.Start();
         }
 
         //private IEnumerable<ActionTimeline> GenerateLipList()
@@ -329,7 +331,7 @@ namespace Echokraut.Helper.Functional
             return 404;
         }
 
-        private IGameObject DiscoverNpc(string npcName)
+        private IGameObject? DiscoverNpc(string npcName)
         {
             if (npcName == "???")
             {

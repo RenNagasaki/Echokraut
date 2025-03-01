@@ -86,14 +86,14 @@ public partial class Echokraut : IDalamudPlugin
         this.ConfigWindow = new ConfigWindow(this, Configuration, this.ClientState, this.PluginInterface);
 
         LogHelper.Setup(log, Configuration);
+        JsonLoaderHelper.Setup(this.ClientState.ClientLanguage);
         DetectLanguageHelper.Setup(Configuration, clientState);
         NpcDataHelper.Setup(Configuration);
         LuminaHelper.Setup(clientState, dataManager);
         BackendHelper.Setup(this, Configuration, clientState, framework, Configuration.BackendSelection);
-        JsonLoaderHelper.Setup(this.ClientState.ClientLanguage);
         VolumeHelper.Setup(gameConfig);
         CommandHelper.Setup(Configuration, chatGui, clientState, dataManager, commandManager, condition, ConfigWindow);
-        this.lipSyncHelper = new LipSyncHelper(clientState, objectTable, Configuration, new EKEventId(0, Enums.TextSource.None));
+        this.lipSyncHelper = new LipSyncHelper(condition, clientState, objectTable, Configuration, new EKEventId(0, Enums.TextSource.None));
         this.addonTalkHelper = new AddonTalkHelper(this, condition, addonLifecycle, clientState, objectTable, Configuration);
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, addonLifecycle, clientState, objectTable, Configuration);
         this.addonSelectStringHelper = new AddonSelectStringHelper(this, addonLifecycle, clientState, objectTable, condition, Configuration);
@@ -198,6 +198,12 @@ public partial class Echokraut : IDalamudPlugin
             Configuration.Save();
 
             npcData = resNpcData;
+            
+            if (speaker != null && (source == TextSource.AddonBubble || source == TextSource.AddonTalk || source == TextSource.AddonBattleTalk))
+            {
+                npcData.IsChild = LuminaHelper.GetENpcBase(speaker.DataId)?.BodyType == 4;
+                Configuration.Save();
+            }
 
             if (npcData.ObjectKind != objectKind && objectKind != ObjectKind.None)
             {

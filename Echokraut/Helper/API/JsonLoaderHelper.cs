@@ -44,7 +44,7 @@ namespace Echokraut.Helper.API
                 reply = request.GetResponse();
                 var returninfo = new StreamReader(reply.GetResponseStream());
                 var json = returninfo.ReadToEnd();
-                if (json == null)
+                if (string.IsNullOrWhiteSpace(json))
                 {
                     ModelsToRaceMap = new Dictionary<int, NpcRaces>();
                     LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Failed to load npc race maps.", new EKEventId(0, TextSource.None));
@@ -68,7 +68,7 @@ namespace Echokraut.Helper.API
                 reply = request.GetResponse();
                 var returninfo = new StreamReader(reply.GetResponseStream());
                 var json = returninfo.ReadToEnd();
-                if (json == null)
+                if (string.IsNullOrWhiteSpace(json))
                 {
                     ModelGenderMap = new List<NpcGenderRaceMap>();
                     LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Failed to load npc gender maps.", new EKEventId(0, TextSource.None));

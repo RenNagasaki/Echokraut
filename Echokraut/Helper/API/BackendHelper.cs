@@ -9,6 +9,7 @@ using ManagedBass;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
@@ -100,34 +101,72 @@ namespace Echokraut.Helper.API
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Adding {newVoices.Count} new Voices", eventId);
                 foreach (var newVoice in newVoices)
                 {
-                    var newEKVoice = new EchokrautVoice()
+                    var voiceName = Path.GetFileNameWithoutExtension(newVoice);
+                    var newEkVoice = new EchokrautVoice()
                     {
                         BackendVoice = newVoice,
-                        VoiceName = Path.GetFileNameWithoutExtension(newVoice),
+                        VoiceName = voiceName,
                         Volume = 1,
                         AllowedGenders = new List<Genders>(),
                         AllowedRaces = new List<NpcRaces>(),
-                        IsDefault = newVoice.Equals(Constants.NARRATORVOICE, StringComparison.OrdinalIgnoreCase)
+                        IsDefault = newVoice.Equals(Constants.NARRATORVOICE, StringComparison.OrdinalIgnoreCase),
+                        UseAsRandom = voiceName.Contains("NPC")
                     };
 
-                    string[] splitVoice = newEKVoice.VoiceName.Split('_');
+                    NpcDataHelper.ReSetVoiceGenders(newEkVoice, eventId);
+                    NpcDataHelper.ReSetVoiceRaces(newEkVoice, eventId);
 
-                    if (splitVoice.Length == 3)
+                    Configuration.EchokrautVoices.Add(newEkVoice);
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Added {newEkVoice}", eventId);
+                }
+
+                Configuration.Save();
+            }
+
+            var oldVoices =
+                Configuration.EchokrautVoices.FindAll(p => backendVoices.Find(f => f == p.BackendVoice) == null);
+            
+            if (oldVoices.Count > 0)
+            {
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Replacing {oldVoices.Count} old Voices", eventId);
+                foreach (var oldVoice in oldVoices)
+                {
+                    EchokrautVoice? newEkVoice = null;
+
+                    if (oldVoice.AllowedRaces.Count > 0 && NpcDataHelper.IsGenderedRace(oldVoice.AllowedRaces[0]))
+                        newEkVoice = Configuration.EchokrautVoices.Find(
+                            f => !oldVoices.Contains(f) &&
+                                 f.VoiceName.Contains("NPC") &&
+                                 !oldVoice.AllowedGenders.Except(f.AllowedGenders).Any() &&
+                                 !oldVoice.AllowedRaces.Except(f.AllowedRaces).Any()
+                        );
+                    else
+                        newEkVoice = Configuration.EchokrautVoices.Find(
+                            f => !oldVoices.Contains(f) &&
+                                 f.VoiceName.Contains("NPC") &&
+                                 !oldVoice.AllowedRaces.Except(f.AllowedRaces).Any()
+                        );
+
+                    foreach (var newVoice in Configuration.EchokrautVoices)
                     {
-                        var genderStr = splitVoice[0];
-                        var raceStr = splitVoice[1];
-                        if (Enum.TryParse(typeof(Genders), genderStr, true, out object? gender))
-                        {
-                            if (Enum.TryParse(typeof(NpcRaces), raceStr, true, out object? race))
-                            {
-                                newEKVoice.AllowedGenders.Add((Genders)gender);
-                                newEKVoice.AllowedRaces.Add((NpcRaces)race);
-                            }
-                        }
+                        if (oldVoices.Contains(newVoice)) continue;
+                        if (!newVoice.VoiceName.Contains("NPC")) continue;
+                        
+                        var res = oldVoice.AllowedRaces.Except(newVoice.AllowedRaces);
+                        //LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Res Races {res.Count()} for {oldVoice} - {oldVoice.BackendVoice} - {newVoice.BackendVoice}", eventId);
                     }
 
-                    Configuration.EchokrautVoices.Add(newEKVoice);
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Added {newEKVoice}", eventId);
+                    if (newEkVoice != null)
+                    {
+                        NpcDataHelper.MigrateOldData(oldVoice, newEkVoice);
+                        Configuration.EchokrautVoices.Remove(oldVoice);
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                        $"Replaced {oldVoice} with {newEkVoice}", eventId);
+                        continue;
+                    }
+
+                    Configuration.EchokrautVoices.Remove(oldVoice);
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Failed to replace {oldVoice}", eventId);
                 }
 
                 Configuration.Save();
@@ -219,6 +258,7 @@ namespace Echokraut.Helper.API
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Searching voice: {npcData.Voice?.VoiceName ?? ""} for NPC: {npcData.Name}", eventId);
             var voiceItem = npcData.Voice;
+            var isChild = npcData.IsChild;
             var mappedList = npcData.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? Configuration.MappedPlayers : Configuration.MappedNpcs;
 
             if (voiceItem == null || voiceItem == Configuration.EchokrautVoices.Find(p => p.IsDefault))
@@ -233,8 +273,9 @@ namespace Echokraut.Helper.API
 
                 if (voiceItem == null)
                 {
-                    voiceItems = Configuration.EchokrautVoices.FindAll(p => p.IsEnabled && p.AllowedGenders.Contains(npcData.Gender) && p.AllowedRaces.Contains(npcData.Race));
-
+                    var isGenderedRace = NpcDataHelper.IsGenderedRace(npcData.Race);
+                        voiceItems = Configuration.EchokrautVoices.FindAll(p => p.FitsNpcData(npcData.Gender, npcData.Race, isChild, isGenderedRace));
+                        
                     if (voiceItems.Count > 0)
                     {
                         var randomVoice = voiceItems[Rand.Next(0, voiceItems.Count)];

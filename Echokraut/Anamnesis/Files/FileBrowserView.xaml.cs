@@ -24,8 +24,6 @@ public partial class FileBrowserView : FileBrowserDrawer
 	private static Sort sortMode;
 
 	private readonly Modes mode;
-	private readonly IEnumerable<FileFilter> filters;
-	private bool updatingEntries = false;
 
 	public FileBrowserView(Shortcut[] shortcuts, IEnumerable<FileFilter> filters, DirectoryInfo? defaultDir, string? defaultName, Modes mode)
 	{
@@ -76,7 +74,6 @@ public partial class FileBrowserView : FileBrowserDrawer
 		this.CurrentDir = defaultDir;
 
 		this.mode = mode;
-		this.filters = filters;
 
 
 

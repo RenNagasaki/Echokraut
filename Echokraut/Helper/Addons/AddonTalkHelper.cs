@@ -18,6 +18,7 @@ using Echokraut.Helper.DataHelper;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace Echokraut.Helper.Addons;
 
@@ -25,7 +26,6 @@ public class AddonTalkHelper
 {
     private record struct AddonTalkState(string? Speaker, string? Text);
 
-    private OnUpdateDelegate updateHandler;
     private readonly ICondition condition;
     private readonly IAddonLifecycle addonLifecycle;
     private readonly IClientState clientState;
@@ -64,8 +64,11 @@ public class AddonTalkHelper
         if (!configuration.Enabled) return;
         if (args is not AddonReceiveEventArgs receiveEventArgs) return;
 
-        // Notify observers that the addon state was advanced
-        echokraut.Cancel(new EKEventId(0, TextSource.AddonTalk));
+        if ((receiveEventArgs.AtkEventType == (byte)AtkEventType.MouseClick || receiveEventArgs.AtkEventType == (byte)AtkEventType.InputReceived) && receiveEventArgs.EventParam == 0)
+        {
+            // Notify observers that the addon state was advanced
+            echokraut.Cancel(new EKEventId(0, TextSource.AddonTalk));
+        }
     }
 
     private unsafe void OnPostUpdate(AddonEvent type, AddonArgs args)

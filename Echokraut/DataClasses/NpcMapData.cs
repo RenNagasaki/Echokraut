@@ -13,6 +13,8 @@ namespace Echokraut.DataClasses
         public NpcRaces Race { get; set; }
         public string RaceStr { get; set; }
         public Genders Gender { get; set; }
+        
+        public bool IsChild { get; set; }
 
         public string voice = "";
         internal EchokrautVoice Voice 

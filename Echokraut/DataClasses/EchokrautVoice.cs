@@ -10,11 +10,30 @@ namespace Echokraut.DataClasses
 {
     public class EchokrautVoice
     {
-        public bool IsDefault { get; set; } = false;
+        public bool IsDefault { get; set; }
         public bool IsEnabled { get; set; } = true;
+        public bool UseAsRandom { get; set; }
+        public bool IsChildVoice { get; set; }
         public float Volume { get; set; } = 1f;
-        public string BackendVoice { get; set; }
-        public string? VoiceName { get; set; }
+        public string BackendVoice { get; set; } = "";
+        
+        public string voiceName { get; set; } = "";
+        
+        private string voiceNameShort { get; set; } = "";
+        internal string VoiceName
+        {
+            get
+            {
+                if (string.IsNullOrWhiteSpace(voiceNameShort))
+                {
+                    var voiceNameArr = voiceName.Split('_');
+                    voiceNameShort = voiceNameArr[voiceNameArr.Length - 1];
+                }
+                
+                return voiceNameShort;
+            }
+            set { voiceName = value; }
+        }
 
         public List<Genders> AllowedGenders { get; set; } = new List<Genders>();
 
@@ -22,7 +41,7 @@ namespace Echokraut.DataClasses
 
         public override string ToString()
         {
-            return $"{VoiceName}";
+            return $"{voiceName}";
         }
         public override bool Equals(object obj)
         {
@@ -40,6 +59,15 @@ namespace Echokraut.DataClasses
         {
             var otherObj = ((EchokrautVoice)obj);
             return otherObj.ToString().ToLower().CompareTo(ToString().ToLower());
+        }
+
+        public bool FitsNpcData(Genders gender, NpcRaces race, bool isChild, bool isGenderedRace)
+        {
+            return IsEnabled && 
+                   UseAsRandom && 
+                   ((isGenderedRace && AllowedGenders.Contains(gender)) || !isGenderedRace) && 
+                    AllowedRaces.Contains(race) &&
+                    IsChildVoice == isChild;
         }
     }
 }

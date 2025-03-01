@@ -16,10 +16,12 @@ using FFXIVClientStructs.FFXIV.Client.Game;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using Dalamud.Game.ClientState.Objects.SubKinds;
+using Dalamud.Interface.Utility.Table;
 using Dalamud.Plugin;
 using Echokraut.Helper.API;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
+using Table = OtterGui.Table.Table;
 
 namespace Echokraut.Windows;
 
@@ -58,7 +60,6 @@ public class ConfigWindow : Window, IDisposable
     private string filterGenderVoices = "";
     private string filterRaceVoices = "";
     private string filterNameVoices = "";
-    private string filterVoices = "";
     #endregion
     #region Logs
     private List<LogMessage> filteredLogsGeneral;
@@ -741,15 +742,16 @@ public class ConfigWindow : Window, IDisposable
 
             if (ImGui.BeginChild("VoicesChild"))
             {
-                if (ImGui.BeginTable("Voice Table##VoiceTable", 7, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY))
+                if (ImGui.BeginTable("Voice Table##VoiceTable", 8, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY))
                 {
                     ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
                     ImGui.TableSetupColumn("##Play", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
                     ImGui.TableSetupColumn("##Stop", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
                     ImGui.TableSetupColumn("Use##Enabled", ImGuiTableColumnFlags.WidthFixed, 35);
                     ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthFixed, 200);
+                    ImGui.TableSetupColumn("Options##Enabled", ImGuiTableColumnFlags.WidthFixed, 120);
                     ImGui.TableSetupColumn("Genders", ImGuiTableColumnFlags.WidthFixed, 100);
-                    ImGui.TableSetupColumn("Races", ImGuiTableColumnFlags.WidthFixed, 100);
+                    ImGui.TableSetupColumn("Races", ImGuiTableColumnFlags.WidthFixed, 320);
                     ImGui.TableSetupColumn("Volume", ImGuiTableColumnFlags.WidthStretch, 200);
                     ImGui.TableHeadersRow();
                     ImGui.TableNextRow();
@@ -765,6 +767,7 @@ public class ConfigWindow : Window, IDisposable
                         resetDataVoices = true;
                     }
                     ImGui.TableNextColumn();
+                    ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcGenders", ref filterGenderVoices, 40) || (filterGenderVoices.Length > 0 && UpdateDataVoices))
                     {
@@ -777,7 +780,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKFilterNpcRaces", ref filterRaceVoices, 40) || (filterRaceVoices.Length > 0 && UpdateDataVoices))
                     {
-                        var foundRaceIndex = Constants.RACELIST.FindIndex(p => p.ToString().Contains(filterRaceVoices));
+                        var foundRaceIndex = Constants.RACELIST.FindIndex(p => p.ToString().Contains(filterRaceVoices, StringComparison.OrdinalIgnoreCase));
                         filteredVoices = foundRaceIndex >= 0 ? filteredVoices.FindAll(p => p.AllowedRaces.Contains(Constants.RACELIST[foundRaceIndex])) : filteredVoices.FindAll(p => p.AllowedRaces.Count == 0);
                         UpdateDataVoices = true;
                         resetDataVoices = true;
@@ -798,6 +801,24 @@ public class ConfigWindow : Window, IDisposable
                                     filteredVoices.Sort((a, b) => string.Compare(a.VoiceName, b.VoiceName));
                                 else
                                     filteredVoices.Sort((a, b) => string.Compare(b.VoiceName, a.VoiceName));
+                                break;
+                            case 4:
+                                if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
+                                    filteredVoices.Sort((a, b) => string.Compare(b.UseAsRandom.ToString(), a.UseAsRandom.ToString()));
+                                else
+                                    filteredVoices.Sort((a, b) => string.Compare(a.UseAsRandom.ToString(), b.UseAsRandom.ToString()));
+                                break;
+                            case 5:
+                                if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
+                                    filteredVoices.Sort((a, b) => string.Compare(string.Join( ",", a.AllowedGenders.OrderBy(p => p.ToString()).ToArray()), string.Join( ",", b.AllowedGenders.OrderBy(p => p.ToString()).ToArray())));
+                                else
+                                    filteredVoices.Sort((a, b) => string.Compare(string.Join( ",", b.AllowedGenders.OrderBy(p => p.ToString()).ToArray()), string.Join( ",", a.AllowedGenders.OrderBy(p => p.ToString()).ToArray())));
+                                break;
+                            case 6:
+                                if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
+                                    filteredVoices.Sort((a, b) => string.Compare(string.Join( ",", a.AllowedRaces.OrderBy(p => p.ToString()).ToArray()), string.Join( ",", b.AllowedRaces.OrderBy(p => p.ToString()).ToArray())));
+                                else
+                                    filteredVoices.Sort((a, b) => string.Compare(string.Join( ",", b.AllowedRaces.OrderBy(p => p.ToString()).ToArray()), string.Join( ",", a.AllowedRaces.OrderBy(p => p.ToString()).ToArray())));
                                 break;
                         }
 
@@ -821,7 +842,6 @@ public class ConfigWindow : Window, IDisposable
                         {
                             BackendStopVoice();
                         }
-
                         ImGui.TableNextColumn();
                         var isEnabled = voice.IsEnabled;
                         if (ImGui.Checkbox($"##EKVoiceIsEnabled{voice.ToString()}", ref isEnabled))
@@ -834,42 +854,151 @@ public class ConfigWindow : Window, IDisposable
                         ImGui.TextUnformatted(voice.VoiceName);
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        if (ImGui.CollapsingHeader($"Details:##EKVoiceAllowedGenders{voice}"))
+                        var headerText = voice.UseAsRandom ? "Random - " : "";
+                        headerText += voice.IsChildVoice ? "Child - " : "";
+                        if (headerText.Length >= 3)
+                            headerText = headerText.Substring(0, headerText.Length - 3);
+                        else 
+                            headerText = "None";
+                        if (ImGui.CollapsingHeader($"{headerText}##EKVoiceOptions{voice}"))
                         {
-                            foreach (var gender in Constants.GENDERLIST)
+                            ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                            if (ImGui.BeginTable($"##OptionsTable{voice}", 3))
                             {
-                                var isAllowed = voice.AllowedGenders.Contains(gender);
-                                if (ImGui.Checkbox($"{gender}##EKVoiceAllowedGender{voice}{gender}", ref isAllowed))
+                                ImGui.TableSetupColumn($"##{voice}options", ImGuiTableColumnFlags.WidthFixed, 120);
+                                ImGui.TableNextColumn();
+                                var useAsRandom = voice.UseAsRandom;
+                                if (ImGui.Checkbox($"Random NPC##EKVoiceUseAsRandom{voice}", ref useAsRandom))
                                 {
-                                    if (isAllowed && !voice.AllowedGenders.Contains(gender))
-                                        voice.AllowedGenders.Add(gender);
-                                    else if (!isAllowed && voice.AllowedGenders.Contains(gender))
-                                        voice.AllowedGenders.Remove(gender);
-
-                                    NpcDataHelper.RefreshSelectables();
+                                    voice.UseAsRandom = useAsRandom;
+                                    this.Configuration.Save();
+                                }
+                                ImGui.TableNextRow();
+                                ImGui.TableNextColumn();
+                                var isChildVoice = voice.IsChildVoice;
+                                if (ImGui.Checkbox($"Child Voice##EKVoiceIsChildVoice{voice}", ref isChildVoice))
+                                {
+                                    voice.IsChildVoice = isChildVoice;
                                     this.Configuration.Save();
                                 }
                             }
+                            ImGui.EndTable();
                         }
 
                         ImGui.TableNextColumn();
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                        if (ImGui.CollapsingHeader($"Details:##EKVoiceAllowedRaces{voice}"))
+                        headerText = "";
+                        voice.AllowedGenders.OrderBy(p => p.ToString()).ToList().ForEach(p => headerText += $"{p} - ");
+                        if (headerText.Length >= 3)
+                            headerText = headerText.Substring(0, headerText.Length - 3);
+                        else 
+                            headerText = "None";
+                        if (ImGui.CollapsingHeader($"{headerText}##EKVoiceAllowedGenders{voice}"))
                         {
-                            foreach (var race in Constants.RACELIST)
+                            if (ImGui.BeginTable($"##GendersTable{voice}", 1))
                             {
-                                var isAllowed = voice.AllowedRaces.Contains(race);
-                                if (ImGui.Checkbox($"{race}##EKVoiceAllowedRace{voice}{race}", ref isAllowed))
+                                ImGui.TableSetupColumn($"##{voice}gender", ImGuiTableColumnFlags.WidthFixed, 100);
+                                ImGui.TableNextColumn();
+                                if (ImGui.Button($"Reset##EKVoiceAllowedGender{voice}Reset"))
                                 {
-                                    if (isAllowed && !voice.AllowedRaces.Contains(race))
-                                        voice.AllowedRaces.Add(race);
-                                    else if (!isAllowed && voice.AllowedRaces.Contains(race))
-                                        voice.AllowedRaces.Remove(race);
+                                    NpcDataHelper.ReSetVoiceGenders(voice);
+                                }
+                                ImGui.TableNextRow();
+                                ImGui.TableNextRow();
+                                ImGui.TableNextColumn();
+
+                                foreach (var gender in Constants.GENDERLIST)
+                                {
+                                    var isAllowed = voice.AllowedGenders.Contains(gender);
+                                    if (ImGui.Checkbox($"{gender}##EKVoiceAllowedGender{voice}{gender}", ref isAllowed))
+                                    {
+                                        if (isAllowed && !voice.AllowedGenders.Contains(gender))
+                                            voice.AllowedGenders.Add(gender);
+                                        else if (!isAllowed && voice.AllowedGenders.Contains(gender))
+                                            voice.AllowedGenders.Remove(gender);
+
+                                        NpcDataHelper.RefreshSelectables();
+                                        this.Configuration.Save();
+                                    }
+                                    ImGui.TableNextRow();
+                                    ImGui.TableNextColumn();
+                                }
+                            }
+                            ImGui.EndTable();
+                        }
+
+                        ImGui.TableNextColumn();
+                        ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                        headerText = "";
+                        voice.AllowedRaces.OrderBy(p => p.ToString()).ToList().ForEach(p => headerText += $"{p} - ");
+                        if (headerText.Length >= 3)
+                            headerText = headerText.Substring(0, headerText.Length - 3);
+                        else 
+                            headerText = "None";
+                        if (ImGui.CollapsingHeader($"{headerText}##EKVoiceAllowedRaces{voice}"))
+                        {
+                            if (ImGui.BeginTable($"##Racestable{voice}", 3))
+                            {
+                                ImGui.TableSetupColumn($"##{voice}race1", ImGuiTableColumnFlags.WidthFixed, 100);
+                                ImGui.TableSetupColumn($"##{voice}race2", ImGuiTableColumnFlags.WidthFixed, 100);
+                                ImGui.TableSetupColumn($"##{voice}race3", ImGuiTableColumnFlags.WidthFixed, 100);
+                                ImGui.TableNextColumn();
+
+                                var allRaces = voice.AllowedRaces.Count == Constants.RACELIST.Count;
+                                if (ImGui.Checkbox($"All##EKVoiceAllowedRace{voice}All", ref allRaces))
+                                {
+                                    if (allRaces)
+                                    {
+                                        foreach (var race in Constants.RACELIST)
+                                            if (!voice.AllowedRaces.Contains(race))
+                                                voice.AllowedRaces.Add(race);
+                                    }
+                                    else
+                                        foreach (var race in Constants.RACELIST)
+                                            if (voice.AllowedRaces.Contains(race))
+                                                voice.AllowedRaces.Remove(race);
 
                                     NpcDataHelper.RefreshSelectables();
                                     this.Configuration.Save();
                                 }
+                                ImGui.TableNextColumn();
+                                ImGui.TableNextColumn();
+                                if (ImGui.Button($"Reset##EKVoiceAllowedRace{voice}Reset"))
+                                {
+                                    NpcDataHelper.ReSetVoiceRaces(voice);
+                                }
+                                ImGui.TableNextRow();
+                                ImGui.TableNextColumn();
+                                ImGui.TableNextRow();
+
+                                int i = 0;
+                                foreach (var race in Constants.RACELIST)
+                                {
+                                    if (i >= 0 && i < 3)
+                                        ImGui.TableNextColumn();
+
+                                    ImGui.SetNextItemWidth(100f);
+                                    var isAllowed = voice.AllowedRaces.Contains(race);
+                                    if (ImGui.Checkbox($"{race}##EKVoiceAllowedRace{voice}{race}", ref isAllowed))
+                                    {
+                                        if (isAllowed && !voice.AllowedRaces.Contains(race))
+                                            voice.AllowedRaces.Add(race);
+                                        else if (!isAllowed && voice.AllowedRaces.Contains(race))
+                                            voice.AllowedRaces.Remove(race);
+
+                                        NpcDataHelper.RefreshSelectables();
+                                        this.Configuration.Save();
+                                    }
+
+                                    i++;
+                                    if (i == 3)
+                                    {
+                                        ImGui.TableNextRow();
+                                        i = 0;
+                                    }
+                                }
                             }
+                            ImGui.EndTable();
                         }
 
                         ImGui.TableNextColumn();
