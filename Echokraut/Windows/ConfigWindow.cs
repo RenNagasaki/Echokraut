@@ -1215,7 +1215,7 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
 
-                if (mapData.voicesSelectable.Draw(mapData.Voice?.ToString() ?? "", out var selectedIndexVoice))
+                if (mapData.voicesSelectable.Draw(mapData.Voice?.VoiceName ?? "", out var selectedIndexVoice))
                 {
                     var newVoiceItem = Configuration.EchokrautVoices.FindAll(f => f.IsSelectable(mapData.Gender, mapData.Race, mapData.IsChild))[selectedIndexVoice];
 
