@@ -540,7 +540,7 @@ namespace Echokraut.TextToTalk.Utils
             if (activeData == -1)
                 activeData = modelData2;
 
-            text = FileHelper.VoiceMessageToFileName(text);
+            text = AudioFileHelper.VoiceMessageToFileName(text);
             var textSubstring = text.Length > 20 ? text.Substring(0, 20) : text;
             return $"BB-{territory.Value.PlaceName.Value.Name.ToString()}-{activeData}-{textSubstring}";
         }

@@ -11,7 +11,7 @@ using System.Reflection;
 
 namespace Echokraut.Helper.Functional
 {
-    public static class FileHelper
+    public static class AudioFileHelper
     {
         public static Dictionary<DateTime, string> SavedFiles = new Dictionary<DateTime, string>();
         public static bool LoadLocalAudio(EKEventId eventId, string localSaveLocation, VoiceMessage voiceMessage)

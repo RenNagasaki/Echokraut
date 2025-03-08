@@ -33,6 +33,7 @@ public class ConfigWindow : Window, IDisposable
     private string testConnectionRes = "";
     private unsafe Camera* camera;
     private IPlayerCharacter? localPlayer;
+    private bool installingLocally;
     #region Voice Selection
     private List<NpcMapData> filteredNpcs = [];
     private static bool _updateDataNpcs;
@@ -234,7 +235,7 @@ public class ConfigWindow : Window, IDisposable
                             deleteMappedNpcs = false;
                             foreach (NpcMapData npcMapData in configuration!.MappedNpcs.FindAll(p => !p.Name.StartsWith("BB") && !p.DoNotDelete))
                             {
-                                FileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, npcMapData.Name);
+                                AudioFileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, npcMapData.Name);
                                 configuration.MappedNpcs.Remove(npcMapData);
                             }
                             UpdateDataNpcs = true;
@@ -254,7 +255,7 @@ public class ConfigWindow : Window, IDisposable
                             deleteMappedPlayers = false;
                             foreach (NpcMapData playerMapData in configuration!.MappedPlayers.FindAll(p => !p.DoNotDelete))
                             {
-                                FileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, playerMapData.Name);
+                                AudioFileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, playerMapData.Name);
                                 configuration.MappedPlayers.Remove(playerMapData);
                             }
                             UpdateDataPlayers = true;
@@ -274,7 +275,7 @@ public class ConfigWindow : Window, IDisposable
                             deleteMappedBubbles = false;
                             foreach (NpcMapData npcMapData in configuration!.MappedNpcs.FindAll(p => p.Name.StartsWith("BB") && !p.DoNotDelete))
                             {
-                                FileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, npcMapData.Name);
+                                AudioFileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, npcMapData.Name);
                                 configuration.MappedNpcs.Remove(npcMapData);
                             }
                             UpdateDataBubbles = true;
@@ -477,6 +478,17 @@ public class ConfigWindow : Window, IDisposable
 
             if (!string.IsNullOrWhiteSpace(testConnectionRes))
                 ImGui.TextColored(new Vector4(1.0f, 1.0f, 1.0f, 0.6f), $"Connection test result: {testConnectionRes}");
+
+            if (ImGuiUtil.DrawDisabledButton(
+                    $"Install local Alltalk##installAlltalkLocally",
+                    new Vector2(500, 25), "Will install an alltalk instance locally and set it up for immediate use.",
+                    false
+                )
+               )
+            {
+                installingLocally = true;
+
+            }
         }
     }
 
@@ -1300,7 +1312,7 @@ public class ConfigWindow : Window, IDisposable
                     {
                         deleteSingleAudioData = false;
                         toBeDeleted = null;
-                        FileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, mapData.Name);
+                        AudioFileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, mapData.Name);
                     }
                 }
                 else if (ImGuiUtil.DrawDisabledButton(
@@ -1350,7 +1362,7 @@ public class ConfigWindow : Window, IDisposable
 
             if (toBeRemoved != null)
             {
-                FileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, toBeRemoved.Name);
+                AudioFileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, toBeRemoved.Name);
                 realData.Remove(toBeRemoved);
                 updateData = true;
                 configuration.Save();

@@ -117,7 +117,7 @@ namespace Echokraut.Helper.Functional
                         if (args.Trim().Length > 0)
                             deleteNFiles = Convert.ToInt32(args);
 
-                        var deletedFiles = FileHelper.DeleteLastNFiles(deleteNFiles);
+                        var deletedFiles = AudioFileHelper.DeleteLastNFiles(deleteNFiles);
                         PrintText("", $"Deleted {deletedFiles} generated audio files");
                     }
                     catch (Exception ex)
@@ -132,7 +132,7 @@ namespace Echokraut.Helper.Functional
                         if (args.Trim().Length > 0)
                             deleteNMinutesFiles = Convert.ToInt32(args);
 
-                        var deletedFiles = FileHelper.DeleteLastNMinutesFiles(deleteNMinutesFiles);
+                        var deletedFiles = AudioFileHelper.DeleteLastNMinutesFiles(deleteNMinutesFiles);
                         PrintText("", $"Deleted {deletedFiles} generated audio files");
                     }
                     catch (Exception ex)

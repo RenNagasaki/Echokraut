@@ -227,7 +227,7 @@ namespace Echokraut.Helper.Functional
                         {
                             if (voiceMessage != null && voiceMessage.Speaker != null && voiceMessage.Speaker.Voice != null)
                             {
-                                var result = FileHelper.LoadLocalBubbleAudio(eventId, Configuration.LocalSaveLocation, voiceMessage);
+                                var result = AudioFileHelper.LoadLocalBubbleAudio(eventId, Configuration.LocalSaveLocation, voiceMessage);
 
                                 if (result)
                                 {
@@ -276,9 +276,9 @@ namespace Echokraut.Helper.Functional
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}", eventId);
                     if (!string.IsNullOrWhiteSpace(playedText.Text) && playedText.Source != TextSource.VoiceTest && !playedText.loadedLocally)
                     {
-                        var filePath = FileHelper.GetLocalAudioPath(Configuration.LocalSaveLocation, playedText);
+                        var filePath = AudioFileHelper.GetLocalAudioPath(Configuration.LocalSaveLocation, playedText);
                         var stream = CurrentlyPlayingStream;
-                        FileHelper.WriteStreamToFile(eventId, filePath, stream);
+                        AudioFileHelper.WriteStreamToFile(eventId, filePath, stream);
                     }
                 }
                 else
@@ -316,7 +316,7 @@ namespace Echokraut.Helper.Functional
         {
             if (Configuration.LoadFromLocalFirst && Directory.Exists(Configuration.LocalSaveLocation) && voiceMessage.Speaker.Voice != null && voiceMessage.Source != TextSource.VoiceTest)
             {
-                var result = FileHelper.LoadLocalAudio(voiceMessage.eventId, Configuration.LocalSaveLocation, voiceMessage);
+                var result = AudioFileHelper.LoadLocalAudio(voiceMessage.eventId, Configuration.LocalSaveLocation, voiceMessage);
 
                 if (result)
                     return;
