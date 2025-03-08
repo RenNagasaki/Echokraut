@@ -22,7 +22,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace Echokraut.Helper.Addons;
 
-public class AddonTalkHelper
+public unsafe class AddonTalkHelper
 {
     private record struct AddonTalkState(string? Speaker, string? Text);
 
@@ -58,17 +58,24 @@ public class AddonTalkHelper
         addonLifecycle.RegisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
         addonLifecycle.RegisterListener(AddonEvent.PostUpdate, "Talk", OnPostUpdate);
     }
-
-    private unsafe void OnPreReceiveEvent(AddonEvent type, AddonArgs args)
+    
+    private void OnPreReceiveEvent(AddonEvent type, AddonArgs args)
     {
-        if (!configuration.Enabled) return;
-        if (args is not AddonReceiveEventArgs receiveEventArgs) return;
+        if (args is not AddonReceiveEventArgs eventArgs)
+            return;
 
-        if ((receiveEventArgs.AtkEventType == (byte)AtkEventType.MouseClick || receiveEventArgs.AtkEventType == (byte)AtkEventType.InputReceived) && receiveEventArgs.EventParam == 0)
-        {
-            // Notify observers that the addon state was advanced
+        var eventData = (AtkEventData*)eventArgs.Data;
+        if (eventData == null)
+            return;
+
+        var eventType = (AtkEventType)eventArgs.AtkEventType;
+        var isControllerButtonClick = eventType == AtkEventType.InputReceived && eventData->InputData.InputId == 1;
+        var isDialogueAdvancing = 
+            (eventType == AtkEventType.MouseClick && ((byte)eventData->MouseData.Modifier & 0b0001_0000) == 0) || 
+            eventArgs.AtkEventType == (byte)AtkEventType.InputReceived;
+
+        if (isControllerButtonClick || isDialogueAdvancing)
             echokraut.Cancel(new EKEventId(0, TextSource.AddonTalk));
-        }
     }
 
     private unsafe void OnPostUpdate(AddonEvent type, AddonArgs args)
