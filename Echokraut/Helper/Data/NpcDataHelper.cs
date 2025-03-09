@@ -225,8 +225,8 @@ namespace Echokraut.Helper.Data
         {
             try
             {
-                Configuration.MappedNpcs.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 300, Configuration.EchokrautVoices.FindAll(f => f.IsSelectable(p.Gender, p.Race, p.IsChild)), g => g.VoiceName));
-                Configuration.MappedPlayers.ForEach(p => p.voicesSelectable = new($"##AllVoices{p.ToString()}", string.Empty, 300, Configuration.EchokrautVoices.FindAll(f => f.IsSelectable(p.Gender, p.Race, p.IsChild)), g => g.VoiceName));
+                Configuration.MappedNpcs.ForEach(p => p.RefreshSelectable());
+                Configuration.MappedPlayers.ForEach(p => p.RefreshSelectable());
             }
             catch (Exception ex)
             {
@@ -266,21 +266,22 @@ namespace Echokraut.Helper.Data
                 if (result == null)
                 {
                     datas.Add(data);
-                    data.voicesSelectable = new($"##AllVoices{data.ToString()}", string.Empty, 250, Configuration.EchokrautVoices, g => g.ToString());
+                    data.Voices = Configuration.EchokrautVoices;
+                    data.RefreshSelectable();
                     BackendHelper.GetVoiceOrRandom(eventId, data);
                     ConfigWindow.UpdateDataNpcs = true;
                     ConfigWindow.UpdateDataBubbles = true;
                     ConfigWindow.UpdateDataPlayers = true;
                     var mapping = data.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? "player" : "npc";
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Added new {mapping} to mapping: {data.ToString()}", eventId);
+                    LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Added new {mapping} to mapping: {data.ToString()}", eventId);
 
                     result = data;
                 }
                 else
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found existing mapping for: {data.ToString()} result: {result.ToString()}", eventId);
+                    LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Found existing mapping for: {data.ToString()} result: {result.ToString()}", eventId);
             }
             else
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found existing mapping for: {data.ToString()} result: {result.ToString()}", eventId);
+                LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Found existing mapping for: {data.ToString()} result: {result.ToString()}", eventId);
 
             return result;
         }
