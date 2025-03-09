@@ -71,10 +71,13 @@ namespace Echokraut.DataClasses
                     IsChildVoice == isChild;
         }
 
-        public bool IsSelectable(Genders gender, NpcRaces race, bool isChild)
+        public bool IsSelectable(string npcName, Genders gender, NpcRaces race, bool isChild)
         {
-            return IsDefault || (IsEnabled && AllowedGenders.Contains(gender) && AllowedRaces.Contains(race) &&
-                                 IsChildVoice == isChild);
+            return IsEnabled && (
+                IsDefault ||
+                (AllowedGenders.Contains(gender) && AllowedRaces.Contains(race) && IsChildVoice == isChild) ||
+                voiceNameShort.Contains(npcName)
+            );
         }
     }
 }

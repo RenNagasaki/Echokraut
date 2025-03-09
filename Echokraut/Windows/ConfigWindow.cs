@@ -1218,6 +1218,7 @@ public class ConfigWindow : Window, IDisposable
                             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Gender for {dataType}: {mapData.ToString()} from: {mapData.Gender} to: {newGender}", new EKEventId(0, TextSource.None));
 
                             mapData.Gender = newGender;
+                            mapData.RefreshSelectable();
                             mapData.DoNotDelete = true;
                             updateData = true;
                             this.configuration.Save();
@@ -1241,6 +1242,7 @@ public class ConfigWindow : Window, IDisposable
                             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Race for {dataType}: {mapData.ToString()} from: {mapData.Race} to: {newRace}", new EKEventId(0, TextSource.None));
 
                             mapData.Race = newRace;
+                            mapData.RefreshSelectable();
                             mapData.DoNotDelete = true;
                             updateData = true;
                             this.configuration.Save();
@@ -1254,21 +1256,16 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
 
-                if (mapData.voicesSelectable.Draw(mapData.Voice?.VoiceName ?? "", out var selectedIndexVoice))
+                if (mapData.VoicesSelectable.Draw(mapData.Voice?.VoiceName ?? "", out var selectedIndexVoice))
                 {
-                    var newVoiceItem = configuration.EchokrautVoices.FindAll(f => f.IsSelectable(mapData.Gender, mapData.Race, mapData.IsChild))[selectedIndexVoice];
+                    var newVoiceItem = configuration!.EchokrautVoices.FindAll(f => f.IsSelectable(mapData.Name, mapData.Gender, mapData.Race, mapData.IsChild))[selectedIndexVoice];
 
-                    if (newVoiceItem != null)
-                    {
-                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Voice for {dataType}: {mapData.ToString()} from: {mapData.Voice} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
-
-                        mapData.Voice = newVoiceItem;
-                        mapData.DoNotDelete = true;
-                        updateData = true;
-                        this.configuration.Save();
-                    }
-                    else
-                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Voice for {dataType}: {mapData}", new EKEventId(0, TextSource.None));
+                    mapData.Voice = newVoiceItem;
+                    mapData.DoNotDelete = true;
+                    mapData.RefreshSelectable();
+                    updateData = true;
+                    this.configuration.Save();
+                    LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Updated Voice for {dataType}: {mapData.ToString()} from: {mapData.Voice} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
                 }
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
