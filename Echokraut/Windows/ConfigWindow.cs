@@ -1062,7 +1062,7 @@ public class ConfigWindow : Window, IDisposable
 
     private void DrawVoiceSelectionTable(string dataType, List<NpcMapData> realData, ref List<NpcMapData> filteredData, ref bool updateData, ref bool resetData, ref string filterGender, ref string filterRace, ref string filterName, ref string filterVoice, bool isBubble = false)
     {
-        if (filteredData == null)
+        if (filteredData.Count == 0)
         {
             updateData = true;
         }
