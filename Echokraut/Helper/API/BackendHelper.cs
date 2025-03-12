@@ -183,7 +183,7 @@ namespace Echokraut.Helper.API
 
             NpcDataHelper.MigrateOldData();
 
-            NpcDataHelper.RefreshSelectables();
+            NpcDataHelper.RefreshSelectables(Configuration.EchokrautVoices);
             ConfigWindow.UpdateDataVoices = true;
 
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Success", eventId);
