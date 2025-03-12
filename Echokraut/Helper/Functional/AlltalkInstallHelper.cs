@@ -13,6 +13,7 @@ namespace Echokraut.Helper.Functional
 {
     public static class AlltalkInstallHelper
     {
+        public const string AlltalkUrl = "https://github.com/RenNagasaki/alltalk_tts/releases/download/alltalk_tts-alltalkbeta/alltalk_tts-alltalkbeta.zip";
         public static void Install(EKEventId eventId)
         {
             try
