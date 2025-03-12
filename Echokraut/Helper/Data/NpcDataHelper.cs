@@ -221,12 +221,20 @@ namespace Echokraut.Helper.Data
             return Configuration.EchokrautVoices.Find(p => p.BackendVoice == backendVoice);
         }
 
-        public static void RefreshSelectables()
+        public static void RefreshSelectables(List<EchokrautVoice> voices)
         {
             try
             {
-                Configuration.MappedNpcs.ForEach(p => p.RefreshSelectable());
-                Configuration.MappedPlayers.ForEach(p => p.RefreshSelectable());
+                Configuration.MappedNpcs.ForEach(p =>
+                {
+                    p.Voices = voices;
+                    p.RefreshSelectable();
+                });
+                Configuration.MappedPlayers.ForEach(p =>
+                {
+                    p.Voices = voices;
+                    p.RefreshSelectable();
+                });
             }
             catch (Exception ex)
             {

@@ -956,7 +956,7 @@ public class ConfigWindow : Window, IDisposable
                                         else if (!isAllowed && voice.AllowedGenders.Contains(gender))
                                             voice.AllowedGenders.Remove(gender);
 
-                                        NpcDataHelper.RefreshSelectables();
+                                        NpcDataHelper.RefreshSelectables(configuration.EchokrautVoices);
                                         this.configuration.Save();
                                     }
                                     ImGui.TableNextRow();
@@ -997,7 +997,7 @@ public class ConfigWindow : Window, IDisposable
                                             if (voice.AllowedRaces.Contains(race))
                                                 voice.AllowedRaces.Remove(race);
 
-                                    NpcDataHelper.RefreshSelectables();
+                                    NpcDataHelper.RefreshSelectables(configuration.EchokrautVoices);
                                     this.configuration.Save();
                                 }
                                 ImGui.TableNextColumn();
@@ -1025,7 +1025,7 @@ public class ConfigWindow : Window, IDisposable
                                         else if (!isAllowed && voice.AllowedRaces.Contains(race))
                                             voice.AllowedRaces.Remove(race);
 
-                                        NpcDataHelper.RefreshSelectables();
+                                        NpcDataHelper.RefreshSelectables(configuration.EchokrautVoices);
                                         this.configuration.Save();
                                     }
 
