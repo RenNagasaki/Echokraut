@@ -4,6 +4,7 @@ using Echokraut.Helper;
 using Echokraut.Helper.Data;
 using OtterGui.Widgets;
 using System;
+using System.Collections.Generic;
 
 namespace Echokraut.DataClasses
 {
@@ -13,12 +14,12 @@ namespace Echokraut.DataClasses
         public NpcRaces Race { get; set; }
         public string RaceStr { get; set; }
         public Genders Gender { get; set; }
-        
+
         public bool IsChild { get; set; }
 
         public string voice = "";
-        internal EchokrautVoice? Voice 
-        { 
+        internal EchokrautVoice? Voice
+        {
             get { return NpcDataHelper.GetVoiceByBackendVoice(voice); }
             set { voice = value != null ? value.BackendVoice : string.Empty; }
         }
@@ -33,9 +34,9 @@ namespace Echokraut.DataClasses
 
         public ObjectKind ObjectKind { get; set; }
 
-        [NonSerialized]
-        public ClippedSelectableCombo<EchokrautVoice> voicesSelectable;
-                
+        internal ClippedSelectableCombo<EchokrautVoice> VoicesSelectable { get; set; }
+
+        internal List<EchokrautVoice> Voices { get; set; }
 
         public NpcMapData(ObjectKind objectKind) {
             this.ObjectKind = objectKind;
@@ -62,6 +63,11 @@ namespace Echokraut.DataClasses
         {
             var otherObj = ((NpcMapData)obj);
             return otherObj.ToString().ToLower().CompareTo(ToString().ToLower());
+        }
+
+        public void RefreshSelectable()
+        {
+            VoicesSelectable = new($"##AllVoices{ToString()}", string.Empty, 300, Voices.FindAll(f => f.IsSelectable(Name, Gender, Race, IsChild)), g => g.VoiceName);
         }
     }
 }
