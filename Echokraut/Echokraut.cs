@@ -91,7 +91,7 @@ public partial class Echokraut : IDalamudPlugin
         BackendHelper.Setup(this, Configuration, clientState, framework, Configuration.BackendSelection);
         VolumeHelper.Setup(gameConfig);
         CommandHelper.Setup(Configuration, chatGui, clientState, dataManager, commandManager, condition, ConfigWindow);
-        this.lipSyncHelper = new LipSyncHelper(condition, clientState, objectTable, Configuration, new EKEventId(0, Enums.TextSource.None));
+        this.lipSyncHelper = new LipSyncHelper(framework, condition, clientState, objectTable, Configuration, new EKEventId(0, Enums.TextSource.None));
         this.addonTalkHelper = new AddonTalkHelper(this, condition, addonLifecycle, clientState, objectTable, Configuration);
         this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, addonLifecycle, clientState, objectTable, Configuration);
         this.addonSelectStringHelper = new AddonSelectStringHelper(this, addonLifecycle, clientState, objectTable, condition, Configuration);
@@ -120,7 +120,7 @@ public partial class Echokraut : IDalamudPlugin
 
     public void StopLipSync(EKEventId eventId)
     {
-        Framework.RunOnFrameworkThread(() => lipSyncHelper.StopLipSync(eventId));
+        lipSyncHelper.StopLipSync(eventId);
     }
 
     public async void Say(EKEventId eventId, GameObject? speaker, SeString speakerName, string textValue)

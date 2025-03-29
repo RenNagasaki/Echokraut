@@ -35,7 +35,7 @@ namespace Echokraut.Helper.Functional
         private static List<VoiceMessage> RequestedBubbleQueue = new List<VoiceMessage>();
         private static Stream CurrentlyPlayingStream = null;
         private static VoiceMessage CurrentlyPlayingStreamText = null;
-        private static WasapiOut ActivePlayer = null;
+        private static WasapiOut? ActivePlayer = null;
         private static bool StopThread = false;
         private static Echokraut Echokraut;
         private static DataClasses.Configuration Configuration;
@@ -134,7 +134,7 @@ namespace Echokraut.Helper.Functional
                 estimatedLength = count / 2.1f;
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Text} length: {estimatedLength}", eventId);
             }
-            Framework.RunOnFrameworkThread(() => Echokraut.lipSyncHelper.TriggerLipSync(eventId, queueItemText.Speaker.Name, estimatedLength, queueItemText.pActor));
+            Echokraut.lipSyncHelper.TriggerLipSync(eventId, estimatedLength, queueItemText.pActor);
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Speaker.Name} length: {estimatedLength}", eventId);
             Playing = true;
         }

@@ -28,6 +28,7 @@ namespace Echokraut.Helper.Functional
 {
     internal class LipSyncHelper
     {
+        private readonly IFramework framework;
         private readonly IObjectTable objects;
         private readonly IClientState clientState;
         private readonly Configuration config;
@@ -39,8 +40,9 @@ namespace Echokraut.Helper.Functional
         private readonly Dictionary<string, CancellationTokenSource> taskCancellations = new Dictionary<string, CancellationTokenSource>();
         public List<ActionTimeline> LipSyncTypes { get; private set; }
 
-        public LipSyncHelper(ICondition condition, IClientState clientState, IObjectTable objects, Configuration config, EKEventId eventId)
+        public LipSyncHelper(IFramework framework, ICondition condition, IClientState clientState, IObjectTable objects, Configuration config, EKEventId eventId)
         {
+            this.framework = framework;
             this.condition = condition;
             this.clientState = clientState;
             this.config = config;
@@ -53,12 +55,14 @@ namespace Echokraut.Helper.Functional
             });
         }
 
-        public async void TriggerLipSync(EKEventId eventId, string npcName, float length, IGameObject? npc = null)
+        public async void TriggerLipSync(EKEventId eventId, float length, IGameObject? npc = null)
         {
+            return;
             if (condition[ConditionFlag.BoundByDuty] && !condition[ConditionFlag.WatchingCutscene]) return;
             if (!config.Enabled) return;
 
-            var npcObject = npc ?? DiscoverNpc(npcName);
+            var npcObject = npc;
+            var npcName = npcObject.Name.TextValue;
 
             ActorMemory? actorMemory = null;
             AnimationMemory? animationMemory = null;
@@ -95,10 +99,10 @@ namespace Echokraut.Helper.Functional
                 ActorMemory.CharacterModes intialState = actorMemory.CharacterMode;
                 ActorMemory.CharacterModes mode = ActorMemory.CharacterModes.EmoteLoop;
 
-                if (!taskCancellations.ContainsKey(npcObject.ToString()))
+                if (!taskCancellations.ContainsKey(npcName))
                 {
                     var cts = new CancellationTokenSource();
-                    taskCancellations.Add(npcObject.ToString(), cts);
+                    taskCancellations.Add(npcName, cts);
                     currentLipsync = npcObject;
                     var token = cts.Token;
 
@@ -177,8 +181,8 @@ namespace Echokraut.Helper.Functional
                                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, "LipSync was completed", eventId);
 
                                 cts.Dispose();
-                                if (taskCancellations.ContainsKey(npcObject.ToString()))
-                                    taskCancellations.Remove(npcObject.ToString());
+                                if (taskCancellations.ContainsKey(npcName))
+                                    taskCancellations.Remove(npcName);
                             }
                         }
                         catch (TaskCanceledException)
@@ -190,8 +194,8 @@ namespace Echokraut.Helper.Functional
                             MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
                             MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
                             cts.Dispose();
-                            if (taskCancellations.ContainsKey(npcObject.ToString()))
-                                taskCancellations.Remove(npcObject.ToString());
+                            if (taskCancellations.ContainsKey(npcName))
+                                taskCancellations.Remove(npcName);
                         }
                         catch (Exception ex)
                         {
@@ -201,8 +205,8 @@ namespace Echokraut.Helper.Functional
                             MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
                             MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
                             cts.Dispose();
-                            if (taskCancellations.ContainsKey(npcObject.ToString()))
-                                taskCancellations.Remove(npcObject.ToString());
+                            if (taskCancellations.ContainsKey(npcName))
+                                taskCancellations.Remove(npcName);
                         }
                     }, token);
                 }
@@ -211,6 +215,7 @@ namespace Echokraut.Helper.Functional
 
         public async void StopLipSync(EKEventId eventId)
         {
+            return;
             try
             {
                 if (condition[ConditionFlag.BoundByDuty]) return;
@@ -238,8 +243,9 @@ namespace Echokraut.Helper.Functional
                 animationMemory.LipsOverride = 0;
                 MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), 0, "Animation Mode Override");
                 MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
-                taskCancellations.Remove(currentLipsync.ToString());
+                taskCancellations.Remove(currentLipsync.Name.TextValue);
                 currentLipsync = null;
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Stopped Lipsync", eventId);
             }
             catch (Exception ex)
             {
@@ -356,7 +362,7 @@ namespace Echokraut.Helper.Functional
             {
                 foreach (var item in objects)
                 {
-                    if (item as Character == null || item as Character == clientState.LocalPlayer || item.Name.TextValue == "") continue;
+                    if (!(item is Character) || item as Character == clientState.LocalPlayer || item.Name.TextValue == "") continue;
                     if (item.Name.TextValue == npcName)
                     {
                         return item;
