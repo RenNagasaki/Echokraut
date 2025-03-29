@@ -9,6 +9,7 @@ namespace Echokraut.Enums
         AddonSelectString,
         AddonCutsceneSelectString,
         AddonBubble,
-        VoiceTest
+        VoiceTest,
+        AlltalkInstall
     }
 }

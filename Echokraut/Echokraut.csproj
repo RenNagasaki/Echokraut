@@ -1,15 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Dalamud.NET.Sdk/12.0.2">
   <Import Project="Dalamud.Plugin.Bootstrap.targets" />
 
   <PropertyGroup>
-    <Version>0.12.1.4</Version>
+    <Version>0.12.1.6</Version>
     <Description>A TTS Dalamud Plugin that breaks the silence! For self hosted TTS Services.</Description>
     <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <IsPackable>false</IsPackable>
     <RepositoryUrl>https://github.com/RenNagasaki/Echokraut</RepositoryUrl>
-    <TargetFramework>net8.0-windows</TargetFramework>
+    <TargetFramework>net9.0-windows</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
@@ -37,6 +37,7 @@
     <PackageReference Include="NAudio" Version="2.2.1" />
     <PackageReference Include="R3" Version="1.1.13" />
     <PackageReference Include="Reloaded.Memory" Version="7.1.0" />
+    <PackageReference Remove="DalamudPackager" />
   </ItemGroup>
 
   <ItemGroup>
@@ -74,9 +75,5 @@
     <None Update="Resources\VoiceNamesEN.json">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Update="DalamudPackager" Version="2.1.13" />
   </ItemGroup>
 </Project>

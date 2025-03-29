@@ -12,16 +12,13 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using Dalamud.Game;
 using Humanizer;
 using System.Globalization;
+using Echokraut.Helper.Addons;
 using GameObject = Dalamud.Game.ClientState.Objects.Types.IGameObject;
 using Echokraut.Helper.DataHelper;
-using Echokraut.Helper.Addons;
 using Echokraut.Helper.API;
 using Echokraut.Helper.Data;
-using Echokraut.Helper.Functional;
-using FFXIVClientStructs.FFXIV.Common.Lua;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement.TaskbarClock;
 
-namespace Echokraut.TextToTalk.Utils
+namespace Echokraut.Helper.Functional
 {
     public static partial class TalkTextHelper
     {
@@ -540,7 +537,7 @@ namespace Echokraut.TextToTalk.Utils
             if (activeData == -1)
                 activeData = modelData2;
 
-            text = FileHelper.VoiceMessageToFileName(text);
+            text = AudioFileHelper.VoiceMessageToFileName(text);
             var textSubstring = text.Length > 20 ? text.Substring(0, 20) : text;
             return $"BB-{territory.Value.PlaceName.Value.Name.ToString()}-{activeData}-{textSubstring}";
         }

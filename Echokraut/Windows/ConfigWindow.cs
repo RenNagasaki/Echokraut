@@ -33,6 +33,7 @@ public class ConfigWindow : Window, IDisposable
     private string testConnectionRes = "";
     private unsafe Camera* camera;
     private IPlayerCharacter? localPlayer;
+    private bool installingLocally;
     #region Voice Selection
     private List<NpcMapData> filteredNpcs = [];
     private static bool _updateDataNpcs;
@@ -234,7 +235,7 @@ public class ConfigWindow : Window, IDisposable
                             deleteMappedNpcs = false;
                             foreach (NpcMapData npcMapData in configuration!.MappedNpcs.FindAll(p => !p.Name.StartsWith("BB") && !p.DoNotDelete))
                             {
-                                FileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, npcMapData.Name);
+                                AudioFileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, npcMapData.Name);
                                 configuration.MappedNpcs.Remove(npcMapData);
                             }
                             UpdateDataNpcs = true;
@@ -254,7 +255,7 @@ public class ConfigWindow : Window, IDisposable
                             deleteMappedPlayers = false;
                             foreach (NpcMapData playerMapData in configuration!.MappedPlayers.FindAll(p => !p.DoNotDelete))
                             {
-                                FileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, playerMapData.Name);
+                                AudioFileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, playerMapData.Name);
                                 configuration.MappedPlayers.Remove(playerMapData);
                             }
                             UpdateDataPlayers = true;
@@ -274,7 +275,7 @@ public class ConfigWindow : Window, IDisposable
                             deleteMappedBubbles = false;
                             foreach (NpcMapData npcMapData in configuration!.MappedNpcs.FindAll(p => p.Name.StartsWith("BB") && !p.DoNotDelete))
                             {
-                                FileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, npcMapData.Name);
+                                AudioFileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, npcMapData.Name);
                                 configuration.MappedNpcs.Remove(npcMapData);
                             }
                             UpdateDataBubbles = true;
@@ -1297,7 +1298,7 @@ public class ConfigWindow : Window, IDisposable
                     {
                         deleteSingleAudioData = false;
                         toBeDeleted = null;
-                        FileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, mapData.Name);
+                        AudioFileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, mapData.Name);
                     }
                 }
                 else if (ImGuiUtil.DrawDisabledButton(
@@ -1347,7 +1348,7 @@ public class ConfigWindow : Window, IDisposable
 
             if (toBeRemoved != null)
             {
-                FileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, toBeRemoved.Name);
+                AudioFileHelper.RemoveSavedNpcFiles(configuration.LocalSaveLocation, toBeRemoved.Name);
                 realData.Remove(toBeRemoved);
                 updateData = true;
                 configuration.Save();
@@ -1936,13 +1937,13 @@ public class ConfigWindow : Window, IDisposable
             Source = TextSource.VoiceTest,
             Speaker = new NpcMapData(Dalamud.Game.ClientState.Objects.Enums.ObjectKind.None)
             {
-                Gender = voice.AllowedGenders[0],
-                Race = voice.AllowedRaces[0],
+                Gender = voice.AllowedGenders.Count > 0 ? voice.AllowedGenders[0] : Genders.Male,
+                Race = voice.AllowedRaces.Count > 0 ? voice.AllowedRaces[0] : NpcRaces.Hyur,
                 Name = voice.VoiceName,
                 Voice = voice
             },
             Text = Constants.TESTMESSAGEDE,
-            Language = this.clientState.ClientLanguage,
+            Language = clientState.ClientLanguage,
             eventId = eventId
         };
         var volume = VolumeHelper.GetVoiceVolume(eventId) * voice.Volume;

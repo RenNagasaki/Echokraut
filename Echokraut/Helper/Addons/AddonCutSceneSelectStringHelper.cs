@@ -1,25 +1,16 @@
-using System;
 using Dalamud.Plugin.Services;
-using R3;
-using Echokraut.TextToTalk.Utils;
 using Echokraut.DataClasses;
-using static Dalamud.Plugin.Services.IFramework;
-using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Echokraut.Enums;
-using System.Threading.Tasks;
-using System.Diagnostics;
 using System.Reflection;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using static System.Windows.Forms.Design.AxImporter;
 using System.Linq;
 using System.Collections.Generic;
 using Echokraut.Helper.DataHelper;
 using Echokraut.Helper.Data;
+using Echokraut.Helper.Functional;
 
 namespace Echokraut.Helper.Addons;
 

@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using static Dalamud.Plugin.Services.IFramework;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using System.Reflection;
+using Dalamud.Utility;
 using Echokraut.Enums;
 using Echokraut.Helper.DataHelper;
 using Echokraut.Helper.Data;
@@ -154,7 +155,7 @@ namespace Echokraut.Helper.Addons
                         var speakerName = SeString.Empty;
                         if (pActor != null && pActor->Name != null)
                         {
-                            speakerName = MemoryHelper.ReadSeStringNullTerminated((nint)pActor->GetName());
+                            speakerName = pActor->GetName().ExtractText();
                         }
 
                         var text = MemoryHelper.ReadSeStringNullTerminated(pString);

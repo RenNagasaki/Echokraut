@@ -14,8 +14,12 @@ namespace Echokraut.DataClasses
         public string VoicesPath { get; } = "/api/voices";
         public string StopPath { get; } = "/api/stop-generation";
         public string ReloadPath { get; } = "/api/reload?tts_method=";
-
         public string ReloadModel = "xtts - xtts2.0.3-trained";
+        public bool LocalInstall = false;
+        public string LocalInstallPath = "C:\\alltalk_tts";
+        public string ModelUrl = "";
+        public string VoicesUrl = "";
+        public string AlltalkUrl = "https://github.com/RenNagasaki/alltalk_tts/releases/download/alltalk_tts-alltalkbeta/alltalk_tts-alltalkbeta.zip";
 
         public override string ToString()
         {
