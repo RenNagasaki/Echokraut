@@ -224,8 +224,8 @@ namespace Echokraut.Helper.API
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}", eventId);
                         if (!string.IsNullOrWhiteSpace(playedText.Text))
                         {
-                            var filePath = FileHelper.GetLocalAudioPath(Configuration.LocalSaveLocation, playedText);
-                            if (FileHelper.WriteStreamToFile(eventId, filePath, responseStream))
+                            var filePath = AudioFileHelper.GetLocalAudioPath(Configuration.LocalSaveLocation, playedText);
+                            if (AudioFileHelper.WriteStreamToFile(eventId, filePath, responseStream))
                             {
                                 PlayingHelper.PlayingBubbleQueue.Add(filePath);
                                 PlayingHelper.PlayingBubbleQueueText.Add(message);

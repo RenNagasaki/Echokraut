@@ -134,7 +134,7 @@ namespace Echokraut.Helper.Functional
                 estimatedLength = count / 2.1f;
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Text} length: {estimatedLength}", eventId);
             }
-            Echokraut.lipSyncHelper.TriggerLipSync(eventId, queueItemText.Speaker.Name, estimatedLength, queueItemText.pActor);
+            Framework.RunOnFrameworkThread(() => Echokraut.lipSyncHelper.TriggerLipSync(eventId, queueItemText.Speaker.Name, estimatedLength, queueItemText.pActor));
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Speaker.Name} length: {estimatedLength}", eventId);
             Playing = true;
         }

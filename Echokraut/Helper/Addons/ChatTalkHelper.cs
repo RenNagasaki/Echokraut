@@ -6,25 +6,14 @@ using Echokraut.DataClasses;
 using Echokraut.Enums;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.DataHelper;
-using Echokraut.TextToTalk.Utils;
 using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.System.Framework;
-using R3;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
-using static Dalamud.Plugin.Services.IFramework;
-using static Echokraut.Helper.Addons.ChatTalkHelper;
-using static FFXIVClientStructs.FFXIV.Component.GUI.AtkComponentNumericInput.Delegates;
-using static System.Net.Mime.MediaTypeNames;
-using static System.Windows.Forms.AxHost;
+using Echokraut.Helper.Functional;
 
 namespace Echokraut.Helper.Addons
 {
-    internal class ChatTalkHelper
+    internal unsafe class ChatTalkHelper
     {
         private record struct ChatMessage(XivChatType Type, SeString Sender, SeString Message);
 
@@ -33,6 +22,7 @@ namespace Echokraut.Helper.Addons
         private readonly IChatGui chat;
         private readonly IObjectTable objects;
         private readonly IClientState clientState;
+        private readonly Conditions* conditions;
         private IChatGui.OnMessageDelegate handler;
 
         public ChatTalkHelper(Echokraut echokraut, Configuration config, IChatGui chat, IObjectTable objects, IClientState clientState)
@@ -42,6 +32,7 @@ namespace Echokraut.Helper.Addons
             this.chat = chat;
             this.objects = objects;
             this.clientState = clientState;
+            this.conditions = Conditions.Instance();
 
             HookIntoChat();
         }
@@ -55,7 +46,7 @@ namespace Echokraut.Helper.Addons
         {
             if (!config.Enabled) return;
             if (!config.VoiceChat) return;
-            if (Conditions.IsWatchingCutscene78 || Conditions.IsWatchingCutscene || Conditions.IsOccupiedInCutSceneEvent || Conditions.IsDutyRecorderPlayback) return;
+            if (conditions->WatchingCutscene78 || conditions->WatchingCutscene || conditions->OccupiedInCutSceneEvent || conditions->DutyRecorderPlayback) return;
 
             var messageObj = new ChatMessage(type, sender, message);
             ProcessChatMessage(messageObj);

@@ -478,17 +478,6 @@ public class ConfigWindow : Window, IDisposable
 
             if (!string.IsNullOrWhiteSpace(testConnectionRes))
                 ImGui.TextColored(new Vector4(1.0f, 1.0f, 1.0f, 0.6f), $"Connection test result: {testConnectionRes}");
-
-            if (ImGuiUtil.DrawDisabledButton(
-                    $"Install local Alltalk##installAlltalkLocally",
-                    new Vector2(500, 25), "Will install an alltalk instance locally and set it up for immediate use.",
-                    false
-                )
-               )
-            {
-                installingLocally = true;
-
-            }
         }
     }
 
@@ -1948,13 +1937,13 @@ public class ConfigWindow : Window, IDisposable
             Source = TextSource.VoiceTest,
             Speaker = new NpcMapData(Dalamud.Game.ClientState.Objects.Enums.ObjectKind.None)
             {
-                Gender = voice.AllowedGenders[0],
-                Race = voice.AllowedRaces[0],
+                Gender = voice.AllowedGenders.Count > 0 ? voice.AllowedGenders[0] : Genders.Male,
+                Race = voice.AllowedRaces.Count > 0 ? voice.AllowedRaces[0] : NpcRaces.Hyur,
                 Name = voice.VoiceName,
                 Voice = voice
             },
             Text = Constants.TESTMESSAGEDE,
-            Language = this.clientState.ClientLanguage,
+            Language = clientState.ClientLanguage,
             eventId = eventId
         };
         var volume = VolumeHelper.GetVoiceVolume(eventId) * voice.Volume;

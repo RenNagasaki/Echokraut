@@ -6,7 +6,6 @@ using Echokraut.Windows;
 using Dalamud.Game;
 using Echokraut.Enums;
 using System;
-using Echokraut.TextToTalk.Utils;
 using Echokraut.DataClasses;
 using System.Linq;
 using Dalamud.Game.Text.SeStringHandling;
@@ -18,7 +17,6 @@ using Echokraut.Helper.DataHelper;
 using Echokraut.Helper.API;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
-using System.Runtime.CompilerServices;
 
 namespace Echokraut;
 
@@ -122,7 +120,7 @@ public partial class Echokraut : IDalamudPlugin
 
     public void StopLipSync(EKEventId eventId)
     {
-        lipSyncHelper.StopLipSync(eventId);
+        Framework.RunOnFrameworkThread(() => lipSyncHelper.StopLipSync(eventId));
     }
 
     public async void Say(EKEventId eventId, GameObject? speaker, SeString speakerName, string textValue)

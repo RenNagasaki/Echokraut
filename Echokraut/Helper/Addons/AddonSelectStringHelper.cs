@@ -1,41 +1,30 @@
-using System;
 using Dalamud.Plugin.Services;
-using R3;
-using Echokraut.TextToTalk.Utils;
 using Echokraut.DataClasses;
-using static Dalamud.Plugin.Services.IFramework;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Echokraut.Enums;
-using System.Threading.Tasks;
-using System.Diagnostics;
 using System.Reflection;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using static System.Windows.Forms.AxHost;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
-using Dalamud.Game.Text;
-using FFXIVClientStructs.FFXIV.Client.Game.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
-using static System.Windows.Forms.Design.AxImporter;
 using System.Collections.Generic;
-using Lumina.Data.Parsing;
 using System.Linq;
 using Echokraut.Helper.DataHelper;
 using Echokraut.Helper.Data;
+using Echokraut.Helper.Functional;
+using FFXIVClientStructs.FFXIV.Client.Game;
 
 namespace Echokraut.Helper.Addons;
 
-public class AddonSelectStringHelper
+public unsafe class AddonSelectStringHelper
 {
     private record struct AddonSelectStringState(string? Speaker, string? Text, AddonPollSource PollSource);
 
     private readonly IAddonLifecycle addonLifecycle;
     private readonly IClientState clientState;
     private readonly IObjectTable objects;
-    private readonly ICondition condition;
     private readonly Configuration config;
+    private readonly Conditions* conditions;
     private readonly Echokraut plugin;
     private List<string> options = new List<string>();
 
@@ -46,7 +35,7 @@ public class AddonSelectStringHelper
         this.clientState = clientState;
         this.config = config;
         this.objects = objects;
-        this.condition = condition;
+        this.conditions = Conditions.Instance();
 
         HookIntoAddonLifecycle();
     }
@@ -61,7 +50,7 @@ public class AddonSelectStringHelper
     {
         if (!config.Enabled) return;
         if (!config.VoicePlayerChoices) return;
-        if (!condition[ConditionFlag.OccupiedInQuestEvent]) return;
+        if (!conditions->OccupiedInQuestEvent) return;
 
         GetAddonStrings(((AddonSelectString*)args.Addon)->PopupMenu.PopupMenu.List);
     }
@@ -70,7 +59,7 @@ public class AddonSelectStringHelper
     {
         if (!config.Enabled) return;
         if (!config.VoicePlayerChoices) return;
-        if (!condition[ConditionFlag.OccupiedInQuestEvent]) return;
+        if (!conditions->OccupiedInQuestEvent) return;
 
         HandleSelectedString(((AddonSelectString*)args.Addon)->PopupMenu.PopupMenu.List);
     }

@@ -6,8 +6,7 @@ using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Helper.Data;
-using Echokraut.TextToTalk.Utils;
-using FFXIVClientStructs.FFXIV.Client.Game.Character;
+using Echokraut.Helper.Functional;
 using Character = Dalamud.Game.ClientState.Objects.Types.ICharacter;
 
 namespace Echokraut.Helper.DataHelper;

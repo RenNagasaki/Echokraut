@@ -15,7 +15,7 @@ namespace Echokraut.DataClasses
         public string Text { get; set; }
         //public string TextTemplate { get; set; }
 
-        public IGameObject pActor {  get; set; }
+        public IGameObject? pActor {  get; set; }
         public NpcMapData Speaker { get; set; }
         public TextSource Source { get; set; }
         public int? ChatType { get; set; }

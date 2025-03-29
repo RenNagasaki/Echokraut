@@ -1,6 +1,5 @@
 using System;
 using Dalamud.Plugin.Services;
-using Echokraut.TextToTalk.Utils;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
 using System.Reflection;
@@ -8,6 +7,7 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Echokraut.Helper.DataHelper;
 using Echokraut.Helper.Data;
+using Echokraut.Helper.Functional;
 
 namespace Echokraut.Helper.Addons;
 

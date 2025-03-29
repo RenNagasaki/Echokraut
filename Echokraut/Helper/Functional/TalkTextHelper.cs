@@ -12,16 +12,13 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using Dalamud.Game;
 using Humanizer;
 using System.Globalization;
+using Echokraut.Helper.Addons;
 using GameObject = Dalamud.Game.ClientState.Objects.Types.IGameObject;
 using Echokraut.Helper.DataHelper;
-using Echokraut.Helper.Addons;
 using Echokraut.Helper.API;
 using Echokraut.Helper.Data;
-using Echokraut.Helper.Functional;
-using FFXIVClientStructs.FFXIV.Common.Lua;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement.TaskbarClock;
 
-namespace Echokraut.TextToTalk.Utils
+namespace Echokraut.Helper.Functional
 {
     public static partial class TalkTextHelper
     {
