@@ -17,21 +17,11 @@ namespace Echokraut.Helper.Addons
     {
         private record struct ChatMessage(XivChatType Type, SeString Sender, SeString Message);
 
-        private readonly Echokraut echokraut;
-        private readonly Configuration config;
-        private readonly IChatGui chat;
-        private readonly IObjectTable objects;
-        private readonly IClientState clientState;
         private readonly Conditions* conditions;
         private IChatGui.OnMessageDelegate handler;
 
-        public ChatTalkHelper(Echokraut echokraut, Configuration config, IChatGui chat, IObjectTable objects, IClientState clientState)
+        public ChatTalkHelper()
         {
-            this.echokraut = echokraut;
-            this.config = config;
-            this.chat = chat;
-            this.objects = objects;
-            this.clientState = clientState;
             this.conditions = Conditions.Instance();
 
             HookIntoChat();
@@ -40,12 +30,12 @@ namespace Echokraut.Helper.Addons
         private void HookIntoChat()
         {
             handler = new IChatGui.OnMessageDelegate(Handle);
-            chat.ChatMessage += handler;
+            Plugin.ChatGui.ChatMessage += handler;
         }
         void Handle(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool handled)
         {
-            if (!config.Enabled) return;
-            if (!config.VoiceChat) return;
+            if (!Plugin.Configuration.Enabled) return;
+            if (!Plugin.Configuration.VoiceChat) return;
             if (conditions->WatchingCutscene78 || conditions->WatchingCutscene || conditions->OccupiedInCutSceneEvent || conditions->DutyRecorderPlayback) return;
 
             var messageObj = new ChatMessage(type, sender, message);
@@ -61,48 +51,36 @@ namespace Echokraut.Helper.Addons
                 var realSender = TalkTextHelper.StripWorldFromNames(sender);
                 text = TalkTextHelper.NormalizePunctuation(text);
 
-                var localPlayer = clientState.LocalPlayer;
+                var localPlayer = Plugin.ClientState.LocalPlayer;
                 switch ((ushort)type)
                 {
                     case (ushort)XivChatType.Say:
-                        if (!config.VoiceChatSay)
-                        {
+                        if (!Plugin.Configuration.VoiceChatSay)
                             return;
-                        }
                         break;
                     case (ushort)XivChatType.Shout:
-                        if (!config.VoiceChatShout)
-                        {
+                        if (!Plugin.Configuration.VoiceChatShout)
                             return;
-                        }
                         break;
                     case (ushort)XivChatType.TellIncoming:
-                        if (!config.VoiceChatTell)
-                        {
+                        if (!Plugin.Configuration.VoiceChatTell)
                             return;
-                        }
                         break;
                     case (ushort)XivChatType.TellOutgoing:
-                        if (!config.VoiceChatTell)
-                        {
+                        if (!Plugin.Configuration.VoiceChatTell)
                             return;
-                        }
                         realSender = localPlayer?.Name.TextValue ?? "PLAYER";
                         break;
                     case (ushort)XivChatType.Party:
                     case (ushort)XivChatType.CrossParty:
                     case (ushort)XivChatType.PvPTeam:
-                        if (!config.VoiceChatParty)
-                        {
+                        if (!Plugin.Configuration.VoiceChatParty)
                             return;
-                        }
                         realSender = realSender.Substring(1);
                         break;
                     case (ushort)XivChatType.Alliance:
-                        if (!config.VoiceChatAlliance)
-                        {
+                        if (!Plugin.Configuration.VoiceChatAlliance)
                             return;
-                        }
                         break;
                     case (ushort)XivChatType.Ls1:
                     case (ushort)XivChatType.Ls2:
@@ -112,28 +90,20 @@ namespace Echokraut.Helper.Addons
                     case (ushort)XivChatType.Ls6:
                     case (ushort)XivChatType.Ls7:
                     case (ushort)XivChatType.Ls8:
-                        if (!config.VoiceChatLinkshell)
-                        {
+                        if (!Plugin.Configuration.VoiceChatLinkshell)
                             return;
-                        }
                         break;
                     case (ushort)XivChatType.FreeCompany:
-                        if (!config.VoiceChatFreeCompany)
-                        {
+                        if (!Plugin.Configuration.VoiceChatFreeCompany)
                             return;
-                        }
                         break;
                     case (ushort)XivChatType.NoviceNetwork:
-                        if (!config.VoiceChatNoviceNetwork)
-                        {
+                        if (!Plugin.Configuration.VoiceChatNoviceNetwork)
                             return;
-                        }
                         break;
                     case (ushort)XivChatType.Yell:
-                        if (!config.VoiceChatYell)
-                        {
+                        if (!Plugin.Configuration.VoiceChatYell)
                             return;
-                        }
                         break;
                     case (ushort)XivChatType.CrossLinkShell1:
                     case (ushort)XivChatType.CrossLinkShell2:
@@ -143,10 +113,8 @@ namespace Echokraut.Helper.Addons
                     case (ushort)XivChatType.CrossLinkShell6:
                     case (ushort)XivChatType.CrossLinkShell7:
                     case (ushort)XivChatType.CrossLinkShell8:
-                        if (!config.VoiceChatCrossLinkshell)
-                        {
+                        if (!Plugin.Configuration.VoiceChatCrossLinkshell)
                             return;
-                        }
                         break;
                     case (ushort)XivChatType.None:
                     case (ushort)XivChatType.Debug:
@@ -167,23 +135,19 @@ namespace Echokraut.Helper.Addons
                         return;
                 }
 
-                var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.Chat);
+                var eventId = LogHelper.Start(MethodBase.GetCurrentMethod().Name, TextSource.Chat);
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"{type.ToString()}: \"{text}\"", eventId);
 
                 // Find the game object this speaker represents
-                var speaker = DalamudHelper.GetGameObjectByName(clientState, objects, realSender, eventId);
+                var speaker = DalamudHelper.GetGameObjectByName(Plugin.ClientState, Plugin.ObjectTable, realSender, eventId);
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"{type.ToString()}: \"{speaker}\" {realSender}", eventId);
 
-                if (!config.VoiceChatPlayer && localPlayer != null && localPlayer.Name.TextValue == realSender) return;
+                if (!Plugin.Configuration.VoiceChatPlayer && localPlayer != null && localPlayer.Name.TextValue == realSender) return;
 
                 if (speaker != null)
-                {
-                    echokraut.Say(eventId, speaker, speaker.Name, text);
-                }
+                    Plugin.Say(eventId, speaker, speaker.Name, text);
                 else
-                {
-                    echokraut.Say(eventId, null, realSender ?? "", text);
-                }
+                    Plugin.Say(eventId, null, realSender ?? "", text);
             }
             catch (Exception ex)
             {
@@ -195,9 +159,7 @@ namespace Echokraut.Helper.Addons
         {
             // Get the speaker name from their entity data, if possible
             if (speaker != null)
-            {
                 return speaker.Name;
-            }
 
             // Parse the speaker name from chat and hope it's right
             return TalkTextHelper.TryGetEntityName(sender, out var senderName) ? senderName : sender;
@@ -205,7 +167,7 @@ namespace Echokraut.Helper.Addons
 
         public void Dispose()
         {
-            chat.ChatMessage -= handler;
+            Plugin.ChatGui.ChatMessage -= handler;
         }
     }
 }

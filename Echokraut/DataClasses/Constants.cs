@@ -11,6 +11,9 @@ namespace Echokraut.DataClasses
 {
     public static class Constants
     {
+        public const string ALLTALKGITHUBURL = "https://github.com/erew123";
+        public const string DISCORDURL = "https://discord.gg/5gesjDfDBr";
+        public static readonly Vector4 DISCORDCOLOR = new Vector4(0.345f, 0.396f, 0.949f, 1f);
         public static readonly Vector4 INFOLOGCOLOR = new Vector4(.3f, 1.0f, 1.0f, 1f);
         public static readonly Vector4 DEBUGLOGCOLOR = new Vector4(0.0f, 1.0f, 0.0f, 1f);
         public static readonly Vector4 ERRORLOGCOLOR = new Vector4(1.0f, 0.0f, 0.0f, 1f);
@@ -94,10 +97,32 @@ namespace Echokraut.DataClasses
             NpcRaces.Namazu.ToString(),
             NpcRaces.Omicron.ToString()
         };
+
+        public static readonly string[] XTTS203URLS =
+        {
+            "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/LICENSE.txt?download=true",
+            "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/README.md?download=true",
+            "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/config.json?download=true",
+            "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/model.pth?download=true",
+            "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/dvae.pth?download=true",
+            "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/mel_stats.pth?download=true",
+            "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/speakers_xtts.pth?download=true",
+            "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/vocab.json?download=true"
+        };
+
+        public const string ALLTALKFOLDERNAME = "alltalk_tts";
+
+        public const string VOICES2URL = "https://drive.google.com/uc?export=download&id=1CPnx1rpkuKvVj5fGr9OiUJHZ_e8DfTzP";
+        public const string VOICESURL = "https://drive.google.com/uc?export=download&id=1bYdZdr3L69kmzUN3vSiqZmLRD7-A3M47";
+
+        public const string ALLTALKURL = "https://github.com/RenNagasaki/alltalk_tts/releases/download/alltalk_tts-alltalkbeta/alltalk_tts-alltalkbeta.zip";
+        public static readonly string[] ALLTALKDEBUGLOGCOLOR = { @"\033[94m", @"\033[93m" };
+        public static readonly string[] ALLTALKERRORLOGCOLOR = { @"\033[91m" };
+
         public const int MASTERVOLUMEOFFSET = 47392;
         public const int VOICEVOLUMEOFFSET = 47440;
         public static readonly char[] SENTENCESEPARATORS = { '.', '!', '?' };
-        public static readonly string[] BACKENDS = { "Alltalk", "Custom Webservice" };
+        public static readonly string[] BACKENDS = { "Alltalk" };
         public static readonly List<NpcRaces> RACESFORRANDOMNPC = new List<NpcRaces>() { NpcRaces.Hyur, NpcRaces.Roegadyn, NpcRaces.Viera, NpcRaces.AuRa, NpcRaces.Miqote, NpcRaces.Hrothgar };
         public const string NARRATORVOICE = "Narrator.wav";
         public const string TESTMESSAGEDE = "In der Stadt gab es auch ein paar Barbaren. Die hatten von Barbaras Rhabarberbar erfahren und da sie fort an jeden Tag bei Barbara waren, nannte man sie bald die \"Rhabarberbar-Barbaren\".";

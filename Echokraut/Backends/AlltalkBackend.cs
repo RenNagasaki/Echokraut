@@ -23,26 +23,18 @@ namespace Echokraut.Backend
 {
     public class AlltalkBackend : ITTSBackend
     {
-        AlltalkData data;
-        Configuration configuration;
-        public AlltalkBackend(AlltalkData data, Configuration config)
-        {
-            this.data = data;
-            this.configuration = config;
-        }
-
         public async Task<Stream> GenerateAudioStreamFromVoice(EKEventId eventId, string voiceLine, string voice, ClientLanguage language)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating Alltalk Audio", eventId);
             HttpClient httpClient = new HttpClient();
-            httpClient.BaseAddress = new Uri(data.BaseUrl);
+            httpClient.BaseAddress = new Uri(Plugin.Configuration.Alltalk.BaseUrl);
             httpClient.Timeout = TimeSpan.FromSeconds(2);
 
             HttpResponseMessage res = null;
             try
             {
-                var uriBuilder = new UriBuilder(data.BaseUrl);
-                uriBuilder.Path = data.StreamPath;
+                var uriBuilder = new UriBuilder(Plugin.Configuration.Alltalk.BaseUrl);
+                uriBuilder.Path = Plugin.Configuration.Alltalk.StreamPath;
                 var query = HttpUtility.ParseQueryString(uriBuilder.Query);
                 query["text"] = voiceLine;
                 query["voice"] = voice;
@@ -79,9 +71,9 @@ namespace Echokraut.Backend
             try
             {
                 HttpClient httpClient = new HttpClient();
-                httpClient.BaseAddress = new Uri(data.BaseUrl);
+                httpClient.BaseAddress = new Uri(Plugin.Configuration.Alltalk.BaseUrl);
                 httpClient.Timeout = TimeSpan.FromSeconds(5);
-                var uriBuilder = new UriBuilder(data.BaseUrl) { Path = data.VoicesPath };
+                var uriBuilder = new UriBuilder(Plugin.Configuration.Alltalk.BaseUrl) { Path = Plugin.Configuration.Alltalk.VoicesPath };
                 var result = httpClient.GetStringAsync(uriBuilder.Uri);
                 result.Wait();
                 string resultStr = result.Result.Replace("\\", "");
@@ -104,14 +96,14 @@ namespace Echokraut.Backend
         public async void StopGenerating(EKEventId eventId)
         {
             HttpClient httpClient = new HttpClient();
-            httpClient.BaseAddress = new Uri(data.BaseUrl);
+            httpClient.BaseAddress = new Uri(Plugin.Configuration.Alltalk.BaseUrl);
             httpClient.Timeout = TimeSpan.FromSeconds(5);
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping Alltalk Generation", eventId);
             HttpResponseMessage res = null;
             try
             {
                 var content = new StringContent("");
-                res = await httpClient.PutAsync(data.StopPath, content).ConfigureAwait(false);
+                res = await httpClient.PutAsync(Plugin.Configuration.Alltalk.StopPath, content).ConfigureAwait(false);
             } catch (Exception ex)
             {
                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), eventId);
@@ -121,12 +113,12 @@ namespace Echokraut.Backend
         public async Task<string> CheckReady(EKEventId eventId)
         {
             HttpClient httpClient = new HttpClient();
-            httpClient.BaseAddress = new Uri(data.BaseUrl);
+            httpClient.BaseAddress = new Uri(Plugin.Configuration.Alltalk.BaseUrl);
             httpClient.Timeout = TimeSpan.FromSeconds(5);
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Checking if Alltalk is ready", eventId);
             try
             {
-                var res = await httpClient.GetAsync(data.ReadyPath).ConfigureAwait(false);
+                var res = await httpClient.GetAsync(Plugin.Configuration.Alltalk.ReadyPath).ConfigureAwait(false);
 
                 var responseString = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
 
@@ -170,14 +162,14 @@ namespace Echokraut.Backend
         public async Task<bool> ReloadService(string reloadModel, EKEventId eventId)
         {
             HttpClient httpClient = new HttpClient();
-            httpClient.BaseAddress = new Uri(data.BaseUrl);
+            httpClient.BaseAddress = new Uri(Plugin.Configuration.Alltalk.BaseUrl);
             httpClient.Timeout = TimeSpan.FromSeconds(5);
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Reloading Alltalk Service", eventId);
             HttpResponseMessage res = null;
             try
             {
                 var content = new StringContent("");
-                res = await httpClient.PostAsync(data.ReloadPath + reloadModel, content).ConfigureAwait(false);
+                res = await httpClient.PostAsync(Plugin.Configuration.Alltalk.ReloadPath + reloadModel, content).ConfigureAwait(false);
                 return true;
             }
             catch (Exception ex)

@@ -28,42 +28,24 @@ namespace Echokraut.Helper.Addons
         private readonly object mSpeechBubbleInfoLockObj = new();
         private readonly List<SpeechBubbleInfo> mSpeechBubbleInfo = new();
         private OnUpdateDelegate updateHandler;
-        private ICondition condition;
-        private IObjectTable objects;
-        private ISigScanner sigScanner;
-        private IGameInteropProvider gameInteropProvider;
-        private IClientState clientState;
-        private IFramework framework;
-        private IDataManager dataManager;
-        private Configuration configuration;
-        private Echokraut echokraut;
         private unsafe Camera* camera;
         private unsafe IPlayerCharacter localPlayer;
         public bool nextIsVoice = false;
         public DateTime timeNextVoice = DateTime.Now;
 
-        public unsafe AddonBubbleHelper(Echokraut echokraut, ICondition condition, IDataManager dataManager, IFramework framework, IObjectTable objectTable, ISigScanner sigScanner, IGameInteropProvider gameInteropProvider, IClientState clientState, Configuration config)
+        public unsafe AddonBubbleHelper()
         {
-            this.echokraut = echokraut;
-            this.condition = condition;
-            this.dataManager = dataManager;
-            this.framework = framework;
-            this.objects = objectTable;
-            this.sigScanner = sigScanner;
-            this.gameInteropProvider = gameInteropProvider;
-            this.clientState = clientState;
-            configuration = config;
             ManagedBass.Bass.Init(Flags: ManagedBass.DeviceInitFlags.Device3D);
             //ManagedBass.Bass.CurrentDevice = 1;
-            Update3DFactors(config.VoiceBubbleAudibleRange);
+            Update3DFactors(Plugin.Configuration.VoiceBubbleAudibleRange);
 
             unsafe
             {
-                var fpOpenChatBubble = sigScanner.ScanText("E8 ?? ?? ?? ?? F6 86 ?? ?? ?? ?? ?? C7 46 ?? ?? ?? ?? ??");
+                var fpOpenChatBubble = Plugin.SigScanner.ScanText("E8 ?? ?? ?? ?? F6 86 ?? ?? ?? ?? ?? C7 46 ?? ?? ?? ?? ??");
                 if (fpOpenChatBubble != nint.Zero)
                 {
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"OpenChatBubble function signature found at 0x{fpOpenChatBubble:X}", new EKEventId(0, TextSource.AddonBubble));
-                    mOpenChatBubbleHook = gameInteropProvider.HookFromAddress<OpenChatBubbleDelegate>(fpOpenChatBubble, OpenChatBubbleDetour);
+                    mOpenChatBubbleHook = Plugin.GameInteropProvider.HookFromAddress<OpenChatBubbleDelegate>(fpOpenChatBubble, OpenChatBubbleDetour);
                     mOpenChatBubbleHook?.Enable();
                 }
                 else
@@ -85,28 +67,28 @@ namespace Echokraut.Helper.Addons
         private void HookIntoFrameworkUpdate()
         {
             updateHandler = new OnUpdateDelegate(Handle);
-            framework.Update += updateHandler;
+            Plugin.Framework.Update += updateHandler;
 
         }
         unsafe void Handle(IFramework f)
         {
             try
             {
-                if (!configuration.Enabled) return;
-                if (!configuration.VoiceBubble) return;
+                if (!Plugin.Configuration.Enabled) return;
+                if (!Plugin.Configuration.VoiceBubble) return;
 
                 var territory = LuminaHelper.GetTerritory();
-                if (territory == null || !configuration.VoiceBubblesInCity && !territory.Value.Mount) return;
+                if (territory == null || !Plugin.Configuration.VoiceBubblesInCity && !territory.Value.Mount) return;
 
                 if (camera == null && CameraManager.Instance() != null)
                     camera = CameraManager.Instance()->GetActiveCamera();
 
-                localPlayer = clientState.LocalPlayer!;
+                localPlayer = Plugin.ClientState.LocalPlayer!;
 
                 if (camera != null && localPlayer != null)
                 {
                     var position = new Vector3();
-                    if (configuration.VoiceSourceCam)
+                    if (Plugin.Configuration.VoiceSourceCam)
                         position = camera->CameraBase.SceneCamera.Position;
                     else
                         position = localPlayer.Position;
@@ -130,7 +112,7 @@ namespace Echokraut.Helper.Addons
         {
             try
             {
-                if (!configuration.Enabled || !configuration.VoiceBubble || condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.WatchingCutscene] || condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.OccupiedInCutSceneEvent])
+                if (!Plugin.Configuration.Enabled || !Plugin.Configuration.VoiceBubble || Plugin.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.WatchingCutscene] || Plugin.Condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.OccupiedInCutSceneEvent])
                     return mOpenChatBubbleHook.Original(pThis, pActor, pString, param3, attachmentPointID);
 
                 var voiceNext = nextIsVoice;
@@ -140,15 +122,15 @@ namespace Echokraut.Helper.Addons
                     voiceNext = false;
 
                 var territory = LuminaHelper.GetTerritory();
-                if (!configuration.VoiceBubblesInCity && !territory.Value.Mount)
+                if (!Plugin.Configuration.VoiceBubblesInCity && !territory.Value.Mount)
                     return mOpenChatBubbleHook.Original(pThis, pActor, pString, param3, attachmentPointID);
 
-                if (pString != nint.Zero && !clientState.IsPvPExcludingDen)
+                if (pString != nint.Zero && !Plugin.ClientState.IsPvPExcludingDen)
                 {
                     //	Idk if the actor can ever be null, but if it can, assume that we should print the bubble just in case.  Otherwise, only don't print if the actor is a player.
                     if (pActor == null && !voiceNext || (byte)pActor->ObjectKind != (byte)Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player && !voiceNext)
                     {
-                        var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonBubble);
+                        var eventId = LogHelper.Start(MethodBase.GetCurrentMethod().Name, TextSource.AddonBubble);
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found EntityId: {pActor->GetGameObjectId().ObjectId}", eventId);
                         var currentTime_mSec = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
@@ -169,8 +151,8 @@ namespace Echokraut.Helper.Addons
                                 if (currentTime_mSec - extantMatch.TimeLastSeen_mSec > 5000)
                                 {
                                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Found bubble: {speakerName} - {text}", eventId);
-                                    var actorObject = objects.CreateObjectReference((nint)pActor);
-                                    echokraut.Say(eventId, actorObject, speakerName, text.ToString());
+                                    var actorObject = Plugin.ObjectTable.CreateObjectReference((nint)pActor);
+                                    Plugin.Say(eventId, actorObject, speakerName, text.ToString());
                                 }
                                 else
                                 {
@@ -185,8 +167,8 @@ namespace Echokraut.Helper.Addons
                             {
                                 mSpeechBubbleInfo.Add(bubbleInfo);
                                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Found bubble: {speakerName} - {text}", eventId);
-                                var actorObject = objects.CreateObjectReference((nint)pActor);
-                                echokraut.Say(eventId, actorObject, speakerName, text.ToString());
+                                var actorObject = Plugin.ObjectTable.CreateObjectReference((nint)pActor);
+                                Plugin.Say(eventId, actorObject, speakerName, text.ToString());
                             }
                         }
                     }

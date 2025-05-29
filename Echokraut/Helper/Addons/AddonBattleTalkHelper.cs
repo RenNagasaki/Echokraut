@@ -15,29 +15,18 @@ public class AddonBattleTalkHelper
 {
     private record struct AddonBattleTalkState(string? Speaker, string? Text);
 
-    private readonly IAddonLifecycle addonLifecycle;
-    private readonly IClientState clientState;
-    private readonly IObjectTable objects;
-    private readonly Configuration config;
-    private readonly Echokraut plugin;
     public bool nextIsVoice = false;
     public DateTime timeNextVoice = DateTime.Now;
     private AddonBattleTalkState lastValue;
 
-    public AddonBattleTalkHelper(Echokraut plugin, IAddonLifecycle addonLifecycle, IClientState clientState, IObjectTable objects, Configuration config)
+    public AddonBattleTalkHelper()
     {
-        this.addonLifecycle = addonLifecycle;
-        this.clientState = clientState;
-        this.plugin = plugin;
-        this.config = config;
-        this.objects = objects;
-
         HookIntoFrameworkUpdate();
     }
 
     private void HookIntoFrameworkUpdate()
     {
-        addonLifecycle.RegisterListener(AddonEvent.PostDraw, "_BattleTalk", OnPostDraw);
+        Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "_BattleTalk", OnPostDraw);
     }
 
     private unsafe void OnPostDraw(AddonEvent type, AddonArgs args)
@@ -47,8 +36,8 @@ public class AddonBattleTalkHelper
     }
     private unsafe void Handle(AddonBattleTalk* addonBattleTalk)
     {
-        if (!config.Enabled) return;
-        if (!config.VoiceBattleDialogue) return;
+        if (!Plugin.Configuration.Enabled) return;
+        if (!Plugin.Configuration.VoiceBattleDialogue) return;
         if (addonBattleTalk == null || !addonBattleTalk->Base.IsVisible) return;
         var state = GetTalkAddonState(addonBattleTalk);
         Mutate(state);
@@ -87,12 +76,12 @@ public class AddonBattleTalkHelper
         if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(1000))
             voiceNext = false;
 
-        var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonBattleTalk);
+        var eventId = LogHelper.Start(MethodBase.GetCurrentMethod().Name, TextSource.AddonBattleTalk);
         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"\"{state}\"", eventId);
 
         // Notify observers that the addon state was advanced
-        if (!config.VoiceBattleDialogQueued)
-            plugin.Cancel(eventId);
+        if (!Plugin.Configuration.VoiceBattleDialogQueued)
+            Plugin.Cancel(eventId);
 
         text = TalkTextHelper.NormalizePunctuation(text);
 
@@ -106,15 +95,15 @@ public class AddonBattleTalkHelper
         }
 
         // Find the game object this speaker is representing
-        var speakerObj = speaker != null ? DalamudHelper.GetGameObjectByName(clientState, objects, speaker, eventId) : null;
+        var speakerObj = speaker != null ? DalamudHelper.GetGameObjectByName(Plugin.ClientState, Plugin.ObjectTable, speaker, eventId) : null;
 
         if (speakerObj != null)
         {
-            plugin.Say(eventId, speakerObj, speakerObj.Name, text);
+            Plugin.Say(eventId, speakerObj, speakerObj.Name, text);
         }
         else
         {
-            plugin.Say(eventId, null, state.Speaker ?? "", text);
+            Plugin.Say(eventId, null, state.Speaker ?? "", text);
         }
 
         return;
@@ -122,6 +111,6 @@ public class AddonBattleTalkHelper
 
     public void Dispose()
     {
-        addonLifecycle.UnregisterListener(AddonEvent.PostDraw, "_BattleTalk", OnPostDraw);
+        Plugin.AddonLifecycle.UnregisterListener(AddonEvent.PostDraw, "_BattleTalk", OnPostDraw);
     }
 }

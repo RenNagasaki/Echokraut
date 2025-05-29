@@ -28,11 +28,6 @@ namespace Echokraut.Helper.Functional
 {
     internal class LipSyncHelper
     {
-        private readonly IFramework framework;
-        private readonly IObjectTable objects;
-        private readonly IClientState clientState;
-        private readonly Configuration config;
-        private readonly ICondition condition;
         private MemoryService memoryService;
         private AnimationService animationService;
         private GameDataService gameDataService;
@@ -40,13 +35,8 @@ namespace Echokraut.Helper.Functional
         private readonly Dictionary<string, CancellationTokenSource> taskCancellations = new Dictionary<string, CancellationTokenSource>();
         public List<ActionTimeline> LipSyncTypes { get; private set; }
 
-        public LipSyncHelper(IFramework framework, ICondition condition, IClientState clientState, IObjectTable objects, Configuration config, EKEventId eventId)
+        public LipSyncHelper(EKEventId eventId)
         {
-            this.framework = framework;
-            this.condition = condition;
-            this.clientState = clientState;
-            this.config = config;
-            this.objects = objects;
 
             InitializeAsync(eventId).ContinueWith(t =>
             {
@@ -58,8 +48,8 @@ namespace Echokraut.Helper.Functional
         public async void TriggerLipSync(EKEventId eventId, float length, IGameObject? npc = null)
         {
             return;
-            if (condition[ConditionFlag.BoundByDuty] && !condition[ConditionFlag.WatchingCutscene]) return;
-            if (!config.Enabled) return;
+            if (Plugin.Condition[ConditionFlag.BoundByDuty] && !Plugin.Condition[ConditionFlag.WatchingCutscene]) return;
+            if (!Plugin.Configuration.Enabled) return;
 
             var npcObject = npc;
             var npcName = npcObject.Name.TextValue;
@@ -218,8 +208,8 @@ namespace Echokraut.Helper.Functional
             return;
             try
             {
-                if (condition[ConditionFlag.BoundByDuty]) return;
-                if (!config.Enabled) return;
+                if (Plugin.Condition[ConditionFlag.BoundByDuty]) return;
+                if (!Plugin.Configuration.Enabled) return;
                 if (currentLipsync == null) return;
 
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Stopping Lipsync for {currentLipsync.Name.TextValue}", eventId);
@@ -360,9 +350,9 @@ namespace Echokraut.Helper.Functional
             }
             else
             {
-                foreach (var item in objects)
+                foreach (var item in Plugin.ObjectTable)
                 {
-                    if (!(item is Character) || item as Character == clientState.LocalPlayer || item.Name.TextValue == "") continue;
+                    if (!(item is Character) || item as Character == Plugin.ClientState.LocalPlayer || item.Name.TextValue == "") continue;
                     if (item.Name.TextValue == npcName)
                     {
                         return item;

@@ -21,34 +21,51 @@ namespace Echokraut.Helper.API
     public static class BackendHelper
     {
         static Random Rand { get; set; }
-        static Config Configuration { get; set; }
-        static IClientState ClientState { get; set; }
         static ITTSBackend Backend { get; set; }
-        static Echokraut Echokraut { get; set; }
 
-        public static void Setup(Echokraut echokraut, Config configuration, IClientState clientState, IFramework framework, TTSBackends backendType)
+        public static void Initialize(TTSBackends backendType)
         {
-            Configuration = configuration;
-            ClientState = clientState;
-            Echokraut = echokraut;
             Rand = new Random(Guid.NewGuid().GetHashCode());
             SetBackendType(backendType);
-            PlayingHelper.Setup(echokraut, configuration, framework);
+            PlayingHelper.Setup();
         }
 
         public static void SetBackendType(TTSBackends backendType)
         {
             if (backendType == TTSBackends.Alltalk)
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Creating backend instance: {backendType}", new EKEventId(0, TextSource.None));
-                Backend = new AlltalkBackend(Configuration.Alltalk, Configuration);
-                GetAndMapVoices(new EKEventId(0, TextSource.None));
+                if (Plugin.Configuration.Alltalk.RemoteInstance ||
+                    (Plugin.Configuration.Alltalk.LocalInstance && AlltalkInstanceHelper.InstanceRunning))
+                {
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Creating backend instance: {backendType}",
+                                   new EKEventId(0, TextSource.None));
+                    Backend = new AlltalkBackend();
+                    GetAndMapVoices(new EKEventId(0, TextSource.None));
+                }
             }
         }
 
         public static bool ReloadService(string reloadModel, EKEventId eventId)
         {
             return Backend.ReloadService(reloadModel, eventId).Result;
+        }
+
+        public static bool IsBackendAvailable()
+        {
+            switch (Plugin.Configuration.BackendSelection)
+            {
+                case TTSBackends.Alltalk:
+                    if (Plugin.Configuration.Alltalk.LocalInstance && Plugin.Configuration.Alltalk.LocalInstall &&
+                        AlltalkInstanceHelper.InstanceRunning)
+                        return true;
+
+                    if (Plugin.Configuration.Alltalk.RemoteInstance &&
+                        !string.IsNullOrWhiteSpace(Plugin.Configuration.Alltalk.BaseUrl))
+                        return true;
+                    break;
+            }
+
+            return false;
         }
 
         public static void OnSay(VoiceMessage voiceMessage, float volume)
@@ -94,7 +111,7 @@ namespace Echokraut.Helper.API
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Loading and mapping voices", eventId);
             var backendVoices = Backend.GetAvailableVoices(eventId);
 
-            var newVoices = backendVoices.FindAll(p => Configuration.EchokrautVoices.Find(f => f.BackendVoice == p) == null);
+            var newVoices = backendVoices.FindAll(p => Plugin.Configuration.EchokrautVoices.Find(f => f.BackendVoice == p) == null);
 
             if (newVoices.Count > 0)
             {
@@ -116,15 +133,15 @@ namespace Echokraut.Helper.API
                     NpcDataHelper.ReSetVoiceGenders(newEkVoice, eventId);
                     NpcDataHelper.ReSetVoiceRaces(newEkVoice, eventId);
 
-                    Configuration.EchokrautVoices.Add(newEkVoice);
+                    Plugin.Configuration.EchokrautVoices.Add(newEkVoice);
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Added {newEkVoice}", eventId);
                 }
 
-                Configuration.Save();
+                Plugin.Configuration.Save();
             }
 
             var oldVoices =
-                Configuration.EchokrautVoices.FindAll(p => backendVoices.Find(f => f == p.BackendVoice) == null);
+                Plugin.Configuration.EchokrautVoices.FindAll(p => backendVoices.Find(f => f == p.BackendVoice) == null);
             
             if (oldVoices.Count > 0)
             {
@@ -137,7 +154,7 @@ namespace Echokraut.Helper.API
                     {
                         if (oldVoice.AllowedRaces.Count > 0 && NpcDataHelper.IsGenderedRace(oldVoice.AllowedRaces[0]))
                         {
-                            var newEkVoices = Configuration.EchokrautVoices.FindAll(
+                            var newEkVoices = Plugin.Configuration.EchokrautVoices.FindAll(
                                 f => !oldVoices.Contains(f) &&
                                      f.VoiceName.Contains("NPC") &&
                                      f.IsChildVoice == oldVoice.IsChildVoice &&
@@ -149,7 +166,7 @@ namespace Echokraut.Helper.API
                         }
                         else
                         {
-                            var newEkVoices = Configuration.EchokrautVoices.FindAll(
+                            var newEkVoices = Plugin.Configuration.EchokrautVoices.FindAll(
                                 f => !oldVoices.Contains(f) &&
                                      f.VoiceName.Contains("NPC") &&
                                      f.IsChildVoice == oldVoice.IsChildVoice &&
@@ -161,13 +178,13 @@ namespace Echokraut.Helper.API
                     }
                     else
                     {
-                        newEkVoice = Configuration.EchokrautVoices.Find(
+                        newEkVoice = Plugin.Configuration.EchokrautVoices.Find(
                             f => !oldVoices.Contains(f) &&
                                  f.VoiceName == oldVoice.VoiceName);
                     }
 
                     NpcDataHelper.MigrateOldData(oldVoice, newEkVoice);
-                    Configuration.EchokrautVoices.Remove(oldVoice);
+                    Plugin.Configuration.EchokrautVoices.Remove(oldVoice);
                     if (newEkVoice != null)
                     {
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
@@ -178,12 +195,12 @@ namespace Echokraut.Helper.API
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Failed to replace {oldVoice}", eventId);
                 }
 
-                Configuration.Save();
+                Plugin.Configuration.Save();
             }
 
             NpcDataHelper.MigrateOldData();
 
-            NpcDataHelper.RefreshSelectables(Configuration.EchokrautVoices);
+            NpcDataHelper.RefreshSelectables(Plugin.Configuration.EchokrautVoices);
             ConfigWindow.UpdateDataVoices = true;
 
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Success", eventId);
@@ -217,14 +234,14 @@ namespace Echokraut.Helper.API
 
                 if (message.Source == TextSource.AddonBubble || message.Source == TextSource.Chat)
                 {
-                    if (Configuration.SaveToLocal && Directory.Exists(Configuration.LocalSaveLocation))
+                    if (Plugin.Configuration.SaveToLocal && Directory.Exists(Plugin.Configuration.LocalSaveLocation))
                     {
                         var playedText = message;
 
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}", eventId);
                         if (!string.IsNullOrWhiteSpace(playedText.Text))
                         {
-                            var filePath = AudioFileHelper.GetLocalAudioPath(Configuration.LocalSaveLocation, playedText);
+                            var filePath = AudioFileHelper.GetLocalAudioPath(Plugin.Configuration.LocalSaveLocation, playedText);
                             if (AudioFileHelper.WriteStreamToFile(eventId, filePath, responseStream))
                             {
                                 PlayingHelper.PlayingBubbleQueue.Add(filePath);
@@ -235,7 +252,7 @@ namespace Echokraut.Helper.API
                     }
                     else
                     {
-                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't save file locally. Save location doesn't exists: {Configuration.LocalSaveLocation}", eventId);
+                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't save file locally. Save location doesn't exists: {Plugin.Configuration.LocalSaveLocation}", eventId);
                     }
                 }
                 else
@@ -268,13 +285,13 @@ namespace Echokraut.Helper.API
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Searching voice: {npcData.Voice?.VoiceName ?? ""} for NPC: {npcData.Name}", eventId);
             var voiceItem = npcData.Voice;
             var isChild = npcData.IsChild;
-            var mappedList = npcData.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? Configuration.MappedPlayers : Configuration.MappedNpcs;
+            var mappedList = npcData.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? Plugin.Configuration.MappedPlayers : Plugin.Configuration.MappedNpcs;
 
-            if (voiceItem == null || voiceItem == Configuration.EchokrautVoices.Find(p => p.IsDefault))
+            if (voiceItem == null || voiceItem == Plugin.Configuration.EchokrautVoices.Find(p => p.IsDefault))
             {
                 var npcName = npcData.Name;
 
-                var voiceItems = Configuration.EchokrautVoices.FindAll(p => p.VoiceName.Contains(npcName, StringComparison.OrdinalIgnoreCase));
+                var voiceItems = Plugin.Configuration.EchokrautVoices.FindAll(p => p.VoiceName.Contains(npcName, StringComparison.OrdinalIgnoreCase));
                 if (voiceItems.Count > 0)
                 {
                     voiceItem = voiceItems[0];
@@ -283,7 +300,7 @@ namespace Echokraut.Helper.API
                 if (voiceItem == null)
                 {
                     var isGenderedRace = NpcDataHelper.IsGenderedRace(npcData.Race);
-                        voiceItems = Configuration.EchokrautVoices.FindAll(p => p.FitsNpcData(npcData.Gender, npcData.Race, isChild, isGenderedRace));
+                        voiceItems = Plugin.Configuration.EchokrautVoices.FindAll(p => p.FitsNpcData(npcData.Gender, npcData.Race, isChild, isGenderedRace));
                         
                     if (voiceItems.Count > 0)
                     {
@@ -293,7 +310,7 @@ namespace Echokraut.Helper.API
                 }
 
                 if (voiceItem == null)
-                    voiceItem = Configuration.EchokrautVoices.Find(p => p.IsDefault);
+                    voiceItem = Plugin.Configuration.EchokrautVoices.Find(p => p.IsDefault);
 
                 if (voiceItem != npcData.Voice)
                 {
@@ -306,10 +323,14 @@ namespace Echokraut.Helper.API
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Chose voice: {voiceItem} for NPC: {npcName}", eventId);
                     }
                     npcData.Voice = voiceItem;
-                    Configuration.Save();
+                    Plugin.Configuration.Save();
                 }
             }
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found voice: {voiceItem} for NPC: {npcData.Name}", eventId);
+
+            if (voiceItem != null)
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found voice: {voiceItem} for NPC: {npcData.Name}", eventId);
+            else
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't find voice for NPC: {npcData.Name}", eventId);
         }
 
         private static string GetVoice(EKEventId eventId, NpcMapData npcData)

@@ -20,46 +20,33 @@ public unsafe class AddonSelectStringHelper
 {
     private record struct AddonSelectStringState(string? Speaker, string? Text, AddonPollSource PollSource);
 
-    private readonly IAddonLifecycle addonLifecycle;
-    private readonly IClientState clientState;
-    private readonly IObjectTable objects;
-    private readonly Configuration config;
-    private readonly Conditions* conditions;
-    private readonly Echokraut plugin;
     private List<string> options = new List<string>();
 
-    public AddonSelectStringHelper(Echokraut plugin, IAddonLifecycle addonLifecycle, IClientState clientState, IObjectTable objects, ICondition condition, Configuration config)
+    public AddonSelectStringHelper()
     {
-        this.plugin = plugin;
-        this.addonLifecycle = addonLifecycle;
-        this.clientState = clientState;
-        this.config = config;
-        this.objects = objects;
-        this.conditions = Conditions.Instance();
-
         HookIntoAddonLifecycle();
     }
 
     private void HookIntoAddonLifecycle()
     {
-        addonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectString", OnPostSetup);
-        addonLifecycle.RegisterListener(AddonEvent.PreFinalize, "SelectString", OnPreFinalize);
+        Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "SelectString", OnPostSetup);
+        Plugin.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "SelectString", OnPreFinalize);
     }
 
     private unsafe void OnPostSetup(AddonEvent type, AddonArgs args)
     {
-        if (!config.Enabled) return;
-        if (!config.VoicePlayerChoices) return;
-        if (!conditions->OccupiedInQuestEvent) return;
+        if (!Plugin.Configuration.Enabled) return;
+        if (!Plugin.Configuration.VoicePlayerChoices) return;
+        if (!Plugin.Condition[ConditionFlag.OccupiedInQuestEvent]) return;
 
         GetAddonStrings(((AddonSelectString*)args.Addon)->PopupMenu.PopupMenu.List);
     }
 
     private unsafe void OnPreFinalize(AddonEvent type, AddonArgs args)
     {
-        if (!config.Enabled) return;
-        if (!config.VoicePlayerChoices) return;
-        if (!conditions->OccupiedInQuestEvent) return;
+        if (!Plugin.Configuration.Enabled) return;
+        if (!Plugin.Configuration.VoicePlayerChoices) return;
+        if (!Plugin.Condition[ConditionFlag.OccupiedInQuestEvent]) return;
 
         HandleSelectedString(((AddonSelectString*)args.Addon)->PopupMenu.PopupMenu.List);
     }
@@ -92,7 +79,7 @@ public unsafe class AddonSelectStringHelper
         if (selectedItem < 0 || selectedItem >= options.Count) return;
 
         var selectedString = options[selectedItem];
-        var localPlayerName = clientState.LocalPlayer?.Name;
+        var localPlayerName = Plugin.ClientState.LocalPlayer?.Name;
 
         HandleChange(new AddonSelectStringState()
         {
@@ -105,7 +92,7 @@ public unsafe class AddonSelectStringHelper
     private void HandleChange(AddonSelectStringState state)
     {
         var (speaker, text, pollSource) = state;
-        var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonSelectString);
+        var eventId = LogHelper.Start(MethodBase.GetCurrentMethod().Name, TextSource.AddonSelectString);
 
         if (state == default)
         {
@@ -114,7 +101,7 @@ public unsafe class AddonSelectStringHelper
         }
 
         // Notify observers that the addon state was advanced
-        plugin.Cancel(eventId);
+        Plugin.Cancel(eventId);
 
         text = TalkTextHelper.NormalizePunctuation(text);
 
@@ -122,23 +109,23 @@ public unsafe class AddonSelectStringHelper
 
 
         // Find the game object this speaker is representing
-        var speakerObj = speaker != null ? DalamudHelper.GetGameObjectByName(clientState, objects, speaker, eventId) : null;
+        var speakerObj = speaker != null ? DalamudHelper.GetGameObjectByName(Plugin.ClientState, Plugin.ObjectTable, speaker, eventId) : null;
 
         if (speakerObj != null)
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"speakerobject: ({speakerObj.Name})", eventId);
-            plugin.Say(eventId, speakerObj, speakerObj.Name, text);
+            Plugin.Say(eventId, speakerObj, speakerObj.Name, text);
         }
         else
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"object: ({state.Speaker})", eventId);
-            plugin.Say(eventId, null, state.Speaker ?? "PLAYER", text);
+            Plugin.Say(eventId, null, state.Speaker ?? "PLAYER", text);
         }
     }
 
     public void Dispose()
     {
-        addonLifecycle.UnregisterListener(AddonEvent.PostSetup, "SelectString", OnPostSetup);
-        addonLifecycle.UnregisterListener(AddonEvent.PreFinalize, "SelectString", OnPreFinalize);
+        Plugin.AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, "SelectString", OnPostSetup);
+        Plugin.AddonLifecycle.UnregisterListener(AddonEvent.PreFinalize, "SelectString", OnPreFinalize);
     }
 }

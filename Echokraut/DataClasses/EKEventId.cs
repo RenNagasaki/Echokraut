@@ -9,6 +9,7 @@ namespace Echokraut.DataClasses
 {
     public class EKEventId
     {
+        public static int CurrentId { get; set; } = 1;
         public int Id { get; set; }
         public TextSource textSource { get; set; }
 

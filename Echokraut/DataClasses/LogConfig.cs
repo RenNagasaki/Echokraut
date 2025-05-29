@@ -40,14 +40,20 @@ namespace Echokraut.DataClasses
         #region CutSceneSelectString
         public bool ShowCutsceneSelectStringDebugLog { get; set; } = true;
         public bool ShowCutsceneSelectStringErrorLog { get; set; } = true;
-        public bool ShowCutSceneSelectStringId0 { get; set; } = true;
-        public bool CutSceneSelectStringJumpToBottom { get; set; } = true;
+        public bool ShowCutsceneSelectStringId0 { get; set; } = true;
+        public bool CutsceneSelectStringJumpToBottom { get; set; } = true;
         #endregion
         #region SelectString
         public bool ShowSelectStringDebugLog { get; set; } = true;
         public bool ShowSelectStringErrorLog { get; set; } = true;
         public bool ShowSelectStringId0 { get; set; } = true;
         public bool SelectStringJumpToBottom { get; set; } = true;
+        #endregion
+        #region Backend
+        public bool ShowBackendDebugLog { get; set; } = true;
+        public bool ShowBackendErrorLog { get; set; } = true;
+        public bool ShowBackendId0 { get; set; } = true;
+        public bool BackendJumpToBottom { get; set; } = true;
         #endregion
     }
 }

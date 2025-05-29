@@ -12,45 +12,51 @@ using Dalamud.Game.Text.SeStringHandling;
 using GameObject = Dalamud.Game.ClientState.Objects.Types.IGameObject;
 using System.Reflection;
 using Dalamud.Game.ClientState.Objects.Enums;
+using Dalamud.IoC;
 using Echokraut.Helper.Addons;
 using Echokraut.Helper.DataHelper;
 using Echokraut.Helper.API;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
+using FFXIVClientStructs.FFXIV.Client.UI.Misc;
 
 namespace Echokraut;
 
-public partial class Echokraut : IDalamudPlugin
+public partial class Plugin : IDalamudPlugin
 {
 
-    private IDalamudPluginInterface PluginInterface { get; init; }
-    private IPluginLog Log { get; init; }
-    private ICommandManager CommandManager { get; init; }
-    private IFramework Framework { get; init; }
-    private IClientState ClientState { get; init; }
-    private ICondition Condition { get; init; }
-    private IObjectTable ObjectTable { get; init; }
-    private IGameGui GameGui { get; init; }
-    private IGameConfig GameConfig { get; init; }
-    private IDataManager DataManager { get; init; }
-    private IChatGui ChatGui { get; init; }
-    private Configuration Configuration { get; init; }
+    [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
+    [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
+    [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
+    [PluginService] internal static IClientState ClientState { get; private set; } = null!;
+    [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
+    [PluginService] internal static IPluginLog Log { get; private set; } = null!;
+    [PluginService] internal static IFramework Framework { get; private set; } = null!;
+    [PluginService] internal static ICondition Condition { get; private set; } = null!;
+    [PluginService] internal static IObjectTable ObjectTable { get; private set; } = null!;
+    [PluginService] internal static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
+    [PluginService] internal static ISigScanner SigScanner { get; private set; } = null!;
+    [PluginService] internal static IGameInteropProvider GameInteropProvider { get; private set; } = null!;
+    [PluginService] internal static IGameGui GameGui { get; private set; } = null!;
+    [PluginService] internal static IGameConfig GameConfig { get; private set; } = null!;
+    [PluginService] internal static IChatGui ChatGui { get; private set; } = null!;
+    internal static Configuration Configuration { get; private set; } = null!;
+    internal static ConfigWindow ConfigWindow { get; private set; } = null!;
+    internal static AlltalkInstanceWindow AlltalkInstanceWindow { get; private set; } = null!;
+    internal static FirstTimeWindow FirstTimeWindow { get; private set; } = null!;
+
+    internal static LipSyncHelper LipSyncHelper{ get; private set; } = null!;
+    internal static SoundHelper SoundHelper{ get; private set; } = null!;
+    internal static AddonTalkHelper AddonTalkHelper{ get; private set; } = null!;
+    internal static AddonBattleTalkHelper AddonBattleTalkHelper{ get; private set; } = null!;
+    internal static AddonSelectStringHelper AddonSelectStringHelper{ get; private set; } = null!;
+    internal static AddonCutSceneSelectStringHelper AddonCutSceneSelectStringHelper{ get; private set; } = null!;
+    internal static AddonBubbleHelper AddonBubbleHelper{ get; private set; } = null!;
+    internal static ChatTalkHelper ChatTalkHelper{ get; private set; } = null!;
 
     public readonly WindowSystem WindowSystem = new("Echokraut");
-    private ConfigWindow ConfigWindow { get; init; }
 
-    #region TextToTalk Base
-    internal readonly LipSyncHelper lipSyncHelper;
-    internal readonly SoundHelper soundHelper;
-    internal readonly AddonTalkHelper addonTalkHelper;
-    internal readonly AddonBattleTalkHelper addonBattleTalkHelper;
-    internal readonly AddonSelectStringHelper addonSelectStringHelper;
-    internal readonly AddonCutSceneSelectStringHelper addonCutSceneSelectStringHelper;
-    internal readonly AddonBubbleHelper addonBubbleHelper;
-    internal readonly ChatTalkHelper chatTalkHelper;
-    #endregion
-
-    public Echokraut(
+    public Plugin(
         IDalamudPluginInterface pluginInterface,
         IPluginLog log,
         ICommandManager commandManager,
@@ -62,7 +68,7 @@ public partial class Echokraut : IDalamudPlugin
         IChatGui chatGui,
         IGameGui gameGui,
         ISigScanner sigScanner,
-        IGameInteropProvider gameInterop,
+        IGameInteropProvider gameInteropProvider,
         IGameConfig gameConfig,
         IAddonLifecycle addonLifecycle)
     {
@@ -76,40 +82,68 @@ public partial class Echokraut : IDalamudPlugin
         ChatGui = chatGui;
         GameGui = gameGui;
         GameConfig = gameConfig;
+        SigScanner = sigScanner;
+        GameInteropProvider = gameInteropProvider;
+        AddonLifecycle = addonLifecycle;
         Log = log;
 
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Configuration.Initialize(PluginInterface);
         pluginInterface.UiBuilder.DisableCutsceneUiHide = !Configuration.HideUiInCutscenes;
-        this.ConfigWindow = new ConfigWindow(this, Configuration, this.ClientState, this.PluginInterface);
+        ConfigWindow = new ConfigWindow();
+        AlltalkInstanceWindow = new AlltalkInstanceWindow();
+        FirstTimeWindow = new FirstTimeWindow();
 
-        LogHelper.Setup(log, Configuration);
-        JsonLoaderHelper.Setup(this.ClientState.ClientLanguage);
-        DetectLanguageHelper.Setup(Configuration, clientState);
-        NpcDataHelper.Setup(Configuration);
-        LuminaHelper.Setup(clientState, dataManager);
-        BackendHelper.Setup(this, Configuration, clientState, framework, Configuration.BackendSelection);
-        VolumeHelper.Setup(gameConfig);
-        CommandHelper.Setup(Configuration, chatGui, clientState, dataManager, commandManager, condition, ConfigWindow);
-        this.lipSyncHelper = new LipSyncHelper(framework, condition, clientState, objectTable, Configuration, new EKEventId(0, Enums.TextSource.None));
-        this.addonTalkHelper = new AddonTalkHelper(this, condition, addonLifecycle, clientState, objectTable, Configuration);
-        this.addonBattleTalkHelper = new AddonBattleTalkHelper(this, addonLifecycle, clientState, objectTable, Configuration);
-        this.addonSelectStringHelper = new AddonSelectStringHelper(this, addonLifecycle, clientState, objectTable, condition, Configuration);
-        this.addonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper(this, addonLifecycle, clientState, objectTable, Configuration);
-        this.addonBubbleHelper = new AddonBubbleHelper(this, condition, dataManager, framework, objectTable,sigScanner, gameInterop, clientState, Configuration);
-        this.chatTalkHelper = new ChatTalkHelper(this, Configuration, chatGui, objectTable, clientState);
-        this.soundHelper = new SoundHelper(this.addonTalkHelper, this.addonBattleTalkHelper, this.addonBubbleHelper, sigScanner, gameInterop, dataManager);
+        LogHelper.Initialize(log);
+        JsonLoaderHelper.Initialize(ClientState.ClientLanguage);
+        DetectLanguageHelper.Initialize();
+        BackendHelper.Initialize(Configuration.BackendSelection);
+        CommandHelper.Initialize();
+        AlltalkInstanceHelper.Initialize();
+        LipSyncHelper = new LipSyncHelper(new EKEventId(0, TextSource.None));
+        AddonTalkHelper = new AddonTalkHelper();
+        AddonBattleTalkHelper = new AddonBattleTalkHelper();
+        AddonSelectStringHelper = new AddonSelectStringHelper();
+        AddonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper();
+        AddonBubbleHelper = new AddonBubbleHelper();
+        ChatTalkHelper = new ChatTalkHelper();
+        SoundHelper = new SoundHelper();
 
         WindowSystem.AddWindow(ConfigWindow);
+        WindowSystem.AddWindow(AlltalkInstanceWindow);
+        WindowSystem.AddWindow(FirstTimeWindow);
 
         PluginInterface.UiBuilder.Draw += DrawUI;
 
         // This adds a button to the plugin installer entry of this plugin which allows
         // to toggle the display status of the configuration ui
         PluginInterface.UiBuilder.OpenConfigUi += CommandHelper.ToggleConfigUI;
+        ClientState.Login += OnLogin;
+
+        if (Configuration.FirstTime && !FirstTimeWindow.IsOpen && ClientState.IsLoggedIn)
+            CommandHelper.ToggleFirstTimeUI();
+
+        if (!Configuration.FirstTime && ClientState.IsLoggedIn && Configuration.Alltalk.AutoStartLocalInstance)
+            AlltalkInstanceHelper.StartInstance();
     }
 
-    public void Cancel(EKEventId eventId)
+    private void OnLogin()
+    {
+        try
+        {
+            if (Configuration.FirstTime && !FirstTimeWindow.IsOpen)
+                CommandHelper.ToggleFirstTimeUI();
+
+            if (!Configuration.FirstTime && Configuration.Alltalk.AutoStartLocalInstance)
+                AlltalkInstanceHelper.StartInstance();
+        }
+        catch (Exception e)
+        {
+            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while starting voice inference: {e}", new EKEventId(0, TextSource.None));
+        }
+    }
+
+    public static void Cancel(EKEventId eventId)
     {
         if (Configuration.CancelSpeechOnTextAdvance)
         {
@@ -118,23 +152,30 @@ public partial class Echokraut : IDalamudPlugin
         }
     }
 
-    public void StopLipSync(EKEventId eventId)
+    public static void StopLipSync(EKEventId eventId)
     {
-        lipSyncHelper.StopLipSync(eventId);
+        LipSyncHelper.StopLipSync(eventId);
     }
 
-    public async void Say(EKEventId eventId, GameObject? speaker, SeString speakerName, string textValue)
+    public static async void Say(EKEventId eventId, GameObject? speaker, SeString speakerName, string textValue)
     {
         try
         {
+            if (!BackendHelper.IsBackendAvailable())
+            {
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"No backend available yet, skipping!", eventId);
+                LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                return;
+            }
+
             var source = eventId.textSource;
-            var language = this.ClientState.ClientLanguage;
+            var language = ClientState.ClientLanguage;
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Preparing for Inference: {speakerName} - {textValue} - {source}", eventId);
 
             var cleanText = TalkTextHelper.StripAngleBracketedText(textValue);
             cleanText = TalkTextHelper.ReplaceSsmlTokens(cleanText);
             cleanText = TalkTextHelper.NormalizePunctuation(cleanText);
-            cleanText = this.Configuration.RemoveStutters ? TalkTextHelper.RemoveStutters(cleanText) : cleanText;
+            cleanText = Configuration.RemoveStutters ? TalkTextHelper.RemoveStutters(cleanText) : cleanText;
 
             if (source == TextSource.Chat)
             {
@@ -144,7 +185,8 @@ public partial class Echokraut : IDalamudPlugin
                     LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
                     return;
                 }
-                else if (Configuration.VoiceChatWithout3D)
+
+                if (Configuration.VoiceChatWithout3D)
                     speaker = ClientState.LocalPlayer;
 
                 language = await DetectLanguageHelper.GetTextLanguage(cleanText, eventId);
@@ -179,16 +221,16 @@ public partial class Echokraut : IDalamudPlugin
             NpcMapData npcData = new NpcMapData(objectKind);
             // Get the speaker's race if it exists.
             var raceStr = "";
-            npcData.Race = CharacterDataHelper.GetSpeakerRace(this.DataManager, eventId, speaker, out raceStr, out var modelId);
+            npcData.Race = CharacterDataHelper.GetSpeakerRace(eventId, speaker, out raceStr, out var modelId);
             npcData.RaceStr = raceStr;
-            npcData.Gender = CharacterDataHelper.GetCharacterGender(this.DataManager, eventId, speaker, npcData.Race, out var modelBody);
+            npcData.Gender = CharacterDataHelper.GetCharacterGender(eventId, speaker, npcData.Race, out var modelBody);
             npcData.Name = TalkTextHelper.CleanUpName(cleanSpeakerName);
 
             if (npcData.ObjectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
                 npcData.Name = JsonLoaderHelper.GetNpcName(npcData.Name);
 
             if (npcData.Name == "PLAYER")
-                npcData.Name = this.ClientState.LocalPlayer?.Name.ToString() ?? "PLAYER";
+                npcData.Name = ClientState.LocalPlayer?.Name.ToString() ?? "PLAYER";
             else if (string.IsNullOrWhiteSpace(npcData.Name) && source == TextSource.AddonBubble)
                 npcData.Name = TalkTextHelper.GetBubbleName(speaker, cleanText);
 
@@ -245,7 +287,18 @@ public partial class Echokraut : IDalamudPlugin
                     break;
             }
 
-            if (npcData.Voice.Volume == 0f)
+
+            if (npcData.Voice == null)
+            {
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Getting voice since not set.", eventId);
+                BackendHelper.GetVoiceOrRandom(eventId, npcData);
+            }
+
+            if (npcData.Voice == null)
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. No Voice set.", eventId);
+
+
+            if (npcData.Voice != null && npcData.Voice.Volume == 0f)
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Voice is muted: {npcData.ToString()}", eventId);
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
@@ -267,13 +320,7 @@ public partial class Echokraut : IDalamudPlugin
                 BackendHelper.OnSay(voiceMessage, volume);
             else
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);
-
-                if (voiceMessage.Speaker.Voice == null)
-                {
-                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Getting voice since not set.", eventId);
-                    BackendHelper.GetVoiceOrRandom(eventId, voiceMessage.Speaker);
-                }
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0.", eventId);
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
             }
         }
@@ -287,18 +334,19 @@ public partial class Echokraut : IDalamudPlugin
     {
         DetectLanguageHelper.Dispose();
         PlayingHelper.Dispose();
-        this.soundHelper.Dispose();
-        this.addonTalkHelper.Dispose();
-        this.addonBattleTalkHelper.Dispose();
-        this.addonCutSceneSelectStringHelper.Dispose();
-        this.addonSelectStringHelper.Dispose();
-        this.addonBubbleHelper.Dispose();
-        this.chatTalkHelper.Dispose();
+        SoundHelper.Dispose();
+        AddonTalkHelper.Dispose();
+        AddonBattleTalkHelper.Dispose();
+        AddonCutSceneSelectStringHelper.Dispose();
+        AddonSelectStringHelper.Dispose();
+        AddonBubbleHelper.Dispose();
+        ChatTalkHelper.Dispose();
 
-        this.Configuration.Save();
+        Configuration.Save();
         WindowSystem.RemoveAllWindows();
         ConfigWindow.Dispose();
         CommandHelper.Dispose();
+        AlltalkInstanceHelper.Dispose();
     }
 
     private void DrawUI() => WindowSystem.Draw();

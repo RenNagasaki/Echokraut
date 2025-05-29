@@ -18,12 +18,6 @@ public unsafe class AddonTalkHelper
 {
     private record struct AddonTalkState(string? Speaker, string? Text);
 
-    private readonly ICondition condition;
-    private readonly IAddonLifecycle addonLifecycle;
-    private readonly IClientState clientState;
-    private readonly IObjectTable objects;
-    private readonly Configuration configuration;
-    private readonly Echokraut echokraut;
     public bool nextIsVoice = false;
     private bool wasTalking = false;
     private bool wasWatchingCutscene = false;
@@ -32,23 +26,16 @@ public unsafe class AddonTalkHelper
     public static nint Address { get; set; }
     private AddonTalkState lastValue;
 
-    public AddonTalkHelper(Echokraut plugin, ICondition condition, IAddonLifecycle addonLifecycle, IClientState clientState, IObjectTable objects, Configuration config)
+    public AddonTalkHelper()
     {
-        echokraut = plugin;
-        this.condition = condition;
-        this.addonLifecycle = addonLifecycle;
-        this.clientState = clientState;
-        this.configuration = config;
-        this.objects = objects;
-
         HookIntoFrameworkUpdate();
     }
 
     private void HookIntoFrameworkUpdate()
     {
-        addonLifecycle.RegisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
-        addonLifecycle.RegisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
-        addonLifecycle.RegisterListener(AddonEvent.PostUpdate, "Talk", OnPostUpdate);
+        Plugin.AddonLifecycle.RegisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
+        Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
+        Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostUpdate, "Talk", OnPostUpdate);
     }
     
     private void OnPreReceiveEvent(AddonEvent type, AddonArgs args)
@@ -67,7 +54,7 @@ public unsafe class AddonTalkHelper
             eventArgs.AtkEventType == (byte)AtkEventType.InputReceived;
 
         if (isControllerButtonClick || isDialogueAdvancing)
-            echokraut.Cancel(new EKEventId(0, TextSource.AddonTalk));
+            Plugin.Cancel(new EKEventId(0, TextSource.AddonTalk));
     }
 
     private unsafe void OnPostUpdate(AddonEvent type, AddonArgs args)
@@ -83,7 +70,7 @@ public unsafe class AddonTalkHelper
                 wasTalking = false;
                 PlayingHelper.InDialog = false;
                 lastValue = new AddonTalkState();
-                echokraut.Cancel(new EKEventId(0, TextSource.AddonTalk));
+                Plugin.Cancel(new EKEventId(0, TextSource.AddonTalk));
             }
         }
     }
@@ -97,8 +84,8 @@ public unsafe class AddonTalkHelper
 
     private unsafe void Handle(AddonTalk* addonTalk)
     {
-        if (!configuration.Enabled) return;
-        if (!configuration.VoiceDialogue) return;
+        if (!Plugin.Configuration.Enabled) return;
+        if (!Plugin.Configuration.VoiceDialogue) return;
         if (addonTalk == null || !addonTalk->AtkUnitBase.IsVisible) return;
         var state = GetTalkAddonState(addonTalk);
         Mutate(state);
@@ -130,10 +117,10 @@ public unsafe class AddonTalkHelper
         if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(500))
             voiceNext = false;
 
-        var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
+        var eventId = LogHelper.Start(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
 
         // Notify observers that the addon state was advanced
-        echokraut.Cancel(eventId);
+        Plugin.Cancel(eventId);
 
         text = TalkTextHelper.NormalizePunctuation(text);
 
@@ -147,10 +134,10 @@ public unsafe class AddonTalkHelper
             return;
         }
 
-        if (condition[ConditionFlag.WatchingCutscene] || condition[ConditionFlag.OccupiedInCutSceneEvent] || condition[ConditionFlag.OccupiedInQuestEvent])
+        if (Plugin.Condition[ConditionFlag.WatchingCutscene] || Plugin.Condition[ConditionFlag.OccupiedInCutSceneEvent] || Plugin.Condition[ConditionFlag.OccupiedInQuestEvent])
         {
             wasWatchingCutscene = true;
-            DalamudHelper.TryGetNextUnkownCharacter(clientState, objects, eventId);
+            DalamudHelper.TryGetNextUnkownCharacter(Plugin.ClientState, Plugin.ObjectTable, eventId);
             if (speaker == "???")
                 speaker = DalamudHelper.nextUnknownCharacter?.Name.TextValue ?? "???";
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Got ??? speaker: \"{speaker}\"", eventId);
@@ -162,18 +149,18 @@ public unsafe class AddonTalkHelper
         }
 
         // Find the game object this speaker is representing
-        var speakerObj = speaker != null ? DalamudHelper.GetGameObjectByName(clientState, objects, speaker, eventId) : null;
+        var speakerObj = speaker != null ? DalamudHelper.GetGameObjectByName(Plugin.ClientState, Plugin.ObjectTable, speaker, eventId) : null;
 
         PlayingHelper.InDialog = true;
 
         wasTalking = true;
         if (speakerObj != null)
         {
-            echokraut.Say(eventId, speakerObj, speakerObj.Name, text);
+            Plugin.Say(eventId, speakerObj, speakerObj.Name, text);
         }
         else
         {
-            echokraut.Say(eventId, null, state.Speaker ?? "", text);
+            Plugin.Say(eventId, null, state.Speaker ?? "", text);
         }
     }
 
@@ -201,8 +188,8 @@ public unsafe class AddonTalkHelper
 
     public void Dispose()
     {
-        addonLifecycle.UnregisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
-        addonLifecycle.UnregisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
-        addonLifecycle.UnregisterListener(AddonEvent.PostUpdate, "Talk", OnPostUpdate);
+        Plugin.AddonLifecycle.UnregisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
+        Plugin.AddonLifecycle.UnregisterListener(AddonEvent.PostDraw, "Talk", OnPostDraw);
+        Plugin.AddonLifecycle.UnregisterListener(AddonEvent.PostUpdate, "Talk", OnPostUpdate);
     }
 }

@@ -20,13 +20,9 @@ namespace Echokraut.Helper.Functional
     {
 
         private static HttpClient httpClient;
-        private static Configuration configuration;
-        private static IClientState clientState;
 
-        public static void Setup(Configuration configuration, IClientState clientState)
+        public static void Initialize()
         {
-            DetectLanguageHelper.configuration = configuration;
-            DetectLanguageHelper.clientState = clientState;
             httpClient = new HttpClient();
             httpClient.Timeout = TimeSpan.FromSeconds(5);
         }
@@ -39,11 +35,11 @@ namespace Echokraut.Helper.Functional
         public async static Task<ClientLanguage> GetTextLanguage(string text, EKEventId eventId)
         {
             var languageString = "en";
-            if (configuration.VoiceChatLanguageAPIKey.Length == 32)
+            if (Plugin.Configuration.VoiceChatLanguageAPIKey.Length == 32)
             {
                 try
                 {
-                    var detectLanguagesApiKey = configuration.VoiceChatLanguageAPIKey;
+                    var detectLanguagesApiKey = Plugin.Configuration.VoiceChatLanguageAPIKey;
                     var uriBuilder = new UriBuilder(@"https://ws.detectlanguage.com/0.2/") { Path = "/0.2/detect" };
                     var detectData = new Dictionary<string, string>();
                     detectData.Add("q", text);
@@ -70,7 +66,7 @@ namespace Echokraut.Helper.Functional
                 catch (Exception ex)
                 {
                     LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while detecting language. Using client language. Exception: {ex}", eventId);
-                    return clientState.ClientLanguage;
+                    return Plugin.ClientState.ClientLanguage;
                 }
 
                 var language = ClientLanguage.English;
@@ -97,7 +93,7 @@ namespace Echokraut.Helper.Functional
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping language detection for chat. Using client language.", eventId);
 
-                return clientState.ClientLanguage;
+                return Plugin.ClientState.ClientLanguage;
             }
         }
     }

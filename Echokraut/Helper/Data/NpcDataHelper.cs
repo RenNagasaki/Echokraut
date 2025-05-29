@@ -13,14 +13,6 @@ namespace Echokraut.Helper.Data
 {
     public static class NpcDataHelper
     {
-        static int NextEventId = 1;
-        private static Configuration Configuration;
-
-        public static void Setup(Configuration configuration)
-        {
-            Configuration = configuration;
-        }
-
         public static bool IsGenderedRace(NpcRaces race)
         {
             if (((int)race > 0 && (int)race < 9) || JsonLoaderHelper.ModelGenderMap.Find(p => p.race == race) != null)
@@ -37,9 +29,9 @@ namespace Echokraut.Helper.Data
             voice.AllowedRaces.Clear();
             string[] splitVoice = voice.voiceName.Split('_');
 
-            if (splitVoice.Length == 3)
+            foreach (var split in splitVoice)
             {
-                var racesStr = splitVoice[1];
+                var racesStr = split;
                 var raceStrArr = racesStr.Split('-');
                 foreach (var raceStr in raceStrArr)
                 {
@@ -75,9 +67,9 @@ namespace Echokraut.Helper.Data
             voice.AllowedGenders.Clear();
             string[] splitVoice = voice.voiceName.Split('_');
 
-            if (splitVoice.Length == 3)
+            foreach (var split in splitVoice)
             {
-                var genderStr = splitVoice[0];
+                var genderStr = split;
                 if (Enum.TryParse(typeof(Genders), genderStr, true, out object? gender))
                 {
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found {gender} gender", eventId);
@@ -90,8 +82,8 @@ namespace Echokraut.Helper.Data
         {
             if (oldVoice == null)
             {
-                var oldPlayerMapData = Configuration.MappedPlayers.FindAll(p => p.voiceItem != null);
-                var oldNpcMapData = Configuration.MappedNpcs.FindAll(p => p.voiceItem != null);
+                var oldPlayerMapData = Plugin.Configuration.MappedPlayers.FindAll(p => p.voiceItem != null);
+                var oldNpcMapData = Plugin.Configuration.MappedNpcs.FindAll(p => p.voiceItem != null);
 
                 if (oldPlayerMapData.Count > 0 || oldNpcMapData.Count > 0)
                 {
@@ -101,7 +93,7 @@ namespace Echokraut.Helper.Data
                     foreach (var player in oldPlayerMapData)
                     {
                         player.Voice =
-                            Configuration.EchokrautVoices.Find(p => p.BackendVoice == player.voiceItem.Voice);
+                            Plugin.Configuration.EchokrautVoices.Find(p => p.BackendVoice == player.voiceItem.Voice);
 
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
                                         $"Migrated player {player.Name} from -> {player.voiceItem} to -> {player.Voice}",
@@ -113,7 +105,7 @@ namespace Echokraut.Helper.Data
 
                     foreach (var npc in oldNpcMapData)
                     {
-                        npc.Voice = Configuration.EchokrautVoices.Find(p => p.BackendVoice == npc.voiceItem.Voice);
+                        npc.Voice = Plugin.Configuration.EchokrautVoices.Find(p => p.BackendVoice == npc.voiceItem.Voice);
 
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
                                         $"Migrated npc {npc.Name} from -> {npc.voiceItem} to -> {npc.Voice}",
@@ -123,13 +115,13 @@ namespace Echokraut.Helper.Data
                             npc.voiceItem = null;
                     }
 
-                    Configuration.Save();
+                    Plugin.Configuration.Save();
                 }
             }
             else 
             {
-                var oldPlayerMapData = Configuration.MappedPlayers.FindAll(p => p.Voice == oldVoice);
-                var oldNpcMapData = Configuration.MappedNpcs.FindAll(p => p.Voice == oldVoice);
+                var oldPlayerMapData = Plugin.Configuration.MappedPlayers.FindAll(p => p.Voice == oldVoice);
+                var oldNpcMapData = Plugin.Configuration.MappedNpcs.FindAll(p => p.Voice == oldVoice);
 
                 if (oldPlayerMapData.Count > 0 || oldNpcMapData.Count > 0)
                 {
@@ -182,18 +174,9 @@ namespace Echokraut.Helper.Data
                         }
                     }
 
-                    Configuration.Save();
+                    Plugin.Configuration.Save();
                 }
             }
-        }
-
-        public static EKEventId EventId(string methodName, TextSource textSource)
-        {
-            var eventId = new EKEventId(NextEventId, textSource);
-            NextEventId++;
-
-            LogHelper.Start(methodName, eventId);
-            return eventId;
         }
 
         private static List<NpcMapData> GetCharacterMapDatas(EKEventId eventId)
@@ -203,13 +186,13 @@ namespace Echokraut.Helper.Data
                 case TextSource.AddonTalk:
                 case TextSource.AddonBattleTalk:
                 case TextSource.AddonBubble:
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found mapping: {Configuration.MappedNpcs} count: {Configuration.MappedNpcs.Count()}", eventId);
-                    return Configuration.MappedNpcs;
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found mapping: {Plugin.Configuration.MappedNpcs} count: {Plugin.Configuration.MappedNpcs.Count()}", eventId);
+                    return Plugin.Configuration.MappedNpcs;
                 case TextSource.AddonSelectString:
                 case TextSource.AddonCutsceneSelectString:
                 case TextSource.Chat:
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found mapping: {Configuration.MappedPlayers} count: {Configuration.MappedPlayers.Count()}", eventId);
-                    return Configuration.MappedPlayers;
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Found mapping: {Plugin.Configuration.MappedPlayers} count: {Plugin.Configuration.MappedPlayers.Count()}", eventId);
+                    return Plugin.Configuration.MappedPlayers;
             }
 
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Didn't find a mapping.", eventId);
@@ -218,19 +201,19 @@ namespace Echokraut.Helper.Data
 
         public static EchokrautVoice GetVoiceByBackendVoice(string backendVoice)
         {
-            return Configuration.EchokrautVoices.Find(p => p.BackendVoice == backendVoice);
+            return Plugin.Configuration.EchokrautVoices.Find(p => p.BackendVoice == backendVoice);
         }
 
         public static void RefreshSelectables(List<EchokrautVoice> voices)
         {
             try
             {
-                Configuration.MappedNpcs.ForEach(p =>
+                Plugin.Configuration.MappedNpcs.ForEach(p =>
                 {
                     p.Voices = voices;
                     p.RefreshSelectable();
                 });
-                Configuration.MappedPlayers.ForEach(p =>
+                Plugin.Configuration.MappedPlayers.ForEach(p =>
                 {
                     p.Voices = voices;
                     p.RefreshSelectable();
@@ -274,7 +257,7 @@ namespace Echokraut.Helper.Data
                 if (result == null)
                 {
                     datas.Add(data);
-                    data.Voices = Configuration.EchokrautVoices;
+                    data.Voices = Plugin.Configuration.EchokrautVoices;
                     data.RefreshSelectable();
                     BackendHelper.GetVoiceOrRandom(eventId, data);
                     ConfigWindow.UpdateDataNpcs = true;

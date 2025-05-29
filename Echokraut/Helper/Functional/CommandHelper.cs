@@ -15,80 +15,66 @@ namespace Echokraut.Helper.Functional
 {
     public static class CommandHelper
     {
-        private static Configuration Configuration;
-        private static IChatGui ChatGui;
-        private static IClientState ClientState;
-        private static IDataManager DataManager;
-        public static ICommandManager CommandManager;
-        private static ICondition Condition;
-        private static ConfigWindow ConfigWindow;
         public static List<string> CommandKeys;
 
-        public static void Setup(Configuration configuration, IChatGui chatGui, IClientState clientState, IDataManager dataManager, ICommandManager commandManager, ICondition condition, ConfigWindow configWindow)
+        public static void Initialize()
         {
-            Configuration = configuration;
-            ChatGui = chatGui;
-            ClientState = clientState;
-            DataManager = dataManager;
-            CommandManager = commandManager;
-            Condition = condition;
-            ConfigWindow = configWindow;
 
             RegisterCommands();
         }
 
         public static void RegisterCommands()
         {
-            CommandManager.AddHandler("/ekt", new CommandInfo(CommandHelper.OnCommand)
+            Plugin.CommandManager.AddHandler("/ekt", new CommandInfo(CommandHelper.OnCommand)
             {
                 HelpMessage = "Toggles Echokraut"
             });
-            CommandManager.AddHandler("/ekttalk", new CommandInfo(CommandHelper.OnCommand)
+            Plugin.CommandManager.AddHandler("/ekttalk", new CommandInfo(CommandHelper.OnCommand)
             {
                 HelpMessage = "Toggles dialogue voicing"
             });
-            CommandManager.AddHandler("/ektbtalk", new CommandInfo(CommandHelper.OnCommand)
+            Plugin.CommandManager.AddHandler("/ektbtalk", new CommandInfo(CommandHelper.OnCommand)
             {
                 HelpMessage = "Toggles battle dialogue voicing"
             });
-            CommandManager.AddHandler("/ektbubble", new CommandInfo(CommandHelper.OnCommand)
+            Plugin.CommandManager.AddHandler("/ektbubble", new CommandInfo(CommandHelper.OnCommand)
             {
                 HelpMessage = "Toggles bubble voicing"
             });
-            CommandManager.AddHandler("/ektchat", new CommandInfo(CommandHelper.OnCommand)
+            Plugin.CommandManager.AddHandler("/ektchat", new CommandInfo(CommandHelper.OnCommand)
             {
                 HelpMessage = "Toggles chat voicing"
             });
-            CommandManager.AddHandler("/ektcutschoice", new CommandInfo(CommandHelper.OnCommand)
+            Plugin.CommandManager.AddHandler("/ektcutschoice", new CommandInfo(CommandHelper.OnCommand)
             {
                 HelpMessage = "Toggles cutscene choice voicing"
             });
-            CommandManager.AddHandler("/ektchoice", new CommandInfo(CommandHelper.OnCommand)
+            Plugin.CommandManager.AddHandler("/ektchoice", new CommandInfo(CommandHelper.OnCommand)
             {
                 HelpMessage = "Toggles choice voicing"
             });
-            CommandManager.AddHandler("/ek", new CommandInfo(CommandHelper.OnCommand)
+            Plugin.CommandManager.AddHandler("/ek", new CommandInfo(CommandHelper.OnCommand)
             {
-                HelpMessage = "Opens the configuration window"
+                HelpMessage = "Opens the Plugin.Configuration window"
             });
-            CommandManager.AddHandler("/ekid", new CommandInfo(CommandHelper.OnCommand)
+            Plugin.CommandManager.AddHandler("/ekid", new CommandInfo(CommandHelper.OnCommand)
             {
                 HelpMessage = "Echoes info about current target"
             });
-            CommandManager.AddHandler("/ekdb", new CommandInfo(CommandHelper.OnCommand)
+            Plugin.CommandManager.AddHandler("/ekdb", new CommandInfo(CommandHelper.OnCommand)
             {
                 HelpMessage = "Echoes current debug info"
             });
-            CommandManager.AddHandler("/ekdel", new CommandInfo(CommandHelper.OnCommand)
+            Plugin.CommandManager.AddHandler("/ekdel", new CommandInfo(CommandHelper.OnCommand)
             {
                 HelpMessage = "/ekdel n -> Deletes last 'n' local saved files. Default 10"
             });
-            CommandManager.AddHandler("/ekdelmin", new CommandInfo(CommandHelper.OnCommand)
+            Plugin.CommandManager.AddHandler("/ekdelmin", new CommandInfo(CommandHelper.OnCommand)
             {
                 HelpMessage = "/ekdelmin n -> Deletes last 'n' minutes generated local saved files. Default 10"
             });
 
-            CommandKeys = CommandHelper.CommandManager.Commands.Keys.ToList().FindAll(p => p.StartsWith("/ek"));
+            CommandKeys = Plugin.CommandManager.Commands.Keys.ToList().FindAll(p => p.StartsWith("/ek"));
             CommandKeys.Sort();
         }
 
@@ -102,7 +88,8 @@ namespace Echokraut.Helper.Functional
             switch (command)
             {
                 case "/ek":
-                    ToggleConfigUI();
+                    if (!Plugin.Configuration.FirstTime)
+                        ToggleConfigUI();
                     break;
                 case "/ekid":
                     PrintTargetInfo();
@@ -141,45 +128,45 @@ namespace Echokraut.Helper.Functional
                     }
                     break;
                 case "/ekt":
-                    Configuration.Enabled = !Configuration.Enabled;
-                    Configuration.Save();
-                    activationText = (Configuration.Enabled ? "Enabled" : "Disabled");
+                    Plugin.Configuration.Enabled = !Plugin.Configuration.Enabled;
+                    Plugin.Configuration.Save();
+                    activationText = (Plugin.Configuration.Enabled ? "Enabled" : "Disabled");
                     activationType = "plugin";
                     break;
                 case "/ekttalk":
-                    Configuration.VoiceDialogue = !Configuration.VoiceDialogue;
-                    Configuration.Save();
-                    activationText = (Configuration.VoiceDialogue ? "Enabled" : "Disabled");
+                    Plugin.Configuration.VoiceDialogue = !Plugin.Configuration.VoiceDialogue;
+                    Plugin.Configuration.Save();
+                    activationText = (Plugin.Configuration.VoiceDialogue ? "Enabled" : "Disabled");
                     activationType = "dialogue";
                     break;
                 case "/ektbtalk":
-                    Configuration.VoiceBattleDialogue = !Configuration.VoiceBattleDialogue;
-                    Configuration.Save();
-                    activationText = (Configuration.VoiceBattleDialogue ? "Enabled" : "Disabled");
+                    Plugin.Configuration.VoiceBattleDialogue = !Plugin.Configuration.VoiceBattleDialogue;
+                    Plugin.Configuration.Save();
+                    activationText = (Plugin.Configuration.VoiceBattleDialogue ? "Enabled" : "Disabled");
                     activationType = "battle dialogue";
                     break;
                 case "/ektbubble":
-                    Configuration.VoiceBubble = !Configuration.VoiceBubble;
-                    Configuration.Save();
-                    activationText = (Configuration.VoiceBubble ? "Enabled" : "Disabled");
+                    Plugin.Configuration.VoiceBubble = !Plugin.Configuration.VoiceBubble;
+                    Plugin.Configuration.Save();
+                    activationText = (Plugin.Configuration.VoiceBubble ? "Enabled" : "Disabled");
                     activationType = "bubble";
                     break;
                 case "/ektchat":
-                    Configuration.VoiceChat = !Configuration.VoiceChat;
-                    Configuration.Save();
-                    activationText = (Configuration.VoiceChat ? "Enabled" : "Disabled");
+                    Plugin.Configuration.VoiceChat = !Plugin.Configuration.VoiceChat;
+                    Plugin.Configuration.Save();
+                    activationText = (Plugin.Configuration.VoiceChat ? "Enabled" : "Disabled");
                     activationType = "chat";
                     break;
                 case "/ektcutschoice":
-                    Configuration.VoicePlayerChoicesCutscene = !Configuration.VoicePlayerChoicesCutscene;
-                    Configuration.Save();
-                    activationText = (Configuration.VoicePlayerChoicesCutscene ? "Enabled" : "Disabled");
+                    Plugin.Configuration.VoicePlayerChoicesCutscene = !Plugin.Configuration.VoicePlayerChoicesCutscene;
+                    Plugin.Configuration.Save();
+                    activationText = (Plugin.Configuration.VoicePlayerChoicesCutscene ? "Enabled" : "Disabled");
                     activationType = "player choice in cutscene";
                     break;
                 case "/ektchoice":
-                    Configuration.VoicePlayerChoices = !Configuration.VoicePlayerChoices;
-                    Configuration.Save();
-                    activationText = (Configuration.VoicePlayerChoices ? "Enabled" : "Disabled");
+                    Plugin.Configuration.VoicePlayerChoices = !Plugin.Configuration.VoicePlayerChoices;
+                    Plugin.Configuration.Save();
+                    activationText = (Plugin.Configuration.VoicePlayerChoices ? "Enabled" : "Disabled");
                     activationType = "player choice";
                     break;
             }
@@ -195,19 +182,27 @@ namespace Echokraut.Helper.Functional
             }
         }
 
-        public static void ToggleConfigUI() => ConfigWindow.Toggle();
+        public static void ToggleConfigUI()
+        {
+            if (!Plugin.Configuration.FirstTime)
+                Plugin.ConfigWindow.Toggle();
+            else
+                Plugin.FirstTimeWindow.Toggle();
+        }
+
+        public static void ToggleFirstTimeUI() => Plugin.FirstTimeWindow.Toggle();
 
         public unsafe static void PrintTargetInfo()
         {
-            var localPlayer = ClientState.LocalPlayer;
+            var localPlayer = Plugin.ClientState.LocalPlayer;
 
             if (localPlayer != null)
             {
                 var target = localPlayer.TargetObject;
                 if (target != null)
                 {
-                    var race = CharacterDataHelper.GetSpeakerRace(DataManager, new EKEventId(0, TextSource.None), target, out var raceStr, out var modelId);
-                    var gender = CharacterDataHelper.GetCharacterGender(DataManager, new EKEventId(0, TextSource.None), target, race, out var modelBody);
+                    var race = CharacterDataHelper.GetSpeakerRace(new EKEventId(0, TextSource.None), target, out var raceStr, out var modelId);
+                    var gender = CharacterDataHelper.GetCharacterGender(new EKEventId(0, TextSource.None), target, race, out var modelBody);
                     var bodyType = LuminaHelper.GetENpcBase(target.DataId)?.BodyType;
                     PrintText(target.Name.TextValue, $"Target -> Name: {target.Name}, Race: {race}, Gender: {gender}, ModelID: {modelId}, ModelBody: {modelBody}, BodyType: {bodyType}");
                 }
@@ -216,16 +211,16 @@ namespace Echokraut.Helper.Functional
         
         public static void PrintDebugInfo()
         {
-            var cond1 = Condition[ConditionFlag.OccupiedInQuestEvent];
-            var cond2 = Condition[ConditionFlag.Occupied];
-            var cond3 = Condition[ConditionFlag.Occupied30];
-            var cond4 = Condition[ConditionFlag.Occupied33];
-            var cond5 = Condition[ConditionFlag.Occupied38];
-            var cond6 = Condition[ConditionFlag.Occupied39];
-            var cond7 = Condition[ConditionFlag.OccupiedInCutSceneEvent];
-            var cond8 = Condition[ConditionFlag.OccupiedInEvent];
-            var cond9 = Condition[ConditionFlag.OccupiedSummoningBell];
-            var cond10 = Condition[ConditionFlag.BoundByDuty];
+            var cond1 = Plugin.Condition[ConditionFlag.OccupiedInQuestEvent];
+            var cond2 = Plugin.Condition[ConditionFlag.Occupied];
+            var cond3 = Plugin.Condition[ConditionFlag.Occupied30];
+            var cond4 = Plugin.Condition[ConditionFlag.Occupied33];
+            var cond5 = Plugin.Condition[ConditionFlag.Occupied38];
+            var cond6 = Plugin.Condition[ConditionFlag.Occupied39];
+            var cond7 = Plugin.Condition[ConditionFlag.OccupiedInCutSceneEvent];
+            var cond8 = Plugin.Condition[ConditionFlag.OccupiedInEvent];
+            var cond9 = Plugin.Condition[ConditionFlag.OccupiedSummoningBell];
+            var cond10 = Plugin.Condition[ConditionFlag.BoundByDuty];
             PrintText("Debug", $"Debug -> ---Start---");
             PrintText("Debug", $"Debug -> OccupiedInQuestEvent: {cond1}");
             PrintText("Debug", $"Debug -> Occupied: {cond2}");
@@ -242,22 +237,22 @@ namespace Echokraut.Helper.Functional
 
         public static void PrintText(string name, string text)
         {
-            ChatGui.Print(new Dalamud.Game.Text.XivChatEntry() { Name = name, Message = "Echokraut: " + text, Timestamp = DateTime.Now.Hour * 60 + DateTime.Now.Minute, Type = Dalamud.Game.Text.XivChatType.Echo });
+            Plugin.ChatGui.Print(new Dalamud.Game.Text.XivChatEntry() { Name = name, Message = "Echokraut: " + text, Timestamp = DateTime.Now.Hour * 60 + DateTime.Now.Minute, Type = Dalamud.Game.Text.XivChatType.Echo });
         }
 
         internal static void Dispose()
         {
-            CommandManager.RemoveHandler("/ek");
-            CommandManager.RemoveHandler("/ekt");
-            CommandManager.RemoveHandler("/ekdb");
-            CommandManager.RemoveHandler("/ekid");
-            CommandManager.RemoveHandler("/ekttalk");
-            CommandManager.RemoveHandler("/ektbtalk");
-            CommandManager.RemoveHandler("/ektbubble");
-            CommandManager.RemoveHandler("/ektcutschoice");
-            CommandManager.RemoveHandler("/ektchoice");
-            CommandManager.RemoveHandler("/ekdel");
-            CommandManager.RemoveHandler("/ekdelmin");
+            Plugin.CommandManager.RemoveHandler("/ek");
+            Plugin.CommandManager.RemoveHandler("/ekt");
+            Plugin.CommandManager.RemoveHandler("/ekdb");
+            Plugin.CommandManager.RemoveHandler("/ekid");
+            Plugin.CommandManager.RemoveHandler("/ekttalk");
+            Plugin.CommandManager.RemoveHandler("/ektbtalk");
+            Plugin.CommandManager.RemoveHandler("/ektbubble");
+            Plugin.CommandManager.RemoveHandler("/ektcutschoice");
+            Plugin.CommandManager.RemoveHandler("/ektchoice");
+            Plugin.CommandManager.RemoveHandler("/ekdel");
+            Plugin.CommandManager.RemoveHandler("/ekdelmin");
         }
     }
 }

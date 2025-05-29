@@ -20,8 +20,8 @@ namespace Echokraut.DataClasses
         public string voice = "";
         internal EchokrautVoice? Voice
         {
-            get { return NpcDataHelper.GetVoiceByBackendVoice(voice); }
-            set { voice = value != null ? value.BackendVoice : string.Empty; }
+            get => NpcDataHelper.GetVoiceByBackendVoice(voice);
+            set => voice = value != null ? value.BackendVoice : string.Empty;
         }
         public BackendVoiceItem voiceItem { get; set; }
 

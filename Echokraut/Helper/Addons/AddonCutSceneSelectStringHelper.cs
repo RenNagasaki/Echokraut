@@ -18,42 +18,31 @@ public class AddonCutSceneSelectStringHelper
 {
     private record struct AddonCutSceneSelectStringState(string? Speaker, string? Text, AddonPollSource PollSource);
 
-    private readonly IAddonLifecycle addonLifecycle;
-    private readonly IClientState clientState;
-    private readonly IObjectTable objects;
-    private readonly Configuration config;
-    private readonly Echokraut plugin;
     private List<string> options = new List<string>();
 
-    public AddonCutSceneSelectStringHelper(Echokraut plugin, IAddonLifecycle addonLifecycle, IClientState clientState, IObjectTable objects, Configuration config)
+    public AddonCutSceneSelectStringHelper()
     {
-        this.plugin = plugin;
-        this.addonLifecycle = addonLifecycle;
-        this.clientState = clientState;
-        this.config = config;
-        this.objects = objects;
-
         HookIntoAddonLifecycle();
     }
 
     private void HookIntoAddonLifecycle()
     {
-        addonLifecycle.RegisterListener(AddonEvent.PostSetup, "CutSceneSelectString", OnPostSetup);
-        addonLifecycle.RegisterListener(AddonEvent.PreFinalize, "CutSceneSelectString", OnPreFinalize);
+        Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "CutSceneSelectString", OnPostSetup);
+        Plugin.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "CutSceneSelectString", OnPreFinalize);
     }
 
     private unsafe void OnPostSetup(AddonEvent type, AddonArgs args)
     {
-        if (!config.Enabled) return;
-        if (!config.VoicePlayerChoicesCutscene) return;
+        if (!Plugin.Configuration.Enabled) return;
+        if (!Plugin.Configuration.VoicePlayerChoicesCutscene) return;
 
         GetAddonStrings(((AddonCutSceneSelectString*)args.Addon)->OptionList);
     }
 
     private unsafe void OnPreFinalize(AddonEvent type, AddonArgs args)
     {
-        if (!config.Enabled) return;
-        if (!config.VoicePlayerChoicesCutscene) return;
+        if (!Plugin.Configuration.Enabled) return;
+        if (!Plugin.Configuration.VoicePlayerChoicesCutscene) return;
 
         HandleSelectedString(((AddonCutSceneSelectString*)args.Addon)->OptionList);
     }
@@ -86,7 +75,7 @@ public class AddonCutSceneSelectStringHelper
         if (selectedItem < 0 || selectedItem >= options.Count) return;
 
         var selectedString = options[selectedItem];
-        var localPlayerName = clientState.LocalPlayer?.Name;
+        var localPlayerName = Plugin.ClientState.LocalPlayer?.Name;
 
         HandleChange(new AddonCutSceneSelectStringState()
         {
@@ -105,9 +94,9 @@ public class AddonCutSceneSelectStringHelper
             return;
         }
 
-        var eventId = NpcDataHelper.EventId(MethodBase.GetCurrentMethod().Name, TextSource.AddonCutsceneSelectString);
+        var eventId = LogHelper.Start(MethodBase.GetCurrentMethod().Name, TextSource.AddonCutsceneSelectString);
         // Notify observers that the addon state was advanced
-        plugin.Cancel(eventId);
+        Plugin.Cancel(eventId);
 
         text = TalkTextHelper.NormalizePunctuation(text);
 
@@ -115,23 +104,23 @@ public class AddonCutSceneSelectStringHelper
 
 
         // Find the game object this speaker is representing
-        var speakerObj = speaker != null ? DalamudHelper.GetGameObjectByName(clientState, objects, speaker, eventId) : null;
+        var speakerObj = speaker != null ? DalamudHelper.GetGameObjectByName(Plugin.ClientState, Plugin.ObjectTable, speaker, eventId) : null;
 
         if (speakerObj != null)
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"speakerobject: ({speakerObj.Name})", eventId);
-            plugin.Say(eventId, speakerObj, speakerObj.Name, text);
+            Plugin.Say(eventId, speakerObj, speakerObj.Name, text);
         }
         else
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"object: ({state.Speaker})", eventId);
-            plugin.Say(eventId, null, state.Speaker ?? "PLAYER", text);
+            Plugin.Say(eventId, null, state.Speaker ?? "PLAYER", text);
         }
     }
 
     public void Dispose()
     {
-        addonLifecycle.UnregisterListener(AddonEvent.PostSetup, "CutSceneSelectString", OnPostSetup);
-        addonLifecycle.UnregisterListener(AddonEvent.PreFinalize, "CutSceneSelectString", OnPreFinalize);
+        Plugin.AddonLifecycle.UnregisterListener(AddonEvent.PostSetup, "CutSceneSelectString", OnPostSetup);
+        Plugin.AddonLifecycle.UnregisterListener(AddonEvent.PreFinalize, "CutSceneSelectString", OnPreFinalize);
     }
 }

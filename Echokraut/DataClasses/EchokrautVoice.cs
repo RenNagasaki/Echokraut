@@ -28,7 +28,17 @@ namespace Echokraut.DataClasses
                 {
                     var voiceNameArr = voiceName.Split('_');
                     if (voiceNameArr.Length > 0)
-                        voiceNameShort = voiceNameArr[voiceNameArr.Length - 1];
+                    {
+                        foreach (var voiceNme in voiceNameArr)
+                        {
+                            if (Enum.TryParse(typeof(Genders), voiceNme, true, out object? gender))
+                                continue;
+                            if (Enum.TryParse(typeof(NpcRaces), voiceNme, true, out object? race))
+                                continue;
+
+                            voiceNameShort = voiceNme;
+                        }
+                    }
                 }
                 
                 return voiceNameShort;
@@ -66,7 +76,7 @@ namespace Echokraut.DataClasses
         {
             return IsEnabled && 
                    UseAsRandom && 
-                   ((isGenderedRace && AllowedGenders.Contains(gender)) || !isGenderedRace) && 
+                   ((isGenderedRace && (AllowedGenders.Contains(gender) || AllowedGenders.Count == 0)) || !isGenderedRace) &&
                     AllowedRaces.Contains(race) &&
                     IsChildVoice == isChild;
         }

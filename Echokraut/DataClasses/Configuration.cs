@@ -18,11 +18,11 @@ public class Configuration : IPluginConfiguration
     public List<NpcMapData> MappedPlayers { get; set; } = new List<NpcMapData>();
 
     public List<EchokrautVoice> EchokrautVoices { get; set; } = new List<EchokrautVoice>();
+    public bool FirstTime { get; set; } = true;
     public bool Enabled { get; set; } = true;
     public bool VoiceDialogue { get; set; } = true;
     public bool VoiceBattleDialogue { get; set; } = true;
     public bool VoiceBattleDialogQueued { get; set; } = true;
-    public bool VoicePlayerDialog { get; set; } = true;
     public bool VoicePlayerChoicesCutscene { get; set; } = true;
     public bool VoicePlayerChoices { get; set; } = true;
     public bool CancelSpeechOnTextAdvance { get; set; } = true;

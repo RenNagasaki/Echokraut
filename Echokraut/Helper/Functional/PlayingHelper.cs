@@ -37,16 +37,9 @@ namespace Echokraut.Helper.Functional
         private static VoiceMessage CurrentlyPlayingStreamText = null;
         private static WasapiOut? ActivePlayer = null;
         private static bool StopThread = false;
-        private static Echokraut Echokraut;
-        private static DataClasses.Configuration Configuration;
-        private static IFramework Framework;
 
-        public static void Setup(Echokraut echokraut, DataClasses.Configuration config, IFramework framework)
+        public static void Setup()
         {
-            Echokraut = echokraut;
-            Configuration = config;
-            Framework = framework;
-
             PlayingQueueThread.Start();
             RequestingQueueThread.Start();
         }
@@ -134,7 +127,7 @@ namespace Echokraut.Helper.Functional
                 estimatedLength = count / 2.1f;
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Text} length: {estimatedLength}", eventId);
             }
-            Echokraut.lipSyncHelper.TriggerLipSync(eventId, estimatedLength, queueItemText.pActor);
+            Plugin.LipSyncHelper.TriggerLipSync(eventId, estimatedLength, queueItemText.pActor);
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Speaker.Name} length: {estimatedLength}", eventId);
             Playing = true;
         }
@@ -221,13 +214,13 @@ namespace Echokraut.Helper.Functional
                 {
                     var voiceMessage = RequestedBubbleQueue[0];
                     eventId = voiceMessage.eventId;
-                    if (Configuration.LoadFromLocalFirst)
+                    if (Plugin.Configuration.LoadFromLocalFirst)
                     {
-                        if (Directory.Exists(Configuration.LocalSaveLocation))
+                        if (Directory.Exists(Plugin.Configuration.LocalSaveLocation))
                         {
                             if (voiceMessage != null && voiceMessage.Speaker != null && voiceMessage.Speaker.Voice != null)
                             {
-                                var result = AudioFileHelper.LoadLocalBubbleAudio(eventId, Configuration.LocalSaveLocation, voiceMessage);
+                                var result = AudioFileHelper.LoadLocalBubbleAudio(eventId, Plugin.Configuration.LocalSaveLocation, voiceMessage);
 
                                 if (result)
                                 {
@@ -238,8 +231,8 @@ namespace Echokraut.Helper.Functional
                             else
                                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. No voice set.", eventId);
                         }
-                        else if (!Directory.Exists(Configuration.LocalSaveLocation))
-                            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. Save location doesn't exists: {Configuration.LocalSaveLocation}", eventId);
+                        else if (!Directory.Exists(Plugin.Configuration.LocalSaveLocation))
+                            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. Save location doesn't exists: {Plugin.Configuration.LocalSaveLocation}", eventId);
                     }
 
                     if (!InDialog && voiceMessage != null)
@@ -267,23 +260,23 @@ namespace Echokraut.Helper.Functional
 
             if (CurrentlyPlayingStream != null)
             {
-                if (Configuration.CreateMissingLocalSaveLocation && !Directory.Exists(Configuration.LocalSaveLocation))
-                    Directory.CreateDirectory(Configuration.LocalSaveLocation);
+                if (Plugin.Configuration.CreateMissingLocalSaveLocation && !Directory.Exists(Plugin.Configuration.LocalSaveLocation))
+                    Directory.CreateDirectory(Plugin.Configuration.LocalSaveLocation);
 
-                if (Configuration.SaveToLocal && Directory.Exists(Configuration.LocalSaveLocation))
+                if (Plugin.Configuration.SaveToLocal && Directory.Exists(Plugin.Configuration.LocalSaveLocation))
                 {
                     var playedText = CurrentlyPlayingStreamText;
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}", eventId);
                     if (!string.IsNullOrWhiteSpace(playedText.Text) && playedText.Source != TextSource.VoiceTest && !playedText.loadedLocally)
                     {
-                        var filePath = AudioFileHelper.GetLocalAudioPath(Configuration.LocalSaveLocation, playedText);
+                        var filePath = AudioFileHelper.GetLocalAudioPath(Plugin.Configuration.LocalSaveLocation, playedText);
                         var stream = CurrentlyPlayingStream;
                         AudioFileHelper.WriteStreamToFile(eventId, filePath, stream);
                     }
                 }
                 else
                 {
-                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't save file locally. Save location doesn't exists: {Configuration.LocalSaveLocation}", eventId);
+                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't save file locally. Save location doesn't exists: {Plugin.Configuration.LocalSaveLocation}", eventId);
                 }
             }
 
@@ -292,12 +285,12 @@ namespace Echokraut.Helper.Functional
             Playing = false;
             CurrentlyPlayingStream.Dispose();
 
-            if (Configuration.AutoAdvanceTextAfterSpeechCompleted)
+            if (Plugin.Configuration.AutoAdvanceTextAfterSpeechCompleted)
             {
                 try
                 {
                     if (InDialog)
-                        Framework.RunOnFrameworkThread(() => Echokraut.addonTalkHelper.Click(eventId));
+                        Plugin.Framework.RunOnFrameworkThread(() => Plugin.AddonTalkHelper.Click(eventId));
                     else
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Not inDialog", eventId);
                 }
@@ -314,15 +307,15 @@ namespace Echokraut.Helper.Functional
 
         public static void AddRequestToQueue(VoiceMessage voiceMessage)
         {
-            if (Configuration.LoadFromLocalFirst && Directory.Exists(Configuration.LocalSaveLocation) && voiceMessage.Speaker.Voice != null && voiceMessage.Source != TextSource.VoiceTest)
+            if (Plugin.Configuration.LoadFromLocalFirst && Directory.Exists(Plugin.Configuration.LocalSaveLocation) && voiceMessage.Speaker.Voice != null && voiceMessage.Source != TextSource.VoiceTest)
             {
-                var result = AudioFileHelper.LoadLocalAudio(voiceMessage.eventId, Configuration.LocalSaveLocation, voiceMessage);
+                var result = AudioFileHelper.LoadLocalAudio(voiceMessage.eventId, Plugin.Configuration.LocalSaveLocation, voiceMessage);
 
                 if (result)
                     return;
             }
-            else if (!Directory.Exists(Configuration.LocalSaveLocation))
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. Save location doesn't exists: {Configuration.LocalSaveLocation}", voiceMessage.eventId);
+            else if (!Directory.Exists(Plugin.Configuration.LocalSaveLocation))
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. Save location doesn't exists: {Plugin.Configuration.LocalSaveLocation}", voiceMessage.eventId);
 
             RequestingQueue.Add(voiceMessage);
         }

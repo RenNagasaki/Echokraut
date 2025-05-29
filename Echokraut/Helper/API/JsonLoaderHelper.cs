@@ -27,7 +27,7 @@ namespace Echokraut.Helper.API
         public static List<NpcGenderRaceMap> ModelGenderMap;
         public static List<string> Emoticons;
         public static List<VoiceMap> VoiceMaps;
-        public static void Setup(ClientLanguage language)
+        public static void Initialize(ClientLanguage language)
         {
             LoadModelsToRaceMap();
             LoadModelsToGenderMap();

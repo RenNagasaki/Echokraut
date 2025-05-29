@@ -10,6 +10,6 @@ namespace Echokraut.Enums
         AddonCutsceneSelectString,
         AddonBubble,
         VoiceTest,
-        AlltalkInstall
+        Backend
     }
 }

@@ -39,7 +39,7 @@ public static class CharacterDataHelper
         return true;
     }
 
-    public static unsafe Genders GetCharacterGender(IDataManager dataManager, EKEventId eventId, IGameObject? speaker, NpcRaces race, out uint? modelBody)
+    public static unsafe Genders GetCharacterGender(EKEventId eventId, IGameObject? speaker, NpcRaces race, out uint? modelBody)
     {
         modelBody = new uint?();
         if (speaker == null || speaker.Address == nint.Zero)
@@ -78,7 +78,7 @@ public static class CharacterDataHelper
         return actorGender;
     }
 
-    public static unsafe NpcRaces GetSpeakerRace(IDataManager dataManager, EKEventId eventId, IGameObject? speaker, out string raceStr, out int modelId)
+    public static unsafe NpcRaces GetSpeakerRace(EKEventId eventId, IGameObject? speaker, out string raceStr, out int modelId)
     {
         var raceEnum = NpcRaces.Unknown;
         modelId = 0;

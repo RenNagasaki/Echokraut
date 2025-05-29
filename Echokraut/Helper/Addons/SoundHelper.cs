@@ -48,18 +48,12 @@ public class SoundHelper : IDisposable
     private readonly AddonBubbleHelper addonBubbleHelper;
     private readonly IDataManager dataManager;
 
-    public SoundHelper(AddonTalkHelper addonTalkHelper, AddonBattleTalkHelper addonBattleTalkHelper, AddonBubbleHelper addonBubbleHelper,
-        ISigScanner sigScanner, IGameInteropProvider gameInterop, IDataManager dataManager)
+    public SoundHelper()
     {
-        this.dataManager = dataManager;
-        this.addonTalkHelper = addonTalkHelper;
-        this.addonBattleTalkHelper = addonBattleTalkHelper;
-        this.addonBubbleHelper = addonBubbleHelper;
-
-        if (sigScanner.TryScanText(LoadSoundFileSig, out var loadSoundFilePtr))
+        if (Plugin.SigScanner.TryScanText(LoadSoundFileSig, out var loadSoundFilePtr))
         {
             loadSoundFileHook =
-                gameInterop.HookFromAddress<LoadSoundFileDelegate>(loadSoundFilePtr, LoadSoundFileDetour);
+                Plugin.GameInteropProvider.HookFromAddress<LoadSoundFileDelegate>(loadSoundFilePtr, LoadSoundFileDetour);
             loadSoundFileHook.Enable();
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Hooked into LoadSoundFile", new EKEventId(0, TextSource.AddonBattleTalk));
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Hooked into LoadSoundFile", new EKEventId(0, TextSource.AddonTalk));
@@ -70,10 +64,10 @@ public class SoundHelper : IDisposable
             LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Failed to hook into LoadSoundFile", new EKEventId(0, TextSource.AddonTalk));
         }
 
-        if (sigScanner.TryScanText(PlaySpecificSoundSig, out var playSpecificSoundPtr))
+        if (Plugin.SigScanner.TryScanText(PlaySpecificSoundSig, out var playSpecificSoundPtr))
         {
             playSpecificSoundHook =
-                gameInterop.HookFromAddress<PlaySpecificSoundDelegate>(playSpecificSoundPtr, PlaySpecificSoundDetour);
+                Plugin.GameInteropProvider.HookFromAddress<PlaySpecificSoundDelegate>(playSpecificSoundPtr, PlaySpecificSoundDetour);
             playSpecificSoundHook.Enable();
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Hooked into PlaySpecificSound", new EKEventId(0, TextSource.AddonBattleTalk));
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "Hooked into PlaySpecificSound", new EKEventId(0, TextSource.AddonTalk));
