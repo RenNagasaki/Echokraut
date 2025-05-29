@@ -159,29 +159,26 @@ namespace Echokraut.Helper.Functional
 
                             InstallThreadCts.Token.ThrowIfCancellationRequested();
                             LogHelper.Info("Install - PC", $"Starting install process", eventId);
-                            InstallProcess.StartInfo.UseShellExecute = false;
-                            InstallProcess.StartInfo.RedirectStandardOutput = true;
-                            InstallProcess.StartInfo.RedirectStandardError = true;
-                            InstallProcess.StartInfo.CreateNoWindow=true;
-                            InstallProcess.StartInfo.FileName = Path.Join(alltalkFolder, "atsetup" + (IsWindows ? ".bat" : ".sh"));
-                            LogHelper.Debug("Install - PC", $"{InstallProcess.StartInfo.FileName}", eventId);
-                            InstallProcess.StartInfo.ArgumentList.Add("-silent");
-                            InstallProcess.OutputDataReceived += (sender, e) =>
+                            InstallProcess.StartInfo.UseShellExecute = true;
+                            InstallProcess.StartInfo.CreateNoWindow=false;
+                            if (IsWindows)
                             {
-                                InstallThreadCts.Token.ThrowIfCancellationRequested();
-                                if (e.Data != null && !string.IsNullOrEmpty(e.Data))
-                                    LogHelper.Debug("Install - PC", CMDHelper.CleanAnsi(e.Data), eventId);
-                            };
-                            InstallProcess.ErrorDataReceived += (sender, e) =>
+                                InstallProcess.StartInfo.FileName = "cmd.exe";
+                                InstallProcess.StartInfo.Arguments =
+                                    $"/C start \"atsetup\" /wait {Path.Join(alltalkFolder, "atsetup.bat")} -silent";
+                            }
+                            else
                             {
-                                InstallThreadCts.Token.ThrowIfCancellationRequested();
-                                if (e.Data != null && !string.IsNullOrEmpty(e.Data))
-                                    LogHelper.Error("Install - PC", CMDHelper.CleanAnsi(e.Data), eventId);
-                            };
+
+                                InstallProcess.StartInfo.FileName = "/bin/bash";
+                                InstallProcess.StartInfo.Arguments =
+                                    $"-c \"setsid bash -c '{Path.Join(alltalkFolder, "atsetup.sh")} -silent' & wait $!\"";
+
+                            }
+
+                            LogHelper.Debug("Install - PC", $"Calling atsetup", eventId);
                             InstallProcess.Start();
                             InstallProcessIsRunning = true;
-                            InstallProcess.BeginOutputReadLine();
-                            InstallProcess.BeginErrorReadLine();
                             InstallProcess.WaitForExit();
                             InstallProcessIsRunning = false;
 
@@ -282,8 +279,6 @@ namespace Echokraut.Helper.Functional
                     InstallProcessIsRunning = false;
                     if (InstallProcess is { HasExited: false })
                     {
-                        InstallProcess?.CancelOutputRead();
-                        InstallProcess?.CancelErrorRead();
                         InstallProcess?.Kill(true);
                     }
                     InstallProcess?.Dispose();
