@@ -4,9 +4,9 @@
 Breaking the silence! That is the goal of this plugin for [Dalamud](https://github.com/goatcorp/Dalamud). Unlike the official Dalamud Plugin [TextToTalk](https://github.com/karashiiro/TextToTalk), this plugin is meant for local/self hosted high quality TTS for those wanting a rich experience without paying an arm and a leg for it.
 
 ## Dislaimer: 
-* Since this plugin is dependent on [AllTalk_TTS](https://github.com/erew123/alltalk_tts) it is important to note that at the moment on Windows only Nvidia GPUs are supported. On Linux AMD should work as well. In the future this will expand.
+* Since this plugin is dependent on [AllTalk_TTS](https://github.com/erew123/alltalk_tts) it is important to note that at the moment on Windows only Nvidia GPUs are supported. On Linux AMD should work as well. In the future this will likely expand.
 * The plugin is only tested in german, but should work in every client language. (Report an issue if not 😘)
-* Self hosted TTS is currently heavily dependent on a strong GPU. It's recommended to have at least a RTX 3060 (or AMD equivalent on Linux) with 6+GB VRAM built into the system hosting [AllTalk_TTS](https://github.com/erew123/alltalk_tts) for inference. (Keep in mind thats just for inference. If you want to play FFXIV on the same machine I guess 3080 is minimum) For training I'd recommend at least 12 GB of VRAM but the more the better.
+* Self hosted TTS is currently heavily dependent on a strong GPU. It's recommended to have at least a RTX 3060 (or AMD equivalent on Linux) with 6+GB VRAM built into the system hosting [AllTalk_TTS](https://github.com/erew123/alltalk_tts) for inference.
 * This plugin is still in it's early stages of development, feel free to report any issues here or [![Discord](https://img.shields.io/badge/Join-Discord-blue)](https://discord.gg/5gesjDfDBr) (preferred)
 
 ## Commands
@@ -17,11 +17,11 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 * `/ektchat` - Toggles chat voicing
 * `/ektcutschoice` - Toggles cutscene choice voicing
 * `/ektchoice` - Toggles choice voicing
-* `/ek` - Opens the configuration window
 * `/ekdel` - /ekdel n -> Deletes last 'n' local saved files. Default 10
 * `/ekdelmin` - /ekdelmin n -> Deletes last 'n' minutes generated local saved files. Default 10
 
 ## Features - Each feature is on/off toggleable
+* One click install: Upon first starting the plugin you get asked to either install a local Alltalk Instance or connect a remote running one. (The local install is fully automated on Windows, semi automated on Linux. Just follow the steps shown)
 * Dialogue TTS: All unvoiced Dialogues get voiced via the TTS Engine.
 * Battletalk TTS: All unvoiced Battletalks get voiced via the TTS Engine. (Battletalks are the small popup Texts in Duties or Story contents.)
 * Playerchoice TTS: Altough still in it's infant phase, the selections of the player in cutscenes get Voiced. This means you can give your own Character a voice! (Altough small in content)
@@ -33,10 +33,9 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 
 ## Features - Fixed
 * Ingame volume: This plugin uses the ingame volume for all generated TTS, meaning the infered(generated) audio should be close or equal to normal voiced cutscenes
-* Auto voice matching: The plugin tries to match an NPC via his name to a existing voice in your TTS. If none are found it tries to match to specified 'NPC' voices per race of NPC or lastly the narrator voice. [AllTalk_TTS](https://github.com/erew123/alltalk_tts) has the option to inform you of all available voices.
+* Auto voice matching: The plugin tries to match an NPC via his name to a existing voice in your TTS. If none are found it tries to match to specified 'NPC' voices per race of NPC or lastly the narrator voice. 
 
 ## Planned Features
-* I'm currently looking in getting emotions to work for TTS meaning that people could use [angry] in their chats and the voice would sound angry. The raw dialogue text for story or quests sometimes contains stuff like <pant> for when a npc is exhausted and more. I aim to use that for more detailed voicing.
 * I'm still trying to figure out a way to identify "???" Dialogues to set the correct voice if possible. At the moment Dialogues with "???" as name get identified as a single NPC called "???" resulting in wrong voices.
   
 ## Supported TTS providers
@@ -45,13 +44,11 @@ Breaking the silence! That is the goal of this plugin for [Dalamud](https://gith
 
 ## Setup/Install
 * Setup [AllTalk_TTS](https://github.com/erew123/alltalk_tts) -> Refer to this site on how to install (Branch v2_Beta preferred. It's faster, easier to use, and more reliable).
-* (Optional) Finetune the xtts2 model to your own voices. Will sound better than simple voice cloning.
-* (Optional) To create your own trained voice model on your own FFXIV GameData, check out: [Echokraut Tools](https://github.com/RenNagasaki/Echokraut-Tools)
 * Add the following path to the experimental paths of [Dalamud](https://github.com/goatcorp/Dalamud): `https://raw.githubusercontent.com/RenNagasaki/MyDalamudPlugins/master/pluginmaster.json`
 * Search for 'Echokraut' in Dalamud and install the plugin
-* Open the settings window either via the button or by typing `/ek`
-* In the 'Settings -> Backend' Tab enter the url of your [AllTalk_TTS](https://github.com/erew123/alltalk_tts) instance. (127.0.0.1:7851 should be default)
-* If clicking 'Test Connection' results in `ready` you're set.
+* Upon first start the "First time using Echokraut" Window should pop up and lead you through the process of setting up Echokraut.
+* (Optional) Finetune the xtts2 model to your own voices. Will sound better than simple voice cloning.
+* (Optional) To create your own trained voice model on your own FFXIV GameData, check out: [Echokraut Tools](https://github.com/RenNagasaki/Echokraut-Tools)
 * (Optional) The naming scheme of the voices can be like this: `GENDER_RACES_NAME.wav`. That way the plugin can auto interpret how to use the voice.
   For example: `Male_Hyur_Thancred.wav` for a named NPC
   and `Male_Hyur-Elezen-Miqote_NPC1.wav` for a random NPC which is from Hyur, Elezen or Miqote race. If more than one NPC voice exists then the plugin selects one randomly the first time you meet a new NPC.
