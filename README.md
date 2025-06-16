@@ -1,6 +1,6 @@
 [![Discord](https://img.shields.io/badge/Join-Discord-blue)](https://discord.gg/5gesjDfDBr)
 
-# Echokraut
+# Echokraut - TTS for FFXIV/FF14
 Breaking the silence! That is the goal of this plugin for [Dalamud](https://github.com/goatcorp/Dalamud). Unlike the official Dalamud Plugin [TextToTalk](https://github.com/karashiiro/TextToTalk), this plugin is meant for local/self hosted high quality TTS for those wanting a rich experience without paying an arm and a leg for it.
 
 ## Dislaimer: 
