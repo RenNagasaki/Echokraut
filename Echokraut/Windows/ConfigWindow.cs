@@ -9,6 +9,7 @@ using System.Linq;
 using Dalamud.Interface;
 using System.Reflection;
 using System.IO;
+using Dalamud.Game;
 using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
@@ -1952,11 +1953,12 @@ public class ConfigWindow : Window, IDisposable
                 Name = voice.VoiceName,
                 Voice = voice
             },
-            Text = Constants.TESTMESSAGEDE,
+            Text = GetTestMessageText(Plugin.ClientState.ClientLanguage),
             Language = Plugin.ClientState.ClientLanguage,
             eventId = eventId
         };
         var volume = VolumeHelper.GetVoiceVolume(eventId) * voice.Volume;
+
 
         if (volume > 0)
             BackendHelper.OnSay(voiceMessage, volume) ;
@@ -1965,6 +1967,23 @@ public class ConfigWindow : Window, IDisposable
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
         }
+    }
+
+    private string GetTestMessageText(ClientLanguage clientLanguage)
+    {
+        switch (clientLanguage)
+        {
+            case ClientLanguage.English:
+                return Constants.TESTMESSAGEEN;
+            case ClientLanguage.French:
+                return Constants.TESTMESSAGEFR;
+            case ClientLanguage.German:
+                return Constants.TESTMESSAGEDE;
+            case ClientLanguage.Japanese:
+                return Constants.TESTMESSAGEJP;
+        }
+
+        return Constants.TESTMESSAGEEN;
     }
 
     private async void BackendStopVoice()
