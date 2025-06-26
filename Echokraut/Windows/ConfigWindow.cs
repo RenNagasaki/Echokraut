@@ -760,11 +760,13 @@ public class ConfigWindow : Window, IDisposable
     private void DrawVoices()
     {
         var voiceArr = Plugin.Configuration!.EchokrautVoices.ConvertAll(p => p.ToString()).ToArray();
-        var defaultVoiceIndexOld = Plugin.Configuration.EchokrautVoices.FindIndex(p => p.IsDefault);
-        var defaultVoiceIndex = defaultVoiceIndexOld;
+        var defaultVoiceIndex = Plugin.Configuration.EchokrautVoices.FindIndex(p => p.IsDefault);
         if (ImGui.Combo($"Default Voice:##EKDefaultVoice", ref defaultVoiceIndex, voiceArr, voiceArr.Length))
         {
-            Plugin.Configuration.EchokrautVoices[defaultVoiceIndexOld].IsDefault = false;
+            // Clear all defaults
+            foreach (var voice in Plugin.Configuration.EchokrautVoices)
+                voice.IsDefault = false;
+
             Plugin.Configuration.EchokrautVoices[defaultVoiceIndex].IsDefault = true;
             Plugin.Configuration.Save();
         }

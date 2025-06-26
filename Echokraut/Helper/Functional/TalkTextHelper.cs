@@ -383,15 +383,19 @@ namespace Echokraut.Helper.Functional
                 while (romanNumerals.Success)
                 {
                     var romanNumeralsText = romanNumerals.Value;
-                    var value = romanNumeralsText.FromRoman();
+
+                    var value = "i";
+                    if (romanNumeralsText != "I")
+                        value = romanNumeralsText.FromRoman().ToString();
 
                     var regex = new Regex(Regex.Escape(romanNumeralsText));
                     cleanText = regex.Replace(cleanText, value.ToString(), 1);
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Replaced '{romanNumeralsText}' with '{value}'", eventId);
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                    $"Replaced '{romanNumeralsText}' with '{value}'", eventId);
 
                     romanNumerals = RomanNumeralsRx.Match(cleanText);
-                    i++;
 
+                    i++;
                     if (i > 50)
                         break;
                 }
