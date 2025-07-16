@@ -104,7 +104,7 @@
         "speakers": [ "Ysayle", "Iceheart" ]
     },
     {
-        "voiceName": "Lyse",
+        "voiceName": "Yda",
         "speakers": [ "Lyse", "Yda", "Yda's Avatar" ]
     },
     {
@@ -152,11 +152,11 @@
         "speakers": [ "Ilberd", "Ilberd of the Dull Blade" ]
     },
     {
-        "voiceName": "Varis zos Galvus",
+        "voiceName": "Varis",
         "speakers": [ "Varis", "Varis zos Galvus", "Varis yae Galvus" ]
     },
     {
-        "voiceName": "Zenos yae Galvus",
+        "voiceName": "Zenos",
         "speakers": [ "Zenos yae Galvus", "Zenos", "Zenos viator Galvus" ]
     },
     {
@@ -164,7 +164,7 @@
         "speakers": [ "Gaius", "Gaius Baelsar", "Gaius van Baelsar", "Shadowhunter", "Menacing Mercenary" ]
     },
     {
-        "voiceName": "Livia sas Junius",
+        "voiceName": "Livia",
         "speakers": [ "Livia", "Livia sas Junius", "Livia the Undeterred", "Drusilla", "The Reaper" ]
     },
     {

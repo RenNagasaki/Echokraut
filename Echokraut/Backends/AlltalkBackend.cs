@@ -18,12 +18,13 @@ using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Dalamud.Game;
 using Echokraut.Helper.Data;
 using System.Net;
+using Echokraut.Helper.Functional;
 
 namespace Echokraut.Backend
 {
     public class AlltalkBackend : ITTSBackend
     {
-        public async Task<Stream> GenerateAudioStreamFromVoice(EKEventId eventId, string voiceLine, string voice, ClientLanguage language)
+        public async Task<Stream> GenerateAudioStreamFromVoice(EKEventId eventId, VoiceMessage message, string voice, ClientLanguage language)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating Alltalk Audio", eventId);
             HttpClient httpClient = new HttpClient();
@@ -36,7 +37,7 @@ namespace Echokraut.Backend
                 var uriBuilder = new UriBuilder(Plugin.Configuration.Alltalk.BaseUrl);
                 uriBuilder.Path = Plugin.Configuration.Alltalk.StreamPath;
                 var query = HttpUtility.ParseQueryString(uriBuilder.Query);
-                query["text"] = voiceLine;
+                query["text"] = message.Text;
                 query["voice"] = voice;
                 query["language"] = getAlltalkLanguage(language);
                 query["output_file"] = "ignoreme.wav";
@@ -52,6 +53,14 @@ namespace Echokraut.Backend
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Getting response...", eventId);
                 var responseStream = await res.Content.ReadAsStreamAsync().ConfigureAwait(false);
                 var readSeekableStream = new ReadSeekableStream(responseStream, 2146435);
+
+                if (!Plugin.Configuration.Alltalk.StreamingGeneration)
+                {
+                    var filePath = Plugin.Configuration.LocalSaveLocation + @"\Temp.wav";
+                    var stream = readSeekableStream;
+                    AudioFileHelper.WriteStreamToFile(eventId, filePath, stream);
+                    readSeekableStream.Seek(0, SeekOrigin.Begin);
+                }
 
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Done", eventId);
                 return readSeekableStream;

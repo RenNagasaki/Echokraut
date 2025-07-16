@@ -37,6 +37,7 @@ namespace Echokraut.DataClasses
                                 continue;
 
                             voiceNameShort = voiceNme;
+                            break;
                         }
                     }
                 }

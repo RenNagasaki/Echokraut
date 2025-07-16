@@ -23,6 +23,8 @@ namespace Echokraut.DataClasses
         public bool RemoteInstance { get; set; } = false;
         public string LocalInstallPath { get; set; }  = "";
 
+        public bool StreamingGeneration { get; set; } = true;
+
         public override string ToString()
         {
             return $"BaseUrl: {BaseUrl}, StreamPath: {StreamPath}, ReadyPath: {ReadyPath}, VoicesPath: {VoicesPath}, StopPath: {StopPath}";

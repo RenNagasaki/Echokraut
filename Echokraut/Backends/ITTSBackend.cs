@@ -10,7 +10,7 @@ namespace Echokraut.Backend
     public interface ITTSBackend
     {
         List<string> GetAvailableVoices(EKEventId eventId);
-        Task<Stream> GenerateAudioStreamFromVoice(EKEventId eventId, string voiceLine, string voice, ClientLanguage language);
+        Task<Stream> GenerateAudioStreamFromVoice(EKEventId eventId, VoiceMessage voiceLine, string voice, ClientLanguage language);
         Task<string> CheckReady(EKEventId eventId);
         Task<bool> ReloadService(string reloadModel, EKEventId eventId);
         void StopGenerating(EKEventId eventId);

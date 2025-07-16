@@ -196,6 +196,13 @@ public class AlltalkInstanceWindow : Window, IDisposable
 
             if (!firstTime)
             {
+                var streamingGeneration = Plugin.Configuration.Alltalk.StreamingGeneration;
+                if (ImGui.Checkbox("Generate Streaming(Do not wait for whole text to be generated before playing audio)##EKGenerateStreaming", ref streamingGeneration))
+                {
+                    Plugin.Configuration.Alltalk.StreamingGeneration = streamingGeneration;
+                    Plugin.Configuration.Save();
+                }
+
                 using (ImRaii.Disabled(AlltalkInstanceHelper.InstanceRunning || AlltalkInstanceHelper.InstanceStarting))
                 {
                     var buttonText = AlltalkInstanceHelper.InstanceStarting ? "Starting..." : AlltalkInstanceHelper.InstanceRunning ? "Running" : "Start";
@@ -285,6 +292,12 @@ public class AlltalkInstanceWindow : Window, IDisposable
 
     public static void DrawAlltalkServiceOptions()
     {
+        var streamingGeneration = Plugin.Configuration.Alltalk.StreamingGeneration;
+        if (ImGui.Checkbox("Generate streaming(Do not wait for whole text to be generated before playing audio)##EKGenerateStreaming", ref streamingGeneration))
+        {
+            Plugin.Configuration.Alltalk.StreamingGeneration = streamingGeneration;
+            Plugin.Configuration.Save();
+        }
         if (ImGui.InputText($"Model to reload##EKBaseUrl", ref Plugin.Configuration.Alltalk.ReloadModel, 40))
             Plugin.Configuration.Save();
         ImGui.SameLine();

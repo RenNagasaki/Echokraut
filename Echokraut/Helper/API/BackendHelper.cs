@@ -222,7 +222,7 @@ namespace Echokraut.Helper.API
                 {
                     try
                     {
-                        responseStream = await Backend.GenerateAudioStreamFromVoice(eventId, text, voice, language);
+                        responseStream = await Backend.GenerateAudioStreamFromVoice(eventId, message, voice, language);
                     }
                     catch (Exception ex)
                     {

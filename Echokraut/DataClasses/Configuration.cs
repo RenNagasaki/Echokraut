@@ -32,7 +32,7 @@ public class Configuration : IPluginConfiguration
     public LogConfig logConfig { get; set; } = new LogConfig();
     public bool SaveToLocal { get; set; } = false;
     public bool LoadFromLocalFirst { get; set; } = false;
-    public string LocalSaveLocation { get; set; } = "";
+    public string LocalSaveLocation { get; set; } = @"C:\alltalk_tts\LocalSaves";
     public bool CreateMissingLocalSaveLocation { get; set; } = false;
     public bool VoiceBubble { get; set; } = false;
     public bool VoiceBubblesInCity { get; set; } = false;
