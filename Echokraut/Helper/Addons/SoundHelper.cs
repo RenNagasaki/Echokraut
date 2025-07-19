@@ -42,12 +42,6 @@ public class SoundHelper : IDisposable
     private static readonly Regex BattleVoiceLineFileNameRegex = new(@"^sound/.*/(Vo_Line)");
     private readonly HashSet<nint> knownVoiceLinePtrs = new();
     private readonly Dictionary<nint, string> knownVoiceLinesMap = new();
-
-    private readonly AddonTalkHelper addonTalkHelper;
-    private readonly AddonBattleTalkHelper addonBattleTalkHelper;
-    private readonly AddonBubbleHelper addonBubbleHelper;
-    private readonly IDataManager dataManager;
-
     public SoundHelper()
     {
         if (Plugin.SigScanner.TryScanText(LoadSoundFileSig, out var loadSoundFilePtr))
@@ -162,17 +156,17 @@ public class SoundHelper : IDisposable
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Filename: {fileName}", new EKEventId(0, TextSource.AddonBattleTalk));
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Caught playback of known voice line at address {soundDataPtr:x}", new EKEventId(0, TextSource.AddonBubble));
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Filename: {fileName}", new EKEventId(0, TextSource.AddonBubble));
-                    addonBattleTalkHelper.nextIsVoice = true;
-                    addonBattleTalkHelper.timeNextVoice = DateTime.Now;
-                    addonBubbleHelper.nextIsVoice = true;
-                    addonBubbleHelper.timeNextVoice = DateTime.Now;
+                    Plugin.AddonBattleTalkHelper.nextIsVoice = true;
+                    Plugin.AddonBattleTalkHelper.timeNextVoice = DateTime.Now;
+                    Plugin.AddonBubbleHelper.nextIsVoice = true;
+                    Plugin.AddonBubbleHelper.timeNextVoice = DateTime.Now;
                 }
                 else
                 {
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Caught playback of known voice line at address {soundDataPtr:x}", new EKEventId(0, TextSource.AddonTalk));
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Filename: {fileName}", new EKEventId(0, TextSource.AddonTalk));
-                    addonTalkHelper.nextIsVoice = true;
-                    addonTalkHelper.timeNextVoice = DateTime.Now;
+                    Plugin.AddonTalkHelper.nextIsVoice = true;
+                    Plugin.AddonTalkHelper.timeNextVoice = DateTime.Now;
 
                 }
             }

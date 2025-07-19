@@ -112,6 +112,10 @@ namespace Echokraut.DataClasses
 
         public const string ALLTALKFOLDERNAME = "alltalk_tts";
 
+        public const string MSBUILDTOOLSURL = "https://aka.ms/vs/17/release/vs_BuildTools.exe";
+        public const string MSBUILDTOOLSMSVC = "Microsoft.VisualStudio.Component.VC.Tools.x86.x64";
+        public const string MSBUILDTOOLSWIN10SDK = "Microsoft.VisualStudio.Component.Windows10SDK.19041";
+        public const string MSBUILDTOOLSWIN11SDK = "Microsoft.VisualStudio.Component.Windows11SDK.22621";
         public const string VOICES2URL = "https://drive.google.com/uc?export=download&id=1CPnx1rpkuKvVj5fGr9OiUJHZ_e8DfTzP";
         public const string VOICESURL = "https://drive.google.com/uc?export=download&id=1bYdZdr3L69kmzUN3vSiqZmLRD7-A3M47";
 

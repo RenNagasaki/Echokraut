@@ -134,7 +134,7 @@ public partial class Plugin : IDalamudPlugin
             if (Configuration.FirstTime && !FirstTimeWindow.IsOpen)
                 CommandHelper.ToggleFirstTimeUI();
 
-            if (!Configuration.FirstTime && Configuration.Alltalk.AutoStartLocalInstance)
+            if (!Configuration.FirstTime && Configuration.Alltalk.AutoStartLocalInstance && !AlltalkInstanceHelper.InstanceRunning && !AlltalkInstanceHelper.InstanceStarting)
                 AlltalkInstanceHelper.StartInstance();
         }
         catch (Exception e)

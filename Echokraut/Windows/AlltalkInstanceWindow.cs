@@ -143,6 +143,13 @@ public class AlltalkInstanceWindow : Window, IDisposable
                         }
                     }
 
+                    var isWindows11 = Plugin.Configuration.Alltalk.IsWindows11;
+                    if (ImGui.Checkbox("Is Windows 11##EKIsWin11", ref isWindows11))
+                    {
+                        Plugin.Configuration.Alltalk.IsWindows11 = isWindows11;
+                        Plugin.Configuration.Save();
+                    }
+
                     if (ImGui.CollapsingHeader("Custom(trained) data:"))
                     {
                         using (ImRaii.Disabled(AlltalkInstanceHelper.Installing))
@@ -186,7 +193,11 @@ public class AlltalkInstanceWindow : Window, IDisposable
                                                  "Reinstall (delete alltalk and install fresh)"
                                                  : "Install";
                         if (ImGui.Button(buttonText))
+                        {
+                            if (Plugin.Configuration.Alltalk.LocalInstall && (AlltalkInstanceHelper.InstanceRunning || AlltalkInstanceHelper.InstanceStarting))
+                                AlltalkInstanceHelper.StopInstance(new EKEventId(0, TextSource.Backend));
                             AlltalkInstanceHelper.Install(Plugin.Configuration.Alltalk.LocalInstall);
+                        }
                     }
 
                     if (AlltalkInstanceHelper.Installing)

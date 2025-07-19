@@ -22,8 +22,8 @@ namespace Echokraut.DataClasses
         public bool AutoStartLocalInstance { get; set; } = false;
         public bool RemoteInstance { get; set; } = false;
         public string LocalInstallPath { get; set; }  = "";
-
         public bool StreamingGeneration { get; set; } = true;
+        public bool IsWindows11 { get; set; } = true;
 
         public override string ToString()
         {
