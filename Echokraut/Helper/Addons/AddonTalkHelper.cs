@@ -59,7 +59,7 @@ public unsafe class AddonTalkHelper
 
     private unsafe void OnPostUpdate(AddonEvent type, AddonArgs args)
     {
-        var addonTalk = (AddonTalk*)args.Addon.ToPointer();
+        var addonTalk = (AddonTalk*)args.Addon.Address.ToPointer();
 
         if (addonTalk != null)
         {
@@ -77,7 +77,7 @@ public unsafe class AddonTalkHelper
 
     private unsafe void OnPostDraw(AddonEvent type, AddonArgs args)
     {
-        var addonTalk = (AddonTalk*)args.Addon.ToPointer();
+        var addonTalk = (AddonTalk*)args.Addon.Address.ToPointer();
         Address = args.Addon;
         Handle(addonTalk);
     }

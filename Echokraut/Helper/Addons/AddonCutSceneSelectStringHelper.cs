@@ -25,7 +25,7 @@ public class AddonCutSceneSelectStringHelper
         HookIntoAddonLifecycle();
     }
 
-    private void HookIntoAddonLifecycle()
+    private void HookIntoAddonLifecycle() 
     {
         Plugin.AddonLifecycle.RegisterListener(AddonEvent.PostSetup, "CutSceneSelectString", OnPostSetup);
         Plugin.AddonLifecycle.RegisterListener(AddonEvent.PreFinalize, "CutSceneSelectString", OnPreFinalize);
@@ -36,7 +36,7 @@ public class AddonCutSceneSelectStringHelper
         if (!Plugin.Configuration.Enabled) return;
         if (!Plugin.Configuration.VoicePlayerChoicesCutscene) return;
 
-        GetAddonStrings(((AddonCutSceneSelectString*)args.Addon)->OptionList);
+        GetAddonStrings(((AddonCutSceneSelectString*)args.Addon.Address)->OptionList);
     }
 
     private unsafe void OnPreFinalize(AddonEvent type, AddonArgs args)
@@ -44,7 +44,7 @@ public class AddonCutSceneSelectStringHelper
         if (!Plugin.Configuration.Enabled) return;
         if (!Plugin.Configuration.VoicePlayerChoicesCutscene) return;
 
-        HandleSelectedString(((AddonCutSceneSelectString*)args.Addon)->OptionList);
+        HandleSelectedString(((AddonCutSceneSelectString*)args.Addon.Address)->OptionList);
     }
 
     private unsafe void GetAddonStrings(AtkComponentList* list)

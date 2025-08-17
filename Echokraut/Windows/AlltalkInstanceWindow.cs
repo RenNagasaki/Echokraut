@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Numerics;
 using System.Reflection;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Utility.Raii;
@@ -14,7 +15,6 @@ using Echokraut.Enums;
 using Echokraut.Helper.API;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
-using ImGuiNET;
 using OtterGui;
 
 namespace Echokraut.Windows;
@@ -249,7 +249,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
             ImGui.SameLine();
             if (spinnerFilling)
             {
-                ImGui.Image(spinnerPart!.ImGuiHandle, iconSizeSmall, new Vector2(0.0f, 0.0f),
+                ImGui.Image(spinnerPart!.Handle, iconSizeSmall, new Vector2(0.0f, 0.0f),
                             new Vector2(1.0f, 1.0f));
                 partIndex++;
 
@@ -261,7 +261,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
             }
             else
             {
-                ImGui.Image(spinnerPart!.ImGuiHandle, iconSizeSmall, new Vector2(1.0f, 0.0f),
+                ImGui.Image(spinnerPart!.Handle, iconSizeSmall, new Vector2(1.0f, 0.0f),
                             new Vector2(0.0f, 1.0f));
                 partIndex--;
 

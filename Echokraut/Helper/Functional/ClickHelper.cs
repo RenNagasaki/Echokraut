@@ -22,7 +22,7 @@ namespace Echokraut.Helper.Functional
                     {
                         Listener = (AtkEventListener*)unitBase,
                         State = new AtkEventState() {
-                            StateFlags = AtkEventStateFlags.Completed | AtkEventStateFlags.Unk3,
+                            StateFlags = AtkEventStateFlags.Pooled | AtkEventStateFlags.Unk3,
                         },
                         Target = &AtkStage.Instance()->AtkEventTarget
                     }

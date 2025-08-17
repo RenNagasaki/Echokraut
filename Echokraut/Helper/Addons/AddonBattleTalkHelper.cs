@@ -31,7 +31,7 @@ public class AddonBattleTalkHelper
 
     private unsafe void OnPostDraw(AddonEvent type, AddonArgs args)
     {
-        var addonBattleTalk = (AddonBattleTalk*)args.Addon.ToPointer();
+        var addonBattleTalk = (AddonBattleTalk*)args.Addon.Address.ToPointer();
         Handle(addonBattleTalk);
     }
     private unsafe void Handle(AddonBattleTalk* addonBattleTalk)

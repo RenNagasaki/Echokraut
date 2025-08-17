@@ -4,6 +4,7 @@ using System.IO;
 using System.Numerics;
 using System.Reflection;
 using System.Runtime.InteropServices;
+using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Textures.TextureWraps;
@@ -15,10 +16,9 @@ using Echokraut.DataClasses;
 using Echokraut.Enums;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
-using ImGuiNET;
 
 namespace Echokraut.Windows;
-
+ 
 public class FirstTimeWindow : Window, IDisposable
 {
     public FirstTimeWindow() : base($"First time using Echokraut###EKFirstTime")
@@ -28,7 +28,7 @@ public class FirstTimeWindow : Window, IDisposable
         SizeCondition = ImGuiCond.FirstUseEver;
 
         if (!Plugin.Configuration.Alltalk.LocalInstance && !Plugin.Configuration.Alltalk.RemoteInstance)
-        {
+        { 
             if (!string.IsNullOrWhiteSpace(Plugin.Configuration.Alltalk.BaseUrl) && !Plugin.Configuration.Alltalk.BaseUrl.Contains("127.0.0.1"))
                 Plugin.Configuration.Alltalk.RemoteInstance = true;
             else

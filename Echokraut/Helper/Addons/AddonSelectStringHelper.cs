@@ -39,7 +39,7 @@ public unsafe class AddonSelectStringHelper
         if (!Plugin.Configuration.VoicePlayerChoices) return;
         if (!Plugin.Condition[ConditionFlag.OccupiedInQuestEvent]) return;
 
-        GetAddonStrings(((AddonSelectString*)args.Addon)->PopupMenu.PopupMenu.List);
+        GetAddonStrings(((AddonSelectString*)args.Addon.Address)->PopupMenu.PopupMenu.List);
     }
 
     private unsafe void OnPreFinalize(AddonEvent type, AddonArgs args)
@@ -48,7 +48,7 @@ public unsafe class AddonSelectStringHelper
         if (!Plugin.Configuration.VoicePlayerChoices) return;
         if (!Plugin.Condition[ConditionFlag.OccupiedInQuestEvent]) return;
 
-        HandleSelectedString(((AddonSelectString*)args.Addon)->PopupMenu.PopupMenu.List);
+        HandleSelectedString(((AddonSelectString*)args.Addon.Address)->PopupMenu.PopupMenu.List);
     }
 
     private unsafe void GetAddonStrings(AtkComponentList* list)
