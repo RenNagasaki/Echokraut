@@ -1,7 +1,8 @@
 [![Discord](https://img.shields.io/badge/Join-Discord-blue)](https://discord.gg/5gesjDfDBr)
 
 # Echokraut - Echoed with TTS
-Breaking the silence! That is the goal of this plugin for [Dalamud](https://github.com/goatcorp/Dalamud). Unlike the official Dalamud Plugin [TextToTalk](https://github.com/karashiiro/TextToTalk), this plugin is meant for local/self hosted high quality TTS for those wanting a rich experience without paying an arm and a leg for it.
+Bring your dialogue to life in Final Fantasy XIV: Fully voiced NPC storylines and battle calls, auto-advance, and immersive 3D chat. Optional: train your own voice model with Echokraut-Tools.
+That is the goal of this plugin for [Dalamud](https://github.com/goatcorp/Dalamud).
 
 ## Dislaimer: 
 * Since this plugin is dependent on [AllTalk_TTS](https://github.com/erew123/alltalk_tts) it is important to note that at the moment on Windows only Nvidia GPUs are supported. On Linux AMD should work as well. In the future this will likely expand.
