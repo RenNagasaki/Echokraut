@@ -223,7 +223,10 @@ public class ConfigWindow : Window, IDisposable
                     if (tabItemGeneral)
                     {
                         DrawGeneralSettings();
-                        DrawExternalLinkButtons(ImGui.GetContentRegionAvail(), new Vector2(10, 60));
+                        DrawExternalLinkButtons(ImGui.GetContentRegionAvail(), new Vector2(0, 60));
+                        ImGui.NewLine();
+                        ImGui.NewLine();
+                        ImGui.NewLine();
 
                         if (deleteMappedNpcs)
                         {
@@ -370,6 +373,13 @@ public class ConfigWindow : Window, IDisposable
 
         using (ImRaii.Disabled(!enabled))
         {
+            var generateBySentence = Plugin.Configuration!.GenerateBySentence;
+            if (ImGui.Checkbox("Generate text per sentence instead of all at once(shorter sentences may sound weird, only needed if using CPU for inference)", ref generateBySentence))
+            {
+                Plugin.Configuration.GenerateBySentence = generateBySentence;
+                Plugin.Configuration.Save();
+            }
+            
             var removeStutters = Plugin.Configuration.RemoveStutters;
             if (ImGui.Checkbox("Remove stutters", ref removeStutters))
             {
@@ -1946,7 +1956,7 @@ public class ConfigWindow : Window, IDisposable
         // Say the thing
         var voiceMessage = new VoiceMessage
         {
-            pActor = null,
+            PActor = null,
             Source = TextSource.VoiceTest,
             Speaker = new NpcMapData(Dalamud.Game.ClientState.Objects.Enums.ObjectKind.None)
             {
@@ -1957,7 +1967,7 @@ public class ConfigWindow : Window, IDisposable
             },
             Text = GetTestMessageText(Plugin.ClientState.ClientLanguage),
             Language = Plugin.ClientState.ClientLanguage,
-            eventId = eventId
+            EventId = eventId
         };
         var volume = VolumeHelper.GetVoiceVolume(eventId) * voice.Volume;
 

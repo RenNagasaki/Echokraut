@@ -123,7 +123,7 @@ public partial class Plugin : IDalamudPlugin
         if (Configuration.FirstTime && !FirstTimeWindow.IsOpen && ClientState.IsLoggedIn)
             CommandHelper.ToggleFirstTimeUI();
 
-        if (!Configuration.FirstTime && ClientState.IsLoggedIn && Configuration.Alltalk.AutoStartLocalInstance)
+        if (!Configuration.FirstTime && ClientState.IsLoggedIn && Configuration.Alltalk.LocalInstall && Configuration.Alltalk.LocalInstance && Configuration.Alltalk.AutoStartLocalInstance)
             AlltalkInstanceHelper.StartInstance();
     }
 
@@ -134,7 +134,7 @@ public partial class Plugin : IDalamudPlugin
             if (Configuration.FirstTime && !FirstTimeWindow.IsOpen)
                 CommandHelper.ToggleFirstTimeUI();
 
-            if (!Configuration.FirstTime && Configuration.Alltalk.AutoStartLocalInstance && !AlltalkInstanceHelper.InstanceRunning && !AlltalkInstanceHelper.InstanceStarting)
+            if (!Configuration.FirstTime && Configuration.Alltalk.LocalInstall && Configuration.Alltalk.LocalInstance && !AlltalkInstanceHelper.InstanceRunning && !AlltalkInstanceHelper.InstanceStarting)
                 AlltalkInstanceHelper.StartInstance();
         }
         catch (Exception e)
@@ -307,12 +307,12 @@ public partial class Plugin : IDalamudPlugin
 
             var voiceMessage = new VoiceMessage
             {
-                pActor = speaker,
+                PActor = speaker,
                 Source = source,
                 Speaker = npcData,
                 Text = cleanText,
                 Language = language,
-                eventId = eventId
+                EventId = eventId
             };
             var volume = VolumeHelper.GetVoiceVolume(eventId) * npcData.Voice.Volume * npcVolume;
 

@@ -26,6 +26,7 @@ public class Configuration : IPluginConfiguration
     public bool VoicePlayerChoicesCutscene { get; set; } = true;
     public bool VoicePlayerChoices { get; set; } = true;
     public bool CancelSpeechOnTextAdvance { get; set; } = true;
+    public bool GenerateBySentence { get; set; } = false;
     public bool AutoAdvanceTextAfterSpeechCompleted { get; set; } = true;
     public bool RemoveStutters { get; set; } = true;
     public bool HideUiInCutscenes { get; set; } = true;

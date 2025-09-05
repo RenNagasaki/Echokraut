@@ -15,15 +15,17 @@ namespace Echokraut.DataClasses
         public string Text { get; set; }
         //public string TextTemplate { get; set; }
 
-        public IGameObject? pActor {  get; set; }
+        public IGameObject? PActor {  get; set; }
         public NpcMapData Speaker { get; set; }
         public TextSource Source { get; set; }
         public int? ChatType { get; set; }
         public ClientLanguage Language { get; set; }
 
-        public bool loadedLocally {  get; set; }
+        public bool LoadedLocally {  get; set; }
 
-        public EKEventId eventId { get; set; }
+        public bool IsLastInDialogue { get; set; } = false;
+
+        public EKEventId EventId { get; set; }
 
     }
 }

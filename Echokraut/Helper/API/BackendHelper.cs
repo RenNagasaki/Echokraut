@@ -15,6 +15,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using static System.Runtime.InteropServices.JavaScript.JSType;
 using Config = Echokraut.DataClasses.Configuration;
+using String = System.String;
 
 namespace Echokraut.Helper.API
 {
@@ -70,7 +71,7 @@ namespace Echokraut.Helper.API
 
         public static void OnSay(VoiceMessage voiceMessage, float volume)
         {
-            var eventId = voiceMessage.eventId;
+            var eventId = voiceMessage.EventId;
             PlayingHelper.Volume = volume;
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Starting voice inference: {voiceMessage.Language}", eventId);
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, voiceMessage.Text.ToString(), eventId);
@@ -86,7 +87,34 @@ namespace Echokraut.Helper.API
                 case TextSource.AddonCutsceneSelectString:
                 case TextSource.AddonSelectString:
                 case TextSource.VoiceTest:
-                    PlayingHelper.AddRequestToQueue(voiceMessage);
+                    var messageList = new List<string>();
+                    if (Plugin.Configuration.GenerateBySentence)
+                    {
+                        var messageArr = voiceMessage.Text.Split(Constants.SENTENCESEPARATORS);
+                        messageList = messageArr.ToList().FindAll(p => !string.IsNullOrWhiteSpace(p.Trim()));
+                    }
+                    else 
+                        messageList.Add(voiceMessage.Text);
+
+                    foreach (var message in messageList)
+                    {
+                        var messageObj = new VoiceMessage()
+                        {
+                            Text = message,
+                            ChatType = voiceMessage.ChatType,
+                            Language = voiceMessage.Language,
+                            LoadedLocally = voiceMessage.LoadedLocally,
+                            PActor = voiceMessage.PActor,
+                            Source = voiceMessage.Source,
+                            Speaker = voiceMessage.Speaker,
+                            EventId = voiceMessage.EventId
+                        };
+                
+                        if (message == messageList.Last())
+                            messageObj.IsLastInDialogue = true;
+                
+                        PlayingHelper.AddRequestToQueue(messageObj);
+                    }
                     break;
             }
         }
@@ -208,7 +236,7 @@ namespace Echokraut.Helper.API
 
         public static async Task<bool> GenerateVoice(VoiceMessage message)
         {
-            var eventId = message.eventId;
+            var eventId = message.EventId;
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating...", eventId);
             try
             {

@@ -22,7 +22,7 @@ namespace Echokraut.Helper.Functional
 
                 if (File.Exists(filePath))
                 {
-                    voiceMessage.loadedLocally = true;
+                    voiceMessage.LoadedLocally = true;
                     WaveStream mainOutputStream = new WaveFileReader(filePath);
                     PlayingHelper.PlayingQueue.Add(mainOutputStream);
                     PlayingHelper.PlayingQueueText.Add(voiceMessage);
@@ -51,7 +51,7 @@ namespace Echokraut.Helper.Functional
 
                 if (File.Exists(filePath))
                 {
-                    voiceMessage.loadedLocally = true;
+                    voiceMessage.LoadedLocally = true;
                     PlayingHelper.PlayingBubbleQueue.Add(filePath);
                     PlayingHelper.PlayingBubbleQueueText.Add(voiceMessage);
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Local file found. Location: {filePath}", eventId);

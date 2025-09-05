@@ -92,7 +92,7 @@ namespace Echokraut.Helper.Functional
                     var queueItemText = PlayingQueueText[0];
                     PlayingQueueText.RemoveAt(0);
                     PlayingQueue.RemoveAt(0);
-                    eventId = queueItemText.eventId;
+                    eventId = queueItemText.EventId;
                     PlayAudio(queueItem, queueItemText, eventId);
                 }
                 catch (Exception ex)
@@ -127,7 +127,7 @@ namespace Echokraut.Helper.Functional
                 estimatedLength = count / 2.1f;
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Text} length: {estimatedLength}", eventId);
             }
-            Plugin.LipSyncHelper.TriggerLipSync(eventId, estimatedLength, queueItemText.pActor);
+            Plugin.LipSyncHelper.TriggerLipSync(eventId, estimatedLength, queueItemText.PActor);
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Speaker.Name} length: {estimatedLength}", eventId);
             Playing = true;
         }
@@ -143,7 +143,7 @@ namespace Echokraut.Helper.Functional
                     var queueItemText = PlayingBubbleQueueText[0];
                     PlayingBubbleQueueText.RemoveAt(0);
                     PlayingBubbleQueue.RemoveAt(0);
-                    eventId = queueItemText.eventId;
+                    eventId = queueItemText.EventId;
                     PlayAudio3D(queueItem, queueItemText, eventId);
                 }
                 catch (Exception ex)
@@ -160,7 +160,7 @@ namespace Echokraut.Helper.Functional
             Bass.GlobalSampleVolume = Convert.ToInt32(volume10k > 10000 ? 10000 : volume10k);
 
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Starting 3D Audio for {queueItemText}", eventId);
-            var pActor = queueItemText.pActor;
+            var pActor = queueItemText.PActor;
             if (pActor != null)
             {
                 var channel = Bass.SampleLoad(queueItem, 0, 0, 1, Flags: BassFlags.Bass3D);
@@ -195,7 +195,7 @@ namespace Echokraut.Helper.Functional
                 var queueItem = RequestingQueue[0];
                 RequestingQueue.RemoveAt(0);
 
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating next queued audio", queueItem.eventId);
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating next queued audio", queueItem.EventId);
                 AddRequestedToQueue(queueItem);
 
                 await BackendHelper.GenerateVoice(queueItem);
@@ -213,7 +213,7 @@ namespace Echokraut.Helper.Functional
                 try
                 {
                     var voiceMessage = RequestedBubbleQueue[0];
-                    eventId = voiceMessage.eventId;
+                    eventId = voiceMessage.EventId;
                     if (Plugin.Configuration.LoadFromLocalFirst)
                     {
                         if (Directory.Exists(Plugin.Configuration.LocalSaveLocation))
@@ -256,7 +256,7 @@ namespace Echokraut.Helper.Functional
         {
             var eventId = new EKEventId(-1, TextSource.None);
             if (CurrentlyPlayingStreamText != null)
-                eventId = CurrentlyPlayingStreamText.eventId;
+                eventId = CurrentlyPlayingStreamText.EventId;
 
             if (CurrentlyPlayingStream != null)
             {
@@ -267,7 +267,7 @@ namespace Echokraut.Helper.Functional
                 {
                     var playedText = CurrentlyPlayingStreamText;
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}", eventId);
-                    if (!string.IsNullOrWhiteSpace(playedText.Text) && playedText.Source != TextSource.VoiceTest && !playedText.loadedLocally)
+                    if (!string.IsNullOrWhiteSpace(playedText.Text) && playedText.Source != TextSource.VoiceTest && !playedText.LoadedLocally)
                     {
                         var filePath = AudioFileHelper.GetLocalAudioPath(Plugin.Configuration.LocalSaveLocation, playedText);
                         var stream = CurrentlyPlayingStream;
@@ -285,22 +285,28 @@ namespace Echokraut.Helper.Functional
             Playing = false;
             CurrentlyPlayingStream.Dispose();
 
-            if (Plugin.Configuration.AutoAdvanceTextAfterSpeechCompleted)
+            if (CurrentlyPlayingStreamText.IsLastInDialogue)
             {
-                try
+                if (Plugin.Configuration.AutoAdvanceTextAfterSpeechCompleted)
                 {
-                    if (InDialog)
-                        Plugin.Framework.RunOnFrameworkThread(() => Plugin.AddonTalkHelper.Click(eventId));
-                    else
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Not inDialog", eventId);
+                    try
+                    {
+                        if (InDialog)
+                            Plugin.Framework.RunOnFrameworkThread(() => Plugin.AddonTalkHelper.Click(eventId));
+                        else
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Not inDialog", eventId);
+                    }
+                    catch (Exception ex)
+                    {
+                        LogHelper.Error(MethodBase.GetCurrentMethod().Name,
+                                        $"Error while 'auto advance text after speech completed': {ex}", eventId);
+                    }
                 }
-                catch (Exception ex)
-                {
-                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while 'auto advance text after speech completed': {ex}", eventId);
-                }
+                else
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"No auto advance", eventId);
             }
             else
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"No auto advance", eventId);
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Not last sentence", eventId);
 
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
         }
@@ -309,13 +315,13 @@ namespace Echokraut.Helper.Functional
         {
             if (Plugin.Configuration.LoadFromLocalFirst && Directory.Exists(Plugin.Configuration.LocalSaveLocation) && voiceMessage.Speaker.Voice != null && voiceMessage.Source != TextSource.VoiceTest)
             {
-                var result = AudioFileHelper.LoadLocalAudio(voiceMessage.eventId, Plugin.Configuration.LocalSaveLocation, voiceMessage);
+                var result = AudioFileHelper.LoadLocalAudio(voiceMessage.EventId, Plugin.Configuration.LocalSaveLocation, voiceMessage);
 
                 if (result)
                     return;
             }
             else if (!Directory.Exists(Plugin.Configuration.LocalSaveLocation))
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. Save location doesn't exists: {Plugin.Configuration.LocalSaveLocation}", voiceMessage.eventId);
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. Save location doesn't exists: {Plugin.Configuration.LocalSaveLocation}", voiceMessage.EventId);
 
             RequestingQueue.Add(voiceMessage);
         }
