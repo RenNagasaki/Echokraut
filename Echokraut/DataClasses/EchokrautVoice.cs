@@ -39,7 +39,10 @@ namespace Echokraut.DataClasses
                             
                             if (voiceNme.Contains("-"))
                             {
+                                
                                 var voiceNmeArr = voiceNme.Split('-');
+                                if (voiceNmeArr[0] == "All" || voiceNmeArr[0] == "Child")
+                                    continue;
                                 if (Enum.TryParse(typeof(NpcRaces), voiceNmeArr[0], true, out object? race2))
                                     continue;
                             }
