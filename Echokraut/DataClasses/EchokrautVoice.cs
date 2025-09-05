@@ -33,8 +33,16 @@ namespace Echokraut.DataClasses
                         {
                             if (Enum.TryParse(typeof(Genders), voiceNme, true, out object? gender))
                                 continue;
+
                             if (Enum.TryParse(typeof(NpcRaces), voiceNme, true, out object? race))
                                 continue;
+                            
+                            if (voiceNme.Contains("-"))
+                            {
+                                var voiceNmeArr = voiceNme.Split('-');
+                                if (Enum.TryParse(typeof(NpcRaces), voiceNmeArr[0], true, out object? race2))
+                                    continue;
+                            }
 
                             voiceNameShort = voiceNme;
                             break;
