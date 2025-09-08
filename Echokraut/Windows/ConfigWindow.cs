@@ -58,6 +58,7 @@ public class ConfigWindow : Window, IDisposable
     private string filterGenderVoices = "";
     private string filterRaceVoices = "";
     private string filterNameVoices = "";
+    private string filterNoteVoices = "";
     #endregion
     #region Logs
     private List<LogMessage> filteredLogsGeneral = [];
@@ -224,86 +225,88 @@ public class ConfigWindow : Window, IDisposable
                     {
                         DrawGeneralSettings();
                         DrawExternalLinkButtons(ImGui.GetContentRegionAvail(), new Vector2(0, 60));
-                        ImGui.NewLine();
-                        ImGui.NewLine();
-                        ImGui.NewLine();
 
-                        if (deleteMappedNpcs)
+                        if (ImGui.CollapsingHeader("Unrecoverable actions:"))
                         {
-                            if (ImGui.Button("Click again to confirm!##clearnpc"))
+                            if (deleteMappedNpcs)
                             {
-                                deleteMappedNpcs = false;
-                                foreach (NpcMapData npcMapData in Plugin.Configuration!.MappedNpcs.FindAll(
-                                             p => !p.Name.StartsWith("BB") && !p.DoNotDelete))
+                                if (ImGui.Button("Click again to confirm!##clearnpc"))
                                 {
-                                    AudioFileHelper.RemoveSavedNpcFiles(Plugin.Configuration.LocalSaveLocation,
-                                                                        npcMapData.Name);
-                                    Plugin.Configuration.MappedNpcs.Remove(npcMapData);
+                                    deleteMappedNpcs = false;
+                                    foreach (NpcMapData npcMapData in
+                                             Plugin.Configuration!.MappedNpcs.FindAll(p => !p.Name.StartsWith("BB") &&
+                                                 !p.DoNotDelete))
+                                    {
+                                        AudioFileHelper.RemoveSavedNpcFiles(Plugin.Configuration.LocalSaveLocation,
+                                                                            npcMapData.Name);
+                                        Plugin.Configuration.MappedNpcs.Remove(npcMapData);
+                                    }
+
+                                    UpdateDataNpcs = true;
+                                    Plugin.Configuration.Save();
                                 }
-
-                                UpdateDataNpcs = true;
-                                Plugin.Configuration.Save();
                             }
-                        }
-                        else if (ImGui.Button("Clear mapped npcs##clearnpc") && !deleteMappedNpcs)
-                        {
-                            lastDeleteClick = DateTime.Now;
-                            deleteMappedNpcs = true;
-                        }
-
-                        ImGui.SameLine();
-                        if (deleteMappedPlayers)
-                        {
-                            if (ImGui.Button("Click again to confirm!##clearplayers"))
+                            else if (ImGui.Button("Clear mapped npcs##clearnpc") && !deleteMappedNpcs)
                             {
-                                deleteMappedPlayers = false;
-                                foreach (NpcMapData playerMapData in Plugin.Configuration!.MappedPlayers.FindAll(
-                                             p => !p.DoNotDelete))
-                                {
-                                    AudioFileHelper.RemoveSavedNpcFiles(Plugin.Configuration.LocalSaveLocation,
-                                                                        playerMapData.Name);
-                                    Plugin.Configuration.MappedPlayers.Remove(playerMapData);
-                                }
-
-                                UpdateDataPlayers = true;
-                                Plugin.Configuration.Save();
+                                lastDeleteClick = DateTime.Now;
+                                deleteMappedNpcs = true;
                             }
-                        }
-                        else if (ImGui.Button("Clear mapped players##clearplayers") && !deleteMappedPlayers)
-                        {
-                            lastDeleteClick = DateTime.Now;
-                            deleteMappedPlayers = true;
-                        }
 
-                        ImGui.SameLine();
-                        if (deleteMappedBubbles)
-                        {
-                            if (ImGui.Button("Click again to confirm!##clearbubblenpc"))
+                            ImGui.SameLine();
+                            if (deleteMappedPlayers)
                             {
-                                deleteMappedBubbles = false;
-                                foreach (NpcMapData npcMapData in Plugin.Configuration!.MappedNpcs.FindAll(
-                                             p => p.Name.StartsWith("BB") && !p.DoNotDelete))
+                                if (ImGui.Button("Click again to confirm!##clearplayers"))
                                 {
-                                    AudioFileHelper.RemoveSavedNpcFiles(Plugin.Configuration.LocalSaveLocation,
-                                                                        npcMapData.Name);
-                                    Plugin.Configuration.MappedNpcs.Remove(npcMapData);
+                                    deleteMappedPlayers = false;
+                                    foreach (NpcMapData playerMapData in
+                                             Plugin.Configuration!.MappedPlayers.FindAll(p => !p.DoNotDelete))
+                                    {
+                                        AudioFileHelper.RemoveSavedNpcFiles(Plugin.Configuration.LocalSaveLocation,
+                                                                            playerMapData.Name);
+                                        Plugin.Configuration.MappedPlayers.Remove(playerMapData);
+                                    }
+
+                                    UpdateDataPlayers = true;
+                                    Plugin.Configuration.Save();
                                 }
-
-                                UpdateDataBubbles = true;
-                                Plugin.Configuration.Save();
                             }
-                        }
-                        else if (ImGui.Button("Clear mapped bubbles##clearbubblenpc"))
-                        {
-                            lastDeleteClick = DateTime.Now;
-                            deleteMappedBubbles = true;
-                        }
+                            else if (ImGui.Button("Clear mapped players##clearplayers") && !deleteMappedPlayers)
+                            {
+                                lastDeleteClick = DateTime.Now;
+                                deleteMappedPlayers = true;
+                            }
 
-                        if (ImGui.Button("Reload remote mappings##reloadremote"))
-                        {
-                            ReloadRemoteMappings();
-                        }
+                            ImGui.SameLine();
+                            if (deleteMappedBubbles)
+                            {
+                                if (ImGui.Button("Click again to confirm!##clearbubblenpc"))
+                                {
+                                    deleteMappedBubbles = false;
+                                    foreach (NpcMapData npcMapData in
+                                             Plugin.Configuration!.MappedNpcs.FindAll(p => p.Name.StartsWith("BB") &&
+                                                 !p.DoNotDelete))
+                                    {
+                                        AudioFileHelper.RemoveSavedNpcFiles(Plugin.Configuration.LocalSaveLocation,
+                                                                            npcMapData.Name);
+                                        Plugin.Configuration.MappedNpcs.Remove(npcMapData);
+                                    }
 
+                                    UpdateDataBubbles = true;
+                                    Plugin.Configuration.Save();
+                                }
+                            }
+                            else if (ImGui.Button("Clear mapped bubbles##clearbubblenpc"))
+                            {
+                                lastDeleteClick = DateTime.Now;
+                                deleteMappedBubbles = true;
+                            }
+
+                            if (ImGui.Button("Reload remote mappings##reloadremote"))
+                            {
+                                ReloadRemoteMappings();
+                            }
+
+                        }
                         ImGui.NewLine();
                         ImGui.TextUnformatted("Available commands:");
                         foreach (var commandKey in CommandHelper.CommandKeys)
@@ -393,6 +396,36 @@ public class ConfigWindow : Window, IDisposable
                 Plugin.Configuration.HideUiInCutscenes = hideUiInCutscenes;
                 Plugin.Configuration.Save();
                 Plugin.PluginInterface.UiBuilder.DisableCutsceneUiHide = !hideUiInCutscenes;
+            }
+            ImGui.NewLine();
+            if (ImGui.CollapsingHeader("Experimental options:"))
+            {
+                var showExtraOptionsInDialogue = Plugin.Configuration!.ShowExtraOptionsInDialogue;
+                if (ImGui.Checkbox("Shows Pause/Resume, Stop/Play and Mute buttons below the text in dialogues",
+                                   ref showExtraOptionsInDialogue))
+                {
+                    Plugin.Configuration.ShowExtraOptionsInDialogue = showExtraOptionsInDialogue;
+                    Plugin.Configuration.Save();
+                }
+
+                using (ImRaii.Disabled(!showExtraOptionsInDialogue))
+                {
+                    var showExtraExtraOptionsInDialogue = Plugin.Configuration!.ShowExtraExtraOptionsInDialogue;
+                    if (ImGui.Checkbox("Shows even more options below the text in dialogues",
+                                       ref showExtraExtraOptionsInDialogue))
+                    {
+                        Plugin.Configuration.ShowExtraExtraOptionsInDialogue = showExtraExtraOptionsInDialogue;
+                        Plugin.Configuration.Save();
+                    }
+                }
+
+                var useSoundEq = Plugin.Configuration!.UseSoundEq;
+                if (ImGui.Checkbox("Use an Equalizer to improve audio from 24khz to 48khz(experimental - most likely useless)",
+                                   ref useSoundEq))
+                {
+                    Plugin.Configuration.UseSoundEq = useSoundEq;
+                    Plugin.Configuration.Save();
+                }
             }
         }
     }
@@ -793,7 +826,7 @@ public class ConfigWindow : Window, IDisposable
         using var child = ImRaii.Child("VoicesChild");
         if (child)
         {
-            using var table = ImRaii.Table("Voice Table##VoiceTable", 8,
+            using var table = ImRaii.Table("Voice Table##VoiceTable", 9,
                                            ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg |
                                            ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX |
                                            ImGuiTableFlags.ScrollY);
@@ -804,10 +837,11 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.TableSetupColumn("##Stop", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
                 ImGui.TableSetupColumn("Use##Enabled", ImGuiTableColumnFlags.WidthFixed, 35);
                 ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthFixed, 200);
+                ImGui.TableSetupColumn("Note", ImGuiTableColumnFlags.WidthStretch, 300);
                 ImGui.TableSetupColumn("Options##Enabled", ImGuiTableColumnFlags.WidthFixed, 120);
                 ImGui.TableSetupColumn("Genders", ImGuiTableColumnFlags.WidthFixed, 100);
                 ImGui.TableSetupColumn("Races", ImGuiTableColumnFlags.WidthFixed, 320);
-                ImGui.TableSetupColumn("Volume", ImGuiTableColumnFlags.WidthStretch, 200);
+                ImGui.TableSetupColumn("Volume", ImGuiTableColumnFlags.WidthFixed, 75);
                 ImGui.TableHeadersRow();
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
@@ -818,6 +852,14 @@ public class ConfigWindow : Window, IDisposable
                 if (ImGui.InputText($"##EKFilterNpcName", ref filterNameVoices, 40) || (filterNameVoices.Length > 0 && UpdateDataVoices))
                 {
                     filteredVoices = filteredVoices.FindAll(p => p.VoiceName.ToLower().Contains(filterNameVoices.ToLower()));
+                    UpdateDataVoices = true;
+                    resetDataVoices = true;
+                }
+                ImGui.TableNextColumn();
+                ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                if (ImGui.InputText($"##EKFilterNpcNote", ref filterNoteVoices, 40) || (filterNoteVoices.Length > 0 && UpdateDataVoices))
+                {
+                    filteredVoices = filteredVoices.FindAll(p => p.Note.ToLower().Contains(filterNoteVoices.ToLower()));
                     UpdateDataVoices = true;
                     resetDataVoices = true;
                 }
@@ -859,17 +901,23 @@ public class ConfigWindow : Window, IDisposable
                             break;
                         case 4:
                             if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
+                                filteredVoices.Sort((a, b) => string.CompareOrdinal(a.Note, b.Note));
+                            else
+                                filteredVoices.Sort((a, b) => string.CompareOrdinal(b.Note, a.Note));
+                            break;
+                        case 5:
+                            if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
                                 filteredVoices.Sort((a, b) => string.CompareOrdinal(b.UseAsRandom.ToString(), a.UseAsRandom.ToString()));
                             else
                                 filteredVoices.Sort((a, b) => string.CompareOrdinal(a.UseAsRandom.ToString(), b.UseAsRandom.ToString()));
                             break;
-                        case 5:
+                        case 6:
                             if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
                                 filteredVoices.Sort((a, b) => string.CompareOrdinal(string.Join( ",", a.AllowedGenders.OrderBy(p => p.ToString()).ToArray()), string.Join( ",", b.AllowedGenders.OrderBy(p => p.ToString()).ToArray())));
                             else
                                 filteredVoices.Sort((a, b) => string.CompareOrdinal(string.Join( ",", b.AllowedGenders.OrderBy(p => p.ToString()).ToArray()), string.Join( ",", a.AllowedGenders.OrderBy(p => p.ToString()).ToArray())));
                             break;
-                        case 6:
+                        case 7:
                             if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
                                 filteredVoices.Sort((a, b) => string.CompareOrdinal(string.Join( ",", a.AllowedRaces.OrderBy(p => p.ToString()).ToArray()), string.Join( ",", b.AllowedRaces.OrderBy(p => p.ToString()).ToArray())));
                             else
@@ -907,6 +955,12 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     ImGui.TextUnformatted(voice.VoiceName);
+                    ImGui.TableNextColumn();
+                    ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                    if (ImGui.InputText($"##EKVoiceNote{voice}", ref voice.Note, 80))
+                    {
+                        Plugin.Configuration.Save();
+                    }
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     var headerText = voice.UseAsRandom ? "Random - " : "";
@@ -1089,20 +1143,24 @@ public class ConfigWindow : Window, IDisposable
             resetData = false;
         }
 
-        using var table = ImRaii.Table($"{dataType} Table##{dataType}Table", 9, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY);
+        using var table = ImRaii.Table($"{dataType} Table##{dataType}Table", 11, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY);
         if (table)
         {
             ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
+            ImGui.TableSetupColumn("##Play", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
+            ImGui.TableSetupColumn("##Stop", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
             ImGui.TableSetupColumn("Lock", ImGuiTableColumnFlags.WidthFixed, 40f);
             ImGui.TableSetupColumn("Use", ImGuiTableColumnFlags.WidthFixed, 35f);
             ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.WidthFixed, 125);
             ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.WidthFixed, 125);
             ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthFixed, 200);
             ImGui.TableSetupColumn("Voice", ImGuiTableColumnFlags.WidthStretch, 250);
-            ImGui.TableSetupColumn("Volume", ImGuiTableColumnFlags.WidthStretch, 200f);
+            ImGui.TableSetupColumn("Volume", ImGuiTableColumnFlags.WidthFixed, 200f);
             ImGui.TableSetupColumn($"##{dataType}saves", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25f);
             ImGui.TableSetupColumn($"##{dataType}mapping", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25f);
             ImGui.TableHeadersRow();
+            ImGui.TableNextColumn();
+            ImGui.TableNextColumn();
             ImGui.TableNextColumn();
             ImGui.TableNextColumn();
             ImGui.TableNextColumn();
@@ -1199,6 +1257,18 @@ public class ConfigWindow : Window, IDisposable
             foreach (NpcMapData mapData in filteredData)
             {
                 ImGui.TableNextRow();
+                ImGui.TableNextColumn();
+                ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##testvoice{mapData}", new Vector2(25, 25), "Test Voice", false, true))
+                {
+                    BackendTestVoice(mapData.Voice);
+                }
+                ImGui.TableNextColumn();
+                ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Stop.ToIconString()}##stopvoice{mapData}", new Vector2(25, 25), "Stop Voice", false, true))
+                {
+                    BackendStopVoice();
+                }
                 ImGui.TableNextColumn();
                 var doNotDelete = mapData.DoNotDelete;
                 if (ImGui.Checkbox($"##EKNpcDoNotDelete{mapData.ToString()}", ref doNotDelete))
@@ -2012,6 +2082,7 @@ public class ConfigWindow : Window, IDisposable
 
     public static void DrawExternalLinkButtons(Vector2 size, Vector2 offset)
     {
+        var cursorPos = ImGui.GetCursorPos();
         ImGui.SetCursorPosX(size.X + offset.X - 105);
         ImGui.SetCursorPosY(offset.Y + 30);
         using (ImRaii.PushColor(ImGuiCol.Button, Constants.DISCORDCOLOR))
@@ -2024,5 +2095,6 @@ public class ConfigWindow : Window, IDisposable
         ImGui.SetCursorPosY(offset.Y + 60);
         if (ImGui.Button($"Alltalk Github##EKAlltalkGithub"))
             CMDHelper.OpenUrl(Constants.ALLTALKGITHUBURL);
+        ImGui.SetCursorPos(cursorPos);
     }
 }

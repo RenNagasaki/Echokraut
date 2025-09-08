@@ -1,4 +1,5 @@
 using System;
+using System.Numerics;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Dalamud.Game.ClientState.Conditions;
@@ -7,9 +8,11 @@ using Echokraut.Enums;
 using System.Reflection;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
+using Dalamud.Game.ClientState.Objects.Types;
 using Echokraut.Helper.DataHelper;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
+using Echokraut.Windows;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 
 namespace Echokraut.Helper.Addons;
@@ -17,6 +20,9 @@ namespace Echokraut.Helper.Addons;
 public unsafe class AddonTalkHelper
 {
     private record struct AddonTalkState(string? Speaker, string? Text);
+    public static Vector2 AddonPos { get; private set; }
+    public static float AddonWidth { get; private set; }
+    public static float AddonScale { get; private set; } = 1f;
 
     public bool nextIsVoice = false;
     private bool wasTalking = false;
@@ -24,11 +30,17 @@ public unsafe class AddonTalkHelper
     public DateTime timeNextVoice = DateTime.Now;
 
     public static nint Address { get; set; }
-    private AddonTalkState lastValue;
+    private static AddonTalkState lastValue;
 
     public AddonTalkHelper()
     {
         HookIntoFrameworkUpdate();
+    }
+
+    public static void RecreateInference()
+    {
+        PlayingHelper.RecreationStarted = true;
+        lastValue = new AddonTalkState(null, null);
     }
 
     private void HookIntoFrameworkUpdate()
@@ -54,7 +66,8 @@ public unsafe class AddonTalkHelper
             eventArgs.AtkEventType == (byte)AtkEventType.InputReceived;
 
         if (isControllerButtonClick || isDialogueAdvancing)
-            Plugin.Cancel(new EKEventId(0, TextSource.AddonTalk));
+            if (Plugin.Configuration.CancelSpeechOnTextAdvance)
+                Plugin.Cancel(new EKEventId(0, TextSource.AddonTalk));
     }
 
     private unsafe void OnPostUpdate(AddonEvent type, AddonArgs args)
@@ -66,11 +79,19 @@ public unsafe class AddonTalkHelper
             var visible = addonTalk->AtkUnitBase.IsVisible;
             if (!visible && wasTalking)
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Addon closed", new EKEventId(0, TextSource.AddonTalk));
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Addon closed",
+                               new EKEventId(0, TextSource.AddonTalk));
                 wasTalking = false;
                 PlayingHelper.InDialog = false;
                 lastValue = new AddonTalkState();
-                Plugin.Cancel(new EKEventId(0, TextSource.AddonTalk));
+                DialogExtraOptionsWindow.CurrentVoiceMessage = null;
+                if (Plugin.Configuration.CancelSpeechOnTextAdvance)
+                    Plugin.Cancel(new EKEventId(0, TextSource.AddonTalk));
+            }
+
+            if (!visible && Plugin.DialogExtraOptionsWindow.IsOpen)
+            {
+                Plugin.DialogExtraOptionsWindow.Toggle();
             }
         }
     }
@@ -79,7 +100,17 @@ public unsafe class AddonTalkHelper
     {
         var addonTalk = (AddonTalk*)args.Addon.Address.ToPointer();
         Address = args.Addon;
-        Handle(addonTalk);
+        if (addonTalk != null)
+        {
+            AddonPos = new Vector2(addonTalk->GetX(), addonTalk->GetY());
+            AddonWidth = addonTalk->GetScaledWidth(true);
+            AddonScale = addonTalk->Scale;
+            
+            if (IsVisible() && !Plugin.DialogExtraOptionsWindow.IsOpen)
+                Plugin.DialogExtraOptionsWindow.Toggle();
+            
+            Handle(addonTalk);
+        }
     }
 
     private unsafe void Handle(AddonTalk* addonTalk)
@@ -120,7 +151,8 @@ public unsafe class AddonTalkHelper
         var eventId = LogHelper.Start(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
 
         // Notify observers that the addon state was advanced
-        Plugin.Cancel(eventId);
+        if (Plugin.Configuration.CancelSpeechOnTextAdvance)
+            Plugin.Cancel(eventId);
 
         text = TalkTextHelper.NormalizePunctuation(text);
 

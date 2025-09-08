@@ -89,7 +89,7 @@ namespace Echokraut.Helper.Functional
             {
                 case "/ek":
                     if (!Plugin.Configuration.FirstTime)
-                        ToggleConfigUI();
+                        ToggleConfigUi();
                     break;
                 case "/ekid":
                     PrintTargetInfo();
@@ -182,7 +182,7 @@ namespace Echokraut.Helper.Functional
             }
         }
 
-        public static void ToggleConfigUI()
+        public static void ToggleConfigUi()
         {
             if (!Plugin.Configuration.FirstTime)
                 Plugin.ConfigWindow.Toggle();
@@ -190,7 +190,9 @@ namespace Echokraut.Helper.Functional
                 Plugin.FirstTimeWindow.Toggle();
         }
 
-        public static void ToggleFirstTimeUI() => Plugin.FirstTimeWindow.Toggle();
+        public static void ToggleDialogUi() => Plugin.DialogExtraOptionsWindow.Toggle();
+
+        public static void ToggleFirstTimeUi() => Plugin.FirstTimeWindow.Toggle();
 
         public unsafe static void PrintTargetInfo()
         {

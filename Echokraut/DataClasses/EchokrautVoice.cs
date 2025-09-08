@@ -58,6 +58,13 @@ namespace Echokraut.DataClasses
             set { voiceName = value; }
         }
 
+        internal string VoiceNameNote
+        {
+            get => $"{VoiceName} ({Note})";
+        }
+
+        public string Note = "";
+
         public List<Genders> AllowedGenders { get; set; } = new List<Genders>();
 
         public List<NpcRaces> AllowedRaces { get; set; } = new List<NpcRaces>();

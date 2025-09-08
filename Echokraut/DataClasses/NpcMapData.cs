@@ -35,6 +35,7 @@ namespace Echokraut.DataClasses
         public ObjectKind ObjectKind { get; set; }
 
         internal ClippedSelectableCombo<EchokrautVoice> VoicesSelectable { get; set; }
+        internal ClippedSelectableCombo<EchokrautVoice> VoicesSelectableDialogue { get; set; }
 
         internal List<EchokrautVoice> Voices { get; set; }
 
@@ -67,7 +68,8 @@ namespace Echokraut.DataClasses
 
         public void RefreshSelectable()
         {
-            VoicesSelectable = new($"##AllVoices{ToString()}", string.Empty, 300, Voices.FindAll(f => f.IsSelectable(Name, Gender, Race, IsChild)), g => g.VoiceName);
+            VoicesSelectable = new($"##AllVoices{ToString()}", string.Empty, 200, Voices.FindAll(f => f.IsSelectable(Name, Gender, Race, IsChild)), g => g.VoiceNameNote);
+            VoicesSelectableDialogue = new($"##AllVoices{ToString()}", string.Empty, 200, Voices.FindAll(f => f.IsSelectable(Name, Gender, Race, IsChild)), g => g.VoiceNameNote);
         }
     }
 }

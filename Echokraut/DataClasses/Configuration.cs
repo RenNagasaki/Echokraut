@@ -16,7 +16,7 @@ public class Configuration : IPluginConfiguration
     public AlltalkData Alltalk { get; set; } = new AlltalkData();
     public List<NpcMapData> MappedNpcs { get; set; } = new List<NpcMapData>();
     public List<NpcMapData> MappedPlayers { get; set; } = new List<NpcMapData>();
-
+    public List<uint> MutedNpcDialogues { get; set; } = new List<uint>();
     public List<EchokrautVoice> EchokrautVoices { get; set; } = new List<EchokrautVoice>();
     public bool FirstTime { get; set; } = true;
     public bool Enabled { get; set; } = true;
@@ -25,6 +25,9 @@ public class Configuration : IPluginConfiguration
     public bool VoiceBattleDialogQueued { get; set; } = true;
     public bool VoicePlayerChoicesCutscene { get; set; } = true;
     public bool VoicePlayerChoices { get; set; } = true;
+    public bool UseSoundEq { get; set; } = false;
+    public bool ShowExtraOptionsInDialogue { get; set; } = true;
+    public bool ShowExtraExtraOptionsInDialogue { get; set; } = true;
     public bool CancelSpeechOnTextAdvance { get; set; } = true;
     public bool GenerateBySentence { get; set; } = false;
     public bool AutoAdvanceTextAfterSpeechCompleted { get; set; } = true;

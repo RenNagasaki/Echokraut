@@ -15,6 +15,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using PlaybackState = NAudio.Wave.PlaybackState;
 
 namespace Echokraut.Helper.Functional
 {
@@ -26,16 +27,17 @@ namespace Echokraut.Helper.Functional
         public static bool QueueText = false;
         public static bool InDialog = false;
         public static bool Playing = false;
+        public static bool RecreationStarted = false;
         public static List<VoiceMessage> RequestedQueue = new List<VoiceMessage>();
         public static List<string> PlayingBubbleQueue = new List<string>();
         public static List<VoiceMessage> PlayingBubbleQueueText = new List<VoiceMessage>();
         public static List<Stream> PlayingQueue = new List<Stream>();
         public static List<VoiceMessage> PlayingQueueText = new List<VoiceMessage>();
+        public static WasapiOut? ActivePlayer = null;
         private static List<VoiceMessage> RequestingQueue = new List<VoiceMessage>();
         private static List<VoiceMessage> RequestedBubbleQueue = new List<VoiceMessage>();
         private static Stream CurrentlyPlayingStream = null;
-        private static VoiceMessage CurrentlyPlayingStreamText = null;
-        private static WasapiOut? ActivePlayer = null;
+        public static VoiceMessage CurrentlyPlayingStreamText = null;
         private static bool StopThread = false;
 
         public static void Setup()
@@ -46,10 +48,27 @@ namespace Echokraut.Helper.Functional
 
         public static void StopPlaying()
         {
+            RecreationStarted = false;
             if (ActivePlayer != null)
             {
                 ActivePlayer.PlaybackStopped -= SoundOut_PlaybackStopped;
                 ActivePlayer.Stop();
+            }
+        }
+
+        public static void PausePlaying()
+        {
+            if (ActivePlayer != null && ActivePlayer.PlaybackState == PlaybackState.Playing)
+            {
+                ActivePlayer.Pause();
+            }
+        }
+
+        public static void ResumePlaying()
+        {
+            if (ActivePlayer != null && ActivePlayer.PlaybackState == PlaybackState.Paused)
+            {
+                ActivePlayer.Play();
             }
         }
 
@@ -110,8 +129,15 @@ namespace Echokraut.Helper.Functional
             CurrentlyPlayingStream = queueItem;
             CurrentlyPlayingStreamText = queueItemText;
             var stream = new RawSourceWaveStream(queueItem, new NAudio.Wave.WaveFormat(24000, 16, 1));
+
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Playing next queue item", eventId);
             var volumeSampleProvider = new VolumeSampleProvider(stream.ToSampleProvider());
+
+            if (Plugin.Configuration.UseSoundEq)
+            {
+                var processedProvider = XttsPostFx.BuildPipelineFromWaveProvider(stream, resampleTo48k: true);
+                volumeSampleProvider = new VolumeSampleProvider(processedProvider.ToSampleProvider());
+            }
             volumeSampleProvider.Volume = Volume;
 
             ActivePlayer = new WasapiOut(AudioClientShareMode.Shared, 3);
@@ -130,6 +156,7 @@ namespace Echokraut.Helper.Functional
             Plugin.LipSyncHelper.TriggerLipSync(eventId, estimatedLength, queueItemText.PActor);
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Speaker.Name} length: {estimatedLength}", eventId);
             Playing = true;
+            RecreationStarted = false;
         }
 
         static void WorkPlayingBubbleQueue()

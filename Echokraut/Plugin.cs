@@ -44,6 +44,7 @@ public partial class Plugin : IDalamudPlugin
     internal static ConfigWindow ConfigWindow { get; private set; } = null!;
     internal static AlltalkInstanceWindow AlltalkInstanceWindow { get; private set; } = null!;
     internal static FirstTimeWindow FirstTimeWindow { get; private set; } = null!;
+    internal static DialogExtraOptionsWindow DialogExtraOptionsWindow { get; private set; } = null!;
 
     internal static LipSyncHelper LipSyncHelper{ get; private set; } = null!;
     internal static SoundHelper SoundHelper{ get; private set; } = null!;
@@ -93,6 +94,7 @@ public partial class Plugin : IDalamudPlugin
         ConfigWindow = new ConfigWindow();
         AlltalkInstanceWindow = new AlltalkInstanceWindow();
         FirstTimeWindow = new FirstTimeWindow();
+        DialogExtraOptionsWindow = new DialogExtraOptionsWindow();
 
         LogHelper.Initialize(log);
         JsonLoaderHelper.Initialize(ClientState.ClientLanguage);
@@ -112,16 +114,17 @@ public partial class Plugin : IDalamudPlugin
         WindowSystem.AddWindow(ConfigWindow);
         WindowSystem.AddWindow(AlltalkInstanceWindow);
         WindowSystem.AddWindow(FirstTimeWindow);
+        WindowSystem.AddWindow(DialogExtraOptionsWindow);
 
         PluginInterface.UiBuilder.Draw += DrawUI;
 
         // This adds a button to the plugin installer entry of this plugin which allows
         // to toggle the display status of the configuration ui
-        PluginInterface.UiBuilder.OpenConfigUi += CommandHelper.ToggleConfigUI;
+        PluginInterface.UiBuilder.OpenConfigUi += CommandHelper.ToggleConfigUi;
         ClientState.Login += OnLogin;
 
         if (Configuration.FirstTime && !FirstTimeWindow.IsOpen && ClientState.IsLoggedIn)
-            CommandHelper.ToggleFirstTimeUI();
+            CommandHelper.ToggleFirstTimeUi();
 
         if (!Configuration.FirstTime && ClientState.IsLoggedIn && Configuration.Alltalk.LocalInstall && Configuration.Alltalk.LocalInstance && Configuration.Alltalk.AutoStartLocalInstance)
             AlltalkInstanceHelper.StartInstance();
@@ -132,7 +135,7 @@ public partial class Plugin : IDalamudPlugin
         try
         {
             if (Configuration.FirstTime && !FirstTimeWindow.IsOpen)
-                CommandHelper.ToggleFirstTimeUI();
+                CommandHelper.ToggleFirstTimeUi();
 
             if (!Configuration.FirstTime && Configuration.Alltalk.LocalInstall && Configuration.Alltalk.LocalInstance && !AlltalkInstanceHelper.InstanceRunning && !AlltalkInstanceHelper.InstanceStarting)
                 AlltalkInstanceHelper.StartInstance();
@@ -145,11 +148,18 @@ public partial class Plugin : IDalamudPlugin
 
     public static void Cancel(EKEventId eventId)
     {
-        if (Configuration.CancelSpeechOnTextAdvance)
-        {
-            BackendHelper.OnCancel(eventId);
-            StopLipSync(eventId);
-        }
+        BackendHelper.OnCancel(eventId);
+        StopLipSync(eventId);
+    }
+
+    public static void Pause(EKEventId eventId)
+    {
+        BackendHelper.OnPause(eventId);
+    }
+
+    public static void Resume(EKEventId eventId)
+    {
+        BackendHelper.OnResume(eventId);
     }
 
     public static void StopLipSync(EKEventId eventId)
@@ -315,7 +325,15 @@ public partial class Plugin : IDalamudPlugin
                 EventId = eventId
             };
             var volume = VolumeHelper.GetVoiceVolume(eventId) * npcData.Voice.Volume * npcVolume;
-
+            DialogExtraOptionsWindow.CurrentVoiceMessage = voiceMessage;
+            
+            if (Configuration.MutedNpcDialogues.Contains(speaker!.DataId))
+            {
+                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping muted dialogue: {cleanText}", eventId);
+                LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                return;
+            }
+            
             if (volume > 0)
                 BackendHelper.OnSay(voiceMessage, volume);
             else

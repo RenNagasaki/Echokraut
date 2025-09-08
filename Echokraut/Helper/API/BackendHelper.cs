@@ -134,6 +134,26 @@ namespace Echokraut.Helper.API
             }
         }
 
+        public static void OnPause(EKEventId eventId)
+        {
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Pausing voice inference", eventId);
+            if (PlayingHelper.ActivePlayer.PlaybackState == NAudio.Wave.PlaybackState.Playing)
+            {
+                var thread = new Thread(PlayingHelper.PausePlaying);
+                thread.Start();
+            }
+        }
+
+        public static void OnResume(EKEventId eventId)
+        {
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Resuming voice inference", eventId);
+            if (PlayingHelper.ActivePlayer.PlaybackState == NAudio.Wave.PlaybackState.Paused)
+            {
+                var thread = new Thread(PlayingHelper.ResumePlaying);
+                thread.Start();
+            }
+        }
+
         static void GetAndMapVoices(EKEventId eventId)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Loading and mapping voices", eventId);
