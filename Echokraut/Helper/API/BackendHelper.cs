@@ -90,7 +90,8 @@ namespace Echokraut.Helper.API
                     var messageList = new List<string>();
                     if (Plugin.Configuration.GenerateBySentence)
                     {
-                        var messageArr = voiceMessage.Text.Split(Constants.SENTENCESEPARATORS);
+                        //var messageArr = voiceMessage.Text.Split(Constants.SENTENCESEPARATORS);
+                        var messageArr = TalkTextHelper.SplitKeepLeft(voiceMessage.Text, Constants.SENTENCESEPARATORS);
                         messageList = messageArr.ToList().FindAll(p => !string.IsNullOrWhiteSpace(p.Trim()));
                     }
                     else 
@@ -98,9 +99,11 @@ namespace Echokraut.Helper.API
 
                     foreach (var message in messageList)
                     {
+                        var trimmedMessage = message.Trim();
+                        var cleanText = Plugin.Configuration.RemovePunctuation ? TalkTextHelper.RemovePunctuation(trimmedMessage) : trimmedMessage;
                         var messageObj = new VoiceMessage()
                         {
-                            Text = message,
+                            Text = cleanText,
                             ChatType = voiceMessage.ChatType,
                             Language = voiceMessage.Language,
                             LoadedLocally = voiceMessage.LoadedLocally,

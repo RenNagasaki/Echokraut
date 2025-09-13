@@ -141,9 +141,11 @@ public unsafe class AddonTalkHelper
 
     private void HandleChange(AddonTalkState state)
     {
+        PlayingHelper.RecreationStarted = true;
         var (speaker, text) = state;
         var voiceNext = nextIsVoice;
         nextIsVoice = false;
+        DialogExtraOptionsWindow.IsVoiced = false;
 
         if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(500))
             voiceNext = false;
@@ -163,6 +165,8 @@ public unsafe class AddonTalkHelper
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice-acted line: {text}", eventId);
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+            PlayingHelper.RecreationStarted = false;
+            DialogExtraOptionsWindow.IsVoiced = true;
             return;
         }
 

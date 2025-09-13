@@ -130,6 +130,9 @@ namespace Echokraut.Helper.Functional
                 case "/ekt":
                     Plugin.Configuration.Enabled = !Plugin.Configuration.Enabled;
                     Plugin.Configuration.Save();
+                    
+                    if (!Plugin.Configuration.Enabled)
+                        Plugin.Cancel(new EKEventId(0, TextSource.None));
                     activationText = (Plugin.Configuration.Enabled ? "Enabled" : "Disabled");
                     activationType = "plugin";
                     break;

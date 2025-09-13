@@ -155,6 +155,13 @@ namespace Echokraut.Helper.Functional
         {
             return text.Replace("&", "and");
         }
+        
+        public static string[] SplitKeepLeft(string input, string delimiters)
+        {
+            // z.B. delimiters = ",;.!?"
+            var cls = "[" + Regex.Escape(delimiters) + "]";
+            return Regex.Split(input, $"(?<={cls})"); // split NACH dem Trenner
+        }
 
         public static string NormalizePunctuation(string? text)
         {
@@ -239,6 +246,18 @@ namespace Echokraut.Helper.Functional
             }
 
             return text;
+        }
+
+        /// <summary>
+        /// Removes punctuation from the text
+        /// </summary>
+        /// <param name="text">The input text.</param>
+        /// <returns>The cleaned text.</returns>
+        public static string RemovePunctuation(string text)
+        {
+            var output = Regex.Replace(text, @"[.!?,;:\-…]+$", "");
+
+            return output;
         }
 
         public static string ReplaceEmoticons(EKEventId eventId, string cleanText)

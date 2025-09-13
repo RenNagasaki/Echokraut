@@ -2,7 +2,7 @@
 <Project Sdk="Dalamud.NET.Sdk/13.0.0">
 
   <PropertyGroup>
-    <Version>0.13.4.0</Version>
+    <Version>0.14.0.0</Version>
     <Description>A TTS Dalamud Plugin that breaks the silence! For self hosted TTS Services.</Description>
     <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
@@ -17,14 +17,6 @@
     <None Remove="Anamnesis\Data\ItemCategories.json" />
     <None Remove="Anamnesis\Data\NpcNames.json" />
     <None Remove="Anamnesis\Data\Tips.json" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="Anamnesis\Data\Equipment.json" />
-    <EmbeddedResource Include="Anamnesis\Data\Images.json" />
-    <EmbeddedResource Include="Anamnesis\Data\ItemCategories.json" />
-    <EmbeddedResource Include="Anamnesis\Data\NpcNames.json" />
-    <EmbeddedResource Include="Anamnesis\Data\Tips.json" />
   </ItemGroup>
 
   <ItemGroup>

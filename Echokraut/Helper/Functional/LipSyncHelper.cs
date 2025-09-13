@@ -1,366 +1,333 @@
-using Anamnesis.Memory;
-using Anamnesis.Services;
 using Dalamud.Game.ClientState.Objects.Types;
-using Dalamud.Plugin.Services;
-using FFXIVClientStructs.FFXIV.Client.Game;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
-using System.Text;
 using System.Threading.Tasks;
 using Task = System.Threading.Tasks.Task;
-using Character = Dalamud.Game.ClientState.Objects.Types.ICharacter;
-using Anamnesis.GameData.Excel;
+using FFXIVClientStructs.FFXIV.Client.Game.Character;
 using Echokraut.DataClasses;
-using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using System.Threading;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using Echokraut.Helper.Data;
 using Lumina.Excel.Sheets;
-using FFXIVClientStructs.FFXIV.Client.Game.Character;
-using System.Globalization;
-using Dalamud.Game.ClientState.Conditions;
+using System.Text.RegularExpressions;
 
 namespace Echokraut.Helper.Functional
 {
-    internal class LipSyncHelper
+    public class LipSyncHelper()
     {
-        private MemoryService memoryService;
-        private AnimationService animationService;
-        private GameDataService gameDataService;
-        private IGameObject? currentLipsync;
-        private readonly Dictionary<string, CancellationTokenSource> taskCancellations = new Dictionary<string, CancellationTokenSource>();
+        private readonly Dictionary<string, CancellationTokenSource> taskCancellations =
+            new Dictionary<string, CancellationTokenSource>();
+
         public List<ActionTimeline> LipSyncTypes { get; private set; }
 
-        public LipSyncHelper(EKEventId eventId)
-        {
+        public sealed record Options(
+            double SyllablesPerSecond = 5.0,
+            double CommaPause = 0.12,
+            double ColonPause = 0.18,
+            double DashPause = 0.15,
+            double EndPause = 0.30,
+            double NewlinePause = 0.20,
+            bool TreatHyphenAsDash = false
+        );
 
-            InitializeAsync(eventId).ContinueWith(t =>
+        // ActionTimeline exd sheet
+        private const ushort SpeakNone = 0;
+        private const ushort SpeakNormalLong = 631;
+        private const ushort SpeakNormalMiddle = 630;
+        private const ushort SpeakNormalShort = 629;
+
+        private ConcurrentDictionary<string, CancellationTokenSource> _runningTasks = [];
+
+        private string GetTaskId(VoiceMessage message)
+        {
+            // Using .Speaker instead of .Id now as we don't want to
+            // lipsync the same character multiple times at once.
+            if (!string.IsNullOrEmpty(message.Speaker?.Name)) return message.Speaker.Name;
+            if (message.PActor != null) return message.PActor.DataId.ToString();
+            return message.EventId.Id.ToString();
+            ;
+        }
+
+        public async Task TryLipSync(VoiceMessage message)
+        {
+            var durationSeconds = EstimateSeconds(message.Text);
+            if (durationSeconds < 0.2f) return;
+
+            TryStopLipSync(message);
+
+            IntPtr character =
+                await Plugin.Framework.RunOnFrameworkThread(() => TryFindCharacter(message.Speaker.Name,
+                                                                message.PActor?.DataId ?? 0));
+            if (character == IntPtr.Zero)
             {
-                if (t.Exception != null)
-                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, "Initialization failed: " + t.Exception, eventId);
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                $"No lipsync target found for speaker {message.Speaker.Name} ({message.PActor?.DataId})",
+                                message.EventId);
+                return;
+            }
+
+            CancellationTokenSource cts = new();
+            string taskId = GetTaskId(message);
+            if (!_runningTasks.TryAdd(taskId, cts))
+            {
+                cts.Dispose();
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                $"Could not add CTS for {taskId}, task already running.", message.EventId);
+                return;
+            }
+
+            CancellationToken token = cts.Token;
+            CharacterModes initialCharacterMode = TryGetCharacterMode(character);
+            CharacterModes characterMode = CharacterModes.EmoteLoop;
+
+            int durationMs = (int)(durationSeconds * 1000);
+            int durationRounded = (int)Math.Floor(durationSeconds);
+            int remaining = durationRounded;
+            Dictionary<int, int> mouthMovement = new()
+            {
+                [6] = durationRounded / 4,
+                [5] = durationRounded % 4 / 2,
+                [4] = durationRounded % 2
+            };
+
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                            $"durationMs[{durationMs}] durationRounded[{durationRounded}] fours[{mouthMovement[6]}] twos[{mouthMovement[5]}] ones[{mouthMovement[4]}]",
+                            message.EventId);
+
+            await Task.Run(async () =>
+            {
+                try
+                {
+                    await Task.Delay(100, token);
+
+                    if (mouthMovement[6] > 0)
+                    {
+                        int delay = CalculateAdjustedDelay(message, mouthMovement[6] * 4000, 6);
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Starting 4s lip movement. Delay: {delay}",
+                                        message.EventId);
+                        await AnimateLipSync(message, initialCharacterMode, characterMode, SpeakNormalLong, delay,
+                                             token);
+                    }
+
+                    if (mouthMovement[5] > 0)
+                    {
+                        int delay = CalculateAdjustedDelay(message, mouthMovement[5] * 2000, 5);
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Starting 2s lip movement. Delay: {delay}",
+                                        message.EventId);
+                        await AnimateLipSync(message, initialCharacterMode, characterMode, SpeakNormalMiddle, delay,
+                                             token);
+                    }
+
+                    if (mouthMovement[4] > 0)
+                    {
+                        int delay = CalculateAdjustedDelay(message, mouthMovement[4] * 1000, 4);
+                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Starting 1s lip movement. Delay: {delay}",
+                                        message.EventId);
+                        await AnimateLipSync(message, initialCharacterMode, characterMode, SpeakNormalShort, delay,
+                                             token);
+                    }
+
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "LipSync completed successfully",
+                                    message.EventId);
+                }
+                catch (TaskCanceledException)
+                {
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, "LipSync was cancelled", message.EventId);
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex, message.EventId);
+                } finally
+                {
+                    await Plugin.Framework.RunOnFrameworkThread(() =>
+                    {
+                        IntPtr character = TryFindCharacter(message.Speaker.Name, message.PActor?.DataId ?? 0);
+                        TrySetCharacterMode(character, initialCharacterMode);
+                        TrySetLipsOverride(character, SpeakNone);
+                    });
+
+                    if (_runningTasks.TryRemove(taskId, out CancellationTokenSource? oldCts))
+                        oldCts.Dispose();
+                }
+            }, token);
+        }
+
+        public void TryStopLipSync(VoiceMessage message)
+        {
+            string taskId = GetTaskId(message);
+            if (_runningTasks.TryRemove(taskId, out CancellationTokenSource? cts))
+            {
+                try
+                {
+                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"StopLipSync cancelling CTS for {taskId}",
+                                    message.EventId);
+                    cts.Cancel();
+                    cts.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex, message.EventId);
+                }
+            }
+        }
+
+        private async Task AnimateLipSync(
+            VoiceMessage message, CharacterModes initialMode, CharacterModes targetMode, ushort speakValue, int delayMs,
+            CancellationToken token)
+        {
+            if (token.IsCancellationRequested) return;
+
+            await Plugin.Framework.RunOnFrameworkThread(() =>
+            {
+                IntPtr character = TryFindCharacter(message.Speaker.Name, message.PActor?.DataId ?? 0);
+                TrySetCharacterMode(character, targetMode);
+                TrySetLipsOverride(character, speakValue);
             });
-        }
 
-        public async void TriggerLipSync(EKEventId eventId, float length, IGameObject? npc = null)
-        {
-            return;
-            if (Plugin.Condition[ConditionFlag.BoundByDuty] && !Plugin.Condition[ConditionFlag.WatchingCutscene]) return;
-            if (!Plugin.Configuration.Enabled) return;
+            await Task.Delay(delayMs, token);
 
-            var npcObject = npc;
-            var npcName = npcObject.Name.TextValue;
-
-            ActorMemory? actorMemory = null;
-            AnimationMemory? animationMemory = null;
-            if (npcObject != null)
+            if (!token.IsCancellationRequested)
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Starting LipSync", eventId);
-                actorMemory = new ActorMemory();
-                actorMemory.SetAddress(npcObject.Address);
-                animationMemory = actorMemory.Animation;
-
-                // Determine the duration based on the message size
-                float duration = length;
-
-                Dictionary<int, int> mouthMovement = new Dictionary<int, int>();
-
-                if (duration < 0.2f)
-                    return;
-
-                int durationMs = (int)(duration * 1000);
-
-
-                // Decide on the lengths
-                int durationRounded = (int)Math.Floor(duration);
-                int remaining = durationRounded;
-                mouthMovement[6] = remaining / 4;
-                remaining = remaining % 4;
-                mouthMovement[5] = remaining / 2;
-                remaining = remaining % 2;
-                mouthMovement[4] = remaining / 1;
-                remaining = remaining % 1;
-                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"durationMs[{durationMs}] durationRounded[{durationRounded}] fours[{mouthMovement[6]}] twos[{mouthMovement[5]}] ones[{mouthMovement[4]}]", eventId);
-
-                // Decide on the Mode
-                ActorMemory.CharacterModes intialState = actorMemory.CharacterMode;
-                ActorMemory.CharacterModes mode = ActorMemory.CharacterModes.EmoteLoop;
-
-                if (!taskCancellations.ContainsKey(npcName))
+                await Plugin.Framework.RunOnFrameworkThread(() =>
                 {
-                    var cts = new CancellationTokenSource();
-                    taskCancellations.Add(npcName, cts);
-                    currentLipsync = npcObject;
-                    var token = cts.Token;
-
-                    Task task = Task.Run(async () => {
-                        try
-                        {
-                            await Task.Delay(100, token);
-
-                            // 4-Second Lips Movement Animation
-                            if (!token.IsCancellationRequested && mouthMovement[6] > 0 && npcObject != null && actorMemory != null && actorMemory != null)
-                            {
-                                animationMemory.LipsOverride = false ? 0 : (ushort)631;
-                                MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), mode, "Animation Mode Override");
-                                MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), false ? 0 : (ushort)631, "Lipsync");
-
-                                int adjustedDelay = CalculateAdjustedDelay(mouthMovement[6] * 4000, 6);
-                                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[6] durationMs[{mouthMovement[6] * 4}] delay [{adjustedDelay}]", eventId);
-                                await Task.Delay(adjustedDelay, token);
-
-                                if (!token.IsCancellationRequested && npcObject != null && actorMemory != null)
-                                {
-                                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[6] was finished", eventId);
-
-                                    animationMemory.LipsOverride = 0;
-                                    MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
-                                    MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
-                                }
-
-                            }
-
-                            // 2-Second Lips Movement Animation
-                            if (!token.IsCancellationRequested && mouthMovement[5] > 0 && npcObject != null && actorMemory != null)
-                            {
-                                animationMemory.LipsOverride = false ? 0 : (ushort)630;
-                                MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), mode, "Animation Mode Override");
-                                MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), false ? 0 : (ushort)630, "Lipsync");
-                                int adjustedDelay = CalculateAdjustedDelay(mouthMovement[5] * 2000, 5);
-                                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[5] durationMs[{mouthMovement[5] * 2}] delay [{adjustedDelay}]", eventId);
-
-                                await Task.Delay(adjustedDelay, token);
-                                if (!token.IsCancellationRequested && npcObject != null && actorMemory != null)
-                                {
-                                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[5] was finished", eventId);
-
-                                    animationMemory.LipsOverride = 0;
-                                    MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
-                                    MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
-                                }
-
-                            }
-
-                            // 1-Second Lips Movement Animation
-                            if (!token.IsCancellationRequested && mouthMovement[4] > 0 && npcObject != null && actorMemory != null)
-                            {
-                                animationMemory.LipsOverride = false ? 0 : (ushort)632;
-                                MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), mode, "Animation Mode Override");
-                                MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), false ? 0 : (ushort)632, "Lipsync");
-                                int adjustedDelay = CalculateAdjustedDelay(mouthMovement[4] * 1000, 4);
-                                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task was started mouthMovement[4] durationMs[{mouthMovement[4]}] delay [{adjustedDelay}]", eventId);
-
-
-                                await Task.Delay(adjustedDelay, token);
-                                if (!token.IsCancellationRequested && npcObject != null && actorMemory != null)
-                                {
-                                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task mouthMovement[4] was finished", eventId);
-
-                                    animationMemory.LipsOverride = 0;
-                                    MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
-                                    MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
-                                }
-                            }
-
-                            if (!token.IsCancellationRequested)
-                            {
-                                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task was Completed", eventId);
-                                LogHelper.Info(MethodBase.GetCurrentMethod().Name, "LipSync was completed", eventId);
-
-                                cts.Dispose();
-                                if (taskCancellations.ContainsKey(npcName))
-                                    taskCancellations.Remove(npcName);
-                            }
-                        }
-                        catch (TaskCanceledException)
-                        {
-                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Task was canceled.", eventId);
-                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "LipSync was canceled", eventId);
-
-                            animationMemory.LipsOverride = 0;
-                            MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
-                            MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
-                            cts.Dispose();
-                            if (taskCancellations.ContainsKey(npcName))
-                                taskCancellations.Remove(npcName);
-                        }
-                        catch (Exception ex)
-                        {
-                            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Unhandled exception in TriggerLipSync task: {ex}", eventId);
-
-                            animationMemory.LipsOverride = 0;
-                            MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), intialState, "Animation Mode Override");
-                            MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
-                            cts.Dispose();
-                            if (taskCancellations.ContainsKey(npcName))
-                                taskCancellations.Remove(npcName);
-                        }
-                    }, token);
-                }
+                    IntPtr character = TryFindCharacter(message.Speaker.Name, message.PActor?.DataId ?? 0);
+                    TrySetCharacterMode(character, initialMode);
+                    TrySetLipsOverride(character, SpeakNone);
+                });
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                $"LipSync {speakValue} block finished after {delayMs}ms", message.EventId);
             }
         }
 
-        public async void StopLipSync(EKEventId eventId)
+        private int CalculateAdjustedDelay(VoiceMessage message, int durationMs, int lipSyncType)
         {
-            return;
-            try
+            int animationLoop = lipSyncType switch
             {
-                if (Plugin.Condition[ConditionFlag.BoundByDuty]) return;
-                if (!Plugin.Configuration.Enabled) return;
-                if (currentLipsync == null) return;
+                4 => 1000,
+                5 => 2000,
+                6 => 4000,
+                _ => 4000
+            };
 
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Stopping Lipsync for {currentLipsync.Name.TextValue}", eventId);
-                if (taskCancellations.TryGetValue(currentLipsync.ToString(), out var cts))
-                {
-                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Cancellation " + currentLipsync.Name.TextValue, eventId);
-                    try
-                    {
-                        cts.Cancel();
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"CTS for {currentLipsync.Name.TextValue} was called to be disposed even though it was disposed already.", eventId);
-                    }
-                    return;
-                }
+            int halfStep = animationLoop / 2;
 
-                var actorMemory = new ActorMemory();
-                actorMemory.SetAddress(currentLipsync.Address);
-                var animationMemory = actorMemory.Animation;
-                animationMemory.LipsOverride = 0;
-                MemoryService.Write(actorMemory.GetAddressOfProperty(nameof(ActorMemory.CharacterModeRaw)), 0, "Animation Mode Override");
-                MemoryService.Write(animationMemory.GetAddressOfProperty(nameof(AnimationMemory.LipsOverride)), 0, "Lipsync");
-                taskCancellations.Remove(currentLipsync.Name.TextValue);
-                currentLipsync = null;
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Stopped Lipsync", eventId);
-            }
-            catch (Exception ex)
+            for (int i = 1; i <= 10; i++)
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"{ex}", eventId);
+                int ideal = i * animationLoop;
+                if (durationMs <= ideal + halfStep)
+                    return ideal - 50;
             }
-        }
 
-        private async Task InitializeAsync(EKEventId eventId)
-        {
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "InitializeAsync --> Waiting for Game Process Stability", eventId);
-            await WaitForGameProcessStability();
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "InitializeAsync --> Done waiting", eventId);
-            InitializeServices();
-        }
-
-        private void InitializeServices()
-        {
-            // Initialize all services that depend on the game process
-            memoryService = new MemoryService();
-            gameDataService = new GameDataService();
-            animationService = new AnimationService();
-            StartServices();
-        }
-
-        private async Task WaitForGameProcessStability()
-        {
-            // Wait until the game process is stable
-            while (Process.GetCurrentProcess() == null || !Process.GetCurrentProcess().Responding)
-            {
-                await Task.Delay(1000); // Check every second
-            }
-        }
-
-        private async void StartServices()
-        {
-            await memoryService.Initialize();
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StartServices --> Waiting for Process Response", new EKEventId(0, Enums.TextSource.None));
-            while (!Process.GetCurrentProcess().Responding)
-                await Task.Delay(100);
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "StartServices --> Done waiting", new EKEventId(0, Enums.TextSource.None));
-            await memoryService.OpenProcess(Process.GetCurrentProcess());
-            await gameDataService.Initialize();
-
-            //LipSyncTypes = GenerateLipList().ToList();
-            await animationService.Initialize();
-            await animationService.Start();
-            await memoryService.Start();
-        }
-
-        //private IEnumerable<ActionTimeline> GenerateLipList()
-        //{
-        //    // Grab "no animation" and all "speak/" animations, which are the only ones valid in this slot
-        //    var lips = GameDataService.ActionTimelines.Where(x => x.AnimationId == 0 || (x.Key?.StartsWith("speak/") ?? false));
-        //    return lips;
-        //}
-
-        public int EstimateDurationFromMessage(string message)
-        {
-            var words = message.Split(new char[] { ' ', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
-            var wordsPerSecond = 150.0 / 60; // 150 words per minute converted to words per second
-
-            return (int)(words / wordsPerSecond * 1000); // duration in milliseconds
-        }
-
-        int CalculateAdjustedDelay(int durationMs, int lipSyncType)
-        {
-            var delay = 0;
-            int animationLoop;
-            if (lipSyncType == 4)
-                animationLoop = 1000;
-            else if (lipSyncType == 5)
-                animationLoop = 2000;
-            else
-                animationLoop = 4000;
-            var halfStep = animationLoop / 2;
-
-            if (durationMs <= 1 * animationLoop + halfStep)
-            {
-                return 1 * animationLoop - 50;
-            }
-            else
-                for (var i = 2; delay < durationMs; i++)
-                    if (durationMs > i * animationLoop - halfStep && durationMs <= i * animationLoop + halfStep)
-                    {
-                        delay = i * animationLoop - 50;
-                        return delay;
-                    }
-
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                            $"CalculateAdjustedDelay fell through: {durationMs}, {lipSyncType}", message.EventId);
             return 404;
         }
 
-        private IGameObject? DiscoverNpc(string npcName)
+        private unsafe void TrySetLipsOverride(IntPtr _character, ushort lipsOverride)
         {
-            if (npcName == "???")
+            Character* character = (Character*)_character;
+            if (character == null) return;
+            character->Timeline.SetLipsOverrideTimeline(lipsOverride);
+        }
+
+        private unsafe CharacterModes TryGetCharacterMode(IntPtr _character)
+        {
+            Character* character = (Character*)_character;
+            if (character == null) return CharacterModes.None;
+            return character->Mode;
+        }
+
+        private unsafe void TrySetCharacterMode(IntPtr _character, CharacterModes mode)
+        {
+            Character* character = (Character*)_character;
+            if (character == null) return;
+            character->SetMode(mode, 0);
+        }
+
+        public IntPtr TryFindCharacter(string name, uint? baseId)
+        {
+            IntPtr baseIdCharacter = IntPtr.Zero;
+
+            foreach (IGameObject gameObject in Plugin.ObjectTable)
             {
-                /*
-                foreach (var item in _objectTable) {
+                if ((gameObject as ICharacter) == null) continue;
 
-                    if (item as Character == null || item as Character == _clientState.LocalPlayer || item.Name.TextValue == "") continue;
+                // Dalamud's GameObject has BaseId renamed to DataId
+                if (gameObject.DataId == baseId && baseId != 0)
+                    baseIdCharacter = gameObject.Address;
 
-                    if (true) {
-                        Character character = item as Character;
-                        if (character != null && character != _clientState.LocalPlayer) {
-                            gender = Convert.ToBoolean(character.Customize[(int)CustomizeIndex.Gender]);
-                            race = character.Customize[(int)CustomizeIndex.Race];
-                            body = character.Customize[(int)CustomizeIndex.ModelType];
-                            return character;
-                        }
-                        return item;
-                    }
-                }*/
+                if (!string.IsNullOrEmpty(name) && gameObject.Name.TextValue == name)
+                    return gameObject.Address;
             }
-            else
+
+            return baseIdCharacter;
+        }
+
+        public static double EstimateSeconds(string text, Options? opt = null)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return 0.0;
+            var o = opt ?? new Options();
+
+            var cleaned = text.Replace("\r", "");
+            var words = Regex.Split(cleaned, @"\s+")
+                             .Where(w => w.Length > 0)
+                             .ToArray();
+
+            long syllables = 0;
+            foreach (var w0 in words)
             {
-                foreach (var item in Plugin.ObjectTable)
+                var w = w0.ToLowerInvariant();
+                w = Regex.Replace(w, "qu", "q");
+                var core = Regex.Replace(w, @"^[^\p{L}]+|[^\p{L}]+$", "");
+                var m = Regex.Matches(core, @"[aeiouyäöüy]+", RegexOptions.IgnoreCase);
+                var count = m.Count;
+                if (count == 0 && core.Length > 0) count = 1;
+                syllables += count;
+            }
+
+            double pauses = 0.0;
+            var endMatches = Regex.Matches(cleaned, @"(\.\.\.|…|[.!?])");
+            pauses += endMatches.Count * o.EndPause;
+            pauses += cleaned.Count(c => c == ',') * o.CommaPause;
+            pauses += cleaned.Count(c => c == ';' || c == ':') * o.ColonPause;
+            var dashCount = Regex.Matches(cleaned, "[–—]").Count
+                            + (o.TreatHyphenAsDash ? cleaned.Count(c => c == '-') : 0);
+            pauses += dashCount * o.DashPause;
+            pauses += cleaned.Count(c => c == '\n') * o.NewlinePause;
+
+            double speechSeconds = syllables / Math.Max(1e-6, o.SyllablesPerSecond);
+            return speechSeconds + pauses;
+        }
+
+        public static double EstimateByWpm(string text, int wordsPerMinute = 150, Options? opt = null)
+        {
+            if (string.IsNullOrWhiteSpace(text)) return 0.0;
+            var o = opt ?? new Options();
+            var words = Regex.Split(text.Replace("\r", ""), @"\s+").Where(w => w.Length > 0).Count();
+            double speech = (words / Math.Max(1e-6, (wordsPerMinute / 60.0)));
+            double pauses = EstimateSeconds(text, o) - (CountSyllables(text) / Math.Max(1e-6, o.SyllablesPerSecond));
+            return speech + pauses;
+
+            static long CountSyllables(string t)
+            {
+                var cleaned = t.Replace("\r", "");
+                var words = Regex.Split(cleaned, @"\s+").Where(w => w.Length > 0);
+                long s = 0;
+                foreach (var w0 in words)
                 {
-                    if (!(item is Character) || item as Character == Plugin.ClientState.LocalPlayer || item.Name.TextValue == "") continue;
-                    if (item.Name.TextValue == npcName)
-                    {
-                        return item;
-                    }
+                    var w = w0.ToLowerInvariant();
+                    w = Regex.Replace(w, "qu", "q");
+                    var core = Regex.Replace(w, @"^[^\p{L}]+|[^\p{L}]+$", "");
+                    var m = Regex.Matches(core, @"[aeiouyäöüy]+", RegexOptions.IgnoreCase);
+                    var c = m.Count;
+                    if (c == 0 && core.Length > 0) c = 1;
+                    s += c;
                 }
-            }
 
-            return null;
+                return s;
+            }
         }
     }
 }

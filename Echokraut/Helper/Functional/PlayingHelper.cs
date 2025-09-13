@@ -145,16 +145,9 @@ namespace Echokraut.Helper.Functional
             ActivePlayer.Init(volumeSampleProvider);
             ActivePlayer.Play();
             var delimiters = new char[] { ' ' };
-
-            var estimatedLength = 10f;
-            if (!string.IsNullOrEmpty(queueItemText.Text))
-            {
-                var count = queueItemText.Text.Split(delimiters, StringSplitOptions.RemoveEmptyEntries).Length;
-                estimatedLength = count / 2.1f;
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Text} length: {estimatedLength}", eventId);
-            }
-            Plugin.LipSyncHelper.TriggerLipSync(eventId, estimatedLength, queueItemText.PActor);
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Speaker.Name} length: {estimatedLength}", eventId);
+            
+            Plugin.LipSyncHelper.TryLipSync(queueItemText);
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItemText.Speaker.Name}", eventId);
             Playing = true;
             RecreationStarted = false;
         }

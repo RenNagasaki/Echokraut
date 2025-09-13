@@ -426,6 +426,13 @@ public class ConfigWindow : Window, IDisposable
                     Plugin.Configuration.UseSoundEq = useSoundEq;
                     Plugin.Configuration.Save();
                 }
+            
+                var removePunctuation = Plugin.Configuration.RemovePunctuation;
+                if (ImGui.Checkbox("Remove punctuation from the text (Experimental – may reduce end-of-speech hallucinations)", ref removePunctuation))
+                {
+                    Plugin.Configuration.RemovePunctuation = removePunctuation;
+                    Plugin.Configuration.Save();
+                }
             }
         }
     }

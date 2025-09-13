@@ -102,7 +102,7 @@ public partial class Plugin : IDalamudPlugin
         BackendHelper.Initialize(Configuration.BackendSelection);
         CommandHelper.Initialize();
         AlltalkInstanceHelper.Initialize();
-        LipSyncHelper = new LipSyncHelper(new EKEventId(0, TextSource.None));
+        LipSyncHelper = new LipSyncHelper();
         AddonTalkHelper = new AddonTalkHelper();
         AddonBattleTalkHelper = new AddonBattleTalkHelper();
         AddonSelectStringHelper = new AddonSelectStringHelper();
@@ -148,8 +148,9 @@ public partial class Plugin : IDalamudPlugin
 
     public static void Cancel(EKEventId eventId)
     {
+        if (DialogExtraOptionsWindow.CurrentVoiceMessage != null)
+            StopLipSync(DialogExtraOptionsWindow.CurrentVoiceMessage);
         BackendHelper.OnCancel(eventId);
-        StopLipSync(eventId);
     }
 
     public static void Pause(EKEventId eventId)
@@ -162,9 +163,9 @@ public partial class Plugin : IDalamudPlugin
         BackendHelper.OnResume(eventId);
     }
 
-    public static void StopLipSync(EKEventId eventId)
+    public static void StopLipSync(VoiceMessage message)
     {
-        LipSyncHelper.StopLipSync(eventId);
+        LipSyncHelper.TryStopLipSync(message);
     }
 
     public static async void Say(EKEventId eventId, GameObject? speaker, SeString speakerName, string textValue)
@@ -175,6 +176,7 @@ public partial class Plugin : IDalamudPlugin
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"No backend available yet, skipping!", eventId);
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                PlayingHelper.RecreationStarted = false;
                 return;
             }
 
@@ -193,6 +195,7 @@ public partial class Plugin : IDalamudPlugin
                 {
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Player is not on the same map: {speakerName.TextValue}. Can't voice", eventId);
                     LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                    PlayingHelper.RecreationStarted = false;
                     return;
                 }
 
@@ -220,6 +223,7 @@ public partial class Plugin : IDalamudPlugin
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Text not speakable: {cleanText}", eventId);
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                PlayingHelper.RecreationStarted = false;
                 return;
             }
 
@@ -249,7 +253,7 @@ public partial class Plugin : IDalamudPlugin
 
             npcData = resNpcData;
             
-            if (speaker != null && (source == TextSource.AddonBubble || source == TextSource.AddonTalk || source == TextSource.AddonBattleTalk))
+            if (speaker != null && (source == TextSource.AddonBubble || source == TextSource.AddonTalk))
             {
                 npcData.IsChild = LuminaHelper.GetENpcBase(speaker.DataId)?.BodyType == 4;
                 Configuration.Save();
@@ -273,6 +277,7 @@ public partial class Plugin : IDalamudPlugin
                     {
                         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Bubble is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                        PlayingHelper.RecreationStarted = false;
                         return;
                     }
                     break;
@@ -282,6 +287,7 @@ public partial class Plugin : IDalamudPlugin
                     {
                         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Npc is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                        PlayingHelper.RecreationStarted = false;
                         return;
                     }
                     break;
@@ -292,6 +298,7 @@ public partial class Plugin : IDalamudPlugin
                     {
                         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Player is muted: {npcData.ToString()}", eventId);
                         LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                        PlayingHelper.RecreationStarted = false;
                         return;
                     }
                     break;
@@ -312,6 +319,7 @@ public partial class Plugin : IDalamudPlugin
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Voice is muted: {npcData.ToString()}", eventId);
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                PlayingHelper.RecreationStarted = false;
                 return;
             }
 
@@ -325,12 +333,15 @@ public partial class Plugin : IDalamudPlugin
                 EventId = eventId
             };
             var volume = VolumeHelper.GetVoiceVolume(eventId) * npcData.Voice.Volume * npcVolume;
-            DialogExtraOptionsWindow.CurrentVoiceMessage = voiceMessage;
+            
+            if (speaker != null && source == TextSource.AddonTalk)
+                DialogExtraOptionsWindow.CurrentVoiceMessage = voiceMessage;
             
             if (Configuration.MutedNpcDialogues.Contains(speaker!.DataId))
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping muted dialogue: {cleanText}", eventId);
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                PlayingHelper.RecreationStarted = false;
                 return;
             }
             
@@ -340,6 +351,7 @@ public partial class Plugin : IDalamudPlugin
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0.", eventId);
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                PlayingHelper.RecreationStarted = false;
             }
         }
         catch (Exception ex)

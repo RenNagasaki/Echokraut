@@ -126,7 +126,7 @@ namespace Echokraut.DataClasses
 
         public const int MASTERVOLUMEOFFSET = 47392;
         public const int VOICEVOLUMEOFFSET = 47440;
-        public static readonly char[] SENTENCESEPARATORS = { '.', '!', '?' };
+        public static readonly string SENTENCESEPARATORS = ".!?";
         public static readonly string[] BACKENDS = { "Alltalk" };
         public static readonly List<NpcRaces> RACESFORRANDOMNPC = new List<NpcRaces>() { NpcRaces.Hyur, NpcRaces.Roegadyn, NpcRaces.Viera, NpcRaces.AuRa, NpcRaces.Miqote, NpcRaces.Hrothgar };
         public const string NARRATORVOICE = "Narrator.wav";
