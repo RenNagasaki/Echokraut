@@ -170,7 +170,7 @@ public unsafe class AddonTalkHelper
             return;
         }
         
-        if (Plugin.Condition[ConditionFlag.OccupiedSummoningBell] || !Plugin.Configuration.VoiceRetainers)
+        if (Plugin.Condition[ConditionFlag.OccupiedSummoningBell] && !Plugin.Configuration.VoiceRetainers)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping retainer line: {text}", eventId);
             LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
