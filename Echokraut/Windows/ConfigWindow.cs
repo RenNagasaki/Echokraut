@@ -418,14 +418,6 @@ public class ConfigWindow : Window, IDisposable
                         Plugin.Configuration.Save();
                     }
                 }
-
-                var useSoundEq = Plugin.Configuration!.UseSoundEq;
-                if (ImGui.Checkbox("Use an Equalizer to improve audio from 24khz to 48khz(experimental - most likely useless)",
-                                   ref useSoundEq))
-                {
-                    Plugin.Configuration.UseSoundEq = useSoundEq;
-                    Plugin.Configuration.Save();
-                }
             
                 var removePunctuation = Plugin.Configuration.RemovePunctuation;
                 if (ImGui.Checkbox("Remove punctuation from the text (Experimental – may reduce end-of-speech hallucinations)", ref removePunctuation))

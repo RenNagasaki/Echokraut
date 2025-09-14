@@ -1,8 +1,5 @@
 using Echokraut.DataClasses;
 using Echokraut.Helper.Data;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
-using NAudio.Wave;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -23,7 +20,7 @@ namespace Echokraut.Helper.Functional
                 if (File.Exists(filePath))
                 {
                     voiceMessage.LoadedLocally = true;
-                    WaveStream mainOutputStream = new WaveFileReader(filePath);
+                    using var mainOutputStream = new WavFileReader(filePath);
                     PlayingHelper.PlayingQueue.Add(mainOutputStream);
                     PlayingHelper.PlayingQueueText.Add(voiceMessage);
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Local file found. Location: {filePath}", eventId);
@@ -106,11 +103,9 @@ namespace Echokraut.Helper.Functional
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Saving audio locally: {filePath}", eventId);
             try
             {
-                stream.Seek(0, SeekOrigin.Begin);
-                var rawStream = new RawSourceWaveStream(stream, new WaveFormat(24000, 16, 1));
-
                 Directory.CreateDirectory(Path.GetDirectoryName(filePath));
-                WaveFileWriter.CreateWaveFile(filePath, rawStream);
+                stream.Seek(0, SeekOrigin.Begin);
+                RawPcmToWav.CreateWaveFileAsync(filePath, stream, sampleRate: 24000, bitsPerSample: 16, channels: 1);
                 SavedFiles.Add(DateTime.Now, filePath);
 
                 return true;

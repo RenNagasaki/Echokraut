@@ -5,7 +5,6 @@ using Echokraut.Enums;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
 using Echokraut.Windows;
-using ManagedBass;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -13,9 +12,6 @@ using System.Linq;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
-using static System.Runtime.InteropServices.JavaScript.JSType;
-using Config = Echokraut.DataClasses.Configuration;
-using String = System.String;
 
 namespace Echokraut.Helper.API
 {
@@ -140,7 +136,7 @@ namespace Echokraut.Helper.API
         public static void OnPause(EKEventId eventId)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Pausing voice inference", eventId);
-            if (PlayingHelper.ActivePlayer.PlaybackState == NAudio.Wave.PlaybackState.Playing)
+            if (PlayingHelper.ActivePlayer.State == PlaybackState.Playing)
             {
                 var thread = new Thread(PlayingHelper.PausePlaying);
                 thread.Start();
@@ -150,7 +146,7 @@ namespace Echokraut.Helper.API
         public static void OnResume(EKEventId eventId)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Resuming voice inference", eventId);
-            if (PlayingHelper.ActivePlayer.PlaybackState == NAudio.Wave.PlaybackState.Paused)
+            if (PlayingHelper.ActivePlayer.State == PlaybackState.Paused)
             {
                 var thread = new Thread(PlayingHelper.ResumePlaying);
                 thread.Start();

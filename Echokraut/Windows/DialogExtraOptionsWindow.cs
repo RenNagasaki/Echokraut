@@ -4,18 +4,11 @@ using System.Reflection;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
-using Dalamud.Interface.Utility;
-using Dalamud.Interface.Textures.TextureWraps;
-using Dalamud.Plugin.Services;
-using Lumina.Data.Files;
-using Dalamud.Plugin;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
 using Echokraut.Helper.Addons;
 using Echokraut.Helper.Data;
-using Echokraut.Helper.DataHelper;
 using Echokraut.Helper.Functional;
-using NAudio.Wave;
 using OtterGui;
 using OtterGui.Raii;
 
@@ -73,14 +66,14 @@ public class DialogExtraOptionsWindow : Window, IDisposable
             {
                 if (PlayingHelper.Playing)
                 {
-                    if (PlayingHelper.ActivePlayer?.PlaybackState != PlaybackState.Playing)
+                    if (PlayingHelper.ActivePlayer?.State != PlaybackState.Playing)
                     {
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##ResumeDialog",
                                                          iconSize,
                                                          "Resume dialogue", false, true))
                             Plugin.Resume(new EKEventId(0, TextSource.AddonTalk));
                     }
-                    else if (PlayingHelper.ActivePlayer?.PlaybackState == PlaybackState.Playing)
+                    else if (PlayingHelper.ActivePlayer?.State == PlaybackState.Playing)
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Pause.ToIconString()}##PauseDialog",
                                                          iconSize,
                                                          "Pause dialogue", false, true))

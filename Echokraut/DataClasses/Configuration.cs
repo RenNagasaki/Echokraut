@@ -25,7 +25,6 @@ public class Configuration : IPluginConfiguration
     public bool VoiceBattleDialogQueued { get; set; } = true;
     public bool VoicePlayerChoicesCutscene { get; set; } = true;
     public bool VoicePlayerChoices { get; set; } = true;
-    public bool UseSoundEq { get; set; } = false;
     public bool RemovePunctuation { get; set; } = false;
     public bool ShowExtraOptionsInDialogue { get; set; } = true;
     public bool ShowExtraExtraOptionsInDialogue { get; set; } = true;
