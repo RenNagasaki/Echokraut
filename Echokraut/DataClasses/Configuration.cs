@@ -39,6 +39,7 @@ public class Configuration : IPluginConfiguration
     public bool LoadFromLocalFirst { get; set; } = false;
     public string LocalSaveLocation { get; set; } = @"C:\alltalk_tts\LocalSaves";
     public bool CreateMissingLocalSaveLocation { get; set; } = false;
+    public bool VoiceRetainers { get; set; } = false;
     public bool VoiceBubble { get; set; } = false;
     public bool VoiceBubblesInCity { get; set; } = false;
     public bool VoiceSourceCam { get; set; } = false;

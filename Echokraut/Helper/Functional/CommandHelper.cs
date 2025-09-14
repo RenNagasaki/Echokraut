@@ -208,7 +208,7 @@ namespace Echokraut.Helper.Functional
                 {
                     var race = CharacterDataHelper.GetSpeakerRace(new EKEventId(0, TextSource.None), target, out var raceStr, out var modelId);
                     var gender = CharacterDataHelper.GetCharacterGender(new EKEventId(0, TextSource.None), target, race, out var modelBody);
-                    var bodyType = LuminaHelper.GetENpcBase(target.DataId)?.BodyType;
+                    var bodyType = LuminaHelper.GetENpcBase(target.DataId, new EKEventId(0, TextSource.None))?.BodyType;
                     PrintText(target.Name.TextValue, $"Target -> Name: {target.Name}, Race: {race}, Gender: {gender}, ModelID: {modelId}, ModelBody: {modelBody}, BodyType: {bodyType}");
                 }
             }

@@ -473,6 +473,13 @@ public class ConfigWindow : Window, IDisposable
             Plugin.Configuration.AutoAdvanceTextAfterSpeechCompleted = autoAdvanceOnSpeechCompletion;
             Plugin.Configuration.Save();
         }
+
+        var voiceRetainers = Plugin.Configuration.VoiceRetainers;
+        if (ImGui.Checkbox("Voice retainer dialogues", ref voiceRetainers))
+        {
+            Plugin.Configuration.VoiceRetainers = voiceRetainers;
+            Plugin.Configuration.Save();
+        }
     }
 
     private void DrawBattleDialogueSettings()

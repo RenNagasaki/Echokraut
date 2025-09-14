@@ -169,6 +169,14 @@ public unsafe class AddonTalkHelper
             DialogExtraOptionsWindow.IsVoiced = true;
             return;
         }
+        
+        if (Plugin.Condition[ConditionFlag.OccupiedSummoningBell] || !Plugin.Configuration.VoiceRetainers)
+        {
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping retainer line: {text}", eventId);
+            LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+            PlayingHelper.RecreationStarted = false;
+            return;
+        }
 
         if (Plugin.Condition[ConditionFlag.WatchingCutscene] || Plugin.Condition[ConditionFlag.OccupiedInCutSceneEvent] || Plugin.Condition[ConditionFlag.OccupiedInQuestEvent])
         {

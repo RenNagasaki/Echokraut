@@ -62,7 +62,7 @@ public static class CharacterDataHelper
 
         if (actorGender == Genders.Male && IsWildRace(race))
         {
-            modelBody = LuminaHelper.GetENpcBase(speaker.DataId)?.ModelBody;
+            modelBody = LuminaHelper.GetENpcBase(speaker.DataId, eventId)?.ModelBody;
             var modBody = modelBody;
             var npcGenderMap = JsonLoaderHelper.ModelGenderMap.Find(p => p.race == race && p.maleDefault && p.male != modBody);
             if (npcGenderMap == null)
@@ -92,7 +92,7 @@ public static class CharacterDataHelper
 
             var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker.Address;
             var speakerRace = charaStruct->DrawData.CustomizeData.Race;
-            var race = LuminaHelper.GetRace(speakerRace);
+            var race = LuminaHelper.GetRace(speakerRace, eventId);
 
             if (!(race is null))
             {

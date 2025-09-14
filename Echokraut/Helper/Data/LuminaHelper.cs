@@ -3,6 +3,9 @@ using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Fate;
 using Lumina.Excel.Sheets;
 using System;
+using System.Reflection;
+using Echokraut.DataClasses;
+using Echokraut.Helper.Data;
 
 namespace Echokraut.Helper.DataHelper
 {
@@ -10,6 +13,7 @@ namespace Echokraut.Helper.DataHelper
     {
         private static ushort TerritoryRow;
         private static TerritoryType? Territory;
+
         public static TerritoryType? GetTerritory()
         {
             var territoryRow = Plugin.ClientState.TerritoryType;
@@ -22,14 +26,33 @@ namespace Echokraut.Helper.DataHelper
             return Territory;
         }
 
-        internal static ENpcBase? GetENpcBase(uint dataId)
+        internal static ENpcBase? GetENpcBase(uint dataId, EKEventId eventId)
         {
-            return Plugin.DataManager.GetExcelSheet<ENpcBase>()!.GetRow(dataId);
+            try
+            {
+                return Plugin.DataManager.GetExcelSheet<ENpcBase>()!.GetRow(dataId);
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while starting voice inference: {ex}",
+                                eventId);
+            }
+
+            return null;
         }
 
-        internal static Race? GetRace(byte speakerRace)
+        internal static Race? GetRace(byte speakerRace, EKEventId eventId)
         {
-            return Plugin.DataManager.GetExcelSheet<Race>()?.GetRow(speakerRace) ?? null;
+            try
+            {
+                return Plugin.DataManager.GetExcelSheet<Race>()?.GetRow(speakerRace) ?? null;
+            }
+            catch (Exception ex)
+            {
+                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while starting voice inference: {ex}", eventId);
+            }
+
+            return null;
         }
     }
 }

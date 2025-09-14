@@ -1,12 +1,8 @@
-using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
 using Echokraut.Helper.API;
 using Echokraut.Helper.Data;
-using FFXIVClientStructs.FFXIV.Client.Game.Event;
-using FFXIVClientStructs.FFXIV.Client.UI.Agent;
 using ManagedBass;
-using NAudio.CoreAudioApi;
 using NAudio.Wave;
 using NAudio.Wave.SampleProviders;
 using System;
@@ -15,6 +11,7 @@ using System.IO;
 using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
+using NAudio.CoreAudioApi;
 using PlaybackState = NAudio.Wave.PlaybackState;
 
 namespace Echokraut.Helper.Functional

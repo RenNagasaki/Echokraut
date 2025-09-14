@@ -255,7 +255,7 @@ public partial class Plugin : IDalamudPlugin
             
             if (speaker != null && (source == TextSource.AddonBubble || source == TextSource.AddonTalk))
             {
-                npcData.IsChild = LuminaHelper.GetENpcBase(speaker.DataId)?.BodyType == 4;
+                npcData.IsChild = LuminaHelper.GetENpcBase(speaker.DataId, eventId)?.BodyType == 4;
                 Configuration.Save();
             }
 
