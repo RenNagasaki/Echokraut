@@ -12,6 +12,7 @@ using System.Linq;
 using Echokraut.Helper.DataHelper;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
+using Echokraut.Windows;
 using FFXIVClientStructs.FFXIV.Client.Game;
 
 namespace Echokraut.Helper.Addons;
@@ -79,7 +80,7 @@ public unsafe class AddonSelectStringHelper
         if (selectedItem < 0 || selectedItem >= options.Count) return;
 
         var selectedString = options[selectedItem];
-        var localPlayerName = Plugin.ClientState.LocalPlayer?.Name;
+        var localPlayerName = DalamudHelper.LocalPlayer?.Name;
 
         HandleChange(new AddonSelectStringState()
         {
@@ -101,7 +102,7 @@ public unsafe class AddonSelectStringHelper
         }
 
         // Notify observers that the addon state was advanced
-        Plugin.Cancel(eventId);
+        Plugin.Cancel(DialogExtraOptionsWindow.CurrentVoiceMessage);
 
         text = TalkTextHelper.NormalizePunctuation(text);
 

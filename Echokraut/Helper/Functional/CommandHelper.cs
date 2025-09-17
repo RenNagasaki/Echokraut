@@ -132,7 +132,7 @@ namespace Echokraut.Helper.Functional
                     Plugin.Configuration.Save();
                     
                     if (!Plugin.Configuration.Enabled)
-                        Plugin.Cancel(new EKEventId(0, TextSource.None));
+                        Plugin.CancelAll(new EKEventId(0, TextSource.None));
                     activationText = (Plugin.Configuration.Enabled ? "Enabled" : "Disabled");
                     activationType = "plugin";
                     break;
@@ -199,11 +199,9 @@ namespace Echokraut.Helper.Functional
 
         public unsafe static void PrintTargetInfo()
         {
-            var localPlayer = Plugin.ClientState.LocalPlayer;
-
-            if (localPlayer != null)
+            if (DalamudHelper.LocalPlayer != null)
             {
-                var target = localPlayer.TargetObject;
+                var target = DalamudHelper.LocalPlayer.TargetObject;
                 if (target != null)
                 {
                     var race = CharacterDataHelper.GetSpeakerRace(new EKEventId(0, TextSource.None), target, out var raceStr, out var modelId);

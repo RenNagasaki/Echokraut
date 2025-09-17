@@ -103,8 +103,10 @@ namespace Echokraut.Helper.API
                             ChatType = voiceMessage.ChatType,
                             Language = voiceMessage.Language,
                             LoadedLocally = voiceMessage.LoadedLocally,
-                            PActor = voiceMessage.PActor,
+                            SpeakerObj = voiceMessage.SpeakerObj,
+                            SpeakerFollowObj = voiceMessage.SpeakerFollowObj,
                             Source = voiceMessage.Source,
+                            Is3D = voiceMessage.Is3D,
                             Speaker = voiceMessage.Speaker,
                             EventId = voiceMessage.EventId
                         };
@@ -118,39 +120,37 @@ namespace Echokraut.Helper.API
             }
         }
 
-        public static void OnCancel(EKEventId eventId)
+        public static void OnCancelAll()
         {
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping voice inference", eventId);
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping Echokraut", new EKEventId(0, TextSource.None));
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping Echokraut", new EKEventId(0, TextSource.AddonTalk));
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping Echokraut", new EKEventId(0, TextSource.AddonBattleTalk));
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping Echokraut", new EKEventId(0, TextSource.AddonCutsceneSelectString));
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping Echokraut", new EKEventId(0, TextSource.AddonSelectString));
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping Echokraut", new EKEventId(0, TextSource.AddonBubble));
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping Echokraut", new EKEventId(0, TextSource.Chat));
+            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Stopping Echokraut", new EKEventId(0, TextSource.Backend));
             PlayingHelper.ClearRequestingQueue();
             PlayingHelper.ClearRequestedQueue();
             PlayingHelper.ClearPlayingQueue();
-            //stopGeneratingThread.Start();
+        }
+
+        public static void OnCancel(VoiceMessage message)
+        {
             if (PlayingHelper.Playing)
             {
-                PlayingHelper.Playing = false;
-                var thread = new Thread(PlayingHelper.StopPlaying);
-                thread.Start();
+                PlayingHelper.StopPlaying(message);
             }
         }
 
-        public static void OnPause(EKEventId eventId)
+        public static void OnPause(VoiceMessage message)
         {
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Pausing voice inference", eventId);
-            if (PlayingHelper.ActivePlayer.State == PlaybackState.Playing)
-            {
-                var thread = new Thread(PlayingHelper.PausePlaying);
-                thread.Start();
-            }
+            PlayingHelper.PausePlaying(message);
         }
 
-        public static void OnResume(EKEventId eventId)
+        public static void OnResume(VoiceMessage message)
         {
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Resuming voice inference", eventId);
-            if (PlayingHelper.ActivePlayer.State == PlaybackState.Paused)
-            {
-                var thread = new Thread(PlayingHelper.ResumePlaying);
-                thread.Start();
-            }
+            PlayingHelper.ResumePlaying(message);
         }
 
         static void GetAndMapVoices(EKEventId eventId)
@@ -259,58 +259,31 @@ namespace Echokraut.Helper.API
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating...", eventId);
             try
             {
-                var text = message.Text;
-                var voice = GetVoice(eventId, message.Speaker);
-                var language = message.Language;
-
-                Stream responseStream = null;
-                var i = 0;
-                while (i < 10 && responseStream == null)
+                if (PlayingHelper.RequestedQueue.Contains(message))
                 {
-                    try
-                    {
-                        responseStream = await Backend.GenerateAudioStreamFromVoice(eventId, message, voice, language);
-                    }
-                    catch (Exception ex)
-                    {
-                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), eventId);
-                    }
+                    var voice = GetVoice(eventId, message.Speaker);
+                    var language = message.Language;
 
-                    i++;
-                }
-
-                if (message.Source == TextSource.AddonBubble || message.Source == TextSource.Chat)
-                {
-                    if (Plugin.Configuration.SaveToLocal && Directory.Exists(Plugin.Configuration.LocalSaveLocation))
+                    Stream responseStream = null;
+                    var i = 0;
+                    while (i < 10 && responseStream == null)
                     {
-                        var playedText = message;
-
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}", eventId);
-                        if (!string.IsNullOrWhiteSpace(playedText.Text))
+                        try
                         {
-                            var filePath = AudioFileHelper.GetLocalAudioPath(Plugin.Configuration.LocalSaveLocation, playedText);
-                            if (AudioFileHelper.WriteStreamToFile(eventId, filePath, responseStream))
-                            {
-                                PlayingHelper.PlayingBubbleQueue.Add(filePath);
-                                PlayingHelper.PlayingBubbleQueueText.Add(message);
-                            }
-                            return true;
+                            responseStream = await Backend.GenerateAudioStreamFromVoice(eventId, message, voice, language);
                         }
-                    }
-                    else
-                    {
-                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't save file locally. Save location doesn't exists: {Plugin.Configuration.LocalSaveLocation}", eventId);
-                    }
-                }
-                else
-                {
-                    if (PlayingHelper.RequestedQueue.Contains(message))
-                    {
-                        PlayingHelper.PlayingQueue.Add(responseStream);
-                        PlayingHelper.PlayingQueueText.Add(message);
+                        catch (Exception ex)
+                        {
+                            LogHelper.Error(MethodBase.GetCurrentMethod().Name, ex.ToString(), eventId);
+                        }
 
-                        return true;
+                        i++;
                     }
+                
+                    message.Stream = responseStream;
+                    PlayingHelper.PlayingQueue.Add(message);
+
+                    return true;
                 }
             }
             catch (Exception ex)

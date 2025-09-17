@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
@@ -9,12 +10,13 @@ using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
 using Character = Dalamud.Game.ClientState.Objects.Types.ICharacter;
 
-namespace Echokraut.Helper.DataHelper;
+namespace Echokraut.Helper.Data;
 
 public static class DalamudHelper
 {
     private static Dictionary<string, bool> lastUnknownState = new Dictionary<string, bool>();
     public static IGameObject? nextUnknownCharacter = null;
+    public static IPlayerCharacter? LocalPlayer = null;
 
     public static IGameObject? GetGameObjectByName(IClientState clientState, IObjectTable objects, SeString? name, EKEventId eventId)
     {

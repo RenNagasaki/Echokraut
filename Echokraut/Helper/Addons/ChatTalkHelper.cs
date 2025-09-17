@@ -51,7 +51,6 @@ namespace Echokraut.Helper.Addons
                 var realSender = TalkTextHelper.StripWorldFromNames(sender);
                 text = TalkTextHelper.NormalizePunctuation(text);
 
-                var localPlayer = Plugin.ClientState.LocalPlayer;
                 switch ((ushort)type)
                 {
                     case (ushort)XivChatType.Say:
@@ -69,7 +68,7 @@ namespace Echokraut.Helper.Addons
                     case (ushort)XivChatType.TellOutgoing:
                         if (!Plugin.Configuration.VoiceChatTell)
                             return;
-                        realSender = localPlayer?.Name.TextValue ?? "PLAYER";
+                        realSender = DalamudHelper.LocalPlayer?.Name.TextValue ?? "PLAYER";
                         break;
                     case (ushort)XivChatType.Party:
                     case (ushort)XivChatType.CrossParty:
@@ -142,12 +141,9 @@ namespace Echokraut.Helper.Addons
                 var speaker = DalamudHelper.GetGameObjectByName(Plugin.ClientState, Plugin.ObjectTable, realSender, eventId);
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"{type.ToString()}: \"{speaker}\" {realSender}", eventId);
 
-                if (!Plugin.Configuration.VoiceChatPlayer && localPlayer != null && localPlayer.Name.TextValue == realSender) return;
+                if (!Plugin.Configuration.VoiceChatPlayer && DalamudHelper.LocalPlayer != null && DalamudHelper.LocalPlayer.Name.TextValue == realSender) return;
 
-                if (speaker != null)
-                    Plugin.Say(eventId, speaker, speaker.Name, text);
-                else
-                    Plugin.Say(eventId, null, realSender ?? "", text);
+                Plugin.Say(eventId, speaker ?? null, speaker?.Name ?? "", text);
             }
             catch (Exception ex)
             {

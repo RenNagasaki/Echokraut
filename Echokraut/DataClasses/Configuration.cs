@@ -42,10 +42,11 @@ public class Configuration : IPluginConfiguration
     public bool VoiceBubble { get; set; } = false;
     public bool VoiceBubblesInCity { get; set; } = false;
     public bool VoiceSourceCam { get; set; } = false;
-    public float VoiceBubbleAudibleRange { get; set; } = 1f;
+    public float Voice3DAudibleRange { get; set; } = 0.3f;
     public bool VoiceChat { get; set; } = false;
     public string VoiceChatLanguageAPIKey { get; set; } = "";
-    public bool VoiceChatWithout3D { get; set; } = false;
+    public bool VoiceChatIn3D { get; set; } = true;
+    public bool VoiceDialogueIn3D { get; set; } = false;
     public bool VoiceChatPlayer { get; set; } = false;
     public bool VoiceChatSay { get; set; } = false;
     public bool VoiceChatNoviceNetwork { get; set; } = false;

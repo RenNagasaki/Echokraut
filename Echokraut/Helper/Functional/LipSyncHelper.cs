@@ -45,7 +45,7 @@ namespace Echokraut.Helper.Functional
             // Using .Speaker instead of .Id now as we don't want to
             // lipsync the same character multiple times at once.
             if (!string.IsNullOrEmpty(message.Speaker?.Name)) return message.Speaker.Name;
-            if (message.PActor != null) return message.PActor.DataId.ToString();
+            if (message.SpeakerObj != null) return message.SpeakerObj.DataId.ToString();
             return message.EventId.Id.ToString();
             ;
         }
@@ -59,11 +59,11 @@ namespace Echokraut.Helper.Functional
 
             IntPtr character =
                 await Plugin.Framework.RunOnFrameworkThread(() => TryFindCharacter(message.Speaker.Name,
-                                                                message.PActor?.DataId ?? 0));
+                                                                message.SpeakerObj?.DataId ?? 0));
             if (character == IntPtr.Zero)
             {
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
-                                $"No lipsync target found for speaker {message.Speaker.Name} ({message.PActor?.DataId})",
+                                $"No lipsync target found for speaker {message.Speaker.Name} ({message.SpeakerObj?.DataId})",
                                 message.EventId);
                 return;
             }
@@ -143,7 +143,7 @@ namespace Echokraut.Helper.Functional
                 {
                     await Plugin.Framework.RunOnFrameworkThread(() =>
                     {
-                        IntPtr character = TryFindCharacter(message.Speaker.Name, message.PActor?.DataId ?? 0);
+                        IntPtr character = TryFindCharacter(message.Speaker.Name, message.SpeakerObj?.DataId ?? 0);
                         TrySetCharacterMode(character, initialCharacterMode);
                         TrySetLipsOverride(character, SpeakNone);
                     });
@@ -181,7 +181,7 @@ namespace Echokraut.Helper.Functional
 
             await Plugin.Framework.RunOnFrameworkThread(() =>
             {
-                IntPtr character = TryFindCharacter(message.Speaker.Name, message.PActor?.DataId ?? 0);
+                IntPtr character = TryFindCharacter(message.Speaker.Name, message.SpeakerObj?.DataId ?? 0);
                 TrySetCharacterMode(character, targetMode);
                 TrySetLipsOverride(character, speakValue);
             });
@@ -192,7 +192,7 @@ namespace Echokraut.Helper.Functional
             {
                 await Plugin.Framework.RunOnFrameworkThread(() =>
                 {
-                    IntPtr character = TryFindCharacter(message.Speaker.Name, message.PActor?.DataId ?? 0);
+                    IntPtr character = TryFindCharacter(message.Speaker.Name, message.SpeakerObj?.DataId ?? 0);
                     TrySetCharacterMode(character, initialMode);
                     TrySetLipsOverride(character, SpeakNone);
                 });

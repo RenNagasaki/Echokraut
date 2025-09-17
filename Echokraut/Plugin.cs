@@ -146,21 +146,28 @@ public partial class Plugin : IDalamudPlugin
         }
     }
 
-    public static void Cancel(EKEventId eventId)
+    public static void CancelAll(EKEventId ekEventId)
     {
-        if (DialogExtraOptionsWindow.CurrentVoiceMessage != null)
-            StopLipSync(DialogExtraOptionsWindow.CurrentVoiceMessage);
-        BackendHelper.OnCancel(eventId);
+        BackendHelper.OnCancelAll();
     }
 
-    public static void Pause(EKEventId eventId)
+    public static void Cancel(VoiceMessage? message)
     {
-        BackendHelper.OnPause(eventId);
+        if (message != null)
+        {
+            StopLipSync(message);
+            BackendHelper.OnCancel(message);
+        }
     }
 
-    public static void Resume(EKEventId eventId)
+    public static void Pause(VoiceMessage message)
     {
-        BackendHelper.OnResume(eventId);
+        BackendHelper.OnPause(message);
+    }
+
+    public static void Resume(VoiceMessage message)
+    {
+        BackendHelper.OnResume(message);
     }
 
     public static void StopLipSync(VoiceMessage message)
@@ -191,7 +198,7 @@ public partial class Plugin : IDalamudPlugin
 
             if (source == TextSource.Chat)
             {
-                if (!Configuration.VoiceChatWithout3D && speaker == null)
+                if (Configuration.VoiceChatIn3D && speaker == null)
                 {
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Player is not on the same map: {speakerName.TextValue}. Can't voice", eventId);
                     LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
@@ -199,8 +206,8 @@ public partial class Plugin : IDalamudPlugin
                     return;
                 }
 
-                if (Configuration.VoiceChatWithout3D)
-                    speaker = ClientState.LocalPlayer;
+                if (!Configuration.VoiceChatIn3D)
+                    speaker = DalamudHelper.LocalPlayer;
 
                 language = await DetectLanguageHelper.GetTextLanguage(cleanText, eventId);
             }
@@ -244,7 +251,7 @@ public partial class Plugin : IDalamudPlugin
                 npcData.Name = JsonLoaderHelper.GetNpcName(npcData.Name);
 
             if (npcData.Name == "PLAYER")
-                npcData.Name = ClientState.LocalPlayer?.Name.ToString() ?? "PLAYER";
+                npcData.Name = DalamudHelper.LocalPlayer?.Name.ToString() ?? "PLAYER";
             else if (string.IsNullOrWhiteSpace(npcData.Name) && source == TextSource.AddonBubble)
                 npcData.Name = TalkTextHelper.GetBubbleName(speaker, cleanText);
 
@@ -266,9 +273,11 @@ public partial class Plugin : IDalamudPlugin
             }
 
             var npcVolume = npcData.Volume;
+            var is3d = false;
             switch (source)
             {
                 case TextSource.AddonBubble:
+                    is3d = true;
                     if (!npcData.HasBubbles)
                         npcData.HasBubbles = true;
 
@@ -283,6 +292,8 @@ public partial class Plugin : IDalamudPlugin
                     break;
                 case TextSource.AddonBattleTalk:
                 case TextSource.AddonTalk:
+                    if (source == TextSource.AddonTalk)
+                        is3d = Configuration.VoiceDialogueIn3D;
                     if (npcData.Volume == 0f || !npcData.IsEnabled)
                     {
                         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Npc is muted: {npcData.ToString()}", eventId);
@@ -294,6 +305,8 @@ public partial class Plugin : IDalamudPlugin
                 case TextSource.AddonCutsceneSelectString:
                 case TextSource.AddonSelectString:
                 case TextSource.Chat:
+                    if (source == TextSource.Chat)
+                        is3d = Configuration.VoiceChatIn3D;
                     if (npcData.Volume == 0f || !npcData.IsEnabled)
                     {
                         LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Player is muted: {npcData.ToString()}", eventId);
@@ -325,17 +338,17 @@ public partial class Plugin : IDalamudPlugin
 
             var voiceMessage = new VoiceMessage
             {
-                PActor = speaker,
+                SpeakerObj = speaker,
+                SpeakerFollowObj = is3d && speaker != null ? speaker : DalamudHelper.LocalPlayer,
                 Source = source,
+                Is3D = is3d,
                 Speaker = npcData,
                 Text = cleanText,
                 Language = language,
                 EventId = eventId
             };
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, voiceMessage.GetDebugInfo(), eventId);
             var volume = VolumeHelper.GetVoiceVolume(eventId) * npcData.Voice.Volume * npcVolume;
-            
-            if (speaker != null && source == TextSource.AddonTalk)
-                DialogExtraOptionsWindow.CurrentVoiceMessage = voiceMessage;
             
             if (Configuration.MutedNpcDialogues.Contains(speaker!.DataId))
             {

@@ -27,18 +27,11 @@ namespace Echokraut.Helper.Addons
         private readonly Hook<OpenChatBubbleDelegate> mOpenChatBubbleHook;
         private readonly object mSpeechBubbleInfoLockObj = new();
         private readonly List<SpeechBubbleInfo> mSpeechBubbleInfo = new();
-        private OnUpdateDelegate updateHandler;
-        private unsafe Camera* camera;
-        private unsafe IPlayerCharacter localPlayer;
         public bool nextIsVoice = false;
         public DateTime timeNextVoice = DateTime.Now;
 
         public unsafe AddonBubbleHelper()
         {
-            ManagedBass.Bass.Init(Flags: ManagedBass.DeviceInitFlags.Device3D);
-            //ManagedBass.Bass.CurrentDevice = 1;
-            Update3DFactors(Plugin.Configuration.VoiceBubbleAudibleRange);
-
             unsafe
             {
                 var fpOpenChatBubble = Plugin.SigScanner.ScanText("E8 ?? ?? ?? ?? F6 86 ?? ?? ?? ?? ?? C7 46 ?? ?? ?? ?? ??");
@@ -52,59 +45,6 @@ namespace Echokraut.Helper.Addons
                 {
                     LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Unable to find the specified function signature for OpenChatBubble", new EKEventId(0, TextSource.AddonBubble));
                 }
-            }
-
-            HookIntoFrameworkUpdate();
-        }
-
-        public void Update3DFactors(float audibleRange)
-        {
-            ManagedBass.Bass.Set3DFactors(1, audibleRange, 1);
-            ManagedBass.Bass.Apply3D();
-            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated 3D factors to: {audibleRange}", new EKEventId(0, TextSource.AddonBubble));
-        }
-
-        private void HookIntoFrameworkUpdate()
-        {
-            updateHandler = new OnUpdateDelegate(Handle);
-            Plugin.Framework.Update += updateHandler;
-
-        }
-        unsafe void Handle(IFramework f)
-        {
-            try
-            {
-                if (!Plugin.Configuration.Enabled) return;
-                if (!Plugin.Configuration.VoiceBubble) return;
-
-                var territory = LuminaHelper.GetTerritory();
-                if (territory == null || !Plugin.Configuration.VoiceBubblesInCity && !territory.Value.Mount) return;
-
-                if (camera == null && CameraManager.Instance() != null)
-                    camera = CameraManager.Instance()->GetActiveCamera();
-
-                localPlayer = Plugin.ClientState.LocalPlayer!;
-
-                if (camera != null && localPlayer != null)
-                {
-                    var position = new Vector3();
-                    if (Plugin.Configuration.VoiceSourceCam)
-                        position = camera->CameraBase.SceneCamera.Position;
-                    else
-                        position = localPlayer.Position;
-
-                    var matrix = camera->CameraBase.SceneCamera.ViewMatrix;
-                    ManagedBass.Bass.Set3DPosition(
-                        new ManagedBass.Vector3D(position.X, position.Y, position.Z),
-                        new ManagedBass.Vector3D(),
-                        new ManagedBass.Vector3D(matrix[2], matrix[1], matrix[0]),
-                        new ManagedBass.Vector3D(0, 1, 0));
-                    ManagedBass.Bass.Apply3D();
-                }
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", new EKEventId(0, TextSource.AddonBubble));
             }
         }
 

@@ -67,7 +67,7 @@ public unsafe class AddonTalkHelper
 
         if (isControllerButtonClick || isDialogueAdvancing)
             if (Plugin.Configuration.CancelSpeechOnTextAdvance)
-                Plugin.Cancel(new EKEventId(0, TextSource.AddonTalk));
+                Plugin.Cancel(DialogExtraOptionsWindow.CurrentVoiceMessage);
     }
 
     private unsafe void OnPostUpdate(AddonEvent type, AddonArgs args)
@@ -84,9 +84,9 @@ public unsafe class AddonTalkHelper
                 wasTalking = false;
                 PlayingHelper.InDialog = false;
                 lastValue = new AddonTalkState();
-                DialogExtraOptionsWindow.CurrentVoiceMessage = null;
                 if (Plugin.Configuration.CancelSpeechOnTextAdvance)
-                    Plugin.Cancel(new EKEventId(0, TextSource.AddonTalk));
+                    Plugin.Cancel(DialogExtraOptionsWindow.CurrentVoiceMessage);
+                DialogExtraOptionsWindow.CurrentVoiceMessage = null;
             }
 
             if (!visible && Plugin.DialogExtraOptionsWindow.IsOpen)
@@ -154,7 +154,7 @@ public unsafe class AddonTalkHelper
 
         // Notify observers that the addon state was advanced
         if (Plugin.Configuration.CancelSpeechOnTextAdvance)
-            Plugin.Cancel(eventId);
+            Plugin.Cancel(DialogExtraOptionsWindow.CurrentVoiceMessage);
 
         text = TalkTextHelper.NormalizePunctuation(text);
 

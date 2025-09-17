@@ -8,6 +8,7 @@ using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Echokraut.Helper.DataHelper;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
+using Echokraut.Windows;
 
 namespace Echokraut.Helper.Addons;
 
@@ -81,7 +82,7 @@ public class AddonBattleTalkHelper
 
         // Notify observers that the addon state was advanced
         if (!Plugin.Configuration.VoiceBattleDialogQueued)
-            Plugin.Cancel(eventId);
+            Plugin.Cancel(DialogExtraOptionsWindow.CurrentVoiceMessage);
 
         text = TalkTextHelper.NormalizePunctuation(text);
 

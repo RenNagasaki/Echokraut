@@ -21,36 +21,8 @@ namespace Echokraut.Helper.Functional
                 {
                     voiceMessage.LoadedLocally = true;
                     using var mainOutputStream = new WavFileReader(filePath);
-                    PlayingHelper.PlayingQueue.Add(mainOutputStream);
-                    PlayingHelper.PlayingQueueText.Add(voiceMessage);
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Local file found. Location: {filePath}", eventId);
-
-                    return true;
-                }
-                else
-                {
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"No local file found. Location searched: {filePath}", eventId);
-                }
-            }
-            catch (Exception ex)
-            {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while loading local audio: {ex}", eventId);
-            }
-
-            return false;
-        }
-
-        public static bool LoadLocalBubbleAudio(EKEventId eventId, string localSaveLocation, VoiceMessage voiceMessage)
-        {
-            try
-            {
-                var filePath = GetLocalAudioPath(localSaveLocation, voiceMessage);
-
-                if (File.Exists(filePath))
-                {
-                    voiceMessage.LoadedLocally = true;
-                    PlayingHelper.PlayingBubbleQueue.Add(filePath);
-                    PlayingHelper.PlayingBubbleQueueText.Add(voiceMessage);
+                    voiceMessage.Stream = mainOutputStream;
+                    PlayingHelper.PlayingQueue.Add(voiceMessage);
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Local file found. Location: {filePath}", eventId);
 
                     return true;

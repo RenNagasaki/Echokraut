@@ -16,7 +16,7 @@ namespace Echokraut.Windows;
 
 public class DialogExtraOptionsWindow : Window, IDisposable
 {
-    public static VoiceMessage CurrentVoiceMessage = null;
+    public static VoiceMessage? CurrentVoiceMessage = null;
     public static bool IsVoiced = false;
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
@@ -61,23 +61,23 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                                     : new Vector2());
             Position = new Vector2(xPos, yPos);
 
-            using (ImRaii.Disabled(
-                       Plugin.Configuration.MutedNpcDialogues.Contains(CurrentVoiceMessage.PActor!.DataId)))
+            var disabled = CurrentVoiceMessage != null && CurrentVoiceMessage.SpeakerObj != null && Plugin.Configuration.MutedNpcDialogues.Contains(CurrentVoiceMessage.SpeakerObj.DataId);
+            using (ImRaii.Disabled(disabled))
             {
                 if (PlayingHelper.Playing)
                 {
-                    if (PlayingHelper.ActivePlayer?.State != PlaybackState.Playing)
+                    if (PlayingHelper.AudioEngine.GetState(CurrentVoiceMessage.StreamId) != PlaybackState.Playing)
                     {
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##ResumeDialog",
                                                          iconSize,
                                                          "Resume dialogue", false, true))
-                            Plugin.Resume(new EKEventId(0, TextSource.AddonTalk));
+                            Plugin.Resume(CurrentVoiceMessage);
                     }
-                    else if (PlayingHelper.ActivePlayer?.State == PlaybackState.Playing)
+                    else if (PlayingHelper.AudioEngine.GetState(CurrentVoiceMessage.StreamId) == PlaybackState.Playing)
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Pause.ToIconString()}##PauseDialog",
                                                          iconSize,
                                                          "Pause dialogue", false, true))
-                            Plugin.Pause(new EKEventId(0, TextSource.AddonTalk));
+                            Plugin.Pause(CurrentVoiceMessage);
                 }
                 else
                     using (ImRaii.Disabled(PlayingHelper.RecreationStarted))
@@ -90,22 +90,22 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                 using (ImRaii.Disabled(!PlayingHelper.Playing))
                     if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Stop.ToIconString()}##StopDialog", iconSize,
                                                      "Stop dialogue", !PlayingHelper.Playing, true))
-                        Plugin.Cancel(new EKEventId(0, TextSource.AddonTalk));
+                        Plugin.Cancel(CurrentVoiceMessage);
             }
 
             ImGui.SameLine();
-            if (!Plugin.Configuration.MutedNpcDialogues.Contains(CurrentVoiceMessage.PActor!.DataId))
+            if (!disabled)
             {
                 if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Microphone.ToIconString()}##MuteDialogue",
                                                  iconSize,
                                                  "Mute dialogue", false, true))
                 {
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name,
-                                   $"Muting NPC Dialogue: {CurrentVoiceMessage.PActor!.Name.TextValue}",
+                                   $"Muting NPC Dialogue: {CurrentVoiceMessage.SpeakerObj!.Name.TextValue}",
                                    new EKEventId(0, TextSource.AddonTalk));
-                    Plugin.Configuration.MutedNpcDialogues.Add(CurrentVoiceMessage.PActor!.DataId);
+                    Plugin.Configuration.MutedNpcDialogues.Add(CurrentVoiceMessage.SpeakerObj!.DataId);
                     if (PlayingHelper.Playing)
-                        Plugin.Cancel(new EKEventId(0, TextSource.AddonTalk));
+                        Plugin.Cancel(CurrentVoiceMessage);
                 }
             }
             else if (ImGuiUtil.DrawDisabledButton(
@@ -114,9 +114,9 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                          "Unmute dialogue", false, true))
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name,
-                               $"Unmuting NPC Dialogue: {CurrentVoiceMessage.PActor!.Name.TextValue}",
+                               $"Unmuting NPC Dialogue: {CurrentVoiceMessage.SpeakerObj!.Name.TextValue}",
                                new EKEventId(0, TextSource.AddonTalk));
-                Plugin.Configuration.MutedNpcDialogues.Remove(CurrentVoiceMessage.PActor!.DataId);
+                Plugin.Configuration.MutedNpcDialogues.Remove(CurrentVoiceMessage.SpeakerObj!.DataId);
                 AddonTalkHelper.RecreateInference();
             }
 
@@ -156,7 +156,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                         LogHelper.Info(MethodBase.GetCurrentMethod()!.Name,
                                        $"Updated Voice for {CurrentVoiceMessage.Speaker.Name}: {CurrentVoiceMessage.Speaker.ToString()} from: {CurrentVoiceMessage.Speaker.Voice} to: {newVoiceItem}",
                                        new EKEventId(0, TextSource.None));
-                        Plugin.Cancel(new EKEventId(0, TextSource.None));
+                        Plugin.Cancel(CurrentVoiceMessage);
                         AddonTalkHelper.RecreateInference();
                     }
                 }

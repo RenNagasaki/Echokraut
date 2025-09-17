@@ -14,7 +14,6 @@ using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
-using Dalamud.Game.ClientState.Objects.SubKinds;
 using Echokraut.Helper.API;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
@@ -26,7 +25,6 @@ public class ConfigWindow : Window, IDisposable
 {
     private readonly FileDialogManager? fileDialogManager;
     private unsafe Camera* camera;
-    private IPlayerCharacter? localPlayer;
     #region Voice Selection
     private List<NpcMapData> filteredNpcs = [];
     private static bool _updateDataNpcs;
@@ -438,6 +436,28 @@ public class ConfigWindow : Window, IDisposable
             Plugin.Configuration.Save();
         }
 
+        using (ImRaii.Disabled(!voiceDialog))
+        {
+            var voiceDialogueIn3D = Plugin.Configuration.VoiceDialogueIn3D;
+            if (ImGui.Checkbox("Voice dialogue in 3D Space", ref voiceDialogueIn3D))
+            {
+                Plugin.Configuration.VoiceDialogueIn3D = voiceDialogueIn3D;
+                Plugin.Configuration.Save();
+            }
+
+            if (voiceDialogueIn3D)
+            {
+                var voiceBubbleAudibleRange = Plugin.Configuration.Voice3DAudibleRange;
+                if (ImGui.SliderFloat("3D Space audible dropoff (shared setting), higher = lesser range, 0 = on player", ref voiceBubbleAudibleRange, 0f, 1f))
+                {
+                    Plugin.Configuration.Voice3DAudibleRange = voiceBubbleAudibleRange;
+                    Plugin.Configuration.Save();
+
+                    PlayingHelper.Update3DFactors(voiceBubbleAudibleRange);
+                }
+            }
+        }
+
         var voicePlayerChoicesCutscene = Plugin.Configuration.VoicePlayerChoicesCutscene;
         if (ImGui.Checkbox("Voice player choices in cutscene", ref voicePlayerChoicesCutscene))
         {
@@ -594,22 +614,20 @@ public class ConfigWindow : Window, IDisposable
                 Plugin.Configuration.Save();
             }
 
-            var voiceBubbleAudibleRange = Plugin.Configuration.VoiceBubbleAudibleRange;
-            if (ImGui.SliderFloat("3D Space audible range (shared with chat)", ref voiceBubbleAudibleRange, 0f, 2f))
+            var voiceBubbleAudibleRange = Plugin.Configuration.Voice3DAudibleRange;
+            if (ImGui.SliderFloat("3D Space audible dropoff (shared setting), higher = lesser range, 0 = on player", ref voiceBubbleAudibleRange, 0f, 1f))
             {
-                Plugin.Configuration.VoiceBubbleAudibleRange = voiceBubbleAudibleRange;
+                Plugin.Configuration.Voice3DAudibleRange = voiceBubbleAudibleRange;
                 Plugin.Configuration.Save();
 
-                Plugin.AddonBubbleHelper.Update3DFactors(voiceBubbleAudibleRange);
+                PlayingHelper.Update3DFactors(voiceBubbleAudibleRange);
             }
 
 
             if (camera == null && CameraManager.Instance() != null)
                 camera = CameraManager.Instance()->GetActiveCamera();
 
-            localPlayer = Plugin.ClientState.LocalPlayer!;
-
-            var position = localPlayer.Position;
+            var position = DalamudHelper.LocalPlayer.Position;
             if (Plugin.Configuration.VoiceSourceCam)
                 position = camera->CameraBase.SceneCamera.Position;
 
@@ -656,11 +674,23 @@ public class ConfigWindow : Window, IDisposable
                 Plugin.Configuration.Save();
             }
 
-            var voiceChatWithout3D = Plugin.Configuration.VoiceChatWithout3D;
-            if (ImGui.Checkbox("Voice Chat without 3D Space", ref voiceChatWithout3D))
+            var voiceChatIn3D = Plugin.Configuration.VoiceChatIn3D;
+            if (ImGui.Checkbox("Voice Chat in 3D Space", ref voiceChatIn3D))
             {
-                Plugin.Configuration.VoiceChatWithout3D = voiceChatWithout3D;
+                Plugin.Configuration.VoiceChatIn3D = voiceChatIn3D;
                 Plugin.Configuration.Save();
+            }
+
+            if (voiceChatIn3D)
+            {
+                var voiceBubbleAudibleRange = Plugin.Configuration.Voice3DAudibleRange;
+                if (ImGui.SliderFloat("3D Space audible dropoff (shared setting), higher = lesser range, 0 = on player", ref voiceBubbleAudibleRange, 0f, 1f))
+                {
+                    Plugin.Configuration.Voice3DAudibleRange = voiceBubbleAudibleRange;
+                    Plugin.Configuration.Save();
+
+                    PlayingHelper.Update3DFactors(voiceBubbleAudibleRange);
+                }
             }
 
             var voiceChatPlayer = Plugin.Configuration.VoiceChatPlayer;
@@ -738,15 +768,6 @@ public class ConfigWindow : Window, IDisposable
             {
                 Plugin.Configuration.VoiceChatCrossLinkshell = voiceChatCrossLinkshell;
                 Plugin.Configuration.Save();
-            }
-
-            var voiceBubbleAudibleRange = Plugin.Configuration.VoiceBubbleAudibleRange;
-            if (ImGui.SliderFloat("3D Space audible range (shared with chat)", ref voiceBubbleAudibleRange, 0f, 2f))
-            {
-                Plugin.Configuration.VoiceBubbleAudibleRange = voiceBubbleAudibleRange;
-                Plugin.Configuration.Save();
-
-                Plugin.AddonBubbleHelper.Update3DFactors(voiceBubbleAudibleRange);
             }
         }
     }
@@ -2032,7 +2053,7 @@ public class ConfigWindow : Window, IDisposable
         // Say the thing
         var voiceMessage = new VoiceMessage
         {
-            PActor = null,
+            SpeakerObj = null,
             Source = TextSource.VoiceTest,
             Speaker = new NpcMapData(Dalamud.Game.ClientState.Objects.Enums.ObjectKind.None)
             {
@@ -2074,9 +2095,9 @@ public class ConfigWindow : Window, IDisposable
         return Constants.TESTMESSAGEEN;
     }
 
-    private async void BackendStopVoice()
+    private void BackendStopVoice()
     {
-        BackendHelper.OnCancel(new EKEventId(0, TextSource.AddonTalk));
+        BackendHelper.OnCancel(DialogExtraOptionsWindow.CurrentVoiceMessage);
         LogHelper.End(MethodBase.GetCurrentMethod().Name, new EKEventId(0, TextSource.AddonTalk));
     }
 
