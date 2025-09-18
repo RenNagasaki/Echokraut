@@ -160,7 +160,7 @@ namespace Echokraut.Helper.Functional
             queueItem.StreamId = AudioEngine.PlayStream(queueItem.Stream, channels: 1, initialPosition: new Vector3D(5,0,2));
             CurrentlyPlayingDictionary.Add(queueItem.StreamId, queueItem);
             
-            if (queueItem.Source == TextSource.AddonTalk)
+            if (queueItem.Source == TextSource.AddonTalk || queueItem.Source == TextSource.VoiceTest)
                 DialogExtraOptionsWindow.CurrentVoiceMessage = queueItem;
             
             AudioEngine.SetVolume(queueItem.StreamId, Volume);

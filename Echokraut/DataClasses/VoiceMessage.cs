@@ -27,8 +27,6 @@ namespace Echokraut.DataClasses
 
         public bool IsLastInDialogue { get; set; } = false;
 
-        public bool Is3D { get; set; } = false;
-
         public EKEventId EventId { get; set; }
         
         public Stream Stream { get; set; }
@@ -36,7 +34,7 @@ namespace Echokraut.DataClasses
 
         public string GetDebugInfo()
         {
-            return $"SpeakerFollowObj: {SpeakerFollowObj}, SpeakerObj: {SpeakerObj}, Speaker: {Speaker}, Is3d: {Is3D}, IsLastInDialogue: {IsLastInDialogue}, LoadedLocally: {LoadedLocally}, Source: {Source}, ChatType: {ChatType}, Language: {Language}";
+            return $"SpeakerFollowObj: {SpeakerFollowObj}, SpeakerObj: {SpeakerObj}, Speaker: {Speaker}, IsLastInDialogue: {IsLastInDialogue}, LoadedLocally: {LoadedLocally}, Source: {Source}, ChatType: {ChatType}, Language: {Language}";
         }
     }
 }

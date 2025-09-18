@@ -106,7 +106,6 @@ namespace Echokraut.Helper.API
                             SpeakerObj = voiceMessage.SpeakerObj,
                             SpeakerFollowObj = voiceMessage.SpeakerFollowObj,
                             Source = voiceMessage.Source,
-                            Is3D = voiceMessage.Is3D,
                             Speaker = voiceMessage.Speaker,
                             EventId = voiceMessage.EventId
                         };

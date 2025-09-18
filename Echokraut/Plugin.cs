@@ -341,7 +341,6 @@ public partial class Plugin : IDalamudPlugin
                 SpeakerObj = speaker,
                 SpeakerFollowObj = is3d && speaker != null ? speaker : DalamudHelper.LocalPlayer,
                 Source = source,
-                Is3D = is3d,
                 Speaker = npcData,
                 Text = cleanText,
                 Language = language,
@@ -350,7 +349,7 @@ public partial class Plugin : IDalamudPlugin
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, voiceMessage.GetDebugInfo(), eventId);
             var volume = VolumeHelper.GetVoiceVolume(eventId) * npcData.Voice.Volume * npcVolume;
             
-            if (Configuration.MutedNpcDialogues.Contains(speaker!.DataId))
+            if (speaker != null && Configuration.MutedNpcDialogues.Contains(speaker.DataId))
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping muted dialogue: {cleanText}", eventId);
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);

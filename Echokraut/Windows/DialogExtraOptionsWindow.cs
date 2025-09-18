@@ -45,7 +45,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
 
     private void DrawReadyStates()
     {
-        if (Plugin.Configuration.ShowExtraOptionsInDialogue && !IsVoiced)
+        if (Plugin.Configuration.ShowExtraOptionsInDialogue && !IsVoiced && PlayingHelper.InDialog)
         {
             var iconSize = new Vector2(24, 24) * AddonTalkHelper.AddonScale;
             var offsetX = 56 * AddonTalkHelper.AddonScale;

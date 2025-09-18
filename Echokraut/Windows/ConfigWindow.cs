@@ -2064,7 +2064,8 @@ public class ConfigWindow : Window, IDisposable
             },
             Text = GetTestMessageText(Plugin.ClientState.ClientLanguage),
             Language = Plugin.ClientState.ClientLanguage,
-            EventId = eventId
+            EventId = eventId,
+            SpeakerFollowObj = DalamudHelper.LocalPlayer
         };
         var volume = VolumeHelper.GetVoiceVolume(eventId) * voice.Volume;
 
