@@ -335,6 +335,9 @@ public partial class Plugin : IDalamudPlugin
                 PlayingHelper.RecreationStarted = false;
                 return;
             }
+            
+            var volume = VolumeHelper.GetVoiceVolume(eventId) * npcData.Voice!.Volume * npcVolume;
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Voice volume: {volume}", eventId);
 
             var voiceMessage = new VoiceMessage
             {
@@ -344,10 +347,10 @@ public partial class Plugin : IDalamudPlugin
                 Speaker = npcData,
                 Text = cleanText,
                 Language = language,
-                EventId = eventId
+                EventId = eventId,
+                Volume = volume
             };
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, voiceMessage.GetDebugInfo(), eventId);
-            var volume = VolumeHelper.GetVoiceVolume(eventId) * npcData.Voice.Volume * npcVolume;
             
             if (speaker != null && Configuration.MutedNpcDialogues.Contains(speaker.DataId))
             {
@@ -358,7 +361,7 @@ public partial class Plugin : IDalamudPlugin
             }
             
             if (volume > 0)
-                BackendHelper.OnSay(voiceMessage, volume);
+                BackendHelper.OnSay(voiceMessage);
             else
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0.", eventId);

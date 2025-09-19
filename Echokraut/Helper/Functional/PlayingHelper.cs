@@ -22,7 +22,6 @@ namespace Echokraut.Helper.Functional
     {
         public static Thread RequestingQueueThread = new Thread(WorkRequestingQueues);
         public static Thread PlayingQueueThread = new Thread(WorkPlayingQueues);
-        public static float Volume = 1f;
         public static bool InDialog = false;
         public static bool Playing = false;
         public static bool RecreationStarted = false;
@@ -41,32 +40,6 @@ namespace Echokraut.Helper.Functional
             AudioEngine.SourceEnded += SoundOut_PlaybackStopped;
             PlayingQueueThread.Start();
             RequestingQueueThread.Start();
-        }
-
-        public static unsafe void Update3DPosition()
-        {
-            if (Camera == null && CameraManager.Instance() != null)
-                Camera = CameraManager.Instance()->GetActiveCamera();
-
-            if (DalamudHelper.LocalPlayer == null)
-                Plugin.Framework.RunOnFrameworkThread(() => DalamudHelper.LocalPlayer = Plugin.ClientState.LocalPlayer);
-
-            if (Camera != null && DalamudHelper.LocalPlayer != null)
-            {
-                Vector3 position;
-                if (Plugin.Configuration.VoiceSourceCam)
-                    position = Camera->CameraBase.SceneCamera.Position;
-                else
-                    position = DalamudHelper.LocalPlayer.Position;
-
-                var matrix = Camera->CameraBase.SceneCamera.ViewMatrix;
-                Bass.Set3DPosition(
-                    new Vector3D(position.X, position.Y, position.Z),
-                    new Vector3D(),
-                    new Vector3D(matrix[2], matrix[1], matrix[0]),
-                    new Vector3D(0, 1, 0));
-                Bass.Apply3D();
-            }
         }
 
         public static void Update3DFactors(float audibleRange)
@@ -125,7 +98,6 @@ namespace Echokraut.Helper.Functional
             {
                 while (!StopThread)
                 {
-                    Update3DPosition();
                     WorkPlayingQueue();
                     Thread.Sleep(100);
                 }
@@ -162,10 +134,11 @@ namespace Echokraut.Helper.Functional
             
             if (queueItem.Source == TextSource.AddonTalk || queueItem.Source == TextSource.VoiceTest)
                 DialogExtraOptionsWindow.CurrentVoiceMessage = queueItem;
+
+            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Audio volume: {queueItem.Volume}", queueItem.EventId);
+            AudioEngine.SetVolume(queueItem.StreamId, queueItem.Volume);
             
-            AudioEngine.SetVolume(queueItem.StreamId, Volume);
-            
-            AudioEngine.SetSourcePoller(queueItem.StreamId, () => new Vector3D(queueItem.SpeakerFollowObj.Position.X, queueItem.SpeakerFollowObj.Position.Y, queueItem.SpeakerFollowObj.Position.Z), 15);
+            AudioEngine.SetSourcePoller(queueItem.StreamId, () => new Vector3D(queueItem.SpeakerFollowObj?.Position.X ?? 0, queueItem.SpeakerFollowObj?.Position.Y ?? 0, queueItem.SpeakerFollowObj?.Position.Z ?? 0));
             Plugin.LipSyncHelper.TryLipSync(queueItem);
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Lipsyncdata text: {queueItem.Speaker.Name}",
                            queueItem.EventId);

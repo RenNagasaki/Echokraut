@@ -2051,6 +2051,7 @@ public class ConfigWindow : Window, IDisposable
         var eventId = LogHelper.Start(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Testing voice: {voice.ToString()}", eventId);
         // Say the thing
+        var volume = VolumeHelper.GetVoiceVolume(eventId) * voice.Volume;
         var voiceMessage = new VoiceMessage
         {
             SpeakerObj = null,
@@ -2065,13 +2066,13 @@ public class ConfigWindow : Window, IDisposable
             Text = GetTestMessageText(Plugin.ClientState.ClientLanguage),
             Language = Plugin.ClientState.ClientLanguage,
             EventId = eventId,
-            SpeakerFollowObj = DalamudHelper.LocalPlayer
+            SpeakerFollowObj = DalamudHelper.LocalPlayer,
+            Volume = volume
         };
-        var volume = VolumeHelper.GetVoiceVolume(eventId) * voice.Volume;
 
 
         if (volume > 0)
-            BackendHelper.OnSay(voiceMessage, volume) ;
+            BackendHelper.OnSay(voiceMessage) ;
         else
         {
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);

@@ -8,6 +8,7 @@ using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
+using FFXIVClientStructs.FFXIV.Client.Game;
 using Character = Dalamud.Game.ClientState.Objects.Types.ICharacter;
 
 namespace Echokraut.Helper.Data;
@@ -17,6 +18,7 @@ public static class DalamudHelper
     private static Dictionary<string, bool> lastUnknownState = new Dictionary<string, bool>();
     public static IGameObject? nextUnknownCharacter = null;
     public static IPlayerCharacter? LocalPlayer = null;
+    public static unsafe Camera* Camera = null;
 
     public static IGameObject? GetGameObjectByName(IClientState clientState, IObjectTable objects, SeString? name, EKEventId eventId)
     {

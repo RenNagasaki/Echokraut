@@ -65,10 +65,9 @@ namespace Echokraut.Helper.API
             return false;
         }
 
-        public static void OnSay(VoiceMessage voiceMessage, float volume)
+        public static void OnSay(VoiceMessage voiceMessage)
         {
             var eventId = voiceMessage.EventId;
-            PlayingHelper.Volume = volume;
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Starting voice inference: {voiceMessage.Language}", eventId);
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, voiceMessage.Text.ToString(), eventId);
 
@@ -107,7 +106,8 @@ namespace Echokraut.Helper.API
                             SpeakerFollowObj = voiceMessage.SpeakerFollowObj,
                             Source = voiceMessage.Source,
                             Speaker = voiceMessage.Speaker,
-                            EventId = voiceMessage.EventId
+                            EventId = voiceMessage.EventId,
+                            Volume = voiceMessage.Volume
                         };
                 
                         if (message == messageList.Last())

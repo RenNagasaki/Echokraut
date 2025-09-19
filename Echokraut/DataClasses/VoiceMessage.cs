@@ -22,6 +22,7 @@ namespace Echokraut.DataClasses
         public TextSource Source { get; set; }
         public int? ChatType { get; set; }
         public ClientLanguage Language { get; set; }
+        public float Volume { get; set; } = 1f;
 
         public bool LoadedLocally {  get; set; }
 

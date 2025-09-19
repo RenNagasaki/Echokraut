@@ -1,3 +1,10 @@
+using System.Numerics;
+using Echokraut.DataClasses;
+using Echokraut.Enums;
+using Echokraut.Helper.Data;
+using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
+
 namespace Echokraut.Helper.Functional;
 using System;
 using System.Collections.Concurrent;
@@ -26,6 +33,16 @@ public sealed class Live3DAudioEngine : IDisposable
 
     readonly ConcurrentDictionary<Guid, Source> _sources = new();
 
+    // NEU: Listener-Update
+    Timer? _listenerTimer;
+    int _listenerIntervalMs = 8;                  // ~125 Hz
+    Vector3D _listenerFront = new(0, 0, 1);
+    Vector3D _listenerTop   = new(0, 1, 0);
+    Vector3D _listenerPosSmoothed;
+    Vector3D _listenerPosLast;
+    long _listenerLastTicks;
+    const float _listenerSmoothHz = 30f;
+
     public Live3DAudioEngine(int deviceIndex = -1) => _deviceIndex = deviceIndex;
 
     public void ConfigureListener(Vector3D position, Vector3D front, Vector3D top,
@@ -34,17 +51,31 @@ public sealed class Live3DAudioEngine : IDisposable
         EnsureInit();
         _distanceFactor = distanceFactor;
         _dopplerFactor = dopplerFactor;
-        NormalizeOrthonormalize(ref front, ref top); // siehe Helper unten
+
+        NormalizeOrthonormalize(ref front, ref top);
+        _listenerFront = front;
+        _listenerTop   = top;
+        _listenerPosSmoothed = position;
+        _listenerPosLast     = position;
+        _listenerLastTicks   = Stopwatch.GetTimestamp();
+
         Bass.Set3DPosition(position, new Vector3D(), front, top);
         Bass.Set3DFactors(distanceFactor, rolloffFactor, dopplerFactor);
         Bass.Apply3D();
+
+        _listenerTimer?.Dispose();
+        _listenerTimer = new Timer(_ => ListenerTick(), null, 0, _listenerIntervalMs);
     }
 
-// Hilfsfunktion: sorgt für orthogonale, normierte front/top
+    public void SetListenerPollInterval(int intervalMs)
+    {
+        _listenerIntervalMs = Math.Max(4, intervalMs);
+        if (_listenerTimer != null) _listenerTimer.Change(0, _listenerIntervalMs);
+    }
+
     static void NormalizeOrthonormalize(ref Vector3D front, ref Vector3D top)
     {
         front = Normalize(front);
-        // top orthogonalisieren
         var right = Normalize(Cross(front, top));
         top = Normalize(Cross(right, front));
 
@@ -54,6 +85,46 @@ public sealed class Live3DAudioEngine : IDisposable
         }
         static Vector3D Cross(Vector3D a, Vector3D b)
             => new Vector3D(a.Y*b.Z - a.Z*b.Y, a.Z*b.X - a.X*b.Z, a.X*b.Y - a.Y*b.X);
+    }
+
+    unsafe void ListenerTick()
+    {
+        if (!_inited) return;
+
+        if (DalamudHelper.Camera == null && CameraManager.Instance() != null)
+            DalamudHelper.Camera = CameraManager.Instance()->GetActiveCamera();
+        
+        if (DalamudHelper.LocalPlayer == null)
+            Plugin.Framework.RunOnFrameworkThread(() => DalamudHelper.LocalPlayer = Plugin.ClientState.LocalPlayer);
+
+        if (DalamudHelper.Camera != null && DalamudHelper.LocalPlayer != null)
+        {
+            var matrix = DalamudHelper.Camera->CameraBase.SceneCamera.ViewMatrix;
+            _listenerFront = new Vector3D(matrix[2], matrix[1], matrix[0]);
+            var p = DalamudHelper.LocalPlayer.Position; // Vector3 (X,Y,Z)
+            var target = new Vector3D(p.X, p.Y, p.Z);
+
+            var now = Stopwatch.GetTimestamp();
+            var dt = Math.Max(1e-4f, (float)(now - _listenerLastTicks) / Stopwatch.Frequency);
+
+            float alpha = 1f - MathF.Exp(-dt * _listenerSmoothHz);
+            _listenerPosSmoothed = Lerp(_listenerPosSmoothed, target, alpha);
+
+            var velUnitsPerSec = Scale(Sub(_listenerPosSmoothed, _listenerPosLast), 1f / dt);
+            var velMetersPerSec = Scale(velUnitsPerSec, 1f / _distanceFactor);
+
+            _listenerPosLast = _listenerPosSmoothed;
+            _listenerLastTicks = now;
+
+            Bass.Set3DPosition(_listenerPosSmoothed, velMetersPerSec, _listenerFront, _listenerTop);
+            Bass.Apply3D();
+
+            static Vector3D Sub(Vector3D a, Vector3D b) => new(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
+            static Vector3D Scale(Vector3D a, float s) => new(a.X * s, a.Y * s, a.Z * s);
+
+            static Vector3D Lerp(Vector3D a, Vector3D b, float t)
+                => new(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t, a.Z + (b.Z - a.Z) * t);
+        }
     }
 
     public Guid PlayStream(Stream source,
@@ -71,6 +142,9 @@ public sealed class Live3DAudioEngine : IDisposable
     {
         EnsureInit();
         if (channels != 1) throw new InvalidOperationException("3D benötigt Mono (1 Kanal).");
+
+        // Quellen-Poller mindestens so schnell wie der Listener (für Bewegungskohärenz)
+        pollIntervalMs = Math.Min(pollIntervalMs, _listenerIntervalMs);
 
         var id = Guid.NewGuid();
         var src = new Source(this, id, source, sampleRate, channels, float32, bufferMs, readChunkMs,
@@ -91,7 +165,11 @@ public sealed class Live3DAudioEngine : IDisposable
     public double GetVolume(Guid id) => _sources.TryGetValue(id, out var s) ? s.Volume : 0;
 
     public void SetSourcePosition(Guid id, Vector3D pos) { if (_sources.TryGetValue(id, out var s)) s.Set3DSourcePosition(pos); }
-    public void SetSourcePoller(Guid id, Func<Vector3D> provider, int intervalMs = 15) { if (_sources.TryGetValue(id, out var s)) s.Set3DSourcePoller(provider, intervalMs); }
+    public void SetSourcePoller(Guid id, Func<Vector3D> provider, int intervalMs = 8)
+    {
+        intervalMs = Math.Min(intervalMs, _listenerIntervalMs);
+        if (_sources.TryGetValue(id, out var s)) s.Set3DSourcePoller(provider, intervalMs);
+    }
 
     void EnsureInit()
     {
@@ -110,6 +188,8 @@ public sealed class Live3DAudioEngine : IDisposable
     public void Dispose()
     {
         StopAll();
+        _listenerTimer?.Dispose();
+        _listenerTimer = null;
         if (_inited) Bass.Free();
         _inited = false;
     }
@@ -150,6 +230,9 @@ public sealed class Live3DAudioEngine : IDisposable
         Vector3D _smoothPos;
         const float _smoothHz = 20f; // ~50 ms Zeitkonstante
 
+        int _dsp;
+        DSPProcedure? _volDsp;
+        bool _outIsFloat; // Ausgabeformat des Streams (16-bit oder 32-bit float)
 
         // Prefetch/Strip-Header für nicht-seekbare Streams
         readonly Queue<byte[]> _prefetchQueue = new();
@@ -169,10 +252,11 @@ public sealed class Live3DAudioEngine : IDisposable
                 lock (_stateLock)
                 {
                     _volume = v;
-                    if (_h != 0) Bass.ChannelSetAttribute(_h, ChannelAttribute.Volume, _volume);
+                    if (_h != 0) AttachVolumeDspIfNeeded();
                 }
             }
         }
+
 
         public Source(Live3DAudioEngine engine, Guid id, Stream source,
                       int sampleRate, int channels, bool float32,
@@ -239,9 +323,10 @@ public sealed class Live3DAudioEngine : IDisposable
             // minDistance=1f → unter 1 m bleibt Pegel konstant; maxDistance=0f = unendlich
 
             Bass.ChannelSetAttribute(_h, ChannelAttribute.Buffer, _bufferMs / 1000f);
-            Bass.ChannelSetAttribute(_h, ChannelAttribute.Volume, 0f);
+            Bass.ChannelSetAttribute(_h, ChannelAttribute.Volume, 1f);
             Bass.ChannelSet3DPosition(_h, _srcPos, null, new Vector3D());
             Bass.Apply3D();
+            AttachVolumeDspIfNeeded();
 
             _endSync = OnEndSync;
             if (Bass.ChannelSetSync(_h, SyncFlags.End, 0, _endSync) == 0)
@@ -277,6 +362,53 @@ public sealed class Live3DAudioEngine : IDisposable
             float target = _volume; // exakt Ziel, kein Auto-Boost
             int fadeMs = 50;
             Bass.ChannelSlideAttribute(_h, ChannelAttribute.Volume, target, fadeMs);
+        }
+        
+        void AttachVolumeDspIfNeeded()
+        {
+            if (_h == 0 || _dsp != 0) return;
+
+            var info = Bass.ChannelGetInfo(_h);
+            _outIsFloat = (info.Flags & BassFlags.Float) != 0;
+
+            _volDsp = new DSPProcedure((handle, channel, buffer, length, user) =>
+            {
+                float vol = _volume;        // volatile read, schnell
+                if (vol >= 0.9999f) return; // fast path
+                if (vol <= 0.0001f)
+                {   // hart muten
+                    unsafe { System.Runtime.CompilerServices.Unsafe.InitBlockUnaligned((void*)buffer, 0, (uint)length); }
+                    return;
+                }
+
+                if (_outIsFloat)
+                {
+                    int n = length / 4;
+                    unsafe
+                    {
+                        float* f = (float*)buffer;
+                        for (int i = 0; i < n; i++) f[i] *= vol;
+                    }
+                }
+                else
+                {
+                    int n = length / 2;
+                    unsafe
+                    {
+                        short* s = (short*)buffer;
+                        for (int i = 0; i < n; i++)
+                        {
+                            int v = (int)(s[i] * vol);
+                            if (v > short.MaxValue) v = short.MaxValue;
+                            else if (v < short.MinValue) v = short.MinValue;
+                            s[i] = (short)v;
+                        }
+                    }
+                }
+            });
+
+            // niedrige Priorität reicht; andere DSPs dürfen vorher laufen
+            _dsp = Bass.ChannelSetDSP(_h, _volDsp, IntPtr.Zero, 10);
         }
 
         public void Pause()
@@ -326,6 +458,7 @@ public sealed class Live3DAudioEngine : IDisposable
         public void Dispose()
         {
             try { _pollTimer?.Dispose(); } catch { }
+            if (_dsp != 0) { try { Bass.ChannelRemoveDSP(_h, _dsp); } catch { } _dsp = 0; _volDsp = null; }
             if (_h != 0) { try { Bass.StreamFree(_h); } catch { } _h = 0; }
             _cts.Cancel();
             _cts.Dispose();
