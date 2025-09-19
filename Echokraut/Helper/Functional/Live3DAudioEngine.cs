@@ -33,9 +33,9 @@ public sealed class Live3DAudioEngine : IDisposable
 
     readonly ConcurrentDictionary<Guid, Source> _sources = new();
 
-    // NEU: Listener-Update
+    // Listener-Update
     Timer? _listenerTimer;
-    int _listenerIntervalMs = 8;                  // ~125 Hz
+    int _listenerIntervalMs = 8; // ~125 Hz
     Vector3D _listenerFront = new(0, 0, 1);
     Vector3D _listenerTop   = new(0, 1, 0);
     Vector3D _listenerPosSmoothed;
@@ -93,7 +93,7 @@ public sealed class Live3DAudioEngine : IDisposable
 
         if (DalamudHelper.Camera == null && CameraManager.Instance() != null)
             DalamudHelper.Camera = CameraManager.Instance()->GetActiveCamera();
-        
+
         if (DalamudHelper.LocalPlayer == null)
             Plugin.Framework.RunOnFrameworkThread(() => DalamudHelper.LocalPlayer = Plugin.ClientState.LocalPlayer);
 
@@ -101,7 +101,8 @@ public sealed class Live3DAudioEngine : IDisposable
         {
             var matrix = DalamudHelper.Camera->CameraBase.SceneCamera.ViewMatrix;
             _listenerFront = new Vector3D(matrix[2], matrix[1], matrix[0]);
-            var p = DalamudHelper.LocalPlayer.Position; // Vector3 (X,Y,Z)
+
+            var p = DalamudHelper.LocalPlayer.Position;
             var target = new Vector3D(p.X, p.Y, p.Z);
 
             var now = Stopwatch.GetTimestamp();
@@ -121,7 +122,6 @@ public sealed class Live3DAudioEngine : IDisposable
 
             static Vector3D Sub(Vector3D a, Vector3D b) => new(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
             static Vector3D Scale(Vector3D a, float s) => new(a.X * s, a.Y * s, a.Z * s);
-
             static Vector3D Lerp(Vector3D a, Vector3D b, float t)
                 => new(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t, a.Z + (b.Z - a.Z) * t);
         }
@@ -143,7 +143,6 @@ public sealed class Live3DAudioEngine : IDisposable
         EnsureInit();
         if (channels != 1) throw new InvalidOperationException("3D benötigt Mono (1 Kanal).");
 
-        // Quellen-Poller mindestens so schnell wie der Listener (für Bewegungskohärenz)
         pollIntervalMs = Math.Min(pollIntervalMs, _listenerIntervalMs);
 
         var id = Guid.NewGuid();
@@ -174,8 +173,16 @@ public sealed class Live3DAudioEngine : IDisposable
     void EnsureInit()
     {
         if (_inited) return;
-        if (!Bass.Init(_deviceIndex, 48000, DeviceInitFlags.Default | DeviceInitFlags.Device3D) && Bass.LastError != Errors.Already)
+
+        // robustere globale Audio-Buffering-Settings
+        Bass.Configure(Configuration.UpdatePeriod, 10);  // ms
+        Bass.Configure(Configuration.DeviceBufferLength, 120); // ms
+        Bass.Configure(Configuration.SRCQuality, 4);            // better SRC
+
+        if (!Bass.Init(_deviceIndex, 48000, DeviceInitFlags.Default | DeviceInitFlags.Device3D) &&
+            Bass.LastError != Errors.Already)
             throw new InvalidOperationException($"Bass.Init failed: {Bass.LastError}");
+
         _inited = true;
     }
 
@@ -228,18 +235,18 @@ public sealed class Live3DAudioEngine : IDisposable
         Vector3D _lastPos;
         long _lastTicks;
         Vector3D _smoothPos;
-        const float _smoothHz = 20f; // ~50 ms Zeitkonstante
+        const float _smoothHz = 20f;
 
         int _dsp;
         DSPProcedure? _volDsp;
-        bool _outIsFloat; // Ausgabeformat des Streams (16-bit oder 32-bit float)
+        bool _outIsFloat;
 
-        // Prefetch/Strip-Header für nicht-seekbare Streams
         readonly Queue<byte[]> _prefetchQueue = new();
         bool _headerChecked;
 
-        // De-click Ramp
-        bool _rampNeeded = true;
+        // Multi-chunk Fade-In
+        int _rampSamplesLeft = 0;
+        int _rampTotalSamples = 0;
 
         public PlaybackState State { get; private set; } = PlaybackState.Stopped;
 
@@ -256,7 +263,6 @@ public sealed class Live3DAudioEngine : IDisposable
                 }
             }
         }
-
 
         public Source(Live3DAudioEngine engine, Guid id, Stream source,
                       int sampleRate, int channels, bool float32,
@@ -317,12 +323,13 @@ public sealed class Live3DAudioEngine : IDisposable
             _h = Bass.CreateStream(_sr, _ch, outFlags, StreamProcedureType.Push);
             if (_h == 0)
                 throw new InvalidOperationException($"CreateStream failed: {Bass.LastError}");
-            
-            // Linear/normaler Rolloff, ab 1 m keine Pegelerhöhung mehr (nahfeld)
-            Bass.ChannelSet3DAttributes(_h, ManagedBass.Mode3D.Normal, 1f, 0f, -1, -1, 0);
-            // minDistance=1f → unter 1 m bleibt Pegel konstant; maxDistance=0f = unendlich
 
-            Bass.ChannelSetAttribute(_h, ChannelAttribute.Buffer, _bufferMs / 1000f);
+            Bass.ChannelSet3DAttributes(_h, ManagedBass.Mode3D.Normal, 1f, 0f, -1, -1, 0);
+
+            // robuster Start: etwas größerer Channel-Buffer (>=450 ms)
+            var channelBufferMs = MathF.Max(_bufferMs, 450);
+            Bass.ChannelSetAttribute(_h, ChannelAttribute.Buffer, channelBufferMs / 1000f);
+
             Bass.ChannelSetAttribute(_h, ChannelAttribute.Volume, 1f);
             Bass.ChannelSet3DPosition(_h, _srcPos, null, new Vector3D());
             Bass.Apply3D();
@@ -334,7 +341,7 @@ public sealed class Live3DAudioEngine : IDisposable
 
             _reader = Task.Run(ReadLoop, _cts.Token);
             _writer = Task.Run(WriteLoop, _cts.Token);
-            
+
             _lastPos = _srcPos;
             _smoothPos = _srcPos;
             _lastTicks = Stopwatch.GetTimestamp();
@@ -345,25 +352,48 @@ public sealed class Live3DAudioEngine : IDisposable
         void PrebufferAndStartWithFadeIn()
         {
             int frameOut = _bytesPerSampleOut * _ch;
-            int targetMs = Math.Min(_bufferMs, 400);
-            int targetBytes = Math.Max(frameOut, _sr * frameOut * targetMs / 1000);
+
+            // 1) Priming-Silence (~10 ms)
+            int silenceMs    = 10;
+            int silenceBytes = Math.Max(frameOut, _sr * frameOut * silenceMs / 1000);
+            PushSilence(silenceBytes);
+
+            // 2) Auf ausreichend Material warten (>= 320 ms)
+            int targetMs   = 320;
+            int targetByte = Math.Max(frameOut, _sr * frameOut * targetMs / 1000);
 
             var sw = Stopwatch.StartNew();
-            while (sw.ElapsedMilliseconds < 1500)
+            while (sw.ElapsedMilliseconds < 2000)
             {
                 int avail = Bass.ChannelGetData(_h, IntPtr.Zero, (int)DataFlags.Available);
-                if (avail >= targetBytes) break;
+                if (avail >= targetByte) break;
                 Thread.Sleep(5);
             }
 
+            // 3) Jetzt starten
             if (!Bass.ChannelPlay(_h, false))
                 throw new InvalidOperationException($"ChannelPlay failed: {Bass.LastError}");
 
-            float target = _volume; // exakt Ziel, kein Auto-Boost
-            int fadeMs = 50;
-            Bass.ChannelSlideAttribute(_h, ChannelAttribute.Volume, target, fadeMs);
+            // 4) Mehr-Chunk-Fade-In im DSP (z. B. 40 ms)
+            int rampMs = 40;
+            _rampTotalSamples = Math.Max(1, _sr * rampMs / 1000 * _ch);
+            _rampSamplesLeft  = _rampTotalSamples;
         }
-        
+
+        void PushSilence(int bytes)
+        {
+            if (bytes <= 0) return;
+            var zero = new byte[bytes];
+            int off = 0;
+            while (off < zero.Length)
+            {
+                int wrote = PutData(_h, zero, off, zero.Length - off);
+                if (wrote < 0) throw new InvalidOperationException($"StreamPutData(silence) failed: {Bass.LastError}");
+                if (wrote == 0) Thread.Sleep(1);
+                off += wrote;
+            }
+        }
+
         void AttachVolumeDspIfNeeded()
         {
             if (_h == 0 || _dsp != 0) return;
@@ -373,10 +403,60 @@ public sealed class Live3DAudioEngine : IDisposable
 
             _volDsp = new DSPProcedure((handle, channel, buffer, length, user) =>
             {
-                float vol = _volume;        // volatile read, schnell
-                if (vol >= 0.9999f) return; // fast path
+                float vol = _volume;
+
+                if (_rampSamplesLeft > 0)
+                {
+                    if (_outIsFloat)
+                    {
+                        int n = length / 4;
+                        unsafe
+                        {
+                            float* f = (float*)buffer;
+                            for (int i = 0; i < n; i++)
+                            {
+                                float k = 1f;
+                                if (_rampSamplesLeft > 0)
+                                {
+                                    int done = _rampTotalSamples - _rampSamplesLeft;
+                                    float t = (_rampTotalSamples > 0) ? (done / (float)_rampTotalSamples) : 1f;
+                                    k = t;
+                                    _rampSamplesLeft--;
+                                }
+                                f[i] *= (vol * k);
+                            }
+                        }
+                        return;
+                    }
+                    else
+                    {
+                        int n = length / 2;
+                        unsafe
+                        {
+                            short* s = (short*)buffer;
+                            for (int i = 0; i < n; i++)
+                            {
+                                float k = 1f;
+                                if (_rampSamplesLeft > 0)
+                                {
+                                    int done = _rampTotalSamples - _rampSamplesLeft;
+                                    float t = (_rampTotalSamples > 0) ? (done / (float)_rampTotalSamples) : 1f;
+                                    k = t;
+                                    _rampSamplesLeft--;
+                                }
+                                int v = (int)(s[i] * (vol * k));
+                                if (v > short.MaxValue) v = short.MaxValue;
+                                else if (v < short.MinValue) v = short.MinValue;
+                                s[i] = (short)v;
+                            }
+                        }
+                        return;
+                    }
+                }
+
+                if (vol >= 0.9999f) return;
                 if (vol <= 0.0001f)
-                {   // hart muten
+                {
                     unsafe { System.Runtime.CompilerServices.Unsafe.InitBlockUnaligned((void*)buffer, 0, (uint)length); }
                     return;
                 }
@@ -407,7 +487,6 @@ public sealed class Live3DAudioEngine : IDisposable
                 }
             });
 
-            // niedrige Priorität reicht; andere DSPs dürfen vorher laufen
             _dsp = Bass.ChannelSetDSP(_h, _volDsp, IntPtr.Zero, 10);
         }
 
@@ -436,24 +515,67 @@ public sealed class Live3DAudioEngine : IDisposable
 
         public void StopAndDispose()
         {
+            Task? reader, writer;
+            int h, dsp;
+            Stream src;
+            bool leaveOpen;
+
             lock (_stateLock)
             {
                 if (State == PlaybackState.Stopped)
-                {
-                    Dispose();
                     return;
-                }
+
+                // 1) Wiedergabe anhalten / Poller stop
                 _playGate.Set();
-                _cts.Cancel();
-                _q.CompleteAdding();
-                try { Task.WaitAll(new[] { _reader, _writer }, 2000); } catch { }
                 _pollTimer?.Dispose();
                 _pollTimer = null;
-                Bass.ChannelStop(_h);
+
+                // 2) Abbruch signalisieren und Producer beenden
+                _cts.Cancel();
+                _q.CompleteAdding();
+
+                // 3) aktuellen Zustand markieren (ohne zu blockieren)
                 SetState(PlaybackState.Stopped);
-                Dispose();
+
+                // 4) Felder für asynchrones Aufräumen sichern (kopieren) …
+                reader    = _reader;    _reader = null;
+                writer    = _writer;    _writer = null;
+                h         = _h;         _h = 0;
+                dsp       = _dsp;       _dsp = 0; _volDsp = null;
+                src       = _source;
+                leaveOpen = _leaveOpen;
             }
+
+            // 5) Sofortiges Stoppen der Audioausgabe (nicht blockierend)
+            if (h != 0)
+            {
+                try { Bass.ChannelStop(h); } catch { /* ignore */ }
+                try { Bass.ChannelRemoveSync(h, 0); } catch { /* ignore */ }
+            }
+
+            // 6) Cleanup im Hintergrund (kein Wait auf dem Aufrufer)
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await SafeAwait(reader);
+                    await SafeAwait(writer);
+                }
+                catch { /* ignore */ }
+
+                try { if (dsp != 0 && h != 0) Bass.ChannelRemoveDSP(h, dsp); } catch { }
+                try { if (h != 0) Bass.StreamFree(h); } catch { }
+
+                try { _cts.Dispose(); } catch { }
+                if (!leaveOpen)
+                {
+                    try { src.Dispose(); } catch { }
+                }
+            });
         }
+
+        static Task SafeAwait(Task? t) => t is null ? Task.CompletedTask :
+                                          t.IsCompleted ? Task.CompletedTask : t.ContinueWith(_ => { }, TaskScheduler.Default);
 
         public void Dispose()
         {
@@ -470,11 +592,9 @@ public sealed class Live3DAudioEngine : IDisposable
             var now = Stopwatch.GetTimestamp();
             var dt = Math.Max(1e-4f, (float)(now - _lastTicks) / Stopwatch.Frequency);
 
-            // Exponentielles Glätten
             float alpha = 1f - MathF.Exp(-dt * _smoothHz);
             _smoothPos = Add(_smoothPos, Scale(Sub(position, _smoothPos), alpha));
 
-            // Velocity (in units/sek). BASS erwartet m/s, daher DistanceFactor berücksichtigen.
             var velUnitsPerSec = Scale(Sub(_smoothPos, _lastPos), 1f / dt);
             var velMetersPerSec = Scale(velUnitsPerSec, 1f / _engine.DistanceFactor);
 
@@ -488,7 +608,6 @@ public sealed class Live3DAudioEngine : IDisposable
             }
         }
 
-
         public void Set3DSourcePoller(Func<Vector3D> positionProvider, int intervalMs = 15)
         {
             _positionProvider = positionProvider ?? throw new ArgumentNullException(nameof(positionProvider));
@@ -501,7 +620,7 @@ public sealed class Live3DAudioEngine : IDisposable
             if (State != PlaybackState.Playing || _positionProvider == null) return;
             Set3DSourcePosition(_positionProvider());
         }
-        
+
         void OnEndSync(int handle, int channel, int data, IntPtr user)
         {
             if (Interlocked.Exchange(ref _ended, 1) == 0)
@@ -523,7 +642,6 @@ public sealed class Live3DAudioEngine : IDisposable
                 var buf = new byte[readBytes];
                 var carry = new MemoryStream(capacity: readBytes * 2);
 
-                // Prefetched (z. B. bereits nach WAV-Header)
                 while (_prefetchQueue.Count > 0)
                 {
                     var p = _prefetchQueue.Dequeue();
@@ -536,10 +654,7 @@ public sealed class Live3DAudioEngine : IDisposable
                     if (n <= 0) break;
 
                     if (_autoDetectWav && !_headerChecked && !_source.CanSeek)
-                    {
-                        // Falls jemand Start() modifiziert hat: defensiv
                         _headerChecked = true;
-                    }
 
                     carry.Write(buf, 0, n);
 
@@ -636,19 +751,14 @@ public sealed class Live3DAudioEngine : IDisposable
                         int outBytes = samples * 4;
                         var outBuf = new byte[outBytes];
                         PcmIntToFloat(chunk, _bytesPerSampleIn * 8, outBuf);
-
-                        if (_rampNeeded) { ApplyRampInFloat(outBuf, _ch, _sr, 0.01); _rampNeeded = false; }
-
                         await PushAll(outBuf).ConfigureAwait(false);
                     }
                     else if (_isIEEEFloatIn)
                     {
-                        if (_rampNeeded) { ApplyRampInFloat(chunk, _ch, _sr, 0.01); _rampNeeded = false; }
                         await PushAll(chunk).ConfigureAwait(false);
                     }
                     else
                     {
-                        if (_rampNeeded) { ApplyRampInInt16(chunk, _ch, _sr, 0.01); _rampNeeded = false; }
                         await PushAll(chunk).ConfigureAwait(false);
                     }
                 }
@@ -673,9 +783,11 @@ public sealed class Live3DAudioEngine : IDisposable
                 offset += wrote;
             }
         }
+
         static Vector3D Sub(Vector3D a, Vector3D b) => new(a.X-b.X, a.Y-b.Y, a.Z-b.Z);
         static Vector3D Add(Vector3D a, Vector3D b) => new(a.X+b.X, a.Y+b.Y, a.Z+b.Z);
         static Vector3D Scale(Vector3D a, float s) => new(a.X*s, a.Y*s, a.Z*s);
+
         static void PcmIntToFloat(ReadOnlySpan<byte> inBuf, int bitsPerSample, Span<byte> outBuf)
         {
             var dst = MemoryMarshal.Cast<byte, float>(outBuf);
@@ -708,27 +820,6 @@ public sealed class Live3DAudioEngine : IDisposable
                     short v = BinaryPrimitives.ReadInt16LittleEndian(inBuf.Slice(i * 2, 2));
                     dst[i] = Math.Clamp(v / 32768f, -1f, 1f);
                 }
-            }
-        }
-
-        static void ApplyRampInFloat(Span<byte> buf, int ch, int sr, double seconds)
-        {
-            int samples = buf.Length / 4;
-            int rampSamples = Math.Min(samples, (int)(sr * seconds) * ch);
-            var f = MemoryMarshal.Cast<byte, float>(buf);
-            for (int i = 0; i < rampSamples; i++)
-                f[i] *= (float)((i + 1) / (double)rampSamples);
-        }
-
-        static void ApplyRampInInt16(Span<byte> buf, int ch, int sr, double seconds)
-        {
-            int samples = buf.Length / 2;
-            int rampSamples = Math.Min(samples, (int)(sr * seconds) * ch);
-            for (int i = 0; i < rampSamples; i++)
-            {
-                short v = BinaryPrimitives.ReadInt16LittleEndian(buf.Slice(i * 2, 2));
-                int scaled = (int)Math.Round(v * ((i + 1) / (double)rampSamples));
-                BinaryPrimitives.WriteInt16LittleEndian(buf.Slice(i * 2, 2), (short)Math.Clamp(scaled, short.MinValue, short.MaxValue));
             }
         }
 
@@ -788,7 +879,6 @@ public sealed class Live3DAudioEngine : IDisposable
                         sampleRate = br.ReadInt32();
                         br.ReadInt32(); br.ReadInt16();
                         bitsPerSample = br.ReadInt16();
-
                         if (len > 16)
                         {
                             short cbSize = br.ReadInt16();
@@ -802,10 +892,6 @@ public sealed class Live3DAudioEngine : IDisposable
                                 int consumed = 2 + 4 + 16;
                                 int left = cbSize - consumed;
                                 if (left > 0) br.ReadBytes(left);
-                            }
-                            else
-                            {
-                                if (cbSize > 0) br.ReadBytes(cbSize);
                             }
                         }
                         else isFloat = (audioFormat == 3);
@@ -839,7 +925,7 @@ public sealed class Live3DAudioEngine : IDisposable
             fmt = null;
             using var ms = new MemoryStream();
             var tmp = new byte[4096];
-            const int MaxHeaderBytes = 2 * 1024 * 1024; // Sicherheitslimit
+            const int MaxHeaderBytes = 2 * 1024 * 1024;
 
             int dataStart = -1;
             short audioFormat = 1;
@@ -858,7 +944,6 @@ public sealed class Live3DAudioEngine : IDisposable
 
                 var span = ms.GetBuffer().AsSpan(0, (int)ms.Length);
 
-                // Kein RIFF/WAVE? Dann sofort alles als Rohdaten durchreichen.
                 if (span.Length >= 12 &&
                     span.Slice(0, 4).SequenceEqual("RIFF"u8) &&
                     span.Slice(8, 4).SequenceEqual("WAVE"u8))
@@ -873,8 +958,7 @@ public sealed class Live3DAudioEngine : IDisposable
                         uint len = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(pos, 4));
                         pos += 4;
 
-                        // Falls Chunk noch nicht vollständig im Puffer liegt -> mehr lesen
-                        long next = (long)pos + len + (len % 2 == 1 ? 1 : 0); // Padding
+                        long next = (long)pos + len + (len % 2 == 1 ? 1 : 0);
                         if (next > span.Length) { pos -= 8; break; }
 
                         if (id.SequenceEqual("fmt "u8))
@@ -900,21 +984,19 @@ public sealed class Live3DAudioEngine : IDisposable
                                 span.Slice(dataStart, payloadLen).CopyTo(payload);
                                 outQueue.Enqueue(payload);
                             }
-                            return; // Header vollständig entfernt
+                            return;
                         }
 
-                        pos = (int)next; // zum nächsten Chunk springen (inkl. Padding)
+                        pos = (int)next;
                     }
                 }
                 else
                 {
-                    // Kein WAV → alles durchreichen
                     outQueue.Enqueue(ms.ToArray());
                     return;
                 }
             }
 
-            // data-Chuck nicht gefunden (zu exotisch/groß) → sicherheitshalber alles als Rohdaten
             outQueue.Enqueue(ms.ToArray());
         }
     }

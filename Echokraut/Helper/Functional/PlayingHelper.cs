@@ -207,7 +207,7 @@ namespace Echokraut.Helper.Functional
                     {
                         var playedText = currentlyPlayingMessage;
                         LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}", eventId);
-                        if (!string.IsNullOrWhiteSpace(playedText.Text) && playedText.Source != TextSource.VoiceTest &&
+                        if (!string.IsNullOrWhiteSpace(playedText.Text) &&
                             !playedText.LoadedLocally)
                         {
                             var filePath =

@@ -19,7 +19,13 @@ namespace Echokraut.Backend
         public async Task<Stream> GenerateAudioStreamFromVoice(EKEventId eventId, VoiceMessage message, string voice, ClientLanguage language)
         {
             LogHelper.Info(MethodBase.GetCurrentMethod().Name, "Generating Alltalk Audio", eventId);
-            HttpClient httpClient = new HttpClient();
+            var handler = new SocketsHttpHandler {
+                AutomaticDecompression = System.Net.DecompressionMethods.None, // keine gzip/br
+                KeepAlivePingPolicy = HttpKeepAlivePingPolicy.Always,          // optional .NET 7+
+                KeepAlivePingDelay = TimeSpan.FromSeconds(30),
+                KeepAlivePingTimeout = TimeSpan.FromSeconds(10)
+            };
+            using var httpClient = new HttpClient(handler);
             httpClient.BaseAddress = new Uri(Plugin.Configuration.Alltalk.BaseUrl);
             httpClient.Timeout = TimeSpan.FromSeconds(2);
 
@@ -36,7 +42,10 @@ namespace Echokraut.Backend
                 uriBuilder.Query = query.ToString();
                 LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Requesting... {uriBuilder.Uri}", eventId);
                 using var req = new HttpRequestMessage(HttpMethod.Get, uriBuilder.Uri);
-                req.Version = HttpVersion.Version30;
+                req.Version = HttpVersion.Version11;
+                req.VersionPolicy = HttpVersionPolicy.RequestVersionExact;
+                req.Headers.TryAddWithoutValidation("Accept-Encoding", "identity");
+                req.Headers.TryAddWithoutValidation("Cache-Control", "no-transform");
 
                 res = await httpClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
                 EnsureSuccessStatusCode(res);

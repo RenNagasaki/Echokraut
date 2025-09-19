@@ -43,9 +43,9 @@
       },
       "ManagedBass": {
         "type": "Direct",
-        "requested": "[3.1.1, )",
-        "resolved": "3.1.1",
-        "contentHash": "qaIIM2VEmZ9DaNCIu306aXi5zS8LZQjo0SNkLb3AjkpxKXA9K/O/LndCogC+cJPb2IKeChJEEXR42JEe6UTq/A=="
+        "requested": "[4.0.1, )",
+        "resolved": "4.0.1",
+        "contentHash": "At7E953X+a9BTlqFGHoKi66/4d2V6LLhKdlXso4JhfzzzDXu4reKkFf377i2Wh16DF+Rcaq3dEhpxKYwgpO1kA=="
       },
       "R3": {
         "type": "Direct",
