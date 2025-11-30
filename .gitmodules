@@ -1,3 +1,6 @@
 [submodule "OtterGui"]
 	path = OtterGui
 	url = https://github.com/Ottermandias/OtterGui
+[submodule "KamiToolKit"]
+	path = KamiToolKit
+	url = https://github.com/MidoriKami/KamiToolKit.git

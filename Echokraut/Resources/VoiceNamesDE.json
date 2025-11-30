@@ -48,6 +48,10 @@
         "speakers": [ "Magnai der Ältere" ]
     },
     {
+        "voiceName": "Loazenikwe",
+        "speakers": ["Bekannte Frauenstimme"]
+    },
+    {
         "voiceName": "Yaana",
         "speakers": [ "Schwarze Katze" ]
     },

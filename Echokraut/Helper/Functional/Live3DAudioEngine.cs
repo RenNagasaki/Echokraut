@@ -1,10 +1,3 @@
-using System.Numerics;
-using Echokraut.DataClasses;
-using Echokraut.Enums;
-using Echokraut.Helper.Data;
-using FFXIVClientStructs.FFXIV.Client.Game;
-using FFXIVClientStructs.FFXIV.Client.Game.Control;
-
 namespace Echokraut.Helper.Functional;
 using System;
 using System.Collections.Concurrent;
@@ -16,7 +9,8 @@ using System.Threading.Tasks;
 using ManagedBass;
 using System.Buffers.Binary;
 using System.Collections.Generic;
-
+using Echokraut.Helper.Data;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
 public enum PlaybackState { Stopped, Playing, Paused }
 
 public sealed class Live3DAudioEngine : IDisposable
@@ -30,12 +24,12 @@ public sealed class Live3DAudioEngine : IDisposable
     float _dopplerFactor = 1f;
     internal float DistanceFactor => _distanceFactor;
     internal float DopplerFactor => _dopplerFactor;
+    internal Vector3D ListenerPosition => _listenerPosSmoothed;
 
     readonly ConcurrentDictionary<Guid, Source> _sources = new();
 
-    // Listener-Update
     Timer? _listenerTimer;
-    int _listenerIntervalMs = 8; // ~125 Hz
+    int _listenerIntervalMs = 8;
     Vector3D _listenerFront = new(0, 0, 1);
     Vector3D _listenerTop   = new(0, 1, 0);
     Vector3D _listenerPosSmoothed;
@@ -174,10 +168,9 @@ public sealed class Live3DAudioEngine : IDisposable
     {
         if (_inited) return;
 
-        // robustere globale Audio-Buffering-Settings
-        Bass.Configure(Configuration.UpdatePeriod, 10);  // ms
-        Bass.Configure(Configuration.DeviceBufferLength, 120); // ms
-        Bass.Configure(Configuration.SRCQuality, 4);            // better SRC
+        Bass.Configure(Configuration.UpdatePeriod, 10);
+        Bass.Configure(Configuration.DeviceBufferLength, 120);
+        Bass.Configure(Configuration.SRCQuality, 4);
 
         if (!Bass.Init(_deviceIndex, 48000, DeviceInitFlags.Default | DeviceInitFlags.Device3D) &&
             Bass.LastError != Errors.Already)
@@ -244,9 +237,32 @@ public sealed class Live3DAudioEngine : IDisposable
         readonly Queue<byte[]> _prefetchQueue = new();
         bool _headerChecked;
 
-        // Multi-chunk Fade-In
         int _rampSamplesLeft = 0;
         int _rampTotalSamples = 0;
+        
+        const float _coincidentEps = 0.02f; 
+        bool _coincidentMode = false; 
+        
+        bool _allowEndSignal = false;
+        bool _everWrote = false;
+
+        void Set3DEnabled(bool enabled)
+        {
+            if (_h == 0) return;
+
+            if (enabled)
+            {
+                Bass.ChannelFlags(_h, BassFlags.Bass3D, BassFlags.Bass3D);
+                Bass.ChannelSetAttribute(_h, ChannelAttribute.Pan, 0f);
+            }
+            else
+            {
+                Bass.ChannelFlags(_h, 0, BassFlags.Bass3D);
+                Bass.ChannelSetAttribute(_h, ChannelAttribute.Pan, 0f);
+            }
+        }
+
+        Vector3D GetListenerPos() => _engine.ListenerPosition;
 
         public PlaybackState State { get; private set; } = PlaybackState.Stopped;
 
@@ -290,6 +306,15 @@ public sealed class Live3DAudioEngine : IDisposable
                 _pollTimer = new Timer(_ => PollPosition(), null, pollIntervalMs, pollIntervalMs);
         }
 
+        bool HasStartworthyPayload()
+        {
+            int frameOut = _bytesPerSampleOut * _ch;
+            int minMs = 40;
+            int minBytes = Math.Max(frameOut, _sr * frameOut * minMs / 1000);
+            int avail = Bass.ChannelGetData(_h, IntPtr.Zero, (int)DataFlags.Available);
+            return avail >= minBytes;
+        }
+
         public void Start()
         {
             if (_autoDetectWav)
@@ -326,7 +351,6 @@ public sealed class Live3DAudioEngine : IDisposable
 
             Bass.ChannelSet3DAttributes(_h, ManagedBass.Mode3D.Normal, 1f, 0f, -1, -1, 0);
 
-            // robuster Start: etwas größerer Channel-Buffer (>=450 ms)
             var channelBufferMs = MathF.Max(_bufferMs, 450);
             Bass.ChannelSetAttribute(_h, ChannelAttribute.Buffer, channelBufferMs / 1000f);
 
@@ -339,13 +363,42 @@ public sealed class Live3DAudioEngine : IDisposable
             if (Bass.ChannelSetSync(_h, SyncFlags.End, 0, _endSync) == 0)
                 throw new InvalidOperationException($"ChannelSetSync(End) failed: {Bass.LastError}");
 
-            _reader = Task.Run(ReadLoop, _cts.Token);
-            _writer = Task.Run(WriteLoop, _cts.Token);
-
             _lastPos = _srcPos;
             _smoothPos = _srcPos;
             _lastTicks = Stopwatch.GetTimestamp();
+            _reader = Task.Run(ReadLoop, _cts.Token);
+            _writer = Task.Run(WriteLoop, _cts.Token);
             PrebufferAndStartWithFadeIn();
+
+            if (!HasStartworthyPayload())
+            {
+                try { _cts.Cancel(); _q.CompleteAdding(); } catch {}
+                try { if (_h != 0) { Bass.ChannelStop(_h); Bass.StreamFree(_h); } } catch {}
+                _h = 0;
+                SetState(PlaybackState.Stopped);
+                ThreadPool.QueueUserWorkItem(_ => _engine.OnSourceEnded(_id));
+                return;
+            }
+
+            if (!Bass.ChannelPlay(_h, false))
+                throw new InvalidOperationException($"ChannelPlay failed: {Bass.LastError}");
+
+            {
+                var L = GetListenerPos();
+                var dx = _srcPos.X - L.X;
+                var dy = _srcPos.Y - L.Y;
+                var dz = _srcPos.Z - L.Z;
+                var dist = MathF.Sqrt(dx*dx + dy*dy + dz*dz);
+                _coincidentMode = dist < _coincidentEps;
+                Set3DEnabled(!_coincidentMode);
+            }
+
+            int rampMs = 40;
+            _rampTotalSamples = Math.Max(1, _sr * rampMs / 1000 * _ch);
+            _rampSamplesLeft  = _rampTotalSamples;
+
+            _allowEndSignal = true;
+            
             SetState(PlaybackState.Playing);
         }
 
@@ -353,12 +406,10 @@ public sealed class Live3DAudioEngine : IDisposable
         {
             int frameOut = _bytesPerSampleOut * _ch;
 
-            // 1) Priming-Silence (~10 ms)
             int silenceMs    = 10;
             int silenceBytes = Math.Max(frameOut, _sr * frameOut * silenceMs / 1000);
             PushSilence(silenceBytes);
 
-            // 2) Auf ausreichend Material warten (>= 320 ms)
             int targetMs   = 320;
             int targetByte = Math.Max(frameOut, _sr * frameOut * targetMs / 1000);
 
@@ -369,27 +420,24 @@ public sealed class Live3DAudioEngine : IDisposable
                 if (avail >= targetByte) break;
                 Thread.Sleep(5);
             }
-
-            // 3) Jetzt starten
-            if (!Bass.ChannelPlay(_h, false))
-                throw new InvalidOperationException($"ChannelPlay failed: {Bass.LastError}");
-
-            // 4) Mehr-Chunk-Fade-In im DSP (z. B. 40 ms)
-            int rampMs = 40;
-            _rampTotalSamples = Math.Max(1, _sr * rampMs / 1000 * _ch);
-            _rampSamplesLeft  = _rampTotalSamples;
         }
 
         void PushSilence(int bytes)
         {
-            if (bytes <= 0) return;
+            if (bytes <= 0 || _h == 0) return;
             var zero = new byte[bytes];
             int off = 0;
             while (off < zero.Length)
             {
                 int wrote = PutData(_h, zero, off, zero.Length - off);
-                if (wrote < 0) throw new InvalidOperationException($"StreamPutData(silence) failed: {Bass.LastError}");
-                if (wrote == 0) Thread.Sleep(1);
+                if (wrote < 0)
+                {
+                    var err = Bass.LastError;
+                    if (err == Errors.Ended || err == Errors.Handle)
+                        break;
+                    throw new InvalidOperationException($"StreamPutData(silence) failed: {err}");
+                }
+                if (wrote == 0) { Thread.Sleep(1); continue; }
                 off += wrote;
             }
         }
@@ -525,19 +573,15 @@ public sealed class Live3DAudioEngine : IDisposable
                 if (State == PlaybackState.Stopped)
                     return;
 
-                // 1) Wiedergabe anhalten / Poller stop
                 _playGate.Set();
                 _pollTimer?.Dispose();
                 _pollTimer = null;
 
-                // 2) Abbruch signalisieren und Producer beenden
                 _cts.Cancel();
                 _q.CompleteAdding();
 
-                // 3) aktuellen Zustand markieren (ohne zu blockieren)
                 SetState(PlaybackState.Stopped);
 
-                // 4) Felder für asynchrones Aufräumen sichern (kopieren) …
                 reader    = _reader;    _reader = null;
                 writer    = _writer;    _writer = null;
                 h         = _h;         _h = 0;
@@ -546,14 +590,12 @@ public sealed class Live3DAudioEngine : IDisposable
                 leaveOpen = _leaveOpen;
             }
 
-            // 5) Sofortiges Stoppen der Audioausgabe (nicht blockierend)
             if (h != 0)
             {
-                try { Bass.ChannelStop(h); } catch { /* ignore */ }
-                try { Bass.ChannelRemoveSync(h, 0); } catch { /* ignore */ }
+                try { Bass.ChannelStop(h); } catch { }
+                try { Bass.ChannelRemoveSync(h, 0); } catch { }
             }
 
-            // 6) Cleanup im Hintergrund (kein Wait auf dem Aufrufer)
             _ = Task.Run(async () =>
             {
                 try
@@ -561,7 +603,7 @@ public sealed class Live3DAudioEngine : IDisposable
                     await SafeAwait(reader);
                     await SafeAwait(writer);
                 }
-                catch { /* ignore */ }
+                catch { }
 
                 try { if (dsp != 0 && h != 0) Bass.ChannelRemoveDSP(h, dsp); } catch { }
                 try { if (h != 0) Bass.StreamFree(h); } catch { }
@@ -603,9 +645,28 @@ public sealed class Live3DAudioEngine : IDisposable
 
             if (_h != 0)
             {
-                Bass.ChannelSet3DPosition(_h, _smoothPos, null, velMetersPerSec);
+                var L = GetListenerPos();
+                var dx = _smoothPos.X - L.X;
+                var dy = _smoothPos.Y - L.Y;
+                var dz = _smoothPos.Z - L.Z;
+                var dist = MathF.Sqrt(dx*dx + dy*dy + dz*dz);
+
+                bool wantCoincident = dist < _coincidentEps;
+
+                if (wantCoincident != _coincidentMode)
+                {
+                    _coincidentMode = wantCoincident;
+                    Set3DEnabled(!_coincidentMode);
+                }
+
+                if (!_coincidentMode)
+                {
+                    Bass.ChannelSet3DPosition(_h, _smoothPos, null, velMetersPerSec);
+                }
+
                 Bass.Apply3D();
             }
+
         }
 
         public void Set3DSourcePoller(Func<Vector3D> positionProvider, int intervalMs = 15)
@@ -766,9 +827,10 @@ public sealed class Live3DAudioEngine : IDisposable
             catch (OperationCanceledException) { }
             finally
             {
-                if (!_cts.IsCancellationRequested)
-                    Bass.StreamPutData(_h, IntPtr.Zero, (int)StreamProcedureType.End);
+                if (_allowEndSignal && _everWrote && !_cts.IsCancellationRequested && _h != 0)
+                    try { Bass.StreamPutData(_h, IntPtr.Zero, (int)StreamProcedureType.End); } catch { }
             }
+
         }
 
         async Task PushAll(byte[] data)
@@ -780,6 +842,7 @@ public sealed class Live3DAudioEngine : IDisposable
                 int wrote = PutData(_h, data, offset, data.Length - offset);
                 if (wrote < 0) throw new InvalidOperationException($"StreamPutData failed: {Bass.LastError}");
                 if (wrote == 0) { await Task.Delay(5, _cts.Token).ConfigureAwait(false); continue; }
+                _everWrote = true;
                 offset += wrote;
             }
         }
@@ -992,12 +1055,12 @@ public sealed class Live3DAudioEngine : IDisposable
                 }
                 else
                 {
-                    outQueue.Enqueue(ms.ToArray());
+                    if (ms.Length > 0) outQueue.Enqueue(ms.ToArray());
                     return;
                 }
             }
 
-            outQueue.Enqueue(ms.ToArray());
+            if (ms.Length > 0) outQueue.Enqueue(ms.ToArray());
         }
     }
 }

@@ -7,6 +7,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Echokraut", "Echokraut\Echo
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "OtterGui", "OtterGui\OtterGui.csproj", "{41C81EA1-3F66-4CAA-87AD-E1ED4B1BF301}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KamiToolKit", "KamiToolKit\KamiToolKit.csproj", "{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -51,6 +53,22 @@ Global
 		{41C81EA1-3F66-4CAA-87AD-E1ED4B1BF301}.ReleaseForms|Any CPU.Build.0 = Release|Any CPU
 		{41C81EA1-3F66-4CAA-87AD-E1ED4B1BF301}.ReleaseForms|x64.ActiveCfg = Release|Any CPU
 		{41C81EA1-3F66-4CAA-87AD-E1ED4B1BF301}.ReleaseForms|x64.Build.0 = Release|Any CPU
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.Debug|Any CPU.ActiveCfg = Debug|x64
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.Debug|Any CPU.Build.0 = Debug|x64
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.Debug|x64.ActiveCfg = Debug|x64
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.Debug|x64.Build.0 = Debug|x64
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.DebugForms|Any CPU.ActiveCfg = Debug|x64
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.DebugForms|Any CPU.Build.0 = Debug|x64
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.DebugForms|x64.ActiveCfg = Debug|x64
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.DebugForms|x64.Build.0 = Debug|x64
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.Release|Any CPU.ActiveCfg = Release|x64
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.Release|Any CPU.Build.0 = Release|x64
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.Release|x64.ActiveCfg = Release|x64
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.Release|x64.Build.0 = Release|x64
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.ReleaseForms|Any CPU.ActiveCfg = Debug|x64
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.ReleaseForms|Any CPU.Build.0 = Debug|x64
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.ReleaseForms|x64.ActiveCfg = Debug|x64
+		{BFFECB71-8701-4AA2-A4AD-5C8485CAE61D}.ReleaseForms|x64.Build.0 = Debug|x64
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

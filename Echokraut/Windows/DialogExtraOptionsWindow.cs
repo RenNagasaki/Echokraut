@@ -136,7 +136,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                     }
                 }
                 ImGui.SameLine();
-                if (CurrentVoiceMessage.Speaker.VoicesSelectableDialogue.Draw(
+                if (CurrentVoiceMessage != null && CurrentVoiceMessage.Speaker.VoicesSelectableDialogue.Draw(
                         CurrentVoiceMessage.Speaker.Voice?.VoiceName ?? "", out var selectedIndexVoice))
                 {
                     var newVoiceItem =
@@ -151,7 +151,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                     {
                         CurrentVoiceMessage.Speaker.Voice = newVoiceItem;
                         CurrentVoiceMessage.Speaker.DoNotDelete = true;
-                        CurrentVoiceMessage.Speaker.RefreshSelectable();
+                        CurrentVoiceMessage.Speaker.RefreshSelectableAndOptionNode();
                         Plugin.Configuration.Save();
                         LogHelper.Info(MethodBase.GetCurrentMethod()!.Name,
                                        $"Updated Voice for {CurrentVoiceMessage.Speaker.Name}: {CurrentVoiceMessage.Speaker.ToString()} from: {CurrentVoiceMessage.Speaker.Voice} to: {newVoiceItem}",

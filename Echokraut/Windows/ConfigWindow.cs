@@ -372,6 +372,11 @@ public class ConfigWindow : Window, IDisposable
             Plugin.Configuration.Save();
         }
 
+        if (ImGui.Button("NativeUI##NativeUI"))
+        {
+            Plugin.AddonEchokrautWindow.Open();
+        }
+
         using (ImRaii.Disabled(!enabled))
         {
             var generateBySentence = Plugin.Configuration!.GenerateBySentence;
@@ -1328,7 +1333,7 @@ public class ConfigWindow : Window, IDisposable
                             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Gender for {dataType}: {mapData.ToString()} from: {mapData.Gender} to: {newGender}", new EKEventId(0, TextSource.None));
 
                             mapData.Gender = newGender;
-                            mapData.RefreshSelectable();
+                            mapData.RefreshSelectableAndOptionNode();
                             mapData.DoNotDelete = true;
                             updateData = true;
                             Plugin.Configuration.Save();
@@ -1352,7 +1357,7 @@ public class ConfigWindow : Window, IDisposable
                             LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Race for {dataType}: {mapData.ToString()} from: {mapData.Race} to: {newRace}", new EKEventId(0, TextSource.None));
 
                             mapData.Race = newRace;
-                            mapData.RefreshSelectable();
+                            mapData.RefreshSelectableAndOptionNode();
                             mapData.DoNotDelete = true;
                             updateData = true;
                             Plugin.Configuration.Save();
@@ -1372,7 +1377,7 @@ public class ConfigWindow : Window, IDisposable
 
                     mapData.Voice = newVoiceItem;
                     mapData.DoNotDelete = true;
-                    mapData.RefreshSelectable();
+                    mapData.RefreshSelectableAndOptionNode();
                     updateData = true;
                     Plugin.Configuration.Save();
                     LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Updated Voice for {dataType}: {mapData.ToString()} from: {mapData.Voice} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
@@ -1459,6 +1464,7 @@ public class ConfigWindow : Window, IDisposable
             {
                 AudioFileHelper.RemoveSavedNpcFiles(Plugin.Configuration.LocalSaveLocation, toBeRemoved.Name);
                 realData.Remove(toBeRemoved);
+                toBeRemoved.Dispose();
                 updateData = true;
                 Plugin.Configuration.Save();
             }

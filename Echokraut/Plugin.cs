@@ -8,6 +8,7 @@ using Echokraut.Enums;
 using System;
 using Echokraut.DataClasses;
 using System.Linq;
+using System.Numerics;
 using Dalamud.Game.Text.SeStringHandling;
 using GameObject = Dalamud.Game.ClientState.Objects.Types.IGameObject;
 using System.Reflection;
@@ -19,6 +20,7 @@ using Echokraut.Helper.API;
 using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
 using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+using KamiToolKit;
 
 namespace Echokraut;
 
@@ -54,6 +56,8 @@ public partial class Plugin : IDalamudPlugin
     internal static AddonCutSceneSelectStringHelper AddonCutSceneSelectStringHelper{ get; private set; } = null!;
     internal static AddonBubbleHelper AddonBubbleHelper{ get; private set; } = null!;
     internal static ChatTalkHelper ChatTalkHelper{ get; private set; } = null!;
+    internal static AddonEchokrautWindow AddonEchokrautWindow{ get; private set; } = null!;
+    internal static NativeController NativeController { get; set; } = null!;
 
     public readonly WindowSystem WindowSystem = new("Echokraut");
 
@@ -88,6 +92,7 @@ public partial class Plugin : IDalamudPlugin
         AddonLifecycle = addonLifecycle;
         Log = log;
 
+        NativeController = new NativeController(pluginInterface);
         Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         Configuration.Initialize(PluginInterface);
         pluginInterface.UiBuilder.DisableCutsceneUiHide = !Configuration.HideUiInCutscenes;
@@ -110,6 +115,12 @@ public partial class Plugin : IDalamudPlugin
         AddonBubbleHelper = new AddonBubbleHelper();
         ChatTalkHelper = new ChatTalkHelper();
         SoundHelper = new SoundHelper();
+        AddonEchokrautWindow = new AddonEchokrautWindow {
+            NativeController = NativeController,
+            InternalName = "EchokrautConfig",
+            Title = "Echokraut Configuration",
+            Size = new Vector2(840.0f, 560.0f),
+        };
 
         WindowSystem.AddWindow(ConfigWindow);
         WindowSystem.AddWindow(AlltalkInstanceWindow);
@@ -386,6 +397,8 @@ public partial class Plugin : IDalamudPlugin
         AddonSelectStringHelper.Dispose();
         AddonBubbleHelper.Dispose();
         ChatTalkHelper.Dispose();
+        AddonEchokrautWindow.Dispose();
+        NativeController.Dispose();
 
         Configuration.Save();
         WindowSystem.RemoveAllWindows();

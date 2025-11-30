@@ -211,12 +211,12 @@ namespace Echokraut.Helper.Data
                 Plugin.Configuration.MappedNpcs.ForEach(p =>
                 {
                     p.Voices = voices;
-                    p.RefreshSelectable();
+                    p.RefreshSelectableAndOptionNode();
                 });
                 Plugin.Configuration.MappedPlayers.ForEach(p =>
                 {
                     p.Voices = voices;
-                    p.RefreshSelectable();
+                    p.RefreshSelectableAndOptionNode();
                 });
             }
             catch (Exception ex)
@@ -258,7 +258,7 @@ namespace Echokraut.Helper.Data
                 {
                     datas.Add(data);
                     data.Voices = Plugin.Configuration.EchokrautVoices;
-                    data.RefreshSelectable();
+                    data.RefreshSelectableAndOptionNode();
                     BackendHelper.GetVoiceOrRandom(eventId, data);
                     ConfigWindow.UpdateDataNpcs = true;
                     ConfigWindow.UpdateDataBubbles = true;

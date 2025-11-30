@@ -26,7 +26,7 @@ namespace Echokraut.Helper.Data
         private static ConcurrentBag<LogMessage> BackendLogs = new ConcurrentBag<LogMessage>();
         private static List<LogMessage> GeneralLogsMainThread = new List<LogMessage>();
         private static List<LogMessage> ChatLogsMainThread = new List<LogMessage>();
-        private static List<LogMessage> TalkLogsMainThread = new List<LogMessage>();
+        private static List<LogMessage> TalkLogsMainThread = new List<LogMessage>(); 
         private static List<LogMessage> BattleTalkLogsMainThread = new List<LogMessage>();
         private static List<LogMessage> BubbleLogsMainThread = new List<LogMessage>();
         private static List<LogMessage> CutsceneSelectStringLogsMainThread = new List<LogMessage>();
