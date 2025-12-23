@@ -55,7 +55,7 @@ public unsafe class AddonTalkHelper
         if (args is not AddonReceiveEventArgs eventArgs)
             return;
 
-        var eventData = (AtkEventData*)eventArgs.Data;
+        var eventData = (AtkEventData*)eventArgs.AtkEventData;
         if (eventData == null)
             return;
 
