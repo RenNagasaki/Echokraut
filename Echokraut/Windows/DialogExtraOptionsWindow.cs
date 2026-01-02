@@ -136,7 +136,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                     }
                 }
                 ImGui.SameLine();
-                if (CurrentVoiceMessage.Speaker.VoicesSelectableDialogue.Draw(
+                if (CurrentVoiceMessage != null && CurrentVoiceMessage.Speaker.VoicesSelectableDialogue.Draw(
                         CurrentVoiceMessage.Speaker.Voice?.VoiceName ?? "", out var selectedIndexVoice))
                 {
                     var newVoiceItem =
