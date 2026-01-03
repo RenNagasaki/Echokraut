@@ -59,6 +59,11 @@ public class Configuration : IPluginConfiguration
     public bool VoiceChatShout { get; set; } = false;
     public bool VoiceChatFreeCompany { get; set; } = false;
     public List<PhoneticCorrection> PhoneticCorrections { get; set; } = new List<PhoneticCorrection>();
+    public bool GoogleDriveDownload { get; set; } = false;
+    public bool GoogleDriveUpload { get; set; } = false;
+    public bool GoogleDriveDownloadPeriodically { get; set; } = false;
+    public bool GoogleDriveRequestVoiceLine { get; set; } = false;
+    public string GoogleDriveShareLink { get; set; } = "";
 
     // the below exist just to make saving less cumbersome
     [NonSerialized]

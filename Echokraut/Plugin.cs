@@ -128,12 +128,18 @@ public partial class Plugin : IDalamudPlugin
 
         if (!Configuration.FirstTime && ClientState.IsLoggedIn && Configuration.Alltalk.LocalInstall && Configuration.Alltalk.LocalInstance && Configuration.Alltalk.AutoStartLocalInstance)
             AlltalkInstanceHelper.StartInstance();
+            
+        if (Configuration.GoogleDriveDownloadPeriodically)
+            GoogleDriveHelper.StartSync();
     }
 
     private void OnLogin()
     {
         try
         {
+            if (Configuration.GoogleDriveDownload)
+                GoogleDriveHelper.DownloadFolder(Configuration.LocalSaveLocation, Configuration.GoogleDriveShareLink);
+            
             if (Configuration.FirstTime && !FirstTimeWindow.IsOpen)
                 CommandHelper.ToggleFirstTimeUi();
 
@@ -179,12 +185,18 @@ public partial class Plugin : IDalamudPlugin
     {
         try
         {
+            var onlyRequest = false;
             if (!BackendHelper.IsBackendAvailable())
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"No backend available yet, skipping!", eventId);
-                LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                PlayingHelper.RecreationStarted = false;
-                return;
+                if (Configuration.GoogleDriveRequestVoiceLine)
+                    onlyRequest = true;
+                else
+                {
+                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"No backend available yet, skipping!", eventId);
+                    LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                    PlayingHelper.RecreationStarted = false;
+                    return;
+                }
             }
 
             var source = eventId.textSource;
@@ -198,7 +210,7 @@ public partial class Plugin : IDalamudPlugin
 
             if (source == TextSource.Chat)
             {
-                if (Configuration.VoiceChatIn3D && speaker == null)
+                if ((Configuration.VoiceChatIn3D && speaker == null))
                 {
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Player is not on the same map: {speakerName.TextValue}. Can't voice", eventId);
                     LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
@@ -305,6 +317,14 @@ public partial class Plugin : IDalamudPlugin
                 case TextSource.AddonCutsceneSelectString:
                 case TextSource.AddonSelectString:
                 case TextSource.Chat:
+                    if (onlyRequest)
+                    {
+                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Can't request Chat and Player Selections: {npcData.ToString()}",
+                                       eventId);
+                        LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+                        return;
+                    }
+
                     if (source == TextSource.Chat)
                         is3d = Configuration.VoiceChatIn3D;
                     if (npcData.Volume == 0f || !npcData.IsEnabled)
@@ -318,17 +338,17 @@ public partial class Plugin : IDalamudPlugin
             }
 
 
-            if (npcData.Voice == null)
+            if (npcData.Voice == null && !onlyRequest)
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Getting voice since not set.", eventId);
                 BackendHelper.GetVoiceOrRandom(eventId, npcData);
             }
 
-            if (npcData.Voice == null)
+            if (npcData.Voice == null && !onlyRequest)
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. No Voice set.", eventId);
 
 
-            if (npcData.Voice != null && npcData.Voice.Volume == 0f)
+            if (npcData.Voice != null && npcData.Voice.Volume == 0f && !onlyRequest)
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Voice is muted: {npcData.ToString()}", eventId);
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
@@ -336,7 +356,7 @@ public partial class Plugin : IDalamudPlugin
                 return;
             }
             
-            var volume = VolumeHelper.GetVoiceVolume(eventId) * npcData.Voice!.Volume * npcVolume;
+            var volume = VolumeHelper.GetVoiceVolume(eventId) * (npcData.Voice?.Volume ?? 1) * npcVolume;
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Voice volume: {volume}", eventId);
 
             var voiceMessage = new VoiceMessage
@@ -348,6 +368,7 @@ public partial class Plugin : IDalamudPlugin
                 Text = cleanText,
                 Language = language,
                 EventId = eventId,
+                OnlyRequest = onlyRequest,
                 Volume = volume
             };
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, voiceMessage.GetDebugInfo(), eventId);
@@ -377,6 +398,7 @@ public partial class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        GoogleDriveHelper.StopSync();
         DetectLanguageHelper.Dispose();
         PlayingHelper.Dispose();
         SoundHelper.Dispose();

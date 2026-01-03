@@ -210,6 +210,8 @@ public sealed class Live3DAudioEngine : IDisposable
         readonly bool _autoDetectWav;
         readonly int _bufferMs;
         readonly int _readChunkMs;
+        readonly object _bassLock = new();
+
 
         int _sr;
         int _ch;
@@ -236,7 +238,8 @@ public sealed class Live3DAudioEngine : IDisposable
         long _lastTicks;
         Vector3D _smoothPos;
         const float _smoothHz = 20f;
-
+        volatile bool _stopping;
+        
         int _dsp;
         DSPProcedure? _volDsp;
         bool _outIsFloat;
@@ -351,6 +354,8 @@ public sealed class Live3DAudioEngine : IDisposable
 
         void PrebufferAndStartWithFadeIn()
         {
+            if (_stopping || _cts.IsCancellationRequested) return;
+            if (_h == 0) return;
             int frameOut = _bytesPerSampleOut * _ch;
 
             // 1) Priming-Silence (~10 ms)
@@ -385,14 +390,27 @@ public sealed class Live3DAudioEngine : IDisposable
             if (bytes <= 0) return;
             var zero = new byte[bytes];
             int off = 0;
-            while (off < zero.Length)
+
+            while (off < zero.Length && !_cts.IsCancellationRequested)
             {
-                int wrote = PutData(_h, zero, off, zero.Length - off);
-                if (wrote < 0) throw new InvalidOperationException($"StreamPutData(silence) failed: {Bass.LastError}");
-                if (wrote == 0) Thread.Sleep(1);
+                int wrote;
+                lock (_bassLock)
+                {
+                    if (_h == 0) return;
+
+                    wrote = PutData(_h, zero, off, zero.Length - off);
+                    if (wrote < 0)
+                    {
+                        if (Bass.LastError == Errors.Ended) return;   // already ended
+                        throw new InvalidOperationException($"StreamPutData(silence) failed: {Bass.LastError}");
+                    }
+                }
+
+                if (wrote == 0) { Thread.Sleep(1); continue; }
                 off += wrote;
             }
         }
+
 
         void AttachVolumeDspIfNeeded()
         {
@@ -522,55 +540,47 @@ public sealed class Live3DAudioEngine : IDisposable
 
             lock (_stateLock)
             {
-                if (State == PlaybackState.Stopped)
-                    return;
+                if (State == PlaybackState.Stopped) return;
 
-                // 1) Wiedergabe anhalten / Poller stop
                 _playGate.Set();
                 _pollTimer?.Dispose();
                 _pollTimer = null;
 
-                // 2) Abbruch signalisieren und Producer beenden
                 _cts.Cancel();
                 _q.CompleteAdding();
-
-                // 3) aktuellen Zustand markieren (ohne zu blockieren)
                 SetState(PlaybackState.Stopped);
 
-                // 4) Felder für asynchrones Aufräumen sichern (kopieren) …
-                reader    = _reader;    _reader = null;
-                writer    = _writer;    _writer = null;
-                h         = _h;         _h = 0;
-                dsp       = _dsp;       _dsp = 0; _volDsp = null;
-                src       = _source;
+                reader = _reader; _reader = null;
+                writer = _writer; _writer = null;
+
+                lock (_bassLock)
+                {
+                    h = _h;
+                    _h = 0;              // 🔥 ab hier kann niemand mehr putdata machen
+                    dsp = _dsp;
+                    _dsp = 0;
+                    _volDsp = null;
+                }
+
+                src = _source;
                 leaveOpen = _leaveOpen;
             }
 
-            // 5) Sofortiges Stoppen der Audioausgabe (nicht blockierend)
             if (h != 0)
             {
-                try { Bass.ChannelStop(h); } catch { /* ignore */ }
-                try { Bass.ChannelRemoveSync(h, 0); } catch { /* ignore */ }
+                try { Bass.ChannelStop(h); } catch { }
+                try { Bass.ChannelRemoveSync(h, 0); } catch { }
             }
 
-            // 6) Cleanup im Hintergrund (kein Wait auf dem Aufrufer)
             _ = Task.Run(async () =>
             {
-                try
-                {
-                    await SafeAwait(reader);
-                    await SafeAwait(writer);
-                }
-                catch { /* ignore */ }
+                try { await SafeAwait(reader); await SafeAwait(writer); } catch { }
 
-                try { if (dsp != 0 && h != 0) Bass.ChannelRemoveDSP(h, dsp); } catch { }
+                try { if (dsp != 0) Bass.ChannelRemoveDSP(h, dsp); } catch { }
                 try { if (h != 0) Bass.StreamFree(h); } catch { }
 
                 try { _cts.Dispose(); } catch { }
-                if (!leaveOpen)
-                {
-                    try { src.Dispose(); } catch { }
-                }
+                if (!leaveOpen) { try { src.Dispose(); } catch { } }
             });
         }
 
@@ -767,8 +777,15 @@ public sealed class Live3DAudioEngine : IDisposable
             finally
             {
                 if (!_cts.IsCancellationRequested)
-                    Bass.StreamPutData(_h, IntPtr.Zero, (int)StreamProcedureType.End);
+                {
+                    lock (_bassLock)
+                    {
+                        if (_h != 0)
+                            Bass.StreamPutData(_h, IntPtr.Zero, (int)StreamProcedureType.End);
+                    }
+                }
             }
+
         }
 
         async Task PushAll(byte[] data)
@@ -777,12 +794,25 @@ public sealed class Live3DAudioEngine : IDisposable
             while (offset < data.Length && !_cts.IsCancellationRequested)
             {
                 _playGate.Wait(_cts.Token);
-                int wrote = PutData(_h, data, offset, data.Length - offset);
-                if (wrote < 0) throw new InvalidOperationException($"StreamPutData failed: {Bass.LastError}");
+
+                int wrote;
+                lock (_bassLock)
+                {
+                    if (_h == 0) return;
+
+                    wrote = PutData(_h, data, offset, data.Length - offset);
+                    if (wrote < 0)
+                    {
+                        if (Bass.LastError == Errors.Ended) return;
+                        throw new InvalidOperationException($"StreamPutData failed: {Bass.LastError}");
+                    }
+                }
+
                 if (wrote == 0) { await Task.Delay(5, _cts.Token).ConfigureAwait(false); continue; }
                 offset += wrote;
             }
         }
+
 
         static Vector3D Sub(Vector3D a, Vector3D b) => new(a.X-b.X, a.Y-b.Y, a.Z-b.Z);
         static Vector3D Add(Vector3D a, Vector3D b) => new(a.X+b.X, a.Y+b.Y, a.Z+b.Z);

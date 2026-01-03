@@ -203,26 +203,27 @@ namespace Echokraut.Helper.Functional
                         !Directory.Exists(Plugin.Configuration.LocalSaveLocation))
                         Directory.CreateDirectory(Plugin.Configuration.LocalSaveLocation);
 
-                    if (Plugin.Configuration.SaveToLocal && Directory.Exists(Plugin.Configuration.LocalSaveLocation))
+                    if (Plugin.Configuration.SaveToLocal && !currentlyPlayingMessage.LoadedLocally)
                     {
-                        var playedText = currentlyPlayingMessage;
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}", eventId);
-                        if (!string.IsNullOrWhiteSpace(playedText.Text) &&
-                            !playedText.LoadedLocally)
+                        if (Directory.Exists(Plugin.Configuration.LocalSaveLocation))
                         {
-                            var filePath =
-                                AudioFileHelper.GetLocalAudioPath(Plugin.Configuration.LocalSaveLocation, playedText);
-                            var stream = currentlyPlayingMessage.Stream;
-                            AudioFileHelper.WriteStreamToFile(eventId, filePath, stream);
+                            var playedText = currentlyPlayingMessage;
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}", eventId);
+                            if (!string.IsNullOrWhiteSpace(playedText.Text) &&
+                                !playedText.LoadedLocally)
+                            {
+                                var stream = currentlyPlayingMessage.Stream;
+                                AudioFileHelper.WriteStreamToFile(eventId, playedText, stream);
+                            }
+                        }
+                        else
+                        {
+                            LogHelper.Error(MethodBase.GetCurrentMethod().Name,
+                                            $"Couldn't save file locally. Save location doesn't exist: {Plugin.Configuration.LocalSaveLocation}",
+                                            eventId);
                         }
                     }
-                    else
-                    {
-                        LogHelper.Error(MethodBase.GetCurrentMethod().Name,
-                                        $"Couldn't save file locally. Save location doesn't exists: {Plugin.Configuration.LocalSaveLocation}",
-                                        eventId);
-                    }
-                    
+
                     currentlyPlayingMessage.Stream.Dispose();
                 }
 
@@ -257,6 +258,20 @@ namespace Echokraut.Helper.Functional
 
         public static void AddRequestToQueue(VoiceMessage voiceMessage)
         {
+            if (Plugin.Configuration.GoogleDriveRequestVoiceLine)
+            {
+                var voiceLine = new VoiceLine()
+                {
+                    Gender = voiceMessage.Speaker.Gender,
+                    Race = voiceMessage.Speaker.Race,
+                    Name = voiceMessage.Speaker.Name,
+                    Text = voiceMessage.Text,
+                    Language = voiceMessage.Language
+                };
+                
+                GoogleDriveHelper.UploadVoiceLine(Constants.GOOGLEDRIVEVOICELINESHARE, voiceLine, voiceMessage.EventId);
+            }
+            
             if (Plugin.Configuration.LoadFromLocalFirst && Directory.Exists(Plugin.Configuration.LocalSaveLocation) && voiceMessage.Speaker.Voice != null && voiceMessage.Source != TextSource.VoiceTest)
             {
                 var result = AudioFileHelper.LoadLocalAudio(voiceMessage.EventId, Plugin.Configuration.LocalSaveLocation, voiceMessage);
@@ -277,6 +292,20 @@ namespace Echokraut.Helper.Functional
 
         public static void AddRequestBubbleToQueue(VoiceMessage voiceMessage)
         {
+            if (Plugin.Configuration.GoogleDriveRequestVoiceLine && voiceMessage.Source == TextSource.AddonBubble)
+            {
+                var voiceLine = new VoiceLine()
+                {
+                    Gender = voiceMessage.Speaker.Gender,
+                    Race = voiceMessage.Speaker.Race,
+                    Name = voiceMessage.Speaker.Name,
+                    Text = voiceMessage.Text,
+                    Language = voiceMessage.Language
+                };
+                
+                GoogleDriveHelper.UploadVoiceLine(Constants.GOOGLEDRIVEVOICELINESHARE, voiceLine, voiceMessage.EventId);
+            }
+                
             if (Plugin.Configuration.LoadFromLocalFirst && Directory.Exists(Plugin.Configuration.LocalSaveLocation) && voiceMessage.Speaker.Voice != null && voiceMessage.Source != TextSource.VoiceTest)
             {
                 var result = AudioFileHelper.LoadLocalAudio(voiceMessage.EventId, Plugin.Configuration.LocalSaveLocation, voiceMessage);

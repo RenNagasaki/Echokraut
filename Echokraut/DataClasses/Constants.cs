@@ -111,6 +111,9 @@ namespace Echokraut.DataClasses
             "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/vocab.json?download=true"
         };
 
+        public const string GOOGLEDRIVEVOICELINESHARE =
+            "https://drive.google.com/drive/folders/1-8Ia4t0acrjJpd1l3J7UIPS5yl0SeVCh?usp=sharing";
+        
         public const string ALLTALKFOLDERNAME = "alltalk_tts";
 
         public const string MSBUILDTOOLSURL = "https://aka.ms/vs/17/release/vs_BuildTools.exe";

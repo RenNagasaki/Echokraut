@@ -27,6 +27,7 @@ namespace Echokraut.DataClasses
         public bool LoadedLocally {  get; set; }
 
         public bool IsLastInDialogue { get; set; } = false;
+        public bool OnlyRequest { get; set; } = false;
 
         public EKEventId EventId { get; set; }
         
