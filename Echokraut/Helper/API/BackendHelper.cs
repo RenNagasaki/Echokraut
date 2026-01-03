@@ -59,6 +59,9 @@ namespace Echokraut.Helper.API
                     if (Plugin.Configuration.Alltalk.RemoteInstance &&
                         !string.IsNullOrWhiteSpace(Plugin.Configuration.Alltalk.BaseUrl))
                         return true;
+
+                    if (Plugin.Configuration.Alltalk.NoInstance)
+                        return true;
                     break;
             }
 

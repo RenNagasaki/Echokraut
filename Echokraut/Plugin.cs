@@ -190,7 +190,7 @@ public partial class Plugin : IDalamudPlugin
             {
                 if (Configuration.GoogleDriveRequestVoiceLine)
                     onlyRequest = true;
-                else
+                else 
                 {
                     LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"No backend available yet, skipping!", eventId);
                     LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
@@ -338,17 +338,17 @@ public partial class Plugin : IDalamudPlugin
             }
 
 
-            if (npcData.Voice == null && !onlyRequest)
+            if (npcData.Voice == null && !onlyRequest && !Configuration.Alltalk.NoInstance)
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Getting voice since not set.", eventId);
                 BackendHelper.GetVoiceOrRandom(eventId, npcData);
             }
 
-            if (npcData.Voice == null && !onlyRequest)
+            if (npcData.Voice == null && !onlyRequest && !Configuration.Alltalk.NoInstance)
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. No Voice set.", eventId);
 
 
-            if (npcData.Voice != null && npcData.Voice.Volume == 0f && !onlyRequest)
+            if (npcData.Voice != null && npcData.Voice.Volume == 0f && !onlyRequest && !Configuration.Alltalk.NoInstance)
             {
                 LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Voice is muted: {npcData.ToString()}", eventId);
                 LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);

@@ -282,7 +282,12 @@ namespace Echokraut.Helper.Functional
             else if (!Directory.Exists(Plugin.Configuration.LocalSaveLocation))
                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. Save location doesn't exists: {Plugin.Configuration.LocalSaveLocation}", voiceMessage.EventId);
 
-            RequestingQueue.Add(voiceMessage);
+            if (!Plugin.Configuration.Alltalk.NoInstance)
+            {
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                $"Echokraut set to 'No Instance' skipping inference", voiceMessage.EventId);
+                RequestingQueue.Add(voiceMessage);
+            }
         }
 
         public static void AddRequestedToQueue(VoiceMessage voiceMessage)
@@ -316,7 +321,12 @@ namespace Echokraut.Helper.Functional
             else if (!Directory.Exists(Plugin.Configuration.LocalSaveLocation))
                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. Save location doesn't exists: {Plugin.Configuration.LocalSaveLocation}", voiceMessage.EventId);
 
-            RequestingBubbleQueue.Add(voiceMessage);
+            if (!Plugin.Configuration.Alltalk.NoInstance)
+            {
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                $"Echokraut set to 'No Instance' skipping inference", voiceMessage.EventId);
+                RequestingBubbleQueue.Add(voiceMessage);
+            }
         }
 
         public static void ClearPlayingQueue()
