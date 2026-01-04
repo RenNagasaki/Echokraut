@@ -14,6 +14,7 @@ namespace Echokraut.DataClasses
     public class VoiceMessage
     {
         public string Text { get; set; }
+        public string OriginalText { get; set; }
         //public string TextTemplate { get; set; }
 
         public IGameObject? SpeakerObj {  get; set; }

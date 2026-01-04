@@ -2122,6 +2122,7 @@ public class ConfigWindow : Window, IDisposable
                 Voice = voice
             },
             Text = GetTestMessageText(Plugin.ClientState.ClientLanguage),
+            OriginalText = GetTestMessageText(Plugin.ClientState.ClientLanguage),
             Language = Plugin.ClientState.ClientLanguage,
             EventId = eventId,
             SpeakerFollowObj = DalamudHelper.LocalPlayer,

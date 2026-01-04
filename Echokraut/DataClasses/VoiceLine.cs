@@ -26,7 +26,7 @@ namespace Echokraut.DataClasses
         }
         public string GetFileName()
         {
-            return $"{Language}_{Gender.ToString()}_{Race.ToString()}_{Name}_{AudioFileHelper.VoiceMessageToFileName(Text)}.json";
+            return $"{Language}_{Gender.ToString()}_{Race.ToString()}_{Name}_{AudioFileHelper.VoiceMessageToFileName(AudioFileHelper.RemovePlayerNameInText(Text))}.json";
         }
     }
 }

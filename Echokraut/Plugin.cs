@@ -29,6 +29,7 @@ public partial class Plugin : IDalamudPlugin
     [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
     [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
     [PluginService] internal static IClientState ClientState { get; private set; } = null!;
+    [PluginService] internal static IPlayerState PlayerState { get; private set; } = null!;
     [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
     [PluginService] internal static IPluginLog Log { get; private set; } = null!;
     [PluginService] internal static IFramework Framework { get; private set; } = null!;
@@ -63,6 +64,7 @@ public partial class Plugin : IDalamudPlugin
         ICommandManager commandManager,
         IFramework framework,
         IClientState clientState,
+        IPlayerState playerState,
         ICondition condition,
         IObjectTable objectTable,
         IDataManager dataManager,
@@ -77,6 +79,7 @@ public partial class Plugin : IDalamudPlugin
         CommandManager = commandManager;
         Framework = framework;
         ClientState = clientState;
+        PlayerState = playerState;
         Condition = condition;
         ObjectTable = objectTable;
         DataManager = dataManager;
@@ -203,6 +206,7 @@ public partial class Plugin : IDalamudPlugin
             var language = ClientState.ClientLanguage;
             LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Preparing for Inference: {speakerName} - {textValue} - {source}", eventId);
 
+            var originalText = textValue;
             var cleanText = TalkTextHelper.StripAngleBracketedText(textValue);
             cleanText = TalkTextHelper.ReplaceSsmlTokens(cleanText);
             cleanText = TalkTextHelper.NormalizePunctuation(cleanText);
@@ -366,6 +370,7 @@ public partial class Plugin : IDalamudPlugin
                 Source = source,
                 Speaker = npcData,
                 Text = cleanText,
+                OriginalText = originalText,
                 Language = language,
                 EventId = eventId,
                 OnlyRequest = onlyRequest,

@@ -258,14 +258,14 @@ namespace Echokraut.Helper.Functional
 
         public static void AddRequestToQueue(VoiceMessage voiceMessage)
         {
-            if (Plugin.Configuration.GoogleDriveRequestVoiceLine)
+            if (Plugin.Configuration.GoogleDriveRequestVoiceLine && voiceMessage.Source != TextSource.VoiceTest)
             {
                 var voiceLine = new VoiceLine()
                 {
                     Gender = voiceMessage.Speaker.Gender,
                     Race = voiceMessage.Speaker.Race,
                     Name = voiceMessage.Speaker.Name,
-                    Text = voiceMessage.Text,
+                    Text = AudioFileHelper.RemovePlayerNameInText(voiceMessage.OriginalText),
                     Language = voiceMessage.Language
                 };
                 
@@ -304,7 +304,7 @@ namespace Echokraut.Helper.Functional
                     Gender = voiceMessage.Speaker.Gender,
                     Race = voiceMessage.Speaker.Race,
                     Name = voiceMessage.Speaker.Name,
-                    Text = voiceMessage.Text,
+                    Text = AudioFileHelper.RemovePlayerNameInText(voiceMessage.OriginalText),
                     Language = voiceMessage.Language
                 };
                 

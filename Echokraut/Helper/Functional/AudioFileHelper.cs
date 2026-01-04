@@ -45,7 +45,7 @@ namespace Echokraut.Helper.Functional
 
         public static string GetLocalAudioPath(string localSaveLocation, VoiceMessage voiceMessage)
         {
-            var filePath = $"{GetParentFolderPath(localSaveLocation, voiceMessage)}/{VoiceMessageToFileName(voiceMessage.Text)}.wav";
+            var filePath = $"{GetParentFolderPath(localSaveLocation, voiceMessage)}/{VoiceMessageToFileName(RemovePlayerNameInText(voiceMessage.OriginalText))}.wav";
 
             return filePath;
         }
@@ -67,6 +67,18 @@ namespace Echokraut.Helper.Functional
             filePath += $"{speaker}/";
 
             return filePath;
+        }
+
+        public static string RemovePlayerNameInText(string text)
+        {
+            var name = DalamudHelper.LocalPlayer.Name.TextValue;
+            var nameArr = name.Split(' ');
+
+            text = text.Replace(name, "<PLAYERNAME>");
+            text = text.Replace(nameArr[0], "<PLAYERFIRSTNAME>");
+            text = text.Replace(nameArr[1], "<PLAYERLASTNAME>");
+            
+            return text;
         }
 
         public static string VoiceMessageToFileName(string voiceMessage)
@@ -95,7 +107,7 @@ namespace Echokraut.Helper.Functional
                 SavedFiles.Add(DateTime.Now, filePath);
                 
                 if (Plugin.Configuration.GoogleDriveUpload)
-                    await GoogleDriveHelper.UploadFile(GetParentFolderPath(string.Empty, voiceMessage), $"{VoiceMessageToFileName(voiceMessage.Text)}.wav", filePath, eventId);
+                    await GoogleDriveHelper.UploadFile(GetParentFolderPath(string.Empty, voiceMessage), $"{VoiceMessageToFileName(RemovePlayerNameInText(voiceMessage.OriginalText))}.wav", filePath, eventId);
 
                 return true;
             }

@@ -60,7 +60,7 @@ public sealed class Live3DAudioEngine : IDisposable
         _listenerLastTicks   = Stopwatch.GetTimestamp();
 
         Bass.Set3DPosition(position, new Vector3D(), front, top);
-        Bass.Set3DFactors(distanceFactor, rolloffFactor, dopplerFactor);
+        Bass.Set3DFactors(distanceFactor, rolloffFactor, 0f);
         Bass.Apply3D();
 
         _listenerTimer?.Dispose();
@@ -95,12 +95,37 @@ public sealed class Live3DAudioEngine : IDisposable
             DalamudHelper.Camera = CameraManager.Instance()->GetActiveCamera();
 
         if (DalamudHelper.LocalPlayer == null)
-            Plugin.Framework.RunOnFrameworkThread(() => DalamudHelper.LocalPlayer = Plugin.ClientState.LocalPlayer);
+            Plugin.Framework.RunOnFrameworkThread(() => DalamudHelper.LocalPlayer = Plugin.ObjectTable.LocalPlayer);
 
         if (DalamudHelper.Camera != null && DalamudHelper.LocalPlayer != null)
         {
             var matrix = DalamudHelper.Camera->CameraBase.SceneCamera.ViewMatrix;
-            _listenerFront = new Vector3D(matrix[2], matrix[1], matrix[0]);
+            
+            var front = new Vector3D(matrix[2], matrix[1], matrix[0]);
+            var top   = new Vector3D(matrix[6], matrix[5], matrix[4]);
+
+            static float Dot(Vector3D a, Vector3D b) => a.X*b.X + a.Y*b.Y + a.Z*b.Z;
+            static float Len(Vector3D v) => MathF.Sqrt(v.X*v.X+v.Y*v.Y+v.Z*v.Z);
+            static Vector3D Norm(Vector3D v){ var l=Len(v); return l>1e-6f? new(v.X/l,v.Y/l,v.Z/l): new(0,0,1); }
+
+            var newFront = front;
+            var oldFront = _listenerFront;
+            newFront = Norm(newFront);
+            oldFront = Norm(oldFront);
+
+            float cos = Math.Clamp(Dot(newFront, oldFront), -1f, 1f);
+            
+            if (cos > 0.99995f) 
+            {
+                front = _listenerFront;
+                top   = _listenerTop;
+            }
+            else
+            {
+                NormalizeOrthonormalize(ref front, ref top);
+                _listenerFront = front;
+                _listenerTop   = top;
+            }
 
             var p = DalamudHelper.LocalPlayer.Position;
             var target = new Vector3D(p.X, p.Y, p.Z);
@@ -113,6 +138,9 @@ public sealed class Live3DAudioEngine : IDisposable
 
             var velUnitsPerSec = Scale(Sub(_listenerPosSmoothed, _listenerPosLast), 1f / dt);
             var velMetersPerSec = Scale(velUnitsPerSec, 1f / _distanceFactor);
+            
+            float v2 = velMetersPerSec.X*velMetersPerSec.X + velMetersPerSec.Y*velMetersPerSec.Y + velMetersPerSec.Z*velMetersPerSec.Z;
+            if (v2 < 0.0001f) velMetersPerSec = new Vector3D();
 
             _listenerPosLast = _listenerPosSmoothed;
             _listenerLastTicks = now;
@@ -175,9 +203,11 @@ public sealed class Live3DAudioEngine : IDisposable
         if (_inited) return;
 
         // robustere globale Audio-Buffering-Settings
-        Bass.Configure(Configuration.UpdatePeriod, 10);  // ms
+        Bass.Configure(Configuration.UpdatePeriod, 10);        // ms
         Bass.Configure(Configuration.DeviceBufferLength, 120); // ms
-        Bass.Configure(Configuration.SRCQuality, 4);            // better SRC
+        Bass.Configure(Configuration.SRCQuality, 4);           // better SRC
+        Bass.Configure(Configuration.FloatDSP, true);          // falls verfügbar im Wrapper
+        Bass.Configure(Configuration.Float, true);             // je nach ManagedBass enum
 
         if (!Bass.Init(_deviceIndex, 48000, DeviceInitFlags.Default | DeviceInitFlags.Device3D) &&
             Bass.LastError != Errors.Already)
@@ -261,11 +291,15 @@ public sealed class Live3DAudioEngine : IDisposable
             get { lock (_stateLock) return _volume; }
             set
             {
-                var v = (float)Math.Clamp(value, 0.0, 1.0);
+                var v = (float)Math.Clamp(value, 0.0, 1f);
                 lock (_stateLock)
                 {
                     _volume = v;
-                    if (_h != 0) AttachVolumeDspIfNeeded();
+                    if (_h != 0)
+                    {
+                        Bass.ChannelSetAttribute(_h, ChannelAttribute.Volume, _volume);
+                        //AttachVolumeDspIfNeeded();
+                    }
                 }
             }
         }
@@ -387,7 +421,7 @@ public sealed class Live3DAudioEngine : IDisposable
             if (_h == 0)
                 throw new InvalidOperationException($"CreateStream failed: {Bass.LastError}");
 
-            Bass.ChannelSet3DAttributes(_h, ManagedBass.Mode3D.Normal, 1f, 0f, -1, -1, 0);
+            Bass.ChannelSet3DAttributes(_h, ManagedBass.Mode3D.Normal, 1f, 1000f, -1, -1, 0);
 
             var channelBufferMs = MathF.Max(_bufferMs, 450);
             Bass.ChannelSetAttribute(_h, ChannelAttribute.Buffer, channelBufferMs / 1000f);
@@ -395,7 +429,7 @@ public sealed class Live3DAudioEngine : IDisposable
             Bass.ChannelSetAttribute(_h, ChannelAttribute.Volume, 1f);
             Bass.ChannelSet3DPosition(_h, _srcPos, null, new Vector3D());
             Bass.Apply3D();
-            AttachVolumeDspIfNeeded();
+            Bass.ChannelSetAttribute(_h, ChannelAttribute.Volume, _volume);
 
             _endSync = OnEndSync;
             if (Bass.ChannelSetSync(_h, SyncFlags.End, 0, _endSync) == 0)
@@ -612,13 +646,16 @@ public sealed class Live3DAudioEngine : IDisposable
             var velUnitsPerSec = Scale(Sub(_smoothPos, _lastPos), 1f / dt);
             var velMetersPerSec = Scale(velUnitsPerSec, 1f / _engine.DistanceFactor);
 
+            float v2 = velMetersPerSec.X*velMetersPerSec.X + velMetersPerSec.Y*velMetersPerSec.Y + velMetersPerSec.Z*velMetersPerSec.Z;
+            if (v2 < 0.0001f) velMetersPerSec = new Vector3D();
+            
             _lastPos = _smoothPos;
             _lastTicks = now;
 
             if (_h != 0)
             {
                 Bass.ChannelSet3DPosition(_h, _smoothPos, null, velMetersPerSec);
-                Bass.Apply3D();
+                //Bass.Apply3D();
             }
         }
 
