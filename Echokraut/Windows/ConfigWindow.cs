@@ -587,6 +587,64 @@ public class ConfigWindow : Window, IDisposable
 
             fileDialogManager!.Draw();
         }
+
+        ImGui.NewLine();
+
+        if (ImGui.CollapsingHeader("Google Drive:"))
+        {
+            var googleDriveRequestVoiceLine = Plugin.Configuration.GoogleDriveRequestVoiceLine;
+            ImGui.LabelText("", "This setting may tremendously help in the future. Please consider helping out.");
+            if (ImGui.Checkbox("Send any dialogue line to my (Ren Nagasaki's) Share for a full database of needed voice lines.", ref googleDriveRequestVoiceLine))
+            {
+                Plugin.Configuration.GoogleDriveRequestVoiceLine = googleDriveRequestVoiceLine;
+                Plugin.Configuration.Save();
+
+                if (googleDriveRequestVoiceLine)
+                    GoogleDriveHelper.CreateDriveServicePkceAsync();
+            }
+            ImGui.NewLine();
+            
+            using (ImRaii.Disabled(!saveLocally))
+            {
+                var googleDriveUpload = Plugin.Configuration.GoogleDriveUpload;
+                if (ImGui.Checkbox("Upload to Google Drive (requires 'Save generated audio locally')", ref googleDriveUpload))
+                {
+                    Plugin.Configuration.GoogleDriveUpload = googleDriveUpload;
+                    Plugin.Configuration.Save();
+                }
+            }
+
+            var googleDriveDownload = Plugin.Configuration.GoogleDriveDownload;
+            if (ImGui.Checkbox("Download from Google Drive Share", ref googleDriveDownload))
+            {
+                Plugin.Configuration.GoogleDriveDownload = googleDriveDownload;
+                Plugin.Configuration.Save();
+            }
+
+            using (ImRaii.Disabled(!googleDriveDownload))
+            {
+                var googleDriveDownloadPeriodically = Plugin.Configuration.GoogleDriveDownloadPeriodically;
+                if (ImGui.Checkbox("Download periodically (every 60 minutes, only updating/downloading new files)",
+                                   ref googleDriveDownloadPeriodically))
+                {
+                    Plugin.Configuration.GoogleDriveDownloadPeriodically = googleDriveDownloadPeriodically;
+                    Plugin.Configuration.Save();
+                }
+
+                ImGui.LabelText("", "Google Drive share link");
+                var googleDriveShareLink = Plugin.Configuration.GoogleDriveShareLink;
+                if (ImGui.InputText($"##EKGDShareLink", ref googleDriveShareLink, 100))
+                {
+                    Plugin.Configuration.GoogleDriveShareLink = googleDriveShareLink;
+                    Plugin.Configuration.Save();
+                }
+                ImGui.SameLine();
+                if (ImGui.Button("Download now##EKGDDownloadNow"))
+                {
+                    GoogleDriveHelper.DownloadFolder(Plugin.Configuration.LocalSaveLocation, Plugin.Configuration.GoogleDriveShareLink);
+                }
+            }
+        }
     }
 
     private unsafe void DrawBubbleSettings()
