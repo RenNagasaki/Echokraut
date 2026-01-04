@@ -254,10 +254,6 @@ public sealed class Live3DAudioEngine : IDisposable
         readonly Queue<byte[]> _prefetchQueue = new();
         bool _headerChecked;
 
-        // Multi-chunk Fade-In
-        int _rampSamplesLeft = 0;
-        int _rampTotalSamples = 0;
-
         public PlaybackState State { get; private set; } = PlaybackState.Stopped;
 
         public double Volume
@@ -436,10 +432,7 @@ public sealed class Live3DAudioEngine : IDisposable
                 Thread.Sleep(5);
             }
 
-            int rampMs = 40;
-            _rampTotalSamples = Math.Max(1, _sr * rampMs / 1000 * _ch);
-            _rampSamplesLeft  = _rampTotalSamples;
-            
+            // 🔥 kein DSP-Ramp mehr – nur Fade in WriteLoop
             if (!Bass.ChannelPlay(_h, false))
                 throw new InvalidOperationException($"ChannelPlay failed: {Bass.LastError}");
         }
@@ -480,60 +473,9 @@ public sealed class Live3DAudioEngine : IDisposable
 
             _volDsp = new DSPProcedure((handle, channel, buffer, length, user) =>
             {
-                var active = Bass.ChannelIsActive(channel);
-                bool playing = active == ManagedBass.PlaybackState.Playing;
-
+                
                 float vol = _volume;
-
-                if (_rampSamplesLeft > 0 && playing)
-                {
-                    if (_outIsFloat)
-                    {
-                        int n = length / 4;
-                        unsafe
-                        {
-                            float* f = (float*)buffer;
-                            for (int i = 0; i < n; i++)
-                            {
-                                float k = 1f;
-                                if (_rampSamplesLeft > 0)
-                                {
-                                    int done = _rampTotalSamples - _rampSamplesLeft;
-                                    float t = (_rampTotalSamples > 0) ? (done / (float)_rampTotalSamples) : 1f;
-                                    k = t;
-                                    _rampSamplesLeft--;
-                                }
-                                f[i] *= (vol * k);
-                            }
-                        }
-                        return;
-                    }
-                    else
-                    {
-                        int n = length / 2;
-                        unsafe
-                        {
-                            short* s = (short*)buffer;
-                            for (int i = 0; i < n; i++)
-                            {
-                                float k = 1f;
-                                if (_rampSamplesLeft > 0)
-                                {
-                                    int done = _rampTotalSamples - _rampSamplesLeft;
-                                    float t = (_rampTotalSamples > 0) ? (done / (float)_rampTotalSamples) : 1f;
-                                    k = t;
-                                    _rampSamplesLeft--;
-                                }
-                                int v = (int)(s[i] * (vol * k));
-                                if (v > short.MaxValue) v = short.MaxValue;
-                                else if (v < short.MinValue) v = short.MinValue;
-                                s[i] = (short)v;
-                            }
-                        }
-                        return;
-                    }
-                }
-
+                
                 if (vol >= 0.9999f) return;
                 if (vol <= 0.0001f)
                 {
@@ -840,7 +782,22 @@ public sealed class Live3DAudioEngine : IDisposable
 
             Buffer.BlockCopy(tmp, 0, floatBytes, 0, n * 4);
         }
+        
+        const int _popKillSamples = 512; // tweak: 256..1024 sinnvoll
 
+        static void KillFirstPcm16LeSamples(byte[] pcm, int samplesToKill)
+        {
+            var s = MemoryMarshal.Cast<byte, short>(pcm.AsSpan());
+            int kill = Math.Min(samplesToKill, s.Length);
+            for (int i = 0; i < kill; i++) s[i] = 0;
+        }
+
+        static void KillFirstFloatSamples(byte[] floats, int samplesToKill)
+        {
+            var f = MemoryMarshal.Cast<byte, float>(floats.AsSpan());
+            int kill = Math.Min(samplesToKill, f.Length);
+            for (int i = 0; i < kill; i++) f[i] = 0f;
+        }
         
         async Task WriteLoop()
         {
@@ -887,16 +844,14 @@ public sealed class Live3DAudioEngine : IDisposable
                     
                     if (_fadePos == 0)
                     {
-                        LogHelper.Info("", $"FIRST CHUNK LEN={chunk.Length} bitsIn={_bitsIn} float={_isIEEEFloatIn} bytesPerSampleIn={_bytesPerSampleIn}",
-                                       new EKEventId(0, TextSource.None));
-                    }
-
-                    
-                    if (_fadePos == 0 && _bitsIn == 16 && !_isIEEEFloatIn)
-                    {
-                        var s = MemoryMarshal.Cast<byte, short>(chunk.AsSpan());
-                        int kill = Math.Min(64, s.Length);
-                        for (int i = 0; i < kill; i++) s[i] = 0;
+                        if (_isIEEEFloatIn)
+                        {
+                            KillFirstFloatSamples(chunk, _popKillSamples);
+                        }
+                        else if (_bitsIn == 16)
+                        {
+                            KillFirstPcm16LeSamples(chunk, _popKillSamples);
+                        }
                     }
 
                     if (_convertToFloat)
@@ -904,7 +859,12 @@ public sealed class Live3DAudioEngine : IDisposable
                         int samples = chunk.Length / _bytesPerSampleIn;
                         int outBytes = samples * 4;
                         var outBuf = new byte[outBytes];
+
                         PcmIntToFloat(chunk, _bytesPerSampleIn * 8, outBuf);
+
+                        if (_fadePos == 0) // Pop-Killer nach Conversion
+                            KillFirstFloatSamples(outBuf, _popKillSamples);
+
                         ApplyFadeInFloat(outBuf);
                         await PushAll(outBuf).ConfigureAwait(false);
                     }
@@ -923,6 +883,7 @@ public sealed class Live3DAudioEngine : IDisposable
                     {
                         await PushAll(chunk).ConfigureAwait(false);
                     }
+
                 }
             }
             catch (OperationCanceledException) { }
