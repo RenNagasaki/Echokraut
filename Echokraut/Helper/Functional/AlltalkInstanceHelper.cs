@@ -533,13 +533,13 @@ namespace Echokraut.Helper.Functional
                             Directory.CreateDirectory(modelFolder);
                             var modelFile = modelFolder + ".zip";
                             var downloadUrl =
-                                GoogleDriveLinkHelper.CheckForGoogleAndConvertToDirectDownloadLink(
+                                GoogleDriveHelper.CheckForGoogleAndConvertToDirectDownloadLink(
                                     Plugin.Configuration.Alltalk.CustomModelUrl, out bool isGoogle);
                             LogHelper.Debug("InstallCustomData", $"{downloadUrl}", eventId);
                             var response = await client.GetAsync(downloadUrl);
 
                             if (isGoogle)
-                                response = GoogleDriveLinkHelper.DownloadGoogleDrive(downloadUrl, response, client);
+                                response = GoogleDriveHelper.DownloadGoogleDrive(downloadUrl, response, client);
 
                             using (var fs = new FileStream(modelFile, FileMode.Create, FileAccess.Write))
                             {
@@ -578,13 +578,13 @@ namespace Echokraut.Helper.Functional
                     {
                         try
                         {
-                            var downloadUrl = GoogleDriveLinkHelper.CheckForGoogleAndConvertToDirectDownloadLink(Plugin.Configuration.Alltalk.CustomVoicesUrl, out bool isGoogle);
+                            var downloadUrl = GoogleDriveHelper.CheckForGoogleAndConvertToDirectDownloadLink(Plugin.Configuration.Alltalk.CustomVoicesUrl, out bool isGoogle);
                             LogHelper.Debug("InstallCustomData",
                                             $"{downloadUrl}", eventId);
                             var response = await client.GetAsync(downloadUrl);
 
                             if (isGoogle)
-                                response = GoogleDriveLinkHelper.DownloadGoogleDrive(downloadUrl, response, client);
+                                response = GoogleDriveHelper.DownloadGoogleDrive(downloadUrl, response, client);
 
                             using (var fs = new FileStream(voicesFile, FileMode.Create, FileAccess.Write))
                             {

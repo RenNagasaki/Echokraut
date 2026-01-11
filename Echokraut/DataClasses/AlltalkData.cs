@@ -19,8 +19,9 @@ namespace Echokraut.DataClasses
         public string CustomVoicesUrl = "";
         public bool LocalInstall { get; set; } = false;
         public bool LocalInstance { get; set; } = false;
-        public bool AutoStartLocalInstance { get; set; } = false;
         public bool RemoteInstance { get; set; } = false;
+        public bool NoInstance { get; set; } = false;
+        public bool AutoStartLocalInstance { get; set; } = false;
         public string LocalInstallPath { get; set; }  = "";
         public bool StreamingGeneration { get; set; } = true;
         public bool IsWindows11 { get; set; } = true;

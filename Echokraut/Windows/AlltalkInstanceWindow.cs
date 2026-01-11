@@ -329,12 +329,14 @@ public class AlltalkInstanceWindow : Window, IDisposable
         {
             var remoteInstance = Plugin.Configuration.Alltalk.RemoteInstance;
             var localInstance = Plugin.Configuration.Alltalk.LocalInstance;
+            var noInstance = Plugin.Configuration.Alltalk.NoInstance;
             using (ImRaii.Disabled(localInstance || AlltalkInstanceHelper.Installing))
             {
                 if (ImGui.Checkbox("Local instance##EKLocalATInstance", ref localInstance))
                 {
                     Plugin.Configuration.Alltalk.LocalInstance = localInstance;
                     Plugin.Configuration.Alltalk.RemoteInstance = false;
+                    Plugin.Configuration.Alltalk.NoInstance = false;
                     Plugin.Configuration.Save();
                 }
             }
@@ -345,6 +347,18 @@ public class AlltalkInstanceWindow : Window, IDisposable
                 {
                     Plugin.Configuration.Alltalk.LocalInstance = false;
                     Plugin.Configuration.Alltalk.RemoteInstance = remoteInstance;
+                    Plugin.Configuration.Alltalk.NoInstance = false;
+                    Plugin.Configuration.Save();
+                }
+            }
+            ImGui.SameLine();
+            using (ImRaii.Disabled(noInstance || AlltalkInstanceHelper.Installing))
+            {
+                if (ImGui.Checkbox("No instance##EKNoATInstance", ref noInstance))
+                {
+                    Plugin.Configuration.Alltalk.LocalInstance = false;
+                    Plugin.Configuration.Alltalk.RemoteInstance = false;
+                    Plugin.Configuration.Alltalk.NoInstance = noInstance;
                     Plugin.Configuration.Save();
                 }
             }
@@ -374,6 +388,18 @@ public class AlltalkInstanceWindow : Window, IDisposable
                     else if (remoteInstance)
                     {
                         DrawRemoteInstance(firstTime);
+                    }
+                    else if (noInstance)
+                    {
+                        using (ImRaii.PushColor(ImGuiCol.Text, Constants.ERRORLOGCOLOR))
+                        {
+                            ImGui.Text(
+                                "Please be aware that selecting 'No Instance' is only meant to be used if you're unable to use Alltalk at all.");
+                            ImGui.Text(
+                                "It will result in you not generating any audio.");
+                            ImGui.Text(
+                                "You will need to procure the audio files directly from a friend or via the Google Drive Share Link.");
+                        }
                     }
                 }
 

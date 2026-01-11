@@ -57,9 +57,9 @@ namespace Echokraut.Backend
 
                 if (!Plugin.Configuration.Alltalk.StreamingGeneration)
                 {
-                    var filePath = Plugin.Configuration.LocalSaveLocation + @"\Temp.wav";
+                    var filePath = Plugin.Configuration.LocalSaveLocation + @"/Temp.wav";
                     var stream = readSeekableStream;
-                    AudioFileHelper.WriteStreamToFile(eventId, filePath, stream);
+                    await AudioFileHelper.WriteStreamToFile(eventId, message, stream);
                     readSeekableStream.Seek(0, SeekOrigin.Begin);
                 }
 

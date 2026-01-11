@@ -64,7 +64,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
             var disabled = CurrentVoiceMessage != null && CurrentVoiceMessage.SpeakerObj != null && Plugin.Configuration.MutedNpcDialogues.Contains(CurrentVoiceMessage.SpeakerObj.DataId);
             using (ImRaii.Disabled(disabled))
             {
-                if (PlayingHelper.Playing)
+                if (PlayingHelper.Playing && CurrentVoiceMessage != null)
                 {
                     if (PlayingHelper.AudioEngine.GetState(CurrentVoiceMessage.StreamId) != PlaybackState.Playing)
                     {

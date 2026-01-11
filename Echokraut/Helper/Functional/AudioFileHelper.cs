@@ -5,6 +5,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using Echokraut.Helper.API;
 
 namespace Echokraut.Helper.Functional
 {
@@ -20,7 +23,7 @@ namespace Echokraut.Helper.Functional
                 if (File.Exists(filePath))
                 {
                     voiceMessage.LoadedLocally = true;
-                    using var mainOutputStream = new WavFileReader(filePath);
+                    var mainOutputStream = new WavFileReader(filePath);
                     voiceMessage.Stream = mainOutputStream;
                     PlayingHelper.PlayingQueue.Add(voiceMessage);
                     LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Local file found. Location: {filePath}", eventId);
@@ -42,21 +45,40 @@ namespace Echokraut.Helper.Functional
 
         public static string GetLocalAudioPath(string localSaveLocation, VoiceMessage voiceMessage)
         {
-            var filePath = GetSpeakerAudioPath(localSaveLocation, voiceMessage.Speaker.Name) + $"{voiceMessage.Speaker.Race.ToString()}-{voiceMessage.Speaker.Voice?.VoiceName}\\{VoiceMessageToFileName(voiceMessage.Text)}.wav";
+            var filePath = $"{GetParentFolderPath(localSaveLocation, voiceMessage)}/{VoiceMessageToFileName(RemovePlayerNameInText(voiceMessage.OriginalText))}.wav";
 
             return filePath;
+        }
+
+        public static string GetParentFolderPath(string localSaveLocation, VoiceMessage voiceMessage)
+        {
+            var parentPath = GetSpeakerAudioPath(localSaveLocation, voiceMessage.Speaker.Name);
+            
+            return parentPath;
         }
 
         public static string GetSpeakerAudioPath(string localSaveLocation, string speaker)
         {
             var filePath = localSaveLocation;
-            if (!filePath.EndsWith(@"\"))
-                filePath += @"\";
+            if (!filePath.EndsWith(@"/") && !string.IsNullOrWhiteSpace(filePath))
+                filePath += @"/";
 
             speaker = speaker != "" ? speaker : "NOPERSON";
-            filePath += $"{speaker}\\";
+            filePath += $"{speaker}/";
 
             return filePath;
+        }
+
+        public static string RemovePlayerNameInText(string text)
+        {
+            var name = DalamudHelper.LocalPlayer.Name.TextValue;
+            var nameArr = name.Split(' ');
+
+            text = text.Replace(name, "<PLAYERNAME>");
+            text = text.Replace(nameArr[0], "<PLAYERFIRSTNAME>");
+            text = text.Replace(nameArr[1], "<PLAYERLASTNAME>");
+            
+            return text;
         }
 
         public static string VoiceMessageToFileName(string voiceMessage)
@@ -70,15 +92,22 @@ namespace Echokraut.Helper.Functional
             return fileName;
         }
 
-        public static bool WriteStreamToFile(EKEventId eventId, string filePath, Stream stream)
+        public static async Task<bool> WriteStreamToFile(EKEventId eventId, VoiceMessage voiceMessage, Stream stream)
         {
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Saving audio locally: {filePath}", eventId);
             try
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(filePath));
+                var filePath = GetLocalAudioPath(Plugin.Configuration.LocalSaveLocation, voiceMessage);
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Saving audio locally: {filePath}", eventId);
+                
+                var parentDirectory = Path.GetDirectoryName(filePath);
+                Directory.CreateDirectory(parentDirectory);
+                
                 stream.Seek(0, SeekOrigin.Begin);
-                RawPcmToWav.CreateWaveFileAsync(filePath, stream, sampleRate: 24000, bitsPerSample: 16, channels: 1);
+                await RawPcmToWav.CreateWaveFileAsync(filePath, stream, sampleRate: 24000, bitsPerSample: 16, channels: 1);
                 SavedFiles.Add(DateTime.Now, filePath);
+                
+                if (Plugin.Configuration.GoogleDriveUpload)
+                    await GoogleDriveHelper.UploadFile(GetParentFolderPath(string.Empty, voiceMessage), $"{VoiceMessageToFileName(RemovePlayerNameInText(voiceMessage.OriginalText))}.wav", filePath, eventId);
 
                 return true;
             }

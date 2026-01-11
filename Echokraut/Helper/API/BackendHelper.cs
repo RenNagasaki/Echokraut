@@ -59,6 +59,9 @@ namespace Echokraut.Helper.API
                     if (Plugin.Configuration.Alltalk.RemoteInstance &&
                         !string.IsNullOrWhiteSpace(Plugin.Configuration.Alltalk.BaseUrl))
                         return true;
+
+                    if (Plugin.Configuration.Alltalk.NoInstance)
+                        return true;
                     break;
             }
 
@@ -98,6 +101,7 @@ namespace Echokraut.Helper.API
                         var cleanText = Plugin.Configuration.RemovePunctuation ? TalkTextHelper.RemovePunctuation(trimmedMessage) : trimmedMessage;
                         var messageObj = new VoiceMessage()
                         {
+                            OriginalText = voiceMessage.OriginalText,
                             Text = cleanText,
                             ChatType = voiceMessage.ChatType,
                             Language = voiceMessage.Language,
