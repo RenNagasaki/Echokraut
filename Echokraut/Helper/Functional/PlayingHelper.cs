@@ -329,20 +329,43 @@ namespace Echokraut.Helper.Functional
             }
         }
 
-        public static void ClearPlayingQueue()
+        public static void ClearPlayingQueue(TextSource textSource = TextSource.None)
         {
-            PlayingQueue.Clear();
-            PlayingQueue.Clear();
+            switch (textSource)
+            {
+                case TextSource.None:
+                    PlayingQueue.Clear();
+                    break;
+                default:
+                    PlayingQueue.RemoveAll(p => p.Source == textSource);
+                    break;
+            }
         }
 
-        public static void ClearRequestingQueue()
+        public static void ClearRequestingQueue(TextSource textSource = TextSource.None)
         {
-            RequestingQueue.Clear();
+            switch (textSource)
+            {
+                case TextSource.None:
+                    RequestingQueue.Clear();
+                    break;
+                default:
+                    RequestingQueue.RemoveAll(p => p.Source == textSource);
+                    break;
+            }
         }
 
-        public static void ClearRequestedQueue()
+        public static void ClearRequestedQueue(TextSource textSource = TextSource.None)
         {
-            RequestedQueue.Clear();
+            switch (textSource)
+            {
+                case TextSource.None:
+                    RequestedQueue.Clear();
+                    break;
+                default:
+                    RequestedQueue.RemoveAll(p => p.Source == textSource);
+                    break;
+            }
         }
 
         public static void Dispose()

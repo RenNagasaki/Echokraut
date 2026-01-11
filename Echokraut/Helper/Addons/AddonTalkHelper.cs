@@ -85,7 +85,7 @@ public unsafe class AddonTalkHelper
                 PlayingHelper.InDialog = false;
                 lastValue = new AddonTalkState();
                 if (Plugin.Configuration.CancelSpeechOnTextAdvance)
-                    Plugin.Cancel(DialogExtraOptionsWindow.CurrentVoiceMessage);
+                    Plugin.Cancel(DialogExtraOptionsWindow.CurrentVoiceMessage, true);
                 DialogExtraOptionsWindow.CurrentVoiceMessage = null;
             }
 

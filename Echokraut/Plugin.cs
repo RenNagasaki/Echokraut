@@ -160,8 +160,15 @@ public partial class Plugin : IDalamudPlugin
         BackendHelper.OnCancelAll();
     }
 
-    public static void Cancel(VoiceMessage? message)
+    public static void Cancel(VoiceMessage? message, bool dialogClosed = false)
     {
+        if (dialogClosed)
+        {
+            PlayingHelper.ClearPlayingQueue(TextSource.AddonTalk);
+            PlayingHelper.ClearRequestedQueue(TextSource.AddonTalk);
+            PlayingHelper.ClearRequestingQueue(TextSource.AddonTalk);
+        }
+        
         if (message != null)
         {
             StopLipSync(message);
