@@ -203,26 +203,27 @@ namespace Echokraut.Helper.Functional
                         !Directory.Exists(Plugin.Configuration.LocalSaveLocation))
                         Directory.CreateDirectory(Plugin.Configuration.LocalSaveLocation);
 
-                    if (Plugin.Configuration.SaveToLocal && Directory.Exists(Plugin.Configuration.LocalSaveLocation))
+                    if (Plugin.Configuration.SaveToLocal && !currentlyPlayingMessage.LoadedLocally)
                     {
-                        var playedText = currentlyPlayingMessage;
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}", eventId);
-                        if (!string.IsNullOrWhiteSpace(playedText.Text) &&
-                            !playedText.LoadedLocally)
+                        if (Directory.Exists(Plugin.Configuration.LocalSaveLocation))
                         {
-                            var filePath =
-                                AudioFileHelper.GetLocalAudioPath(Plugin.Configuration.LocalSaveLocation, playedText);
-                            var stream = currentlyPlayingMessage.Stream;
-                            AudioFileHelper.WriteStreamToFile(eventId, filePath, stream);
+                            var playedText = currentlyPlayingMessage;
+                            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Text: {playedText.Text}", eventId);
+                            if (!string.IsNullOrWhiteSpace(playedText.Text) &&
+                                !playedText.LoadedLocally)
+                            {
+                                var stream = currentlyPlayingMessage.Stream;
+                                AudioFileHelper.WriteStreamToFile(eventId, playedText, stream);
+                            }
+                        }
+                        else
+                        {
+                            LogHelper.Error(MethodBase.GetCurrentMethod().Name,
+                                            $"Couldn't save file locally. Save location doesn't exist: {Plugin.Configuration.LocalSaveLocation}",
+                                            eventId);
                         }
                     }
-                    else
-                    {
-                        LogHelper.Error(MethodBase.GetCurrentMethod().Name,
-                                        $"Couldn't save file locally. Save location doesn't exists: {Plugin.Configuration.LocalSaveLocation}",
-                                        eventId);
-                    }
-                    
+
                     currentlyPlayingMessage.Stream.Dispose();
                 }
 
@@ -257,6 +258,20 @@ namespace Echokraut.Helper.Functional
 
         public static void AddRequestToQueue(VoiceMessage voiceMessage)
         {
+            if (Plugin.Configuration.GoogleDriveRequestVoiceLine && voiceMessage.Source != TextSource.VoiceTest)
+            {
+                var voiceLine = new VoiceLine()
+                {
+                    Gender = voiceMessage.Speaker.Gender,
+                    Race = voiceMessage.Speaker.Race,
+                    Name = voiceMessage.Speaker.Name,
+                    Text = AudioFileHelper.RemovePlayerNameInText(voiceMessage.OriginalText),
+                    Language = voiceMessage.Language
+                };
+                
+                GoogleDriveHelper.UploadVoiceLine(Constants.GOOGLEDRIVEVOICELINESHARE, voiceLine, voiceMessage.EventId);
+            }
+            
             if (Plugin.Configuration.LoadFromLocalFirst && Directory.Exists(Plugin.Configuration.LocalSaveLocation) && voiceMessage.Speaker.Voice != null && voiceMessage.Source != TextSource.VoiceTest)
             {
                 var result = AudioFileHelper.LoadLocalAudio(voiceMessage.EventId, Plugin.Configuration.LocalSaveLocation, voiceMessage);
@@ -267,6 +282,12 @@ namespace Echokraut.Helper.Functional
             else if (!Directory.Exists(Plugin.Configuration.LocalSaveLocation))
                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. Save location doesn't exists: {Plugin.Configuration.LocalSaveLocation}", voiceMessage.EventId);
 
+            if (Plugin.Configuration.Alltalk.NoInstance)
+            {
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                $"Echokraut set to 'No Instance' skipping inference", voiceMessage.EventId);
+                return;
+            }
             RequestingQueue.Add(voiceMessage);
         }
 
@@ -277,6 +298,20 @@ namespace Echokraut.Helper.Functional
 
         public static void AddRequestBubbleToQueue(VoiceMessage voiceMessage)
         {
+            if (Plugin.Configuration.GoogleDriveRequestVoiceLine && voiceMessage.Source == TextSource.AddonBubble)
+            {
+                var voiceLine = new VoiceLine()
+                {
+                    Gender = voiceMessage.Speaker.Gender,
+                    Race = voiceMessage.Speaker.Race,
+                    Name = voiceMessage.Speaker.Name,
+                    Text = AudioFileHelper.RemovePlayerNameInText(voiceMessage.OriginalText),
+                    Language = voiceMessage.Language
+                };
+                
+                GoogleDriveHelper.UploadVoiceLine(Constants.GOOGLEDRIVEVOICELINESHARE, voiceLine, voiceMessage.EventId);
+            }
+                
             if (Plugin.Configuration.LoadFromLocalFirst && Directory.Exists(Plugin.Configuration.LocalSaveLocation) && voiceMessage.Speaker.Voice != null && voiceMessage.Source != TextSource.VoiceTest)
             {
                 var result = AudioFileHelper.LoadLocalAudio(voiceMessage.EventId, Plugin.Configuration.LocalSaveLocation, voiceMessage);
@@ -287,23 +322,53 @@ namespace Echokraut.Helper.Functional
             else if (!Directory.Exists(Plugin.Configuration.LocalSaveLocation))
                 LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldn't load file locally. Save location doesn't exists: {Plugin.Configuration.LocalSaveLocation}", voiceMessage.EventId);
 
+            if (Plugin.Configuration.Alltalk.NoInstance)
+            {
+                LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                                $"Echokraut set to 'No Instance' skipping inference", voiceMessage.EventId);
+                return;
+            }
+            
             RequestingBubbleQueue.Add(voiceMessage);
         }
 
-        public static void ClearPlayingQueue()
+        public static void ClearPlayingQueue(TextSource textSource = TextSource.None)
         {
-            PlayingQueue.Clear();
-            PlayingQueue.Clear();
+            switch (textSource)
+            {
+                case TextSource.None:
+                    PlayingQueue.Clear();
+                    break;
+                default:
+                    PlayingQueue.RemoveAll(p => p.Source == textSource);
+                    break;
+            }
         }
 
-        public static void ClearRequestingQueue()
+        public static void ClearRequestingQueue(TextSource textSource = TextSource.None)
         {
-            RequestingQueue.Clear();
+            switch (textSource)
+            {
+                case TextSource.None:
+                    RequestingQueue.Clear();
+                    break;
+                default:
+                    RequestingQueue.RemoveAll(p => p.Source == textSource);
+                    break;
+            }
         }
 
-        public static void ClearRequestedQueue()
+        public static void ClearRequestedQueue(TextSource textSource = TextSource.None)
         {
-            RequestedQueue.Clear();
+            switch (textSource)
+            {
+                case TextSource.None:
+                    RequestedQueue.Clear();
+                    break;
+                default:
+                    RequestedQueue.RemoveAll(p => p.Source == textSource);
+                    break;
+            }
         }
 
         public static void Dispose()
