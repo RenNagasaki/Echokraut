@@ -151,6 +151,7 @@ namespace Echokraut.Helper.Functional
 
                         InstanceStarting = false;
                         InstanceRunning = true;
+                        BackendHelper.Initialize(Plugin.Configuration.BackendSelection);
                         
                         InstanceProcess.WaitForExit();
 

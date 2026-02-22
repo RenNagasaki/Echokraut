@@ -102,7 +102,9 @@ public partial class Plugin : IDalamudPlugin
         LogHelper.Initialize(log);
         JsonLoaderHelper.Initialize(ClientState.ClientLanguage);
         DetectLanguageHelper.Initialize();
-        BackendHelper.Initialize(Configuration.BackendSelection);
+        if (Configuration.Alltalk.RemoteInstance)
+            BackendHelper.Initialize(Configuration.BackendSelection);
+        PlayingHelper.Setup();
         CommandHelper.Initialize();
         AlltalkInstanceHelper.Initialize();
         LipSyncHelper = new LipSyncHelper();

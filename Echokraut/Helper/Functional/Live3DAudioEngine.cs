@@ -127,31 +127,36 @@ public sealed class Live3DAudioEngine : IDisposable
                 _listenerTop   = top;
             }
 
-            var p = DalamudHelper.LocalPlayer.Position;
-            var target = new Vector3D(p.X, p.Y, p.Z);
+            if (DalamudHelper.LocalPlayer != null)
+            {
+                var p = DalamudHelper.LocalPlayer.Position;
+                var target = new Vector3D(p.X, p.Y, p.Z);
 
-            var now = Stopwatch.GetTimestamp();
-            var dt = Math.Max(1e-4f, (float)(now - _listenerLastTicks) / Stopwatch.Frequency);
+                var now = Stopwatch.GetTimestamp();
+                var dt = Math.Max(1e-4f, (float)(now - _listenerLastTicks) / Stopwatch.Frequency);
 
-            float alpha = 1f - MathF.Exp(-dt * _listenerSmoothHz);
-            _listenerPosSmoothed = Lerp(_listenerPosSmoothed, target, alpha);
+                float alpha = 1f - MathF.Exp(-dt * _listenerSmoothHz);
+                _listenerPosSmoothed = Lerp(_listenerPosSmoothed, target, alpha);
 
-            var velUnitsPerSec = Scale(Sub(_listenerPosSmoothed, _listenerPosLast), 1f / dt);
-            var velMetersPerSec = Scale(velUnitsPerSec, 1f / _distanceFactor);
-            
-            float v2 = velMetersPerSec.X*velMetersPerSec.X + velMetersPerSec.Y*velMetersPerSec.Y + velMetersPerSec.Z*velMetersPerSec.Z;
-            if (v2 < 0.0001f) velMetersPerSec = new Vector3D();
+                var velUnitsPerSec = Scale(Sub(_listenerPosSmoothed, _listenerPosLast), 1f / dt);
+                var velMetersPerSec = Scale(velUnitsPerSec, 1f / _distanceFactor);
 
-            _listenerPosLast = _listenerPosSmoothed;
-            _listenerLastTicks = now;
+                float v2 = velMetersPerSec.X * velMetersPerSec.X + velMetersPerSec.Y * velMetersPerSec.Y +
+                           velMetersPerSec.Z * velMetersPerSec.Z;
+                if (v2 < 0.0001f) velMetersPerSec = new Vector3D();
 
-            Bass.Set3DPosition(_listenerPosSmoothed, velMetersPerSec, _listenerFront, _listenerTop);
-            Bass.Apply3D();
+                _listenerPosLast = _listenerPosSmoothed;
+                _listenerLastTicks = now;
 
-            static Vector3D Sub(Vector3D a, Vector3D b) => new(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
-            static Vector3D Scale(Vector3D a, float s) => new(a.X * s, a.Y * s, a.Z * s);
-            static Vector3D Lerp(Vector3D a, Vector3D b, float t)
-                => new(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t, a.Z + (b.Z - a.Z) * t);
+                Bass.Set3DPosition(_listenerPosSmoothed, velMetersPerSec, _listenerFront, _listenerTop);
+                Bass.Apply3D();
+
+                static Vector3D Sub(Vector3D a, Vector3D b) => new(a.X - b.X, a.Y - b.Y, a.Z - b.Z);
+                static Vector3D Scale(Vector3D a, float s) => new(a.X * s, a.Y * s, a.Z * s);
+
+                static Vector3D Lerp(Vector3D a, Vector3D b, float t)
+                    => new(a.X + (b.X - a.X) * t, a.Y + (b.Y - a.Y) * t, a.Z + (b.Z - a.Z) * t);
+            }
         }
     }
 

@@ -338,7 +338,7 @@ public class Program
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
                     UseShellExecute = false,
-                    CreateNoWindow = true // auf true setzen, wenn du kein Konsolenfenster willst
+                    CreateNoWindow = true
                 };
 
                 InstanceProcess = new Process();
@@ -363,7 +363,7 @@ public class Program
                             InstanceRunning = true;
                             var readyFile = Path.Join(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Ready.txt");
                             if (!File.Exists(readyFile))
-                                File.Create(readyFile);
+                                File.WriteAllText(readyFile, " ");
                         }
                     }
                 };
@@ -378,7 +378,6 @@ public class Program
                 InstanceProcess.BeginErrorReadLine();
                 InstanceProcessIsRunning = true;
 
-                // Eingabebefehle an cmd.exe senden
                 using (var sw = InstanceProcess.StandardInput)
                 {
                     if (sw.BaseStream.CanWrite)
@@ -400,7 +399,6 @@ public class Program
                             sw.WriteLine(command);
                         }
 
-                        // Python-Skript ausführen
                         command = $"python -u {Path.Join(alltalkFolder, "script.py")}";
                         sw.WriteLine(command);
                     }

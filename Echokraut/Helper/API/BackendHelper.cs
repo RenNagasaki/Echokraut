@@ -24,7 +24,6 @@ namespace Echokraut.Helper.API
         {
             Rand = new Random(Guid.NewGuid().GetHashCode());
             SetBackendType(backendType);
-            PlayingHelper.Setup();
         }
 
         public static void SetBackendType(TTSBackends backendType)

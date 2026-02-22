@@ -378,6 +378,7 @@ namespace Echokraut.Helper.Functional
                 StopThread = true;
                 PlayingQueueThread.Interrupt();
                 RequestingQueueThread.Interrupt();
+                AudioEngine.Dispose();
             }
             catch { }
         }
