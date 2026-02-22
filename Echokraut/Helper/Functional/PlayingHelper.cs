@@ -375,10 +375,10 @@ namespace Echokraut.Helper.Functional
         {
             try
             {
+                AudioEngine.Dispose();
                 StopThread = true;
                 PlayingQueueThread.Interrupt();
                 RequestingQueueThread.Interrupt();
-                AudioEngine.Dispose();
             }
             catch { }
         }
