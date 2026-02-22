@@ -198,6 +198,9 @@ public class AlltalkInstanceWindow : Window, IDisposable
                                 AlltalkInstanceHelper.StopInstance(new EKEventId(0, TextSource.Backend));
                             AlltalkInstanceHelper.Install();
                         }
+                        
+                        ImGui.Text("Please be aware that the install process needs about 20GB of space on disk and, depending on your connection, may take quite some time to install");
+                        ImGui.Text("The process should open up to two shell/cmd windows while installing, you can follow the process there");
                     }
 
                     if (AlltalkInstanceHelper.Installing)
