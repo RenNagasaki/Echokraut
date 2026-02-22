@@ -3,6 +3,7 @@ using Echokraut.Helper.Data;
 using System;
 using System.Diagnostics;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
@@ -28,27 +29,25 @@ namespace Echokraut.Helper.Functional
         private static Task? InstanceThread;
         private static Process? InstanceProcess;
         private static bool InstanceProcessIsRunning;
-        private static string? LocalInstallerLocation;
 
         public static void Initialize()
         {
-            LocalInstallerLocation = Path.Join(Environment.CurrentDirectory, 
-                                               "EchokrautLocalInstaller.exe");
             IsWindows = Dalamud.Utility.Util.GetHostPlatform() == OSPlatform.Windows;
             IsCudaInstalled = IsCudaInstalledCheck(new EKEventId(0, TextSource.Backend));
         }
-        public static void Install(bool reinstall)
+        public static void Install()
         {
             var eventId = LogHelper.Start("Install", TextSource.Backend);
             try
             {
                 LogHelper.Info("InstallInstance", $"Starting alltalk install process", eventId);
-                LogHelper.Debug("InstallInstance", $"Location: {LocalInstallerLocation}", eventId);
 
                 InstallThread = Task.Run(() =>
                 {
                     Installing = true;
-                    var processInfo = new ProcessStartInfo(LocalInstallerLocation)
+                    var localInstallerLocation = CheckAndDownloadLocalInstaller(eventId);
+                    
+                    var processInfo = new ProcessStartInfo(localInstallerLocation)
                     {
                         UseShellExecute = true, 
                         CreateNoWindow = false,
@@ -67,9 +66,6 @@ namespace Echokraut.Helper.Functional
                     InstallProcess = new Process();
                     InstallProcess.StartInfo = processInfo;
                     InstallProcess.Start();
-                    InstallProcess.BeginOutputReadLine();
-                    InstallProcess.BeginErrorReadLine();
-
                     InstallProcess.WaitForExit();
 
                     LogHelper.Info("Install", $"Done!", eventId);
@@ -102,8 +98,6 @@ namespace Echokraut.Helper.Functional
                     Installing = false;
                     if (InstallProcess is { HasExited: false })
                     {
-                        InstallProcess?.CancelOutputRead();
-                        InstallProcess?.CancelErrorRead();
                         InstallProcess?.Kill(true);
                     }
                     InstallProcess?.Dispose();
@@ -132,7 +126,9 @@ namespace Echokraut.Helper.Functional
                         InstanceProcess = new Process();
                         LogHelper.Info("StartInstance", $"Starting alltalk instance process", eventId);
 
-                        var processInfo = new ProcessStartInfo(LocalInstallerLocation)
+                        var localInstallerLocation = CheckAndDownloadLocalInstaller(eventId);
+                        
+                        var processInfo = new ProcessStartInfo(localInstallerLocation)
                         {
                             UseShellExecute = true, 
                             CreateNoWindow = false,
@@ -146,9 +142,15 @@ namespace Echokraut.Helper.Functional
                         InstanceProcess = new Process();
                         InstanceProcess.StartInfo = processInfo;
                         InstanceProcess.Start();
-                        InstanceProcess.BeginOutputReadLine();
-                        InstanceProcess.BeginErrorReadLine();
                         InstanceProcessIsRunning = true;
+
+                        while (!File.Exists(Path.Join(Path.GetDirectoryName(localInstallerLocation), "Ready.txt")))
+                        {
+                            Thread.Sleep(2000);
+                        }
+
+                        InstanceStarting = false;
+                        InstanceRunning = true;
                         
                         InstanceProcess.WaitForExit();
 
@@ -183,21 +185,22 @@ namespace Echokraut.Helper.Functional
                 {
                     LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Stopping alltalk instance process",
                                    eventId);
-                    InstanceRunning = false;
+                    var readyFile = Path.Join(Plugin.Configuration.Alltalk.LocalInstallPath, "EchokrautLocalInstaller", "Ready.txt");
+                    if (File.Exists(readyFile))
+                        File.Delete(readyFile);
+                    InstanceRunning = false; 
                     InstanceStarting = false;
-                    InstanceStopping = true;
+                    InstanceStopping = true; 
                     InstanceProcessIsRunning = false;
                     if (InstanceProcess is { HasExited: false })
                     {
-                        InstanceProcess.CancelOutputRead();
-                        InstanceProcess.CancelErrorRead();
                         InstanceProcess.Kill(true);
                     }
                     InstanceProcess?.Dispose();
                     InstanceProcess = null;
                     InstanceThread = null;
                     InstanceStopping = false;
-                }
+                } 
             }
             catch (Exception ex)
             {
@@ -369,6 +372,31 @@ namespace Echokraut.Helper.Functional
             {
                 LogHelper.Error("InstallCustomData", $"Error while installing custom data: {ex}", eventId);
             }
+        }
+
+        private static string CheckAndDownloadLocalInstaller(EKEventId eventId)
+        {
+            var localInstallerLocation = Path.Join(Plugin.Configuration.Alltalk.LocalInstallPath, "EchokrautLocalInstaller");
+            var localInstallerExeLocation = Path.Join(localInstallerLocation, "EchokrautLocalInstaller.exe");
+
+            if (!File.Exists(localInstallerExeLocation))
+            {
+                LogHelper.Info("CheckAndDownloadLocalInstaller", $"Downloading local installer", eventId);
+                using var http = new HttpClient();
+
+                string fileName = Path.GetFileName(new Uri(Constants.EKLOCALINSTALLERURL).LocalPath);
+                string zipPath = Path.Combine(Plugin.Configuration.Alltalk.LocalInstallPath, fileName);
+
+                var bytes = http.GetByteArrayAsync(Constants.EKLOCALINSTALLERURL).Result;
+                File.WriteAllBytes(zipPath, bytes);
+
+                Directory.CreateDirectory(localInstallerLocation);
+
+                ZipFile.ExtractToDirectory(zipPath, localInstallerLocation, overwriteFiles: true);
+            }
+
+            LogHelper.Debug("InstallInstance", $"Location: {localInstallerExeLocation}", eventId);
+            return localInstallerExeLocation;
         }
     }
 }

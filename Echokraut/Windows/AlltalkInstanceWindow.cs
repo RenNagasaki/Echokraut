@@ -196,7 +196,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
                         {
                             if (Plugin.Configuration.Alltalk.LocalInstall && (AlltalkInstanceHelper.InstanceRunning || AlltalkInstanceHelper.InstanceStarting))
                                 AlltalkInstanceHelper.StopInstance(new EKEventId(0, TextSource.Backend));
-                            AlltalkInstanceHelper.Install(Plugin.Configuration.Alltalk.LocalInstall);
+                            AlltalkInstanceHelper.Install();
                         }
                     }
 
@@ -207,13 +207,6 @@ public class AlltalkInstanceWindow : Window, IDisposable
 
             if (!firstTime)
             {
-                var streamingGeneration = Plugin.Configuration.Alltalk.StreamingGeneration;
-                if (ImGui.Checkbox("Generate Streaming(Do not wait for whole text to be generated before playing audio)##EKGenerateStreaming", ref streamingGeneration))
-                {
-                    Plugin.Configuration.Alltalk.StreamingGeneration = streamingGeneration;
-                    Plugin.Configuration.Save();
-                }
-
                 using (ImRaii.Disabled(AlltalkInstanceHelper.InstanceRunning || AlltalkInstanceHelper.InstanceStarting))
                 {
                     var buttonText = AlltalkInstanceHelper.InstanceStarting ? "Starting..." : AlltalkInstanceHelper.InstanceRunning ? "Running" : "Start";
@@ -231,6 +224,10 @@ public class AlltalkInstanceWindow : Window, IDisposable
                     if (ImGui.Button(buttonText))
                         AlltalkInstanceHelper.StopInstance(new EKEventId(0, TextSource.Backend));
                 }
+
+                ImGui.NewLine();
+                
+                DrawAlltalkServiceOptions();
             }
         }
         catch (Exception ex)

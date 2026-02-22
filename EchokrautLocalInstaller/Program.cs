@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using System.IO.Pipes;
+using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json;
@@ -72,19 +73,18 @@ public class Program
                     StartInstance(installFolder);
                     break;
                 case "install":
-                    IsWindows = Convert.ToBoolean(args[6]);
+                    IsWindows = Convert.ToBoolean(args[5]);
                     Install(args[1],
                             args[2],
                             args[3],
                             Convert.ToBoolean(args[4]),
-                            Convert.ToBoolean(args[5]),
-                            Convert.ToBoolean(args[7]));
+                            Convert.ToBoolean(args[6]));
                     break;
             }
         }
     }
 
-    static void Install(string installFolder, string customModelUrl, string customVoicesUrl, bool reinstall,  bool autoStartLocalInstance, bool isWindows11)
+    static void Install(string installFolder, string customModelUrl, string customVoicesUrl, bool reinstall, bool isWindows11)
     {
         try
         {
@@ -271,12 +271,10 @@ public class Program
                         configEngine["settings"]["deepspeed_enabled"] = true;
                         File.WriteAllText(modelSettingsFile, JsonConvert.SerializeObject(configEngine));
                     }
-                    InstallCustomData(alltalkFolder, autoStartLocalInstance, customModelUrl, customVoicesUrl).Wait();
+                    InstallCustomData(alltalkFolder, customModelUrl, customVoicesUrl).Wait();
 
                     Console.WriteLine($"Done!");
                     Installing = false;
-                    if (autoStartLocalInstance)
-                        StartInstance(alltalkFolder);
                 }
             }
             catch (OperationCanceledException ex)
@@ -363,6 +361,9 @@ public class Program
                             Console.WriteLine("Alltalk instance is ready");
                             InstanceStarting = false;
                             InstanceRunning = true;
+                            var readyFile = Path.Join(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Ready.txt");
+                            if (!File.Exists(readyFile))
+                                File.Create(readyFile);
                         }
                     }
                 };
@@ -442,6 +443,9 @@ public class Program
             InstanceProcess?.Dispose();
             InstanceProcess = null;
             InstanceStopping = false;
+            var readyFile = Path.Join(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Ready.txt");
+            if (File.Exists(readyFile))
+                File.Delete(readyFile);
         }
         catch (Exception ex)
         {
@@ -450,7 +454,7 @@ public class Program
     }
 
     static async Task InstallCustomData(
-        string alltalkFolder, bool autoStartLocalInstance, string customModelUrl, string customVoicesUrl,
+        string alltalkFolder, string customModelUrl, string customVoicesUrl,
         bool installProcess = true)
     {
         try
@@ -550,9 +554,6 @@ public class Program
             }
             else
                 Console.WriteLine($"No custom voices found, skipping");
-
-            if (autoStartLocalInstance && !installProcess)
-                StartInstance(alltalkFolder);
         }
         catch (Exception ex)
         {
