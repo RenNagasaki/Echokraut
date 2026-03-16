@@ -73,5 +73,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\OtterGui\OtterGui.csproj" />
+    <ProjectReference Include="..\KamiToolKit\KamiToolKit.csproj" />
   </ItemGroup>
 </Project>

@@ -10,5 +10,6 @@ public interface IGameObjectService
     void TryGetNextUnknownCharacter(EKEventId eventId);
     void ClearLastUnknownState();
     IGameObject? LocalPlayer { get; }
+    string LocalPlayerName { get; }
     IGameObject? NextUnknownCharacter { get; }
 }

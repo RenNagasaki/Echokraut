@@ -18,19 +18,17 @@ public class DialogExtraOptionsWindow : Window, IDisposable
     private readonly Echokraut.DataClasses.Configuration _config;
     private readonly IAudioPlaybackService _audioPlayback;
     private readonly ILipSyncHelper _lipSync;
-    private readonly ICommandService _commands;
     private readonly Action _recreateInference;
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
     // and the window ID will always be "###XYZ counter window" for ImGui
-    public DialogExtraOptionsWindow(ILogService log, Echokraut.DataClasses.Configuration config, IAudioPlaybackService audioPlayback, ILipSyncHelper lipSync, ICommandService commands, Action recreateInference)
+    public DialogExtraOptionsWindow(ILogService log, Echokraut.DataClasses.Configuration config, IAudioPlaybackService audioPlayback, ILipSyncHelper lipSync, Action recreateInference)
         : base("EK-DialogExtraOptionsWindow")
     {
         _log = log;
         _config = config;
         _audioPlayback = audioPlayback;
         _lipSync = lipSync;
-        _commands = commands;
         _recreateInference = recreateInference;
         Flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoBackground |
                 ImGuiWindowFlags.NoNav;
@@ -177,14 +175,6 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                         _recreateInference();
                     }
                 }
-            }
-            ImGui.SameLine();
-            if (ImGuiUtil.DrawDisabledButton(
-                    $"{FontAwesomeIcon.Cog.ToIconString()}##OpenSettings",
-                    iconSize,
-                    "Toggle Echokraut config window", false, true))
-            {
-                _commands.ToggleConfigUi();
             }
         }
     }
