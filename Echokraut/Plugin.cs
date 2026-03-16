@@ -7,54 +7,55 @@ using Dalamud.Game;
 using Echokraut.Enums;
 using System;
 using Echokraut.DataClasses;
-using System.Linq;
 using Dalamud.Game.Text.SeStringHandling;
 using GameObject = Dalamud.Game.ClientState.Objects.Types.IGameObject;
-using System.Reflection;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.IoC;
-using Echokraut.Helper.Addons;
-using Echokraut.Helper.DataHelper;
-using Echokraut.Helper.API;
-using Echokraut.Helper.Data;
-using Echokraut.Helper.Functional;
-using FFXIVClientStructs.FFXIV.Client.UI.Misc;
+using Echokraut.Backend;
+using FFXIVClientStructs.FFXIV.Client.Game;
+using FFXIVClientStructs.FFXIV.Client.Game.Control;
+using Echokraut.Services;
+using System.Threading.Tasks;
 
 namespace Echokraut;
 
 public partial class Plugin : IDalamudPlugin
 {
+    // Service container for dependency injection
+    private readonly ServiceContainer _services;
 
-    [PluginService] internal static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
-    [PluginService] internal static ITextureProvider TextureProvider { get; private set; } = null!;
-    [PluginService] internal static ICommandManager CommandManager { get; private set; } = null!;
-    [PluginService] internal static IClientState ClientState { get; private set; } = null!;
-    [PluginService] internal static IPlayerState PlayerState { get; private set; } = null!;
-    [PluginService] internal static IDataManager DataManager { get; private set; } = null!;
-    [PluginService] internal static IPluginLog Log { get; private set; } = null!;
-    [PluginService] internal static IFramework Framework { get; private set; } = null!;
-    [PluginService] internal static ICondition Condition { get; private set; } = null!;
-    [PluginService] internal static IObjectTable ObjectTable { get; private set; } = null!;
-    [PluginService] internal static IAddonLifecycle AddonLifecycle { get; private set; } = null!;
-    [PluginService] internal static ISigScanner SigScanner { get; private set; } = null!;
-    [PluginService] internal static IGameInteropProvider GameInteropProvider { get; private set; } = null!;
-    [PluginService] internal static IGameGui GameGui { get; private set; } = null!;
-    [PluginService] internal static IGameConfig GameConfig { get; private set; } = null!;
-    [PluginService] internal static IChatGui ChatGui { get; private set; } = null!;
-    internal static Configuration Configuration { get; private set; } = null!;
-    internal static ConfigWindow ConfigWindow { get; private set; } = null!;
-    internal static AlltalkInstanceWindow AlltalkInstanceWindow { get; private set; } = null!;
-    internal static FirstTimeWindow FirstTimeWindow { get; private set; } = null!;
-    internal static DialogExtraOptionsWindow DialogExtraOptionsWindow { get; private set; } = null!;
+    // Commonly used services
+    private readonly ILogService _log;
+    private readonly IVoiceMessageProcessor _voiceProcessor;
+    private readonly IAudioPlaybackService _audioPlayback;
+    private readonly IBackendService _backend;
+    private readonly IGoogleDriveSyncService _googleDrive;
+    private readonly IAlltalkInstanceService _alltalkInstance;
+    private readonly ICommandService _commands;
 
-    internal static LipSyncHelper LipSyncHelper{ get; private set; } = null!;
-    internal static SoundHelper SoundHelper{ get; private set; } = null!;
-    internal static AddonTalkHelper AddonTalkHelper{ get; private set; } = null!;
-    internal static AddonBattleTalkHelper AddonBattleTalkHelper{ get; private set; } = null!;
-    internal static AddonSelectStringHelper AddonSelectStringHelper{ get; private set; } = null!;
-    internal static AddonCutSceneSelectStringHelper AddonCutSceneSelectStringHelper{ get; private set; } = null!;
-    internal static AddonBubbleHelper AddonBubbleHelper{ get; private set; } = null!;
-    internal static ChatTalkHelper ChatTalkHelper{ get; private set; } = null!;
+    // Camera pointer (unsafe, stays in Plugin)
+    private static unsafe Camera* _camera = null;
+
+    // Dalamud services
+    private readonly IDalamudPluginInterface _pluginInterface;
+    private readonly IFramework _framework;
+    private readonly IClientState _clientState;
+    private readonly IObjectTable _objectTable;
+
+    // Configuration and windows
+    private readonly Configuration _configuration;
+    private readonly ConfigWindow _configWindow;
+    private readonly FirstTimeWindow _firstTimeWindow;
+    private readonly DialogExtraOptionsWindow _dialogExtraOptionsWindow;
+
+    // Addon helpers
+    private readonly ISoundHelper _soundHelper;
+    private readonly IAddonTalkHelper _addonTalkHelper;
+    private readonly IAddonBattleTalkHelper _addonBattleTalkHelper;
+    private readonly IAddonSelectStringHelper _addonSelectStringHelper;
+    private readonly IAddonCutSceneSelectStringHelper _addonCutSceneSelectStringHelper;
+    private readonly IAddonBubbleHelper _addonBubbleHelper;
+    private readonly IChatTalkHelper _chatTalkHelper;
 
     public readonly WindowSystem WindowSystem = new("Echokraut");
 
@@ -73,361 +74,194 @@ public partial class Plugin : IDalamudPlugin
         ISigScanner sigScanner,
         IGameInteropProvider gameInteropProvider,
         IGameConfig gameConfig,
-        IAddonLifecycle addonLifecycle)
+        IAddonLifecycle addonLifecycle,
+        ITextureProvider textureProvider)
     {
-        PluginInterface = pluginInterface;
-        CommandManager = commandManager;
-        Framework = framework;
-        ClientState = clientState;
-        PlayerState = playerState;
-        Condition = condition;
-        ObjectTable = objectTable;
-        DataManager = dataManager;
-        ChatGui = chatGui;
-        GameGui = gameGui;
-        GameConfig = gameConfig;
-        SigScanner = sigScanner;
-        GameInteropProvider = gameInteropProvider;
-        AddonLifecycle = addonLifecycle;
-        Log = log;
+        _pluginInterface = pluginInterface;
+        _framework = framework;
+        _clientState = clientState;
+        _objectTable = objectTable;
 
-        Configuration = PluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
-        Configuration.Initialize(PluginInterface);
-        pluginInterface.UiBuilder.DisableCutsceneUiHide = !Configuration.HideUiInCutscenes;
-        ConfigWindow = new ConfigWindow();
-        AlltalkInstanceWindow = new AlltalkInstanceWindow();
-        FirstTimeWindow = new FirstTimeWindow();
-        DialogExtraOptionsWindow = new DialogExtraOptionsWindow();
+        _configuration = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+        _configuration.Initialize(pluginInterface);
+        pluginInterface.UiBuilder.DisableCutsceneUiHide = !_configuration.HideUiInCutscenes;
 
-        LogHelper.Initialize(log);
-        JsonLoaderHelper.Initialize(ClientState.ClientLanguage);
-        DetectLanguageHelper.Initialize();
-        if (Configuration.Alltalk.RemoteInstance)
-            BackendHelper.Initialize(Configuration.BackendSelection);
-        PlayingHelper.Setup();
-        CommandHelper.Initialize();
-        AlltalkInstanceHelper.Initialize();
-        LipSyncHelper = new LipSyncHelper();
-        AddonTalkHelper = new AddonTalkHelper();
-        AddonBattleTalkHelper = new AddonBattleTalkHelper();
-        AddonSelectStringHelper = new AddonSelectStringHelper();
-        AddonCutSceneSelectStringHelper = new AddonCutSceneSelectStringHelper();
-        AddonBubbleHelper = new AddonBubbleHelper();
-        ChatTalkHelper = new ChatTalkHelper();
-        SoundHelper = new SoundHelper();
+        _services = ServiceBuilder.BuildServices(
+            log, gameConfig, clientState, objectTable, commandManager,
+            chatGui, condition, _configuration, framework, dataManager,
+            addonLifecycle, sigScanner, gameInteropProvider, pluginInterface);
 
-        WindowSystem.AddWindow(ConfigWindow);
-        WindowSystem.AddWindow(AlltalkInstanceWindow);
-        WindowSystem.AddWindow(FirstTimeWindow);
-        WindowSystem.AddWindow(DialogExtraOptionsWindow);
+        _log          = _services.GetService<ILogService>();
+        _voiceProcessor = _services.GetService<IVoiceMessageProcessor>();
+        _audioPlayback  = _services.GetService<IAudioPlaybackService>();
+        _backend        = _services.GetService<IBackendService>();
+        _googleDrive    = _services.GetService<IGoogleDriveSyncService>();
+        _alltalkInstance = _services.GetService<IAlltalkInstanceService>();
+        _commands       = _services.GetService<ICommandService>();
 
-        PluginInterface.UiBuilder.Draw += DrawUI;
+        var npcData = _services.GetService<INpcDataService>();
+        npcData.RefreshSelectables(_configuration.EchokrautVoices);
 
-        // This adds a button to the plugin installer entry of this plugin which allows
-        // to toggle the display status of the configuration ui
-        PluginInterface.UiBuilder.OpenConfigUi += CommandHelper.ToggleConfigUi;
-        ClientState.Login += OnLogin;
+        _soundHelper                    = _services.GetService<ISoundHelper>();
+        _addonTalkHelper                = _services.GetService<IAddonTalkHelper>();
+        _addonBattleTalkHelper          = _services.GetService<IAddonBattleTalkHelper>();
+        _addonSelectStringHelper        = _services.GetService<IAddonSelectStringHelper>();
+        _addonCutSceneSelectStringHelper = _services.GetService<IAddonCutSceneSelectStringHelper>();
+        _addonBubbleHelper              = _services.GetService<IAddonBubbleHelper>();
+        _chatTalkHelper                 = _services.GetService<IChatTalkHelper>();
 
-        if (Configuration.FirstTime && !FirstTimeWindow.IsOpen && ClientState.IsLoggedIn)
-            CommandHelper.ToggleFirstTimeUi();
+        (_configWindow, _firstTimeWindow, _dialogExtraOptionsWindow) = CreateWindows(commandManager);
 
-        if (!Configuration.FirstTime && ClientState.IsLoggedIn && Configuration.Alltalk.LocalInstall && Configuration.Alltalk.LocalInstance && Configuration.Alltalk.AutoStartLocalInstance)
-            AlltalkInstanceHelper.StartInstance();
-            
-        if (Configuration.GoogleDriveDownloadPeriodically)
-            GoogleDriveHelper.StartSync();
+        WireEvents();
+
+        _framework.Update += OnFrameworkUpdate;
+        _pluginInterface.UiBuilder.Draw += DrawUI;
+        _pluginInterface.UiBuilder.OpenConfigUi += _commands.ToggleConfigUi;
+        _clientState.Login += OnLogin;
+
+        HandleStartup();
+    }
+
+    private (ConfigWindow configWindow, FirstTimeWindow firstTimeWindow, DialogExtraOptionsWindow dialogExtraOptionsWindow) CreateWindows(
+        ICommandManager commandManager)
+    {
+        var lipSync  = _services.GetService<ILipSyncHelper>();
+        var jsonData = _services.GetService<IJsonDataService>();
+        var npcData  = _services.GetService<INpcDataService>();
+
+        var alttalkInstanceWindow = _services.GetService<AlltalkInstanceWindow>();
+
+        var configWindow = new ConfigWindow(
+            _log,
+            _services.GetService<IVolumeService>(),
+            _configuration,
+            _framework,
+            _commands,
+            commandManager,
+            _pluginInterface,
+            _backend,
+            _audioPlayback,
+            _clientState,
+            jsonData,
+            _services.GetService<IAudioFileService>(),
+            _services.GetService<IGameObjectService>(),
+            _googleDrive,
+            npcData,
+            alttalkInstanceWindow);
+
+        var firstTimeWindow = new FirstTimeWindow(
+            _log, _configuration, _framework, alttalkInstanceWindow, configWindow);
+
+        var dialogExtraOptionsWindow = new DialogExtraOptionsWindow(
+            _log, _configuration, _audioPlayback, lipSync, _commands,
+            () => _addonTalkHelper.RecreateInference());
+
+        WindowSystem.AddWindow(configWindow);
+        WindowSystem.AddWindow(alttalkInstanceWindow);
+        WindowSystem.AddWindow(firstTimeWindow);
+        WindowSystem.AddWindow(dialogExtraOptionsWindow);
+
+        return (configWindow, firstTimeWindow, dialogExtraOptionsWindow);
+    }
+
+    private void WireEvents()
+    {
+        _audioPlayback.AutoAdvanceRequested += eventId => _addonTalkHelper.Click(eventId);
+        _audioPlayback.CurrentMessageChanged += msg => DialogState.CurrentVoiceMessage = msg;
+
+        _commands.ToggleConfigRequested    += () => _configWindow.Toggle();
+        _commands.ToggleFirstTimeRequested += () => _firstTimeWindow.Toggle();
+        _commands.CancelAllRequested += _ => _audioPlayback?.ClearQueue();
+    }
+
+    private void HandleStartup()
+    {
+        if (_configuration.FirstTime && !_firstTimeWindow.IsOpen && _clientState.IsLoggedIn)
+            _commands.ToggleFirstTimeUi();
+
+        if (!_configuration.FirstTime && _clientState.IsLoggedIn
+            && _configuration.Alltalk.LocalInstall
+            && _configuration.Alltalk.LocalInstance
+            && _configuration.Alltalk.AutoStartLocalInstance)
+        {
+            _alltalkInstance.StartInstance();
+            _backend.RefreshBackend();
+        }
+
+        if (_configuration.GoogleDriveDownloadPeriodically)
+            _googleDrive.StartSync();
     }
 
     private void OnLogin()
     {
         try
         {
-            if (Configuration.GoogleDriveDownload)
-                GoogleDriveHelper.DownloadFolder(Configuration.LocalSaveLocation, Configuration.GoogleDriveShareLink);
-            
-            if (Configuration.FirstTime && !FirstTimeWindow.IsOpen)
-                CommandHelper.ToggleFirstTimeUi();
+            if (_configuration.GoogleDriveDownload)
+                _googleDrive.DownloadFolder(_configuration.LocalSaveLocation, _configuration.GoogleDriveShareLink);
 
-            if (!Configuration.FirstTime && Configuration.Alltalk.LocalInstall && Configuration.Alltalk.LocalInstance && !AlltalkInstanceHelper.InstanceRunning && !AlltalkInstanceHelper.InstanceStarting)
-                AlltalkInstanceHelper.StartInstance();
+            if (_configuration.FirstTime && !_firstTimeWindow.IsOpen)
+                _commands.ToggleFirstTimeUi();
+
+            if (!_configuration.FirstTime
+                && _configuration.Alltalk.LocalInstall
+                && _configuration.Alltalk.LocalInstance
+                && !_alltalkInstance.InstanceRunning
+                && !_alltalkInstance.InstanceStarting)
+            {
+                _alltalkInstance.StartInstance();
+                _backend.RefreshBackend();
+            }
         }
         catch (Exception e)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while starting voice inference: {e}", new EKEventId(0, TextSource.None));
+            _log.Error(nameof(OnLogin), $"Error while starting voice inference: {e}", new EKEventId(0, TextSource.None));
         }
     }
 
-    public static void CancelAll(EKEventId ekEventId)
+    public async Task Say(EKEventId eventId, GameObject? speaker, SeString speakerName, string textValue)
     {
-        BackendHelper.OnCancelAll();
+        await _voiceProcessor.ProcessSpeechAsync(eventId, speaker, speakerName, textValue);
     }
 
-    public static void Cancel(VoiceMessage? message, bool dialogClosed = false)
+    private unsafe void OnFrameworkUpdate(Dalamud.Plugin.Services.IFramework fw)
     {
-        if (dialogClosed)
+        if (_camera == null)
         {
-            PlayingHelper.ClearPlayingQueue(TextSource.AddonTalk);
-            PlayingHelper.ClearRequestedQueue(TextSource.AddonTalk);
-            PlayingHelper.ClearRequestingQueue(TextSource.AddonTalk);
+            var mgr = FFXIVClientStructs.FFXIV.Client.Game.Control.CameraManager.Instance();
+            if (mgr != null) _camera = mgr->GetActiveCamera();
         }
-        
-        if (message != null)
+
+        var localPlayer = _objectTable.LocalPlayer;
+        if (_camera != null && localPlayer != null)
         {
-            StopLipSync(message);
-            BackendHelper.OnCancel(message);
-        }
-    }
-
-    public static void Pause(VoiceMessage message)
-    {
-        BackendHelper.OnPause(message);
-    }
-
-    public static void Resume(VoiceMessage message)
-    {
-        BackendHelper.OnResume(message);
-    }
-
-    public static void StopLipSync(VoiceMessage message)
-    {
-        LipSyncHelper.TryStopLipSync(message);
-    }
-
-    public static async void Say(EKEventId eventId, GameObject? speaker, SeString speakerName, string textValue)
-    {
-        try
-        {
-            var onlyRequest = false;
-            if (!BackendHelper.IsBackendAvailable())
-            {
-                if (Configuration.GoogleDriveRequestVoiceLine)
-                    onlyRequest = true;
-                else 
-                {
-                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"No backend available yet, skipping!", eventId);
-                    LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                    PlayingHelper.RecreationStarted = false;
-                    return;
-                }
-            }
-
-            var source = eventId.textSource;
-            var language = ClientState.ClientLanguage;
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Preparing for Inference: {speakerName} - {textValue} - {source}", eventId);
-
-            var originalText = textValue;
-            var cleanText = TalkTextHelper.StripAngleBracketedText(textValue);
-            cleanText = TalkTextHelper.ReplaceSsmlTokens(cleanText);
-            cleanText = TalkTextHelper.NormalizePunctuation(cleanText);
-            cleanText = Configuration.RemoveStutters ? TalkTextHelper.RemoveStutters(cleanText) : cleanText;
-
-            if (source == TextSource.Chat)
-            {
-                if ((Configuration.VoiceChatIn3D && speaker == null))
-                {
-                    LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Player is not on the same map: {speakerName.TextValue}. Can't voice", eventId);
-                    LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                    PlayingHelper.RecreationStarted = false;
-                    return;
-                }
-
-                if (!Configuration.VoiceChatIn3D)
-                    speaker = DalamudHelper.LocalPlayer;
-
-                language = await DetectLanguageHelper.GetTextLanguage(cleanText, eventId);
-            }
-
-            cleanText = TalkTextHelper.ReplaceDate(eventId, cleanText, language);
-            cleanText = TalkTextHelper.ReplaceTime(eventId, cleanText, language);
-            cleanText = TalkTextHelper.ReplaceRomanNumbers(eventId, cleanText);
-            cleanText = TalkTextHelper.ReplaceCurrency(eventId, cleanText);
-            cleanText = TalkTextHelper.ReplaceIntWithVerbal(eventId, cleanText, language);
-            cleanText = TalkTextHelper.ReplacePhonetics(cleanText, Configuration.PhoneticCorrections);
-            cleanText = TalkTextHelper.AnalyzeAndImproveText(cleanText);
-
-            if (source == TextSource.Chat)
-                cleanText = TalkTextHelper.ReplaceEmoticons(eventId, cleanText);
-            cleanText = cleanText.Trim();
-
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Cleantext: {cleanText}", eventId);
-            // Ensure that the result is clean; ignore it otherwise
-            if (!cleanText.Any() || !TalkTextHelper.IsSpeakable(cleanText) || cleanText.Length == 0)
-            {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Text not speakable: {cleanText}", eventId);
-                LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                PlayingHelper.RecreationStarted = false;
-                return;
-            }
-
-            // Some characters have emdashes in their names, which should be treated
-            // as hyphens for the sake of the plugin.
-            var cleanSpeakerName = TalkTextHelper.NormalizePunctuation(speakerName.TextValue);
-
-            var objectKind = speaker == null ? ObjectKind.None : speaker.ObjectKind;
-            NpcMapData npcData = new NpcMapData(objectKind);
-            // Get the speaker's race if it exists.
-            var raceStr = "";
-            npcData.Race = CharacterDataHelper.GetSpeakerRace(eventId, speaker, out raceStr, out var modelId);
-            npcData.RaceStr = raceStr;
-            npcData.Gender = CharacterDataHelper.GetCharacterGender(eventId, speaker, npcData.Race, out var modelBody);
-            npcData.Name = TalkTextHelper.CleanUpName(cleanSpeakerName);
-
-            if (npcData.ObjectKind != Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
-                npcData.Name = JsonLoaderHelper.GetNpcName(npcData.Name);
-
-            if (npcData.Name == "PLAYER")
-                npcData.Name = DalamudHelper.LocalPlayer?.Name.ToString() ?? "PLAYER";
-            else if (string.IsNullOrWhiteSpace(npcData.Name) && source == TextSource.AddonBubble)
-                npcData.Name = TalkTextHelper.GetBubbleName(speaker, cleanText);
-
-            var resNpcData = NpcDataHelper.GetAddCharacterMapData(npcData, eventId);
-            Configuration.Save();
-
-            npcData = resNpcData;
-            
-            if (speaker != null && (source == TextSource.AddonBubble || source == TextSource.AddonTalk))
-            {
-                npcData.IsChild = LuminaHelper.GetENpcBase(speaker.DataId, eventId)?.BodyType == 4;
-                Configuration.Save();
-            }
-
-            if (npcData.ObjectKind != objectKind && objectKind != ObjectKind.None)
-            {
-                npcData.ObjectKind = objectKind;
-                Configuration.Save();
-            }
-
-            var npcVolume = npcData.Volume;
-            var is3d = false;
-            switch (source)
-            {
-                case TextSource.AddonBubble:
-                    is3d = true;
-                    if (!npcData.HasBubbles)
-                        npcData.HasBubbles = true;
-
-                    npcVolume = npcData.VolumeBubble;
-                    if (npcData.VolumeBubble == 0f || !npcData.IsEnabledBubble)
-                    {
-                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Bubble is muted: {npcData.ToString()}", eventId);
-                        LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                        PlayingHelper.RecreationStarted = false;
-                        return;
-                    }
-                    break;
-                case TextSource.AddonBattleTalk:
-                case TextSource.AddonTalk:
-                    if (source == TextSource.AddonTalk)
-                        is3d = Configuration.VoiceDialogueIn3D;
-                    if (npcData.Volume == 0f || !npcData.IsEnabled)
-                    {
-                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Npc is muted: {npcData.ToString()}", eventId);
-                        LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                        PlayingHelper.RecreationStarted = false;
-                        return;
-                    }
-                    break;
-                case TextSource.AddonCutsceneSelectString:
-                case TextSource.AddonSelectString:
-                case TextSource.Chat:
-                    if (onlyRequest)
-                    {
-                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Can't request Chat and Player Selections: {npcData.ToString()}",
-                                       eventId);
-                        LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                        return;
-                    }
-
-                    if (source == TextSource.Chat)
-                        is3d = Configuration.VoiceChatIn3D;
-                    if (npcData.Volume == 0f || !npcData.IsEnabled)
-                    {
-                        LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Player is muted: {npcData.ToString()}", eventId);
-                        LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                        PlayingHelper.RecreationStarted = false;
-                        return;
-                    }
-                    break;
-            }
-
-
-            if (npcData.Voice == null && !onlyRequest && !Configuration.Alltalk.NoInstance)
-            {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Getting voice since not set.", eventId);
-                BackendHelper.GetVoiceOrRandom(eventId, npcData);
-            }
-
-            if (npcData.Voice == null && !onlyRequest && !Configuration.Alltalk.NoInstance)
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. No Voice set.", eventId);
-
-
-            if (npcData.Voice != null && npcData.Voice.Volume == 0f && !onlyRequest && !Configuration.Alltalk.NoInstance)
-            {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Voice is muted: {npcData.ToString()}", eventId);
-                LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                PlayingHelper.RecreationStarted = false;
-                return;
-            }
-            
-            var volume = VolumeHelper.GetVoiceVolume(eventId) * (npcData.Voice?.Volume ?? 1) * npcVolume;
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Voice volume: {volume}", eventId);
-
-            var voiceMessage = new VoiceMessage
-            {
-                SpeakerObj = speaker,
-                SpeakerFollowObj = is3d && speaker != null ? speaker : DalamudHelper.LocalPlayer,
-                Source = source,
-                Speaker = npcData,
-                Text = cleanText,
-                OriginalText = originalText,
-                Language = language,
-                EventId = eventId,
-                OnlyRequest = onlyRequest,
-                Volume = volume
-            };
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, voiceMessage.GetDebugInfo(), eventId);
-            
-            if (speaker != null && Configuration.MutedNpcDialogues.Contains(speaker.DataId))
-            {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping muted dialogue: {cleanText}", eventId);
-                LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                PlayingHelper.RecreationStarted = false;
-                return;
-            }
-            
-            if (volume > 0)
-                BackendHelper.OnSay(voiceMessage);
-            else
-            {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0.", eventId);
-                LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
-                PlayingHelper.RecreationStarted = false;
-            }
-        }
-        catch (Exception ex)
-        {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error while starting voice inference: {ex}", eventId);
+            var matrix = _camera->CameraBase.SceneCamera.ViewMatrix;
+            _audioPlayback.UpdateListenerState(
+                localPlayer.Position,
+                matrix[2], matrix[1], matrix[0],
+                matrix[6], matrix[5], matrix[4]);
         }
     }
 
     public void Dispose()
     {
-        GoogleDriveHelper.StopSync();
-        DetectLanguageHelper.Dispose();
-        PlayingHelper.Dispose();
-        SoundHelper.Dispose();
-        AddonTalkHelper.Dispose();
-        AddonBattleTalkHelper.Dispose();
-        AddonCutSceneSelectStringHelper.Dispose();
-        AddonSelectStringHelper.Dispose();
-        AddonBubbleHelper.Dispose();
-        ChatTalkHelper.Dispose();
+        _framework.Update -= OnFrameworkUpdate;
+        _pluginInterface.UiBuilder.Draw -= DrawUI;
+        _pluginInterface.UiBuilder.OpenConfigUi -= _commands.ToggleConfigUi;
+        _clientState.Login -= OnLogin;
+        _googleDrive.StopSync();
+        _soundHelper.Dispose();
+        _addonTalkHelper.Dispose();
+        _addonBattleTalkHelper.Dispose();
+        _addonCutSceneSelectStringHelper.Dispose();
+        _addonSelectStringHelper.Dispose();
+        _addonBubbleHelper.Dispose();
+        _chatTalkHelper.Dispose();
 
-        Configuration.Save();
+        _configuration.Save();
         WindowSystem.RemoveAllWindows();
-        ConfigWindow.Dispose();
-        CommandHelper.Dispose();
-        AlltalkInstanceHelper.Dispose();
+        _configWindow.Dispose();
+        _commands.Dispose();
+        _services.Dispose();
     }
 
     private void DrawUI() => WindowSystem.Draw();

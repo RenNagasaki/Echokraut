@@ -13,13 +13,13 @@ namespace Echokraut.DataClasses
 {
     public class VoiceMessage
     {
-        public string Text { get; set; }
-        public string OriginalText { get; set; }
+        public string Text { get; set; } = null!;
+        public string OriginalText { get; set; } = null!;
         //public string TextTemplate { get; set; }
 
         public IGameObject? SpeakerObj {  get; set; }
         public IGameObject? SpeakerFollowObj {  get; set; }
-        public NpcMapData Speaker { get; set; }
+        public NpcMapData Speaker { get; set; } = null!;
         public TextSource Source { get; set; }
         public int? ChatType { get; set; }
         public ClientLanguage Language { get; set; }
@@ -29,10 +29,11 @@ namespace Echokraut.DataClasses
 
         public bool IsLastInDialogue { get; set; } = false;
         public bool OnlyRequest { get; set; } = false;
+        public bool Is3D { get; set; } = false;
 
-        public EKEventId EventId { get; set; }
-        
-        public Stream Stream { get; set; }
+        public EKEventId EventId { get; set; } = null!;
+
+        public Stream Stream { get; set; } = null!;
         public Guid StreamId { get; set; }
 
         public string GetDebugInfo()

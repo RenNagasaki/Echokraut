@@ -1,13 +1,5 @@
 using Dalamud.Game;
-using Dalamud.Game.ClientState.Objects.Types;
 using Echokraut.Enums;
-using FFXIVClientStructs.FFXIV.Client.Game.Object;
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 using Echokraut.Helper.Functional;
 
 namespace Echokraut.DataClasses
@@ -17,16 +9,16 @@ namespace Echokraut.DataClasses
         public Genders Gender { get; set; }
         public NpcRaces Race { get; set; }
         public ClientLanguage Language { get; set; }
-        public string Name { get; set; }
-        public string Text { get; set; }
+        public string Name { get; set; } = null!;
+        public string Text { get; set; } = null!;
 
         public string GetDebugInfo()
         {
             return $"Gender: {Gender} | Race: {Race} | Name: {Name} | Language: {Language} | Text: {Text}";
         }
-        public string GetFileName()
+        public string GetFileName(string playerName = "")
         {
-            return $"{Language}_{Gender.ToString()}_{Race.ToString()}_{Name}_{AudioFileHelper.VoiceMessageToFileName(AudioFileHelper.RemovePlayerNameInText(Text))}.json";
+            return $"{Language}_{Gender.ToString()}_{Race.ToString()}_{Name}_{TalkTextHelper.VoiceMessageToFileName(TalkTextHelper.RemovePlayerNameInText(Text, playerName))}.json";
         }
     }
 }

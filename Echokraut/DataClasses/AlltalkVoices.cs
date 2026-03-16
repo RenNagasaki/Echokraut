@@ -8,6 +8,6 @@ namespace Echokraut
 {
     public class AlltalkVoices
     {
-        public List<string> voices { get; set; }
+        public List<string> voices { get; set; } = null!;
     }
 }

@@ -1,22 +1,19 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text.RegularExpressions;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.Text.SeStringHandling.Payloads;
 using Echokraut.DataClasses;
+using Echokraut.Services;
 using FFXIVClientStructs.FFXIV.Client.System.String;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using Dalamud.Game;
 using Humanizer;
 using System.Globalization;
-using Echokraut.Helper.Addons;
 using GameObject = Dalamud.Game.ClientState.Objects.Types.IGameObject;
-using Echokraut.Helper.DataHelper;
-using Echokraut.Helper.API;
-using Echokraut.Helper.Data;
 
 namespace Echokraut.Helper.Functional
 {
@@ -55,7 +52,7 @@ namespace Echokraut.Helper.Functional
         private static readonly Regex TimeRx = TimeRegex();
         private static readonly Regex BracketedRx = BracketedRegex();
 
-        public static unsafe AddonTalkText ReadTalkAddon(AddonTalk* talkAddon)
+        public static unsafe AddonTalkText? ReadTalkAddon(AddonTalk* talkAddon)
         {
             if (talkAddon is null) return null;
             return new AddonTalkText
@@ -65,7 +62,7 @@ namespace Echokraut.Helper.Functional
             };
         }
 
-        public static unsafe AddonTalkText ReadTalkAddon(AddonBattleTalk* talkAddon)
+        public static unsafe AddonTalkText? ReadTalkAddon(AddonBattleTalk* talkAddon)
         {
             if (talkAddon is null) return null;
             return new AddonTalkText
@@ -75,7 +72,7 @@ namespace Echokraut.Helper.Functional
             };
         }
 
-        public static unsafe AddonTalkText ReadSelectStringAddon(AddonSelectString* selectStringAddon)
+        public static unsafe AddonTalkText? ReadSelectStringAddon(AddonSelectString* selectStringAddon)
         {
             if (selectStringAddon is null) return null;
             var list = selectStringAddon->PopupMenu.PopupMenu.List;
@@ -94,7 +91,7 @@ namespace Echokraut.Helper.Functional
             };
         }
 
-        public static unsafe AddonTalkText ReadCutSceneSelectStringAddon(AddonCutSceneSelectString* cutSceneSelectStringAddon)
+        public static unsafe AddonTalkText? ReadCutSceneSelectStringAddon(AddonCutSceneSelectString* cutSceneSelectStringAddon)
         {
             if (cutSceneSelectStringAddon is null) return null;
             var list = cutSceneSelectStringAddon->OptionList;
@@ -260,22 +257,22 @@ namespace Echokraut.Helper.Functional
             return output;
         }
 
-        public static string ReplaceEmoticons(EKEventId eventId, string cleanText)
+        public static string ReplaceEmoticons(ILogService log, EKEventId eventId, string cleanText, List<string> emoticons)
         {
             try
             {
-                Regex r = new Regex(string.Join("|", JsonLoaderHelper.Emoticons.Select(s => Regex.Escape(s)).ToArray()));
+                Regex r = new Regex(string.Join("|", emoticons.Select(s => Regex.Escape(s)).ToArray()));
                 cleanText = r.Replace(cleanText, string.Empty);
             }
             catch (Exception ex)
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", eventId);
+                log.Error(nameof(ReplaceEmoticons), $"Error: {ex}", eventId);
             }
 
             return cleanText;
         }
 
-        public static string ReplaceDate(EKEventId eventId, string cleanText, ClientLanguage language)
+        public static string ReplaceDate(ILogService log, EKEventId eventId, string cleanText, ClientLanguage language)
         {
             try
             {
@@ -307,7 +304,7 @@ namespace Echokraut.Helper.Functional
 
                     var regex = new Regex(Regex.Escape(dateString));
                     cleanText = regex.Replace(cleanText, value.ToString(), 1);
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Replaced '{dateString}' with '{value}'", eventId);
+                    log.Debug(nameof(ReplaceDate), $"Replaced '{dateString}' with '{value}'", eventId);
 
                     dateRxResult = DateRx.Match(cleanText);
                     i++;
@@ -318,13 +315,13 @@ namespace Echokraut.Helper.Functional
             }
             catch (Exception ex)
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", eventId);
+                log.Error(nameof(ReplaceDate), $"Error: {ex}", eventId);
             }
 
             return cleanText;
         }
 
-        public static string ReplaceTime(EKEventId eventId, string cleanText, ClientLanguage language)
+        public static string ReplaceTime(ILogService log, EKEventId eventId, string cleanText, ClientLanguage language)
         {
             try
             {
@@ -366,7 +363,7 @@ namespace Echokraut.Helper.Functional
                             regex = new Regex(Regex.Escape(timeString));
                             cleanText = regex.Replace(cleanText, value.ToString(), 1);
                         }
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Replaced '{timeString}' with '{value}'", eventId);
+                        log.Debug(nameof(ReplaceTime), $"Replaced '{timeString}' with '{value}'", eventId);
                     }
                     else
                     {
@@ -375,7 +372,7 @@ namespace Echokraut.Helper.Functional
 
                         var regex = new Regex(Regex.Escape(timeString));
                         cleanText = regex.Replace(cleanText, value.ToString(), 1);
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Replaced '{timeString}' with '{value}'", eventId);
+                        log.Debug(nameof(ReplaceTime), $"Replaced '{timeString}' with '{value}'", eventId);
                     }
 
                     timeRxResult = TimeRx.Match(cleanText);
@@ -387,13 +384,13 @@ namespace Echokraut.Helper.Functional
             }
             catch (Exception ex)
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", eventId);
+                log.Error(nameof(ReplaceTime), $"Error: {ex}", eventId);
             }
 
             return cleanText;
         }
 
-        public static string ReplaceRomanNumbers(EKEventId eventId, string cleanText)
+        public static string ReplaceRomanNumbers(ILogService log, EKEventId eventId, string cleanText)
         {
             try
             {
@@ -409,7 +406,7 @@ namespace Echokraut.Helper.Functional
 
                     var regex = new Regex(Regex.Escape(romanNumeralsText));
                     cleanText = regex.Replace(cleanText, value.ToString(), 1);
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name,
+                    log.Debug(nameof(ReplaceRomanNumbers),
                                     $"Replaced '{romanNumeralsText}' with '{value}'", eventId);
 
                     romanNumerals = RomanNumeralsRx.Match(cleanText);
@@ -421,13 +418,13 @@ namespace Echokraut.Helper.Functional
             }
             catch (Exception ex)
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", eventId);
+                log.Error(nameof(ReplaceRomanNumbers), $"Error: {ex}", eventId);
             }
 
             return cleanText;
         }
 
-        public static string ReplaceCurrency(EKEventId eventId, string cleanText)
+        public static string ReplaceCurrency(ILogService log, EKEventId eventId, string cleanText)
         {
             try
             {
@@ -440,7 +437,7 @@ namespace Echokraut.Helper.Functional
 
                     var regex = new Regex(Regex.Escape(currencyNumeralsText));
                     cleanText = regex.Replace(cleanText, value.ToString(), 1);
-                    LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Replaced '{currencyNumeralsText}' with '{value}'", eventId);
+                    log.Debug(nameof(ReplaceCurrency), $"Replaced '{currencyNumeralsText}' with '{value}'", eventId);
 
                     currencyNumerals = CurrencyRx.Match(cleanText);
                     i++;
@@ -451,13 +448,13 @@ namespace Echokraut.Helper.Functional
             }
             catch (Exception ex)
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", eventId);
+                log.Error(nameof(ReplaceCurrency), $"Error: {ex}", eventId);
             }
 
             return cleanText;
         }
 
-        internal static string ReplaceIntWithVerbal(EKEventId eventId, string cleanText, ClientLanguage language)
+        internal static string ReplaceIntWithVerbal(ILogService log, EKEventId eventId, string cleanText, ClientLanguage language)
         {
             try
             {
@@ -491,14 +488,14 @@ namespace Echokraut.Helper.Functional
                         value = integerValue.ToOrdinalWords(culture);
                         var regex = new Regex(Regex.Escape(integer.Value + "."));
                         cleanText = regex.Replace(cleanText, value.ToString(), 1);
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Replaced '{integer.Value}' with '{value}'", eventId);
+                        log.Debug(nameof(ReplaceIntWithVerbal), $"Replaced '{integer.Value}' with '{value}'", eventId);
                     }
                     else
                     {
                         value = integerValue.ToWords(culture);
                         var regex = new Regex(Regex.Escape(integer.Value));
                         cleanText = regex.Replace(cleanText, value.ToString(), 1);
-                        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Replaced '{integer.Value}' with '{value}'", eventId);
+                        log.Debug(nameof(ReplaceIntWithVerbal), $"Replaced '{integer.Value}' with '{value}'", eventId);
                     }
 
                     integer = IntegerRx.Match(cleanText);
@@ -510,7 +507,7 @@ namespace Echokraut.Helper.Functional
             }
             catch (Exception ex)
             {
-                LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Error: {ex}", eventId);
+                log.Error(nameof(ReplaceIntWithVerbal), $"Error: {ex}", eventId);
             }
 
             return cleanText;
@@ -549,10 +546,9 @@ namespace Echokraut.Helper.Functional
             return playerName.TextValue;
         }
 
-        public static unsafe string GetBubbleName(GameObject? speaker, string text)
+        public static unsafe string GetBubbleName(Lumina.Excel.Sheets.TerritoryType? territory, GameObject? speaker, string text)
         {
-            var territory = LuminaHelper.GetTerritory();
-            var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker.Address;
+            var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker!.Address;
             var modelData = charaStruct->ModelContainer.ModelSkeletonId;
             var modelData2 = charaStruct->ModelContainer.ModelSkeletonId_2;
 
@@ -560,9 +556,29 @@ namespace Echokraut.Helper.Functional
             if (activeData == -1)
                 activeData = modelData2;
 
-            text = AudioFileHelper.VoiceMessageToFileName(text);
+            text = VoiceMessageToFileName(text);
             var textSubstring = text.Length > 20 ? text.Substring(0, 20) : text;
-            return $"BB-{territory.Value.PlaceName.Value.Name.ToString()}-{activeData}-{textSubstring}";
+            return $"BB-{territory?.PlaceName.Value.Name.ToString() ?? "Unknown"}-{activeData}-{textSubstring}";
+        }
+
+        public static string VoiceMessageToFileName(string voiceMessage)
+        {
+            var fileName = voiceMessage;
+            var temp = fileName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries);
+            fileName = string.Join("", temp).ToLower().Replace(" ", "").Replace(".", "").Replace("!", "").Replace(",", "").Replace("-", "").Replace("_", "");
+            if (fileName.Length > 120)
+                fileName = fileName.Substring(0, 120);
+            return fileName;
+        }
+
+        public static string RemovePlayerNameInText(string text, string playerName)
+        {
+            if (string.IsNullOrEmpty(playerName)) return text;
+            var nameArr = playerName.Split(' ');
+            text = text.Replace(playerName, "<PLAYERNAME>");
+            if (nameArr.Length > 0) text = text.Replace(nameArr[0], "<PLAYERFIRSTNAME>");
+            if (nameArr.Length > 1) text = text.Replace(nameArr[1], "<PLAYERLASTNAME>");
+            return text;
         }
 
         public static string ExtractTokens(string text, IReadOnlyDictionary<string, string?> tokenMap)
