@@ -2,7 +2,6 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Numerics;
-using System.Reflection;
 using System.Runtime.InteropServices;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
@@ -14,25 +13,37 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
-using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
+using Echokraut.Services;
 
 namespace Echokraut.Windows;
  
 public class FirstTimeWindow : Window, IDisposable
 {
-    public FirstTimeWindow() : base($"First time using Echokraut###EKFirstTime")
+    private readonly ILogService _log;
+    private readonly Configuration _config;
+    private readonly IFramework _framework;
+    private readonly AlltalkInstanceWindow _alttalkInstanceWindow;
+    private readonly ConfigWindow _configWindow;
+
+    public FirstTimeWindow(ILogService log, Configuration config, IFramework framework, AlltalkInstanceWindow alttalkInstanceWindow, ConfigWindow configWindow)
+        : base($"First time using Echokraut###EKFirstTime")
     {
+        _log = log;
+        _config = config;
+        _framework = framework;
+        _alttalkInstanceWindow = alttalkInstanceWindow;
+        _configWindow = configWindow;
         Flags = ImGuiWindowFlags.NoScrollbar;
         Size = new Vector2(600, 900);
         SizeCondition = ImGuiCond.FirstUseEver;
 
-        if (!Plugin.Configuration.Alltalk.LocalInstance && !Plugin.Configuration.Alltalk.RemoteInstance)
-        { 
-            if (!string.IsNullOrWhiteSpace(Plugin.Configuration.Alltalk.BaseUrl) && !Plugin.Configuration.Alltalk.BaseUrl.Contains("127.0.0.1"))
-                Plugin.Configuration.Alltalk.RemoteInstance = true;
+        if (!_config.Alltalk.LocalInstance && !_config.Alltalk.RemoteInstance)
+        {
+            if (!string.IsNullOrWhiteSpace(_config.Alltalk.BaseUrl) && !_config.Alltalk.BaseUrl.Contains("127.0.0.1"))
+                _config.Alltalk.RemoteInstance = true;
             else
-                Plugin.Configuration.Alltalk.LocalInstance = true;
+                _config.Alltalk.LocalInstance = true;
         }
     }
 
@@ -41,7 +52,7 @@ public class FirstTimeWindow : Window, IDisposable
     public override void PreDraw()
     {
         // Flags must be added or removed before Draw() is being called, or they won't apply
-        if (Plugin.Configuration.IsConfigWindowMovable)
+        if (_config.IsConfigWindowMovable)
         {
             Flags &= ~ImGuiWindowFlags.NoMove;
         }
@@ -55,7 +66,7 @@ public class FirstTimeWindow : Window, IDisposable
     {
         try
         {
-            Plugin.Framework.RunOnFrameworkThread(() => {LogHelper.UpdateLogList(); });
+            _framework.RunOnFrameworkThread(() => { _log.UpdateMainThreadLogs(); });
             using (ImRaii.TextWrapPos(0))
             {
                 ImGui.Text(
@@ -71,7 +82,7 @@ public class FirstTimeWindow : Window, IDisposable
                     "For example: \r\n- You or someone you know hosts one or more instances on their server\r\n- You're using google collab or other services like vast.ai");
             }
 
-            AlltalkInstanceWindow.DrawAlltalk(true);
+            _alttalkInstanceWindow.DrawAlltalk(true);
 
             using (ImRaii.TextWrapPos(0))
             {
@@ -79,13 +90,13 @@ public class FirstTimeWindow : Window, IDisposable
                     "Pressing this button will close the install window and enable you to fully use & configure Echokraut.");
                 ImGui.Text("Use /ek in chat to open the full configuration window.");
 
-                using (ImRaii.Disabled(!(Plugin.Configuration.Alltalk.RemoteInstance || (Plugin.Configuration.Alltalk.LocalInstance && Plugin.Configuration.Alltalk.LocalInstall))))
+                using (ImRaii.Disabled(!(_config.Alltalk.RemoteInstance || (_config.Alltalk.LocalInstance && _config.Alltalk.LocalInstall))))
                 {
                     if (ImGui.Button("I Understand"))
                     {
-                        Plugin.Configuration.FirstTime = false;
-                        if (!Plugin.ConfigWindow.IsOpen)
-                            Plugin.ConfigWindow.Toggle();
+                        _config.FirstTime = false;
+                        if (!_configWindow.IsOpen)
+                            _configWindow.Toggle();
                         Toggle();
                     }
                 }
@@ -94,7 +105,7 @@ public class FirstTimeWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", new EKEventId(0, TextSource.Backend));
+            _log.Error(nameof(Draw), $"Something went wrong: {ex}", new EKEventId(0, TextSource.Backend));
         }
     }
 }

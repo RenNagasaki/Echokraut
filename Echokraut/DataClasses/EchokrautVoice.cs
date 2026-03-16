@@ -73,7 +73,8 @@ namespace Echokraut.DataClasses
         {
             return $"{voiceName}";
         }
-        public override bool Equals(object obj)
+        public override int GetHashCode() => ToString().ToLowerInvariant().GetHashCode();
+        public override bool Equals(object? obj)
         {
             var item = obj as EchokrautVoice;
 
@@ -87,8 +88,8 @@ namespace Echokraut.DataClasses
 
         public int CompareTo(object? obj)
         {
-            var otherObj = ((EchokrautVoice)obj);
-            return otherObj.ToString().ToLower().CompareTo(ToString().ToLower());
+            var otherObj = obj as EchokrautVoice;
+            return otherObj?.ToString().ToLower().CompareTo(ToString().ToLower()) ?? -1;
         }
 
         public bool FitsNpcData(Genders gender, NpcRaces race, bool isChild, bool isGenderedRace)

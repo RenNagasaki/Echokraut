@@ -6,7 +6,6 @@ using Echokraut.DataClasses;
 using Echokraut.Enums;
 using System.Linq;
 using Dalamud.Interface;
-using System.Reflection;
 using System.IO;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game;
@@ -14,44 +13,58 @@ using Dalamud.Interface.ImGuiFileDialog;
 using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
-using Echokraut.Helper.API;
-using Echokraut.Helper.Data;
 using Echokraut.Helper.Functional;
+using Echokraut.Services;
 using OtterGui;
+using Dalamud.Plugin;
+using Dalamud.Plugin.Services;
 
 namespace Echokraut.Windows;
 
 public class ConfigWindow : Window, IDisposable
 {
+    private readonly ILogService _log;
+    private readonly IVolumeService _volumeService;
+    private readonly Configuration _config;
+    private readonly IFramework _framework;
+    private readonly ICommandService _commands;
+    private readonly ICommandManager _commandManager;
+    private readonly IDalamudPluginInterface _pluginInterface;
+    private readonly IBackendService _backend;
+    private readonly IAudioPlaybackService _audioPlayback;
+    private readonly IClientState _clientState;
+    private readonly IJsonDataService _jsonData;
+    private readonly IAudioFileService _audioFiles;
+    private readonly IGameObjectService _gameObjects;
+    private readonly IGoogleDriveSyncService _googleDrive;
+    private readonly INpcDataService _npcData;
+    private readonly AlltalkInstanceWindow _alttalkInstanceWindow;
     private readonly FileDialogManager? fileDialogManager;
     private unsafe Camera* camera;
     #region Voice Selection
     private List<NpcMapData> filteredNpcs = [];
-    private static bool _updateDataNpcs;
-    public static bool UpdateDataNpcs {
-        set => _updateDataNpcs = value;
-    }
+    private bool _updateDataNpcs;
     private bool resetDataNpcs;
     private string filterGenderNpcs = "";
     private string filterRaceNpcs = "";
     private string filterNameNpcs = "";
     private string filterVoiceNpcs = "";
     private List<NpcMapData> filteredPlayers = [];
-    public static bool UpdateDataPlayers { get; set; }
+    private bool _updateDataPlayers;
     private bool resetDataPlayers;
     private string filterGenderPlayers = "";
     private string filterRacePlayers = "";
     private string filterNamePlayers = "";
     private string filterVoicePlayers = "";
     private List<NpcMapData> filteredBubbles = [];
-    public static bool UpdateDataBubbles { get; set; }
+    private bool _updateDataBubbles;
     private bool resetDataBubbles;
     private string filterGenderBubbles = "";
     private string filterRaceBubbles = "";
     private string filterNameBubbles = "";
     private string filterVoiceBubbles = "";
     private List<EchokrautVoice> filteredVoices = [];
-    public static bool UpdateDataVoices { get; set; }
+    private bool _updateDataVoices;
     private bool resetDataVoices;
     private string filterGenderVoices = "";
     private string filterRaceVoices = "";
@@ -63,53 +76,53 @@ public class ConfigWindow : Window, IDisposable
     private string filterLogsGeneralMethod = "";
     private string filterLogsGeneralMessage = "";
     private string filterLogsGeneralId = "";
-    public static bool UpdateLogGeneralFilter = true;
+    private bool _updateLogGeneralFilter = true;
     private bool resetLogGeneralFilter = true;
     private List<LogMessage> filteredLogsTalk = [];
     private string filterLogsTalkMethod = "";
     private string filterLogsTalkMessage = "";
     private string filterLogsTalkId = "";
-    public static bool UpdateLogTalkFilter = true;
+    private bool _updateLogTalkFilter = true;
     private bool resetLogTalkFilter = true;
     private List<LogMessage> filteredLogsBattleTalk = [];
     private string filterLogsBattleTalkMethod = "";
     private string filterLogsBattleTalkMessage = "";
     private string filterLogsBattleTalkId = "";
-    public static bool UpdateLogBattleTalkFilter = true;
+    private bool _updateLogBattleTalkFilter = true;
     private bool resetLogBattleTalkFilter = true;
     private List<LogMessage> filteredLogsBubbles = [];
     private string filterLogsBubblesMethod = "";
     private string filterLogsBubblesMessage = "";
     private string filterLogsBubblesId = "";
-    public static bool UpdateLogBubblesFilter = true;
+    private bool _updateLogBubblesFilter = true;
     private bool resetLogBubblesFilter = true;
     private List<LogMessage> filteredLogsChat = [];
     private string filterLogsChatMethod = "";
     private string filterLogsChatMessage = "";
     private string filterLogsChatId = "";
-    public static bool UpdateLogChatFilter = true;
+    private bool _updateLogChatFilter = true;
     private bool resetLogChatFilter = true;
     private List<LogMessage> filteredLogsCutsceneSelectString = [];
     private string filterLogsCutsceneSelectStringMethod = "";
     private string filterLogsCutsceneSelectStringMessage = "";
     private string filterLogsCutsceneSelectStringId = "";
-    public static bool UpdateLogCutsceneSelectStringFilter = true;
+    private bool _updateLogCutsceneSelectStringFilter = true;
     private bool resetLogCutsceneSelectStringFilter = true;
     private List<LogMessage> filteredLogsSelectString = [];
     private string filterLogsSelectStringMethod = "";
     private string filterLogsSelectStringMessage = "";
     private string filterLogsSelectStringId = "";
-    public static bool UpdateLogSelectStringFilter = true;
+    private bool _updateLogSelectStringFilter = true;
     private bool resetLogSelectStringFilter = true;
-    public static List<LogMessage> FilteredLogsBackend = [];
-    public static string FilterLogsBackendMethod = "";
-    public static string FilterLogsBackendMessage = "";
-    public static string FilterLogsBackendId = "";
-    public static bool UpdateLogBackendFilter = true;
-    public static bool ResetLogBackendFilter = true;
+    private List<LogMessage> _filteredLogsBackend = [];
+    private string _filterLogsBackendMethod = "";
+    private string _filterLogsBackendMessage = "";
+    private string _filterLogsBackendId = "";
+    private bool _updateLogBackendFilter = true;
+    private bool _resetLogBackendFilter = true;
     #endregion
     #region Phonetic Corrections
-    private List<PhoneticCorrection> filteredPhon = [];
+    private List<PhoneticCorrection>? filteredPhon = [];
     private string filterPhonOriginal = "";
     private string filterPhonCorrected = "";
     private bool updatePhonData = true;
@@ -132,21 +145,145 @@ public class ConfigWindow : Window, IDisposable
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
     // and the window ID will always be "###XYZ counter window" for ImGui
-    public ConfigWindow() : base($"Echokraut Plugin.Configuration###EKSettings")
+    public ConfigWindow(
+        ILogService log,
+        IVolumeService volumeService,
+        Configuration config,
+        IFramework framework,
+        ICommandService commands,
+        ICommandManager commandManager,
+        IDalamudPluginInterface pluginInterface,
+        IBackendService backend,
+        IAudioPlaybackService audioPlayback,
+        IClientState clientState,
+        IJsonDataService jsonData,
+        IAudioFileService audioFiles,
+        IGameObjectService gameObjects,
+        IGoogleDriveSyncService googleDrive,
+        INpcDataService npcData,
+        AlltalkInstanceWindow alttalkInstanceWindow) : base($"Echokraut Configuration###EKSettings")
     {
+        _log = log;
+        _volumeService = volumeService;
+        _config = config;
+        _framework = framework;
+        _commands = commands;
+        _commandManager = commandManager;
+        _pluginInterface = pluginInterface;
+        _backend = backend;
+        _audioPlayback = audioPlayback;
+        _clientState = clientState;
+        _jsonData = jsonData;
+        _audioFiles = audioFiles;
+        _gameObjects = gameObjects;
+        _googleDrive = googleDrive;
+        _npcData = npcData;
+        _alttalkInstanceWindow = alttalkInstanceWindow;
         fileDialogManager = new FileDialogManager();
 
         Flags = ImGuiWindowFlags.AlwaysVerticalScrollbar & ImGuiWindowFlags.HorizontalScrollbar & ImGuiWindowFlags.AlwaysHorizontalScrollbar;
         Size = new Vector2(540, 480);
         SizeCondition = ImGuiCond.FirstUseEver;
+
+        _log.LogUpdated += OnLogUpdated;
+        _backend.VoicesMapped += OnVoicesMapped;
+        _backend.CharacterMapped += OnCharacterMapped;
     }
 
-    public void Dispose() { }
+    public void Dispose()
+    {
+        _log.LogUpdated -= OnLogUpdated;
+        _backend.VoicesMapped -= OnVoicesMapped;
+        _backend.CharacterMapped -= OnCharacterMapped;
+    }
+
+    private void OnVoicesMapped() => _updateDataVoices = true;
+
+    private void OnCharacterMapped()
+    {
+        _updateDataNpcs = true;
+        _updateDataBubbles = true;
+        _updateDataPlayers = true;
+    }
+
+    private void OnLogUpdated(TextSource source)
+    {
+        switch (source)
+        {
+            case TextSource.None:                      _updateLogGeneralFilter = true; break;
+            case TextSource.Chat:                      _updateLogChatFilter = true; break;
+            case TextSource.AddonTalk:                 _updateLogTalkFilter = true; break;
+            case TextSource.AddonBattleTalk:           _updateLogBattleTalkFilter = true; break;
+            case TextSource.AddonSelectString:         _updateLogSelectStringFilter = true; break;
+            case TextSource.AddonCutsceneSelectString: _updateLogCutsceneSelectStringFilter = true; break;
+            case TextSource.AddonBubble:               _updateLogBubblesFilter = true; break;
+            case TextSource.Backend:                   _updateLogBackendFilter = true; break;
+        }
+    }
+
+    private List<LogMessage> RecreateLogList(TextSource textSource)
+    {
+        var logListFiltered = new List<LogMessage>(_log.GetLogsForSource(textSource));
+
+        var showDebug = false;
+        var showError = false;
+        var showId0 = true;
+        switch (textSource)
+        {
+            case TextSource.None:
+                showDebug = _config.logConfig.ShowGeneralDebugLog;
+                showError = _config.logConfig.ShowGeneralErrorLog;
+                showId0 = true;
+                break;
+            case TextSource.Chat:
+                showDebug = _config.logConfig.ShowChatDebugLog;
+                showError = _config.logConfig.ShowChatErrorLog;
+                showId0 = _config.logConfig.ShowChatId0;
+                break;
+            case TextSource.AddonTalk:
+                showDebug = _config.logConfig.ShowTalkDebugLog;
+                showError = _config.logConfig.ShowTalkErrorLog;
+                showId0 = _config.logConfig.ShowTalkId0;
+                break;
+            case TextSource.AddonBattleTalk:
+                showDebug = _config.logConfig.ShowBattleTalkDebugLog;
+                showError = _config.logConfig.ShowBattleTalkErrorLog;
+                showId0 = _config.logConfig.ShowBattleTalkId0;
+                break;
+            case TextSource.AddonSelectString:
+                showDebug = _config.logConfig.ShowSelectStringDebugLog;
+                showError = _config.logConfig.ShowSelectStringErrorLog;
+                showId0 = _config.logConfig.ShowSelectStringId0;
+                break;
+            case TextSource.AddonCutsceneSelectString:
+                showDebug = _config.logConfig.ShowCutsceneSelectStringDebugLog;
+                showError = _config.logConfig.ShowCutsceneSelectStringErrorLog;
+                showId0 = _config.logConfig.ShowCutsceneSelectStringId0;
+                break;
+            case TextSource.AddonBubble:
+                showDebug = _config.logConfig.ShowBubbleDebugLog;
+                showError = _config.logConfig.ShowBubbleErrorLog;
+                showId0 = _config.logConfig.ShowBubbleId0;
+                break;
+            case TextSource.Backend:
+                showDebug = _config.logConfig.ShowBackendDebugLog;
+                showError = _config.logConfig.ShowBackendErrorLog;
+                showId0 = _config.logConfig.ShowBackendId0;
+                break;
+        }
+
+        if (!showDebug) logListFiltered.RemoveAll(p => p.type == LogType.Debug);
+        if (!showError) logListFiltered.RemoveAll(p => p.type == LogType.Error);
+        if (!showId0)   logListFiltered.RemoveAll(p => p.eventId.Id == 0);
+
+        logListFiltered.Sort((p, q) => p.timeStamp.CompareTo(q.timeStamp));
+        return logListFiltered;
+    }
 
     public override void PreDraw()
     {
         // Flags must be added or removed before Draw() is being called, or they won't apply
-        if (Plugin.Configuration!.IsConfigWindowMovable)
+        if (_config.IsConfigWindowMovable)
         {
             Flags &= ~ImGuiWindowFlags.NoMove;
         }
@@ -160,7 +297,7 @@ public class ConfigWindow : Window, IDisposable
     {
         try
         {
-            Plugin.Framework.RunOnFrameworkThread(() => {LogHelper.UpdateLogList(); });
+            _framework.RunOnFrameworkThread(() => { _log.UpdateMainThreadLogs(); });
             if (lastDeleteClick.AddSeconds(5) <= DateTime.Now && (deleteMappedNpcs || deleteMappedPlayers || deleteMappedBubbles))
             {
                 deleteMappedNpcs = false;
@@ -205,7 +342,7 @@ public class ConfigWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod()!.Name, $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
+            _log.Error(nameof(Draw), $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
         }
     }
 
@@ -232,16 +369,16 @@ public class ConfigWindow : Window, IDisposable
                                 {
                                     deleteMappedNpcs = false;
                                     foreach (NpcMapData npcMapData in
-                                             Plugin.Configuration!.MappedNpcs.FindAll(p => !p.Name.StartsWith("BB") &&
+                                             _config.MappedNpcs.FindAll(p => !p.Name.StartsWith("BB") &&
                                                  !p.DoNotDelete))
                                     {
-                                        AudioFileHelper.RemoveSavedNpcFiles(Plugin.Configuration.LocalSaveLocation,
+                                        _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation,
                                                                             npcMapData.Name);
-                                        Plugin.Configuration.MappedNpcs.Remove(npcMapData);
+                                        _config.MappedNpcs.Remove(npcMapData);
                                     }
 
-                                    UpdateDataNpcs = true;
-                                    Plugin.Configuration.Save();
+                                    _updateDataNpcs = true;
+                                    _config.Save();
                                 }
                             }
                             else if (ImGui.Button("Clear mapped npcs##clearnpc") && !deleteMappedNpcs)
@@ -257,15 +394,15 @@ public class ConfigWindow : Window, IDisposable
                                 {
                                     deleteMappedPlayers = false;
                                     foreach (NpcMapData playerMapData in
-                                             Plugin.Configuration!.MappedPlayers.FindAll(p => !p.DoNotDelete))
+                                             _config.MappedPlayers.FindAll(p => !p.DoNotDelete))
                                     {
-                                        AudioFileHelper.RemoveSavedNpcFiles(Plugin.Configuration.LocalSaveLocation,
+                                        _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation,
                                                                             playerMapData.Name);
-                                        Plugin.Configuration.MappedPlayers.Remove(playerMapData);
+                                        _config.MappedPlayers.Remove(playerMapData);
                                     }
 
-                                    UpdateDataPlayers = true;
-                                    Plugin.Configuration.Save();
+                                    _updateDataPlayers = true;
+                                    _config.Save();
                                 }
                             }
                             else if (ImGui.Button("Clear mapped players##clearplayers") && !deleteMappedPlayers)
@@ -281,16 +418,16 @@ public class ConfigWindow : Window, IDisposable
                                 {
                                     deleteMappedBubbles = false;
                                     foreach (NpcMapData npcMapData in
-                                             Plugin.Configuration!.MappedNpcs.FindAll(p => p.Name.StartsWith("BB") &&
+                                             _config.MappedNpcs.FindAll(p => p.Name.StartsWith("BB") &&
                                                  !p.DoNotDelete))
                                     {
-                                        AudioFileHelper.RemoveSavedNpcFiles(Plugin.Configuration.LocalSaveLocation,
+                                        _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation,
                                                                             npcMapData.Name);
-                                        Plugin.Configuration.MappedNpcs.Remove(npcMapData);
+                                        _config.MappedNpcs.Remove(npcMapData);
                                     }
 
-                                    UpdateDataBubbles = true;
-                                    Plugin.Configuration.Save();
+                                    _updateDataBubbles = true;
+                                    _config.Save();
                                 }
                             }
                             else if (ImGui.Button("Clear mapped bubbles##clearbubblenpc"))
@@ -307,9 +444,9 @@ public class ConfigWindow : Window, IDisposable
                         }
                         ImGui.NewLine();
                         ImGui.TextUnformatted("Available commands:");
-                        foreach (var commandKey in CommandHelper.CommandKeys)
+                        foreach (var commandKey in _commands.CommandKeys)
                         {
-                            var command = Plugin.CommandManager.Commands[commandKey];
+                            var command = _commandManager.Commands[commandKey];
                             ImGui.TextUnformatted(commandKey);
                             ImGui.SameLine();
                             ImGui.TextUnformatted(command.HelpMessage);
@@ -317,7 +454,7 @@ public class ConfigWindow : Window, IDisposable
                     }
                 }
 
-                using (ImRaii.Disabled(!Plugin.Configuration!.Enabled))
+                using (ImRaii.Disabled(!_config.Enabled))
                 {
                     using (var tabItemDialogue = ImRaii.TabItem("Dialogue"))
                     {
@@ -359,69 +496,69 @@ public class ConfigWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod()!.Name, $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
+            _log.Error(nameof(DrawSettings), $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
         }
     }
 
     private void DrawGeneralSettings()
     {
-        var enabled = Plugin.Configuration!.Enabled;
+        var enabled = _config.Enabled;
         if (ImGui.Checkbox("Enabled", ref enabled))
         {
-            Plugin.Configuration.Enabled = enabled;
-            Plugin.Configuration.Save();
+            _config.Enabled = enabled;
+            _config.Save();
         }
 
         using (ImRaii.Disabled(!enabled))
         {
-            var generateBySentence = Plugin.Configuration!.GenerateBySentence;
+            var generateBySentence = _config.GenerateBySentence;
             if (ImGui.Checkbox("Generate text per sentence instead of all at once(shorter sentences may sound weird, only needed if using CPU for inference)", ref generateBySentence))
             {
-                Plugin.Configuration.GenerateBySentence = generateBySentence;
-                Plugin.Configuration.Save();
+                _config.GenerateBySentence = generateBySentence;
+                _config.Save();
             }
             
-            var removeStutters = Plugin.Configuration.RemoveStutters;
+            var removeStutters = _config.RemoveStutters;
             if (ImGui.Checkbox("Remove stutters", ref removeStutters))
             {
-                Plugin.Configuration.RemoveStutters = removeStutters;
-                Plugin.Configuration.Save();
+                _config.RemoveStutters = removeStutters;
+                _config.Save();
             }
 
-            var hideUiInCutscenes = Plugin.Configuration.HideUiInCutscenes;
+            var hideUiInCutscenes = _config.HideUiInCutscenes;
             if (ImGui.Checkbox("Hide UI in Cutscenes", ref hideUiInCutscenes))
             {
-                Plugin.Configuration.HideUiInCutscenes = hideUiInCutscenes;
-                Plugin.Configuration.Save();
-                Plugin.PluginInterface.UiBuilder.DisableCutsceneUiHide = !hideUiInCutscenes;
+                _config.HideUiInCutscenes = hideUiInCutscenes;
+                _config.Save();
+                _pluginInterface.UiBuilder.DisableCutsceneUiHide = !hideUiInCutscenes;
             }
             ImGui.NewLine();
             if (ImGui.CollapsingHeader("Experimental options:"))
             {
-                var showExtraOptionsInDialogue = Plugin.Configuration!.ShowExtraOptionsInDialogue;
+                var showExtraOptionsInDialogue = _config.ShowExtraOptionsInDialogue;
                 if (ImGui.Checkbox("Shows Pause/Resume, Stop/Play and Mute buttons below the text in dialogues",
                                    ref showExtraOptionsInDialogue))
                 {
-                    Plugin.Configuration.ShowExtraOptionsInDialogue = showExtraOptionsInDialogue;
-                    Plugin.Configuration.Save();
+                    _config.ShowExtraOptionsInDialogue = showExtraOptionsInDialogue;
+                    _config.Save();
                 }
 
                 using (ImRaii.Disabled(!showExtraOptionsInDialogue))
                 {
-                    var showExtraExtraOptionsInDialogue = Plugin.Configuration!.ShowExtraExtraOptionsInDialogue;
+                    var showExtraExtraOptionsInDialogue = _config.ShowExtraExtraOptionsInDialogue;
                     if (ImGui.Checkbox("Shows even more options below the text in dialogues",
                                        ref showExtraExtraOptionsInDialogue))
                     {
-                        Plugin.Configuration.ShowExtraExtraOptionsInDialogue = showExtraExtraOptionsInDialogue;
-                        Plugin.Configuration.Save();
+                        _config.ShowExtraExtraOptionsInDialogue = showExtraExtraOptionsInDialogue;
+                        _config.Save();
                     }
                 }
             
-                var removePunctuation = Plugin.Configuration.RemovePunctuation;
+                var removePunctuation = _config.RemovePunctuation;
                 if (ImGui.Checkbox("Remove punctuation from the text (Experimental – may reduce end-of-speech hallucinations)", ref removePunctuation))
                 {
-                    Plugin.Configuration.RemovePunctuation = removePunctuation;
-                    Plugin.Configuration.Save();
+                    _config.RemovePunctuation = removePunctuation;
+                    _config.Save();
                 }
             }
         }
@@ -429,87 +566,87 @@ public class ConfigWindow : Window, IDisposable
 
     private void DrawDialogueSettings()
     {
-        var voiceDialog = Plugin.Configuration!.VoiceDialogue;
+        var voiceDialog = _config.VoiceDialogue;
         if (ImGui.Checkbox("Voice dialog", ref voiceDialog))
         {
-            Plugin.Configuration.VoiceDialogue = voiceDialog;
-            Plugin.Configuration.Save();
+            _config.VoiceDialogue = voiceDialog;
+            _config.Save();
         }
 
         using (ImRaii.Disabled(!voiceDialog))
         {
-            var voiceDialogueIn3D = Plugin.Configuration.VoiceDialogueIn3D;
+            var voiceDialogueIn3D = _config.VoiceDialogueIn3D;
             if (ImGui.Checkbox("Voice dialogue in 3D Space", ref voiceDialogueIn3D))
             {
-                Plugin.Configuration.VoiceDialogueIn3D = voiceDialogueIn3D;
-                Plugin.Configuration.Save();
+                _config.VoiceDialogueIn3D = voiceDialogueIn3D;
+                _config.Save();
             }
 
             if (voiceDialogueIn3D)
             {
-                var voiceBubbleAudibleRange = Plugin.Configuration.Voice3DAudibleRange;
+                var voiceBubbleAudibleRange = _config.Voice3DAudibleRange;
                 if (ImGui.SliderFloat("3D Space audible dropoff (shared setting), higher = lesser range, 0 = on player", ref voiceBubbleAudibleRange, 0f, 1f))
                 {
-                    Plugin.Configuration.Voice3DAudibleRange = voiceBubbleAudibleRange;
-                    Plugin.Configuration.Save();
+                    _config.Voice3DAudibleRange = voiceBubbleAudibleRange;
+                    _config.Save();
 
-                    PlayingHelper.Update3DFactors(voiceBubbleAudibleRange);
+                    _audioPlayback.Update3DFactors(voiceBubbleAudibleRange);
                 }
             }
         }
 
-        var voicePlayerChoicesCutscene = Plugin.Configuration.VoicePlayerChoicesCutscene;
+        var voicePlayerChoicesCutscene = _config.VoicePlayerChoicesCutscene;
         if (ImGui.Checkbox("Voice player choices in cutscene", ref voicePlayerChoicesCutscene))
         {
-            Plugin.Configuration.VoicePlayerChoicesCutscene = voicePlayerChoicesCutscene;
-            Plugin.Configuration.Save();
+            _config.VoicePlayerChoicesCutscene = voicePlayerChoicesCutscene;
+            _config.Save();
         }
 
-        var voicePlayerChoices = Plugin.Configuration.VoicePlayerChoices;
+        var voicePlayerChoices = _config.VoicePlayerChoices;
         if (ImGui.Checkbox("Voice player choices outside of cutscene", ref voicePlayerChoices))
         {
-            Plugin.Configuration.VoicePlayerChoices = voicePlayerChoices;
-            Plugin.Configuration.Save();
+            _config.VoicePlayerChoices = voicePlayerChoices;
+            _config.Save();
         }
 
-        var cancelAdvance = Plugin.Configuration.CancelSpeechOnTextAdvance;
+        var cancelAdvance = _config.CancelSpeechOnTextAdvance;
         if (ImGui.Checkbox("Cancel voice on text advance", ref cancelAdvance))
         {
-            Plugin.Configuration.CancelSpeechOnTextAdvance = cancelAdvance;
-            Plugin.Configuration.Save();
+            _config.CancelSpeechOnTextAdvance = cancelAdvance;
+            _config.Save();
         }
 
-        var autoAdvanceOnSpeechCompletion = Plugin.Configuration.AutoAdvanceTextAfterSpeechCompleted;
+        var autoAdvanceOnSpeechCompletion = _config.AutoAdvanceTextAfterSpeechCompleted;
         if (ImGui.Checkbox("Click dialogue window after speech completion", ref autoAdvanceOnSpeechCompletion))
         {
-            Plugin.Configuration.AutoAdvanceTextAfterSpeechCompleted = autoAdvanceOnSpeechCompletion;
-            Plugin.Configuration.Save();
+            _config.AutoAdvanceTextAfterSpeechCompleted = autoAdvanceOnSpeechCompletion;
+            _config.Save();
         }
 
-        var voiceRetainers = Plugin.Configuration.VoiceRetainers;
+        var voiceRetainers = _config.VoiceRetainers;
         if (ImGui.Checkbox("Voice retainer dialogues", ref voiceRetainers))
         {
-            Plugin.Configuration.VoiceRetainers = voiceRetainers;
-            Plugin.Configuration.Save();
+            _config.VoiceRetainers = voiceRetainers;
+            _config.Save();
         }
     }
 
     private void DrawBattleDialogueSettings()
     {
-        var voiceBattleDialog = Plugin.Configuration!.VoiceBattleDialogue;
+        var voiceBattleDialog = _config.VoiceBattleDialogue;
         if (ImGui.Checkbox("Voice battle dialog", ref voiceBattleDialog))
         {
-            Plugin.Configuration.VoiceBattleDialogue = voiceBattleDialog;
-            Plugin.Configuration.Save();
+            _config.VoiceBattleDialogue = voiceBattleDialog;
+            _config.Save();
         }
 
         using (ImRaii.Disabled(!voiceBattleDialog))
         {
-            var voiceBattleDialogQueued = Plugin.Configuration.VoiceBattleDialogQueued;
+            var voiceBattleDialogQueued = _config.VoiceBattleDialogQueued;
             if (ImGui.Checkbox("Voice battle dialog in a queue", ref voiceBattleDialogQueued))
             {
-                Plugin.Configuration.VoiceBattleDialogQueued = voiceBattleDialogQueued;
-                Plugin.Configuration.Save();
+                _config.VoiceBattleDialogQueued = voiceBattleDialogQueued;
+                _config.Save();
             }
         }
     }
@@ -518,70 +655,70 @@ public class ConfigWindow : Window, IDisposable
     {
         var backends = Enum.GetValues<TTSBackends>().ToArray();
         var backendsDisplay = backends.Select(b => b.ToString()).ToArray();
-        var presetIndex = Enum.GetValues<TTSBackends>().ToList().IndexOf(Plugin.Configuration!.BackendSelection);
+        var presetIndex = Enum.GetValues<TTSBackends>().ToList().IndexOf(_config.BackendSelection);
         if (ImGui.Combo($"Select Backend##EKCBoxBackend", ref presetIndex, backendsDisplay, backendsDisplay.Length))
         {
             var backendSelection = backends[presetIndex];
-            Plugin.Configuration.BackendSelection = backendSelection;
-            Plugin.Configuration.Save();
-            BackendHelper.SetBackendType(backendSelection);
+            _config.BackendSelection = backendSelection;
+            _config.Save();
+            _backend.SetBackendType(backendSelection);
 
-            LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Updated backendselection to: {Constants.BACKENDS[presetIndex]}", new EKEventId(0, TextSource.None));
+            _log.Info(nameof(DrawBackendSettings), $"Updated backendselection to: {Constants.BACKENDS[presetIndex]}", new EKEventId(0, TextSource.None));
         }
 
-        if (Plugin.Configuration.BackendSelection == TTSBackends.Alltalk)
-            AlltalkInstanceWindow.DrawAlltalk(false);
+        if (_config.BackendSelection == TTSBackends.Alltalk)
+            _alttalkInstanceWindow.DrawAlltalk(false);
     }
 
     private void DrawSaveSettings()
     {
-        var loadLocalFirst = Plugin.Configuration!.LoadFromLocalFirst;
+        var loadLocalFirst = _config.LoadFromLocalFirst;
         if (ImGui.Checkbox("Search audio locally first before generating", ref loadLocalFirst))
         {
-            Plugin.Configuration.LoadFromLocalFirst = loadLocalFirst;
-            Plugin.Configuration.Save();
+            _config.LoadFromLocalFirst = loadLocalFirst;
+            _config.Save();
         }
-        var saveLocally = Plugin.Configuration.SaveToLocal;
+        var saveLocally = _config.SaveToLocal;
         if (ImGui.Checkbox("Save generated audio locally", ref saveLocally))
         {
-            Plugin.Configuration.SaveToLocal = saveLocally;
-            Plugin.Configuration.Save();
+            _config.SaveToLocal = saveLocally;
+            _config.Save();
         }
 
         using (ImRaii.Disabled(!saveLocally))
         {
-            var createMissingLocalSave = Plugin.Configuration.CreateMissingLocalSaveLocation;
+            var createMissingLocalSave = _config.CreateMissingLocalSaveLocation;
             if (ImGui.Checkbox("Create directory if not existing", ref createMissingLocalSave))
             {
-                Plugin.Configuration.CreateMissingLocalSaveLocation = createMissingLocalSave;
-                Plugin.Configuration.Save();
+                _config.CreateMissingLocalSaveLocation = createMissingLocalSave;
+                _config.Save();
             }
         }
 
         using (ImRaii.Disabled(!saveLocally && !loadLocalFirst))
         {
-            var localSaveLocation = Plugin.Configuration.LocalSaveLocation;
+            var localSaveLocation = _config.LocalSaveLocation;
             if (ImGui.InputText($"##EKSavePath", ref localSaveLocation, 40))
             {
-                Plugin.Configuration.LocalSaveLocation = localSaveLocation;
-                Plugin.Configuration.Save();
+                _config.LocalSaveLocation = localSaveLocation;
+                _config.Save();
             }
             ImGui.SameLine();
             if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Folder.ToIconString()}##import", new Vector2(25, 25),
                     "Select a directory via dialog.", false, true))
             {
-                var startDir = Plugin.Configuration.LocalSaveLocation.Length > 0 && Directory.Exists(Plugin.Configuration.LocalSaveLocation)
-                ? Plugin.Configuration.LocalSaveLocation
+                var startDir = _config.LocalSaveLocation.Length > 0 && Directory.Exists(_config.LocalSaveLocation)
+                ? _config.LocalSaveLocation
                     : null;
 
-                LogHelper.Debug(MethodBase.GetCurrentMethod()!.Name, $"Connection test result: {startDir}", new EKEventId(0, TextSource.None));
+                _log.Debug(nameof(DrawSaveSettings), $"Connection test result: {startDir}", new EKEventId(0, TextSource.None));
                 fileDialogManager!.OpenFolderDialog("Choose audio files directory", (b, s) =>
                 {
                     if (!b)
                         return;
 
-                    Plugin.Configuration.LocalSaveLocation = s;
-                    Plugin.Configuration.Save();
+                    _config.LocalSaveLocation = s;
+                    _config.Save();
                 }, startDir);
             }
 
@@ -592,56 +729,56 @@ public class ConfigWindow : Window, IDisposable
 
         if (ImGui.CollapsingHeader("Google Drive:"))
         {
-            var googleDriveRequestVoiceLine = Plugin.Configuration.GoogleDriveRequestVoiceLine;
+            var googleDriveRequestVoiceLine = _config.GoogleDriveRequestVoiceLine;
             ImGui.LabelText("", "This setting may tremendously help in the future. Please consider helping out.");
             if (ImGui.Checkbox("Send any dialogue line to my (Ren Nagasaki's) Share for a full database of needed voice lines.", ref googleDriveRequestVoiceLine))
             {
-                Plugin.Configuration.GoogleDriveRequestVoiceLine = googleDriveRequestVoiceLine;
-                Plugin.Configuration.Save();
+                _config.GoogleDriveRequestVoiceLine = googleDriveRequestVoiceLine;
+                _config.Save();
 
                 if (googleDriveRequestVoiceLine)
-                    GoogleDriveHelper.CreateDriveServicePkceAsync();
+                    _ = _googleDrive.CreateDriveServicePkceAsync();
             }
             ImGui.NewLine();
             
             using (ImRaii.Disabled(!saveLocally))
             {
-                var googleDriveUpload = Plugin.Configuration.GoogleDriveUpload;
+                var googleDriveUpload = _config.GoogleDriveUpload;
                 if (ImGui.Checkbox("Upload to Google Drive (requires 'Save generated audio locally')", ref googleDriveUpload))
                 {
-                    Plugin.Configuration.GoogleDriveUpload = googleDriveUpload;
-                    Plugin.Configuration.Save();
+                    _config.GoogleDriveUpload = googleDriveUpload;
+                    _config.Save();
                 }
             }
 
-            var googleDriveDownload = Plugin.Configuration.GoogleDriveDownload;
+            var googleDriveDownload = _config.GoogleDriveDownload;
             if (ImGui.Checkbox("Download from Google Drive Share", ref googleDriveDownload))
             {
-                Plugin.Configuration.GoogleDriveDownload = googleDriveDownload;
-                Plugin.Configuration.Save();
+                _config.GoogleDriveDownload = googleDriveDownload;
+                _config.Save();
             }
 
             using (ImRaii.Disabled(!googleDriveDownload))
             {
-                var googleDriveDownloadPeriodically = Plugin.Configuration.GoogleDriveDownloadPeriodically;
+                var googleDriveDownloadPeriodically = _config.GoogleDriveDownloadPeriodically;
                 if (ImGui.Checkbox("Download periodically (every 60 minutes, only updating/downloading new files)",
                                    ref googleDriveDownloadPeriodically))
                 {
-                    Plugin.Configuration.GoogleDriveDownloadPeriodically = googleDriveDownloadPeriodically;
-                    Plugin.Configuration.Save();
+                    _config.GoogleDriveDownloadPeriodically = googleDriveDownloadPeriodically;
+                    _config.Save();
                 }
 
                 ImGui.LabelText("", "Google Drive share link");
-                var googleDriveShareLink = Plugin.Configuration.GoogleDriveShareLink;
+                var googleDriveShareLink = _config.GoogleDriveShareLink;
                 if (ImGui.InputText($"##EKGDShareLink", ref googleDriveShareLink, 100))
                 {
-                    Plugin.Configuration.GoogleDriveShareLink = googleDriveShareLink;
-                    Plugin.Configuration.Save();
+                    _config.GoogleDriveShareLink = googleDriveShareLink;
+                    _config.Save();
                 }
                 ImGui.SameLine();
                 if (ImGui.Button("Download now##EKGDDownloadNow"))
                 {
-                    GoogleDriveHelper.DownloadFolder(Plugin.Configuration.LocalSaveLocation, Plugin.Configuration.GoogleDriveShareLink);
+                    _googleDrive.DownloadFolder(_config.LocalSaveLocation, _config.GoogleDriveShareLink);
                 }
             }
         }
@@ -649,44 +786,44 @@ public class ConfigWindow : Window, IDisposable
 
     private unsafe void DrawBubbleSettings()
     {
-        var voiceBubbles = Plugin.Configuration!.VoiceBubble;
+        var voiceBubbles = _config.VoiceBubble;
         if (ImGui.Checkbox("Voice NPC Bubbles", ref voiceBubbles))
         {
-            Plugin.Configuration.VoiceBubble = voiceBubbles;
-            Plugin.Configuration.Save();
+            _config.VoiceBubble = voiceBubbles;
+            _config.Save();
         }
 
         using (ImRaii.Disabled(!voiceBubbles))
         {
-            var voiceBubblesInCity = Plugin.Configuration.VoiceBubblesInCity;
+            var voiceBubblesInCity = _config.VoiceBubblesInCity;
             if (ImGui.Checkbox("Voice NPC Bubbles in City", ref voiceBubblesInCity))
             {
-                Plugin.Configuration.VoiceBubblesInCity = voiceBubblesInCity;
-                Plugin.Configuration.Save();
+                _config.VoiceBubblesInCity = voiceBubblesInCity;
+                _config.Save();
             }
 
-            var voiceSourceCam = Plugin.Configuration.VoiceSourceCam;
+            var voiceSourceCam = _config.VoiceSourceCam;
             if (ImGui.Checkbox("Voice Bubbles with camera as center", ref voiceSourceCam))
             {
-                Plugin.Configuration.VoiceSourceCam = voiceSourceCam;
-                Plugin.Configuration.Save();
+                _config.VoiceSourceCam = voiceSourceCam;
+                _config.Save();
             }
 
-            var voiceBubbleAudibleRange = Plugin.Configuration.Voice3DAudibleRange;
+            var voiceBubbleAudibleRange = _config.Voice3DAudibleRange;
             if (ImGui.SliderFloat("3D Space audible dropoff (shared setting), higher = lesser range, 0 = on player", ref voiceBubbleAudibleRange, 0f, 1f))
             {
-                Plugin.Configuration.Voice3DAudibleRange = voiceBubbleAudibleRange;
-                Plugin.Configuration.Save();
+                _config.Voice3DAudibleRange = voiceBubbleAudibleRange;
+                _config.Save();
 
-                PlayingHelper.Update3DFactors(voiceBubbleAudibleRange);
+                _audioPlayback.Update3DFactors(voiceBubbleAudibleRange);
             }
 
 
             if (camera == null && CameraManager.Instance() != null)
                 camera = CameraManager.Instance()->GetActiveCamera();
 
-            var position = DalamudHelper.LocalPlayer.Position;
-            if (Plugin.Configuration.VoiceSourceCam)
+            var position = _gameObjects.LocalPlayer?.Position ?? System.Numerics.Vector3.Zero;
+            if (_config.VoiceSourceCam)
                 position = camera->CameraBase.SceneCamera.Position;
 
             if (ImGui.CollapsingHeader("3D space debug info##3DSpaceDebug"))
@@ -708,11 +845,11 @@ public class ConfigWindow : Window, IDisposable
 
     private void DrawChatSettings()
     {
-        var voiceChat = Plugin.Configuration!.VoiceChat;
+        var voiceChat = _config.VoiceChat;
         if (ImGui.Checkbox("Voice Chat", ref voiceChat))
         {
-            Plugin.Configuration.VoiceChat = voiceChat;
-            Plugin.Configuration.Save();
+            _config.VoiceChat = voiceChat;
+            _config.Save();
         }
 
         using (ImRaii.Disabled(!voiceChat))
@@ -725,107 +862,107 @@ public class ConfigWindow : Window, IDisposable
                 if (ImGui.Button("DetectLanguage.com"))
                     System.Diagnostics.Process.Start("https://detectlanguage.com/");
             }
-            var voiceChatLanguageApiKey = Plugin.Configuration.VoiceChatLanguageAPIKey;
+            var voiceChatLanguageApiKey = _config.VoiceChatLanguageAPIKey;
             if (ImGui.InputText("Detect Language API Key", ref voiceChatLanguageApiKey, 32))
             {
-                Plugin.Configuration.VoiceChatLanguageAPIKey = voiceChatLanguageApiKey;
-                Plugin.Configuration.Save();
+                _config.VoiceChatLanguageAPIKey = voiceChatLanguageApiKey;
+                _config.Save();
             }
 
-            var voiceChatIn3D = Plugin.Configuration.VoiceChatIn3D;
+            var voiceChatIn3D = _config.VoiceChatIn3D;
             if (ImGui.Checkbox("Voice Chat in 3D Space", ref voiceChatIn3D))
             {
-                Plugin.Configuration.VoiceChatIn3D = voiceChatIn3D;
-                Plugin.Configuration.Save();
+                _config.VoiceChatIn3D = voiceChatIn3D;
+                _config.Save();
             }
 
             if (voiceChatIn3D)
             {
-                var voiceBubbleAudibleRange = Plugin.Configuration.Voice3DAudibleRange;
+                var voiceBubbleAudibleRange = _config.Voice3DAudibleRange;
                 if (ImGui.SliderFloat("3D Space audible dropoff (shared setting), higher = lesser range, 0 = on player", ref voiceBubbleAudibleRange, 0f, 1f))
                 {
-                    Plugin.Configuration.Voice3DAudibleRange = voiceBubbleAudibleRange;
-                    Plugin.Configuration.Save();
+                    _config.Voice3DAudibleRange = voiceBubbleAudibleRange;
+                    _config.Save();
 
-                    PlayingHelper.Update3DFactors(voiceBubbleAudibleRange);
+                    _audioPlayback.Update3DFactors(voiceBubbleAudibleRange);
                 }
             }
 
-            var voiceChatPlayer = Plugin.Configuration.VoiceChatPlayer;
+            var voiceChatPlayer = _config.VoiceChatPlayer;
             if (ImGui.Checkbox("Voice your own Chat", ref voiceChatPlayer))
             {
-                Plugin.Configuration.VoiceChatPlayer = voiceChatPlayer;
-                Plugin.Configuration.Save();
+                _config.VoiceChatPlayer = voiceChatPlayer;
+                _config.Save();
             }
 
-            var voiceChatSay = Plugin.Configuration.VoiceChatSay;
+            var voiceChatSay = _config.VoiceChatSay;
             if (ImGui.Checkbox("Voice say Chat", ref voiceChatSay))
             {
-                Plugin.Configuration.VoiceChatSay = voiceChatSay;
-                Plugin.Configuration.Save();
+                _config.VoiceChatSay = voiceChatSay;
+                _config.Save();
             }
 
-            var voiceChatYell = Plugin.Configuration.VoiceChatYell;
+            var voiceChatYell = _config.VoiceChatYell;
             if (ImGui.Checkbox("Voice yell Chat", ref voiceChatYell))
             {
-                Plugin.Configuration.VoiceChatYell = voiceChatYell;
-                Plugin.Configuration.Save();
+                _config.VoiceChatYell = voiceChatYell;
+                _config.Save();
             }
 
-            var voiceChatShout = Plugin.Configuration.VoiceChatShout;
+            var voiceChatShout = _config.VoiceChatShout;
             if (ImGui.Checkbox("Voice shout Chat", ref voiceChatShout))
             {
-                Plugin.Configuration.VoiceChatShout = voiceChatShout;
-                Plugin.Configuration.Save();
+                _config.VoiceChatShout = voiceChatShout;
+                _config.Save();
             }
 
-            var voiceChatFreeCompany = Plugin.Configuration.VoiceChatFreeCompany;
+            var voiceChatFreeCompany = _config.VoiceChatFreeCompany;
             if (ImGui.Checkbox("Voice free company Chat", ref voiceChatFreeCompany))
             {
-                Plugin.Configuration.VoiceChatFreeCompany = voiceChatFreeCompany;
-                Plugin.Configuration.Save();
+                _config.VoiceChatFreeCompany = voiceChatFreeCompany;
+                _config.Save();
             }
 
-            var voiceChatTell = Plugin.Configuration.VoiceChatTell;
+            var voiceChatTell = _config.VoiceChatTell;
             if (ImGui.Checkbox("Voice tell Chat", ref voiceChatTell))
             {
-                Plugin.Configuration.VoiceChatTell = voiceChatTell;
-                Plugin.Configuration.Save();
+                _config.VoiceChatTell = voiceChatTell;
+                _config.Save();
             }
 
-            var voiceChatParty = Plugin.Configuration.VoiceChatParty;
+            var voiceChatParty = _config.VoiceChatParty;
             if (ImGui.Checkbox("Voice party Chat", ref voiceChatParty))
             {
-                Plugin.Configuration.VoiceChatParty = voiceChatParty;
-                Plugin.Configuration.Save();
+                _config.VoiceChatParty = voiceChatParty;
+                _config.Save();
             }
 
-            var voiceChatAlliance = Plugin.Configuration.VoiceChatAlliance;
+            var voiceChatAlliance = _config.VoiceChatAlliance;
             if (ImGui.Checkbox("Voice alliance Chat", ref voiceChatAlliance))
             {
-                Plugin.Configuration.VoiceChatAlliance = voiceChatAlliance;
-                Plugin.Configuration.Save();
+                _config.VoiceChatAlliance = voiceChatAlliance;
+                _config.Save();
             }
 
-            var voiceChatNoviceNetwork = Plugin.Configuration.VoiceChatNoviceNetwork;
+            var voiceChatNoviceNetwork = _config.VoiceChatNoviceNetwork;
             if (ImGui.Checkbox("Voice novice network Chat", ref voiceChatNoviceNetwork))
             {
-                Plugin.Configuration.VoiceChatNoviceNetwork = voiceChatNoviceNetwork;
-                Plugin.Configuration.Save();
+                _config.VoiceChatNoviceNetwork = voiceChatNoviceNetwork;
+                _config.Save();
             }
 
-            var voiceChatLinkshell = Plugin.Configuration.VoiceChatLinkshell;
+            var voiceChatLinkshell = _config.VoiceChatLinkshell;
             if (ImGui.Checkbox("Voice Linkshells", ref voiceChatLinkshell))
             {
-                Plugin.Configuration.VoiceChatLinkshell = voiceChatLinkshell;
-                Plugin.Configuration.Save();
+                _config.VoiceChatLinkshell = voiceChatLinkshell;
+                _config.Save();
             }
 
-            var voiceChatCrossLinkshell = Plugin.Configuration.VoiceChatCrossLinkshell;
+            var voiceChatCrossLinkshell = _config.VoiceChatCrossLinkshell;
             if (ImGui.Checkbox("Voice Cross Linkshells", ref voiceChatCrossLinkshell))
             {
-                Plugin.Configuration.VoiceChatCrossLinkshell = voiceChatCrossLinkshell;
-                Plugin.Configuration.Save();
+                _config.VoiceChatCrossLinkshell = voiceChatCrossLinkshell;
+                _config.Save();
             }
         }
     }
@@ -843,7 +980,7 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (tabItemNPCs)
                     {
-                        DrawVoiceSelectionTable("NPCs", Plugin.Configuration!.MappedNpcs, ref filteredNpcs,
+                        DrawVoiceSelectionTable("NPCs", _config.MappedNpcs, ref filteredNpcs,
                                                 ref _updateDataNpcs, ref resetDataNpcs, ref filterGenderNpcs,
                                                 ref filterRaceNpcs, ref filterNameNpcs, ref filterVoiceNpcs);
                     }
@@ -853,7 +990,7 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (tabItemPlayers)
                     {
-                        DrawVoiceSelectionTable("Players", Plugin.Configuration!.MappedPlayers, ref filteredPlayers,
+                        DrawVoiceSelectionTable("Players", _config.MappedPlayers, ref filteredPlayers,
                                                 ref _updateDataNpcs, ref resetDataPlayers, ref filterGenderPlayers,
                                                 ref filterRacePlayers, ref filterNamePlayers, ref filterVoicePlayers);
                     }
@@ -863,7 +1000,7 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (tabItemBubbles)
                     {
-                        DrawVoiceSelectionTable("Bubbles", Plugin.Configuration!.MappedNpcs, ref filteredBubbles,
+                        DrawVoiceSelectionTable("Bubbles", _config.MappedNpcs, ref filteredBubbles,
                                                 ref _updateDataNpcs, ref resetDataBubbles, ref filterGenderBubbles,
                                                 ref filterRaceBubbles, ref filterNameBubbles, ref filterVoiceBubbles,
                                                 true);
@@ -881,30 +1018,30 @@ public class ConfigWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod()!.Name, $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
+            _log.Error(nameof(DrawVoiceSelection), $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
         }
     }
 
     private void DrawVoices()
     {
-        var voiceArr = Plugin.Configuration!.EchokrautVoices.ConvertAll(p => p.ToString()).ToArray();
-        var defaultVoiceIndex = Plugin.Configuration.EchokrautVoices.FindIndex(p => p.IsDefault);
+        var voiceArr = _config.EchokrautVoices.ConvertAll(p => p.ToString()).ToArray();
+        var defaultVoiceIndex = _config.EchokrautVoices.FindIndex(p => p.IsDefault);
         if (ImGui.Combo($"Default Voice:##EKDefaultVoice", ref defaultVoiceIndex, voiceArr, voiceArr.Length))
         {
             // Clear all defaults
-            foreach (var voice in Plugin.Configuration.EchokrautVoices)
+            foreach (var voice in _config.EchokrautVoices)
                 voice.IsDefault = false;
 
-            Plugin.Configuration.EchokrautVoices[defaultVoiceIndex].IsDefault = true;
-            Plugin.Configuration.Save();
+            _config.EchokrautVoices[defaultVoiceIndex].IsDefault = true;
+            _config.Save();
         }
 
-        UpdateDataVoices = filteredVoices.Count == 0;
+        _updateDataVoices = filteredVoices.Count == 0;
 
-        if (UpdateDataVoices || (resetDataVoices && (filterGenderVoices.Length == 0 || filterRaceVoices.Length == 0 || filterNameVoices.Length == 0)))
+        if (_updateDataVoices || (resetDataVoices && (filterGenderVoices.Length == 0 || filterRaceVoices.Length == 0 || filterNameVoices.Length == 0)))
         {
-            filteredVoices = Plugin.Configuration.EchokrautVoices;
-            UpdateDataVoices = true;
+            filteredVoices = _config.EchokrautVoices;
+            _updateDataVoices = true;
             resetDataVoices = false;
         }
 
@@ -934,37 +1071,37 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.TableNextColumn();
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                if (ImGui.InputText($"##EKFilterNpcName", ref filterNameVoices, 40) || (filterNameVoices.Length > 0 && UpdateDataVoices))
+                if (ImGui.InputText($"##EKFilterNpcName", ref filterNameVoices, 40) || (filterNameVoices.Length > 0 && _updateDataVoices))
                 {
                     filteredVoices = filteredVoices.FindAll(p => p.VoiceName.ToLower().Contains(filterNameVoices.ToLower()));
-                    UpdateDataVoices = true;
+                    _updateDataVoices = true;
                     resetDataVoices = true;
                 }
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                if (ImGui.InputText($"##EKFilterNpcNote", ref filterNoteVoices, 40) || (filterNoteVoices.Length > 0 && UpdateDataVoices))
+                if (ImGui.InputText($"##EKFilterNpcNote", ref filterNoteVoices, 40) || (filterNoteVoices.Length > 0 && _updateDataVoices))
                 {
                     filteredVoices = filteredVoices.FindAll(p => p.Note.ToLower().Contains(filterNoteVoices.ToLower()));
-                    UpdateDataVoices = true;
+                    _updateDataVoices = true;
                     resetDataVoices = true;
                 }
                 ImGui.TableNextColumn();
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                if (ImGui.InputText($"##EKFilterNpcGenders", ref filterGenderVoices, 40) || (filterGenderVoices.Length > 0 && UpdateDataVoices))
+                if (ImGui.InputText($"##EKFilterNpcGenders", ref filterGenderVoices, 40) || (filterGenderVoices.Length > 0 && _updateDataVoices))
                 {
                     var foundGenderIndex = Constants.GENDERLIST.FindIndex(p => p.ToString().Contains(filterGenderVoices));
                     filteredVoices = foundGenderIndex >= 0 ? filteredVoices.FindAll(p => p.AllowedGenders.Contains(Constants.GENDERLIST[foundGenderIndex])): filteredVoices.FindAll(p => p.AllowedGenders.Count == 0);
-                    UpdateDataVoices = true;
+                    _updateDataVoices = true;
                     resetDataVoices = true;
                 }
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                if (ImGui.InputText($"##EKFilterNpcRaces", ref filterRaceVoices, 40) || (filterRaceVoices.Length > 0 && UpdateDataVoices))
+                if (ImGui.InputText($"##EKFilterNpcRaces", ref filterRaceVoices, 40) || (filterRaceVoices.Length > 0 && _updateDataVoices))
                 {
                     var foundRaceIndex = Constants.RACELIST.FindIndex(p => p.ToString().Contains(filterRaceVoices, StringComparison.OrdinalIgnoreCase));
                     filteredVoices = foundRaceIndex >= 0 ? filteredVoices.FindAll(p => p.AllowedRaces.Contains(Constants.RACELIST[foundRaceIndex])) : filteredVoices.FindAll(p => p.AllowedRaces.Count == 0);
-                    UpdateDataVoices = true;
+                    _updateDataVoices = true;
                     resetDataVoices = true;
                 }
                 var sortSpecs = ImGui.TableGetSortSpecs();
@@ -1010,7 +1147,7 @@ public class ConfigWindow : Window, IDisposable
                             break;
                     }
 
-                    UpdateDataVoices = false;
+                    _updateDataVoices = false;
                     sortSpecs.SpecsDirty = false;
                 }
                 ImGui.TableNextColumn();
@@ -1035,7 +1172,7 @@ public class ConfigWindow : Window, IDisposable
                     if (ImGui.Checkbox($"##EKVoiceIsEnabled{voice}", ref isEnabled))
                     {
                         voice.IsEnabled = isEnabled;
-                        Plugin.Configuration.Save();
+                        _config.Save();
                     }
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1044,7 +1181,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKVoiceNote{voice}", ref voice.Note, 80))
                     {
-                        Plugin.Configuration.Save();
+                        _config.Save();
                     }
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1064,7 +1201,7 @@ public class ConfigWindow : Window, IDisposable
                                 if (ImGui.Checkbox($"Random NPC##EKVoiceUseAsRandom{voice}", ref useAsRandom))
                                 {
                                     voice.UseAsRandom = useAsRandom;
-                                    Plugin.Configuration.Save();
+                                    _config.Save();
                                 }
 
                                 ImGui.TableNextRow();
@@ -1073,7 +1210,7 @@ public class ConfigWindow : Window, IDisposable
                                 if (ImGui.Checkbox($"Child Voice##EKVoiceIsChildVoice{voice}", ref isChildVoice))
                                 {
                                     voice.IsChildVoice = isChildVoice;
-                                    Plugin.Configuration.Save();
+                                    _config.Save();
                                 }
                             }
                         }
@@ -1094,7 +1231,7 @@ public class ConfigWindow : Window, IDisposable
                                 ImGui.TableNextColumn();
                                 if (ImGui.Button($"Reset##EKVoiceAllowedGender{voice}Reset"))
                                 {
-                                    NpcDataHelper.ReSetVoiceGenders(voice);
+                                    _npcData.ReSetVoiceGenders(voice);
                                 }
 
                                 ImGui.TableNextRow();
@@ -1111,8 +1248,8 @@ public class ConfigWindow : Window, IDisposable
                                         else if (!isAllowed && voice.AllowedGenders.Contains(gender))
                                             voice.AllowedGenders.Remove(gender);
 
-                                        NpcDataHelper.RefreshSelectables(Plugin.Configuration.EchokrautVoices);
-                                        Plugin.Configuration.Save();
+                                        _npcData.RefreshSelectables(_config.EchokrautVoices);
+                                        _config.Save();
                                     }
 
                                     ImGui.TableNextRow();
@@ -1155,15 +1292,15 @@ public class ConfigWindow : Window, IDisposable
                                             if (voice.AllowedRaces.Contains(race))
                                                 voice.AllowedRaces.Remove(race);
 
-                                    NpcDataHelper.RefreshSelectables(Plugin.Configuration.EchokrautVoices);
-                                    Plugin.Configuration.Save();
+                                    _npcData.RefreshSelectables(_config.EchokrautVoices);
+                                    _config.Save();
                                 }
 
                                 ImGui.TableNextColumn();
                                 ImGui.TableNextColumn();
                                 if (ImGui.Button($"Reset##EKVoiceAllowedRace{voice}Reset"))
                                 {
-                                    NpcDataHelper.ReSetVoiceRaces(voice);
+                                    _npcData.ReSetVoiceRaces(voice);
                                 }
 
                                 ImGui.TableNextRow();
@@ -1183,8 +1320,8 @@ public class ConfigWindow : Window, IDisposable
                                         else if (!isAllowed && voice.AllowedRaces.Contains(race))
                                             voice.AllowedRaces.Remove(race);
 
-                                        NpcDataHelper.RefreshSelectables(Plugin.Configuration.EchokrautVoices);
-                                        Plugin.Configuration.Save();
+                                        _npcData.RefreshSelectables(_config.EchokrautVoices);
+                                        _config.Save();
                                     }
 
                                     i++;
@@ -1204,7 +1341,7 @@ public class ConfigWindow : Window, IDisposable
                     if (ImGui.SliderFloat($"##EKVoiceVolumeSlider{voice}", ref voiceVolume, 0f, 2f))
                     {
                         voice.Volume = voiceVolume;
-                        Plugin.Configuration.Save();
+                        _config.Save();
                     }
                 }
             }
@@ -1338,7 +1475,7 @@ public class ConfigWindow : Window, IDisposable
                 updateData = false;
             }
 
-            NpcMapData toBeRemoved = null;
+            NpcMapData? toBeRemoved = null;
             foreach (NpcMapData mapData in filteredData)
             {
                 ImGui.TableNextRow();
@@ -1346,7 +1483,7 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                 if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##testvoice{mapData}", new Vector2(25, 25), "Test Voice", false, true))
                 {
-                    BackendTestVoice(mapData.Voice);
+                    if (mapData.Voice != null) BackendTestVoice(mapData.Voice);
                 }
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1359,7 +1496,7 @@ public class ConfigWindow : Window, IDisposable
                 if (ImGui.Checkbox($"##EKNpcDoNotDelete{mapData.ToString()}", ref doNotDelete))
                 {
                     mapData.DoNotDelete = doNotDelete;
-                    Plugin.Configuration.Save();
+                    _config.Save();
                 }
                 ImGui.TableNextColumn();
                 var isEnabled = isBubble ? mapData.IsEnabledBubble : mapData.IsEnabled;
@@ -1369,7 +1506,7 @@ public class ConfigWindow : Window, IDisposable
                         mapData.IsEnabledBubble = isEnabled;
                     else
                         mapData.IsEnabled = isEnabled;
-                    Plugin.Configuration.Save();
+                    _config.Save();
                 }
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1383,17 +1520,17 @@ public class ConfigWindow : Window, IDisposable
                             toBeRemoved = mapData;
                         else
                         {
-                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Gender for {dataType}: {mapData.ToString()} from: {mapData.Gender} to: {newGender}", new EKEventId(0, TextSource.None));
+                            _log.Info(nameof(DrawVoiceSelectionTable), $"Updated Gender for {dataType}: {mapData.ToString()} from: {mapData.Gender} to: {newGender}", new EKEventId(0, TextSource.None));
 
                             mapData.Gender = newGender;
                             mapData.RefreshSelectable();
                             mapData.DoNotDelete = true;
                             updateData = true;
-                            Plugin.Configuration.Save();
+                            _config.Save();
                         }
                     }
                     else
-                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Gender for {dataType}: {mapData}", new EKEventId(0, TextSource.None));
+                        _log.Error(nameof(DrawVoiceSelectionTable), $"Couldnt update Gender for {dataType}: {mapData}", new EKEventId(0, TextSource.None));
                 }
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1407,17 +1544,17 @@ public class ConfigWindow : Window, IDisposable
                             toBeRemoved = mapData;
                         else
                         {
-                            LogHelper.Info(MethodBase.GetCurrentMethod().Name, $"Updated Race for {dataType}: {mapData.ToString()} from: {mapData.Race} to: {newRace}", new EKEventId(0, TextSource.None));
+                            _log.Info(nameof(DrawVoiceSelectionTable), $"Updated Race for {dataType}: {mapData.ToString()} from: {mapData.Race} to: {newRace}", new EKEventId(0, TextSource.None));
 
                             mapData.Race = newRace;
                             mapData.RefreshSelectable();
                             mapData.DoNotDelete = true;
                             updateData = true;
-                            Plugin.Configuration.Save();
+                            _config.Save();
                         }
                     }
                     else
-                        LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Couldnt update Race for {dataType}: {mapData}", new EKEventId(0, TextSource.None));
+                        _log.Error(nameof(DrawVoiceSelectionTable), $"Couldnt update Race for {dataType}: {mapData}", new EKEventId(0, TextSource.None));
                 }
                 ImGui.TableNextColumn();
                 ImGui.TextUnformatted(mapData.Name);
@@ -1426,14 +1563,14 @@ public class ConfigWindow : Window, IDisposable
 
                 if (mapData.VoicesSelectable.Draw(mapData.Voice?.VoiceName ?? "", out var selectedIndexVoice))
                 {
-                    var newVoiceItem = Plugin.Configuration!.EchokrautVoices.FindAll(f => f.IsSelectable(mapData.Name, mapData.Gender, mapData.Race, mapData.IsChild))[selectedIndexVoice];
+                    var newVoiceItem = _config.EchokrautVoices.FindAll(f => f.IsSelectable(mapData.Name, mapData.Gender, mapData.Race, mapData.IsChild))[selectedIndexVoice];
 
                     mapData.Voice = newVoiceItem;
                     mapData.DoNotDelete = true;
                     mapData.RefreshSelectable();
                     updateData = true;
-                    Plugin.Configuration.Save();
-                    LogHelper.Info(MethodBase.GetCurrentMethod()!.Name, $"Updated Voice for {dataType}: {mapData.ToString()} from: {mapData.Voice} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
+                    _config.Save();
+                    _log.Info(nameof(DrawVoiceSelectionTable), $"Updated Voice for {dataType}: {mapData.ToString()} from: {mapData.Voice} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
                 }
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1449,7 +1586,7 @@ public class ConfigWindow : Window, IDisposable
                     else
                         mapData.Volume = voiceVolume;
                     mapData.DoNotDelete = true;
-                    Plugin.Configuration.Save();
+                    _config.Save();
                 }
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1465,7 +1602,7 @@ public class ConfigWindow : Window, IDisposable
                     {
                         deleteSingleAudioData = false;
                         toBeDeleted = null;
-                        AudioFileHelper.RemoveSavedNpcFiles(Plugin.Configuration.LocalSaveLocation, mapData.Name);
+                        _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation, mapData.Name);
                     }
                 }
                 else if (ImGuiUtil.DrawDisabledButton(
@@ -1515,10 +1652,10 @@ public class ConfigWindow : Window, IDisposable
 
             if (toBeRemoved != null)
             {
-                AudioFileHelper.RemoveSavedNpcFiles(Plugin.Configuration.LocalSaveLocation, toBeRemoved.Name);
+                _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation, toBeRemoved.Name);
                 realData.Remove(toBeRemoved);
                 updateData = true;
-                Plugin.Configuration.Save();
+                _config.Save();
             }
         }
     }
@@ -1529,10 +1666,10 @@ public class ConfigWindow : Window, IDisposable
     {
         try
         {
-            if (Plugin.Configuration.PhoneticCorrections.Count == 0)
+            if (_config.PhoneticCorrections.Count == 0)
             {
-                Plugin.Configuration.PhoneticCorrections.Add(new PhoneticCorrection("C'ami", "Kami"));
-                Plugin.Configuration.Save();
+                _config.PhoneticCorrections.Add(new PhoneticCorrection("C'ami", "Kami"));
+                _config.Save();
                 updatePhonData = true;
             }
 
@@ -1543,10 +1680,11 @@ public class ConfigWindow : Window, IDisposable
 
             if (updatePhonData || (resetPhonFilter && (filterPhonOriginal.Length == 0 || filterPhonCorrected.Length == 0)))
             {
-                filteredPhon = Plugin.Configuration.PhoneticCorrections;
+                filteredPhon = _config.PhoneticCorrections ?? [];
                 updatePhonData = true;
                 resetPhonFilter = false;
             }
+            filteredPhon ??= [];
             using var table = ImRaii.Table("Phonetics Table##NPCTable", 3, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY);
             if (table)
             {
@@ -1602,11 +1740,11 @@ public class ConfigWindow : Window, IDisposable
                     if (!string.IsNullOrWhiteSpace(originalText) && !string.IsNullOrWhiteSpace(correctedText))
                     {
                         PhoneticCorrection newCorrection = new PhoneticCorrection(originalText, correctedText);
-                        if (!Plugin.Configuration.PhoneticCorrections.Contains(newCorrection))
+                        if (!_config.PhoneticCorrections!.Contains(newCorrection))
                         {
-                            Plugin.Configuration.PhoneticCorrections.Add(newCorrection);
-                            Plugin.Configuration.PhoneticCorrections.Sort();
-                            Plugin.Configuration.Save();
+                            _config.PhoneticCorrections.Add(newCorrection);
+                            _config.PhoneticCorrections.Sort();
+                            _config.Save();
                             originalText = "";
                             correctedText = "";
                             updatePhonData = true;
@@ -1620,7 +1758,7 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                 ImGui.InputText("##correctText", ref correctedText, 25);
 
-                PhoneticCorrection toBeRemoved = null;
+                PhoneticCorrection? toBeRemoved = null;
                 int i = 0;
                 foreach (PhoneticCorrection phoneticCorrection in filteredPhon)
                 {
@@ -1634,27 +1772,27 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##origText{i}", ref phoneticCorrection.OriginalText, 25))
-                        Plugin.Configuration.Save();
+                        _config.Save();
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##correctText{i}", ref phoneticCorrection.CorrectedText, 25))
-                        Plugin.Configuration.Save();
+                        _config.Save();
 
                     i++;
                 }
 
                 if (toBeRemoved != null)
                 {
-                    Plugin.Configuration.PhoneticCorrections.Remove(toBeRemoved);
-                    Plugin.Configuration.PhoneticCorrections.Sort();
-                    Plugin.Configuration.Save();
+                    _config.PhoneticCorrections!.Remove(toBeRemoved);
+                    _config.PhoneticCorrections.Sort();
+                    _config.Save();
                     updatePhonData = true;
                 }
             }
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
+            _log.Error(nameof(DrawPhoneticCorrections), $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
         }
     }
     #endregion
@@ -1673,12 +1811,12 @@ public class ConfigWindow : Window, IDisposable
                     {
                         DrawLogTable("General",
                                      TextSource.None,
-                                     Plugin.Configuration.logConfig.GeneralJumpToBottom,
-                                     Plugin.Configuration.logConfig.ShowGeneralDebugLog,
-                                     Plugin.Configuration.logConfig.ShowGeneralErrorLog,
+                                     _config.logConfig.GeneralJumpToBottom,
+                                     _config.logConfig.ShowGeneralDebugLog,
+                                     _config.logConfig.ShowGeneralErrorLog,
                                      true,
                                      ref filteredLogsGeneral,
-                                     ref UpdateLogGeneralFilter,
+                                     ref _updateLogGeneralFilter,
                                      ref resetLogGeneralFilter,
                                      ref filterLogsGeneralMethod,
                                      ref filterLogsGeneralMessage,
@@ -1692,12 +1830,12 @@ public class ConfigWindow : Window, IDisposable
                     {
                         DrawLogTable("Dialogue",
                                      TextSource.AddonTalk,
-                                     Plugin.Configuration.logConfig.TalkJumpToBottom,
-                                     Plugin.Configuration.logConfig.ShowTalkDebugLog,
-                                     Plugin.Configuration.logConfig.ShowTalkErrorLog,
-                                     Plugin.Configuration.logConfig.ShowTalkId0,
+                                     _config.logConfig.TalkJumpToBottom,
+                                     _config.logConfig.ShowTalkDebugLog,
+                                     _config.logConfig.ShowTalkErrorLog,
+                                     _config.logConfig.ShowTalkId0,
                                      ref filteredLogsTalk,
-                                     ref UpdateLogTalkFilter,
+                                     ref _updateLogTalkFilter,
                                      ref resetLogTalkFilter,
                                      ref filterLogsTalkMethod,
                                      ref filterLogsTalkMessage,
@@ -1711,12 +1849,12 @@ public class ConfigWindow : Window, IDisposable
                     {
                         DrawLogTable("BattleDialogue",
                                      TextSource.AddonBattleTalk,
-                                     Plugin.Configuration.logConfig.BattleTalkJumpToBottom,
-                                     Plugin.Configuration.logConfig.ShowBattleTalkDebugLog,
-                                     Plugin.Configuration.logConfig.ShowBattleTalkErrorLog,
-                                     Plugin.Configuration.logConfig.ShowBattleTalkId0,
+                                     _config.logConfig.BattleTalkJumpToBottom,
+                                     _config.logConfig.ShowBattleTalkDebugLog,
+                                     _config.logConfig.ShowBattleTalkErrorLog,
+                                     _config.logConfig.ShowBattleTalkId0,
                                      ref filteredLogsBattleTalk,
-                                     ref UpdateLogBattleTalkFilter,
+                                     ref _updateLogBattleTalkFilter,
                                      ref resetLogBattleTalkFilter,
                                      ref filterLogsBattleTalkMethod,
                                      ref filterLogsBattleTalkMessage,
@@ -1730,12 +1868,12 @@ public class ConfigWindow : Window, IDisposable
                     {
                         DrawLogTable("Chat",
                                      TextSource.Chat,
-                                     Plugin.Configuration.logConfig.ChatJumpToBottom,
-                                     Plugin.Configuration.logConfig.ShowChatDebugLog,
-                                     Plugin.Configuration.logConfig.ShowChatErrorLog,
-                                     Plugin.Configuration.logConfig.ShowChatId0,
+                                     _config.logConfig.ChatJumpToBottom,
+                                     _config.logConfig.ShowChatDebugLog,
+                                     _config.logConfig.ShowChatErrorLog,
+                                     _config.logConfig.ShowChatId0,
                                      ref filteredLogsChat,
-                                     ref UpdateLogChatFilter,
+                                     ref _updateLogChatFilter,
                                      ref resetLogChatFilter,
                                      ref filterLogsChatMethod,
                                      ref filterLogsChatMessage,
@@ -1749,12 +1887,12 @@ public class ConfigWindow : Window, IDisposable
                     {
                         DrawLogTable("Bubbles",
                                      TextSource.AddonBubble,
-                                     Plugin.Configuration.logConfig.BubbleJumpToBottom,
-                                     Plugin.Configuration.logConfig.ShowBubbleDebugLog,
-                                     Plugin.Configuration.logConfig.ShowBubbleErrorLog,
-                                     Plugin.Configuration.logConfig.ShowBubbleId0,
+                                     _config.logConfig.BubbleJumpToBottom,
+                                     _config.logConfig.ShowBubbleDebugLog,
+                                     _config.logConfig.ShowBubbleErrorLog,
+                                     _config.logConfig.ShowBubbleId0,
                                      ref filteredLogsBubbles,
-                                     ref UpdateLogBubblesFilter,
+                                     ref _updateLogBubblesFilter,
                                      ref resetLogBubblesFilter,
                                      ref filterLogsBubblesMethod,
                                      ref filterLogsBubblesMessage,
@@ -1768,12 +1906,12 @@ public class ConfigWindow : Window, IDisposable
                     {
                         DrawLogTable("PlayerChoiceCutscene",
                                      TextSource.AddonCutsceneSelectString,
-                                     Plugin.Configuration.logConfig.CutsceneSelectStringJumpToBottom,
-                                     Plugin.Configuration.logConfig.ShowCutsceneSelectStringDebugLog,
-                                     Plugin.Configuration.logConfig.ShowCutsceneSelectStringErrorLog,
-                                     Plugin.Configuration.logConfig.ShowCutsceneSelectStringId0,
+                                     _config.logConfig.CutsceneSelectStringJumpToBottom,
+                                     _config.logConfig.ShowCutsceneSelectStringDebugLog,
+                                     _config.logConfig.ShowCutsceneSelectStringErrorLog,
+                                     _config.logConfig.ShowCutsceneSelectStringId0,
                                      ref filteredLogsCutsceneSelectString,
-                                     ref UpdateLogCutsceneSelectStringFilter,
+                                     ref _updateLogCutsceneSelectStringFilter,
                                      ref resetLogCutsceneSelectStringFilter,
                                      ref filterLogsCutsceneSelectStringMethod,
                                      ref filterLogsCutsceneSelectStringMessage,
@@ -1787,12 +1925,12 @@ public class ConfigWindow : Window, IDisposable
                     {
                         DrawLogTable("PlayerChoice",
                                      TextSource.AddonSelectString,
-                                     Plugin.Configuration.logConfig.SelectStringJumpToBottom,
-                                     Plugin.Configuration.logConfig.ShowSelectStringDebugLog,
-                                     Plugin.Configuration.logConfig.ShowSelectStringErrorLog,
-                                     Plugin.Configuration.logConfig.ShowSelectStringId0,
+                                     _config.logConfig.SelectStringJumpToBottom,
+                                     _config.logConfig.ShowSelectStringDebugLog,
+                                     _config.logConfig.ShowSelectStringErrorLog,
+                                     _config.logConfig.ShowSelectStringId0,
                                      ref filteredLogsSelectString,
-                                     ref UpdateLogSelectStringFilter,
+                                     ref _updateLogSelectStringFilter,
                                      ref resetLogSelectStringFilter,
                                      ref filterLogsSelectStringMethod,
                                      ref filterLogsSelectStringMessage,
@@ -1806,62 +1944,62 @@ public class ConfigWindow : Window, IDisposable
                     {
                         DrawLogTable("Backend",
                                      TextSource.Backend,
-                                     Plugin.Configuration.logConfig.BackendJumpToBottom,
-                                     Plugin.Configuration.logConfig.ShowBackendDebugLog,
-                                     Plugin.Configuration.logConfig.ShowBackendErrorLog,
-                                     Plugin.Configuration.logConfig.ShowBackendId0,
-                                     ref FilteredLogsBackend,
-                                     ref UpdateLogBackendFilter,
-                                     ref ResetLogBackendFilter,
-                                     ref FilterLogsBackendMethod,
-                                     ref FilterLogsBackendMessage,
-                                     ref FilterLogsBackendId);
+                                     _config.logConfig.BackendJumpToBottom,
+                                     _config.logConfig.ShowBackendDebugLog,
+                                     _config.logConfig.ShowBackendErrorLog,
+                                     _config.logConfig.ShowBackendId0,
+                                     ref _filteredLogsBackend,
+                                     ref _updateLogBackendFilter,
+                                     ref _resetLogBackendFilter,
+                                     ref _filterLogsBackendMethod,
+                                     ref _filterLogsBackendMessage,
+                                     ref _filterLogsBackendId);
                     }
                 }
             }
         }
         catch (Exception ex)
         {
-            LogHelper.Error(MethodBase.GetCurrentMethod().Name, $"Something went wrong: {ex}", new EKEventId(0, TextSource.None), false);
+            _log.Error(nameof(DrawLogs), $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
         }
     }
 
     internal void DrawLogTableSettings(TextSource textSource, bool configJumpToBottom, bool configShowDebugLog, bool configShowErrorLog, bool configShowId0, ref bool updateLogs){
         if (ImGui.CollapsingHeader("Options:"))
         {
-            using (ImRaii.Disabled(LogHelper.Updating))
+            using (ImRaii.Disabled(_log.Updating))
             {
                 if (ImGui.Checkbox("Show debug logs", ref configShowDebugLog))
                 {
                     switch (textSource)
                     {
                         case TextSource.None:
-                            Plugin.Configuration.logConfig.ShowGeneralDebugLog = configShowDebugLog;
+                            _config.logConfig.ShowGeneralDebugLog = configShowDebugLog;
                             break;
                         case TextSource.AddonBubble:
-                            Plugin.Configuration.logConfig.ShowBubbleDebugLog = configShowDebugLog;
+                            _config.logConfig.ShowBubbleDebugLog = configShowDebugLog;
                             break;
                         case TextSource.AddonTalk:
-                            Plugin.Configuration.logConfig.ShowTalkDebugLog = configShowDebugLog;
+                            _config.logConfig.ShowTalkDebugLog = configShowDebugLog;
                             break;
                         case TextSource.AddonBattleTalk:
-                            Plugin.Configuration.logConfig.ShowBattleTalkDebugLog = configShowDebugLog;
+                            _config.logConfig.ShowBattleTalkDebugLog = configShowDebugLog;
                             break;
                         case TextSource.AddonSelectString:
-                            Plugin.Configuration.logConfig.ShowSelectStringDebugLog = configShowDebugLog;
+                            _config.logConfig.ShowSelectStringDebugLog = configShowDebugLog;
                             break;
                         case TextSource.AddonCutsceneSelectString:
-                            Plugin.Configuration.logConfig.ShowCutsceneSelectStringDebugLog = configShowDebugLog;
+                            _config.logConfig.ShowCutsceneSelectStringDebugLog = configShowDebugLog;
                             break;
                         case TextSource.Chat:
-                            Plugin.Configuration.logConfig.ShowChatDebugLog = configShowDebugLog;
+                            _config.logConfig.ShowChatDebugLog = configShowDebugLog;
                             break;
                         case TextSource.Backend:
-                            Plugin.Configuration.logConfig.ShowBackendDebugLog = configShowDebugLog;
+                            _config.logConfig.ShowBackendDebugLog = configShowDebugLog;
                             break;
                     }
 
-                    Plugin.Configuration.Save();
+                    _config.Save();
                     updateLogs = true;
                 }
 
@@ -1870,32 +2008,32 @@ public class ConfigWindow : Window, IDisposable
                     switch (textSource)
                     {
                         case TextSource.None:
-                            Plugin.Configuration.logConfig.ShowGeneralErrorLog = configShowErrorLog;
+                            _config.logConfig.ShowGeneralErrorLog = configShowErrorLog;
                             break;
                         case TextSource.AddonBubble:
-                            Plugin.Configuration.logConfig.ShowBubbleErrorLog = configShowErrorLog;
+                            _config.logConfig.ShowBubbleErrorLog = configShowErrorLog;
                             break;
                         case TextSource.AddonTalk:
-                            Plugin.Configuration.logConfig.ShowTalkErrorLog = configShowErrorLog;
+                            _config.logConfig.ShowTalkErrorLog = configShowErrorLog;
                             break;
                         case TextSource.AddonBattleTalk:
-                            Plugin.Configuration.logConfig.ShowBattleTalkErrorLog = configShowErrorLog;
+                            _config.logConfig.ShowBattleTalkErrorLog = configShowErrorLog;
                             break;
                         case TextSource.AddonSelectString:
-                            Plugin.Configuration.logConfig.ShowSelectStringErrorLog = configShowErrorLog;
+                            _config.logConfig.ShowSelectStringErrorLog = configShowErrorLog;
                             break;
                         case TextSource.AddonCutsceneSelectString:
-                            Plugin.Configuration.logConfig.ShowCutsceneSelectStringErrorLog = configShowErrorLog;
+                            _config.logConfig.ShowCutsceneSelectStringErrorLog = configShowErrorLog;
                             break;
                         case TextSource.Chat:
-                            Plugin.Configuration.logConfig.ShowChatErrorLog = configShowErrorLog;
+                            _config.logConfig.ShowChatErrorLog = configShowErrorLog;
                             break;
                         case TextSource.Backend:
-                            Plugin.Configuration.logConfig.ShowBackendErrorLog = configShowErrorLog;
+                            _config.logConfig.ShowBackendErrorLog = configShowErrorLog;
                             break;
                     }
 
-                    Plugin.Configuration.Save();
+                    _config.Save();
                     updateLogs = true;
                 }
 
@@ -1904,29 +2042,29 @@ public class ConfigWindow : Window, IDisposable
                     switch (textSource)
                     {
                         case TextSource.AddonBubble:
-                            Plugin.Configuration.logConfig.ShowBubbleId0 = configShowId0;
+                            _config.logConfig.ShowBubbleId0 = configShowId0;
                             break;
                         case TextSource.AddonTalk:
-                            Plugin.Configuration.logConfig.ShowTalkId0 = configShowId0;
+                            _config.logConfig.ShowTalkId0 = configShowId0;
                             break;
                         case TextSource.AddonBattleTalk:
-                            Plugin.Configuration.logConfig.ShowBattleTalkId0 = configShowId0;
+                            _config.logConfig.ShowBattleTalkId0 = configShowId0;
                             break;
                         case TextSource.AddonSelectString:
-                            Plugin.Configuration.logConfig.ShowSelectStringId0 = configShowId0;
+                            _config.logConfig.ShowSelectStringId0 = configShowId0;
                             break;
                         case TextSource.AddonCutsceneSelectString:
-                            Plugin.Configuration.logConfig.ShowCutsceneSelectStringId0 = configShowId0;
+                            _config.logConfig.ShowCutsceneSelectStringId0 = configShowId0;
                             break;
                         case TextSource.Chat:
-                            Plugin.Configuration.logConfig.ShowChatId0 = configShowId0;
+                            _config.logConfig.ShowChatId0 = configShowId0;
                             break;
                         case TextSource.Backend:
-                            Plugin.Configuration.logConfig.ShowBackendId0 = configShowId0;
+                            _config.logConfig.ShowBackendId0 = configShowId0;
                             break;
                     }
 
-                    Plugin.Configuration.Save();
+                    _config.Save();
                     updateLogs = true;
                 }
 
@@ -1935,32 +2073,32 @@ public class ConfigWindow : Window, IDisposable
                     switch (textSource)
                     {
                         case TextSource.None:
-                            Plugin.Configuration.logConfig.GeneralJumpToBottom = configJumpToBottom;
+                            _config.logConfig.GeneralJumpToBottom = configJumpToBottom;
                             break;
                         case TextSource.AddonBubble:
-                            Plugin.Configuration.logConfig.BubbleJumpToBottom = configJumpToBottom;
+                            _config.logConfig.BubbleJumpToBottom = configJumpToBottom;
                             break;
                         case TextSource.AddonTalk:
-                            Plugin.Configuration.logConfig.TalkJumpToBottom = configJumpToBottom;
+                            _config.logConfig.TalkJumpToBottom = configJumpToBottom;
                             break;
                         case TextSource.AddonBattleTalk:
-                            Plugin.Configuration.logConfig.BattleTalkJumpToBottom = configJumpToBottom;
+                            _config.logConfig.BattleTalkJumpToBottom = configJumpToBottom;
                             break;
                         case TextSource.AddonSelectString:
-                            Plugin.Configuration.logConfig.SelectStringJumpToBottom = configJumpToBottom;
+                            _config.logConfig.SelectStringJumpToBottom = configJumpToBottom;
                             break;
                         case TextSource.AddonCutsceneSelectString:
-                            Plugin.Configuration.logConfig.CutsceneSelectStringJumpToBottom = configJumpToBottom;
+                            _config.logConfig.CutsceneSelectStringJumpToBottom = configJumpToBottom;
                             break;
                         case TextSource.Chat:
-                            Plugin.Configuration.logConfig.ChatJumpToBottom = configJumpToBottom;
+                            _config.logConfig.ChatJumpToBottom = configJumpToBottom;
                             break;
                         case TextSource.Backend:
-                            Plugin.Configuration.logConfig.BackendJumpToBottom = configJumpToBottom;
+                            _config.logConfig.BackendJumpToBottom = configJumpToBottom;
                             break;
                     }
 
-                    Plugin.Configuration.Save();
+                    _config.Save();
                 }
             }
         }
@@ -1977,9 +2115,9 @@ public class ConfigWindow : Window, IDisposable
 
             if (updateLogs || (resetLogs && (filterMethod.Length == 0 || filterMessage.Length == 0 || filterId.Length == 0)))
             {
-                if (!LogHelper.Updating)
+                if (!_log.Updating)
                 {
-                    filteredLogs = LogHelper.RecreateLogList(source);
+                    filteredLogs = RecreateLogList(source);
                     updateLogs = true;
                     resetLogs = false;
                     newData = true;
@@ -2069,7 +2207,7 @@ public class ConfigWindow : Window, IDisposable
                                 break;
                         }
 
-                        if (!LogHelper.Updating)
+                        if (!_log.Updating)
                             updateLogs = false;
                         sortSpecs.SpecsDirty = false;
                     }
@@ -2106,10 +2244,10 @@ public class ConfigWindow : Window, IDisposable
     private async void BackendTestVoice(EchokrautVoice voice)
     {
         BackendStopVoice();
-        var eventId = LogHelper.Start(MethodBase.GetCurrentMethod().Name, TextSource.AddonTalk);
-        LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Testing voice: {voice.ToString()}", eventId);
+        var eventId = _log.Start(nameof(BackendTestVoice), TextSource.AddonTalk);
+        _log.Debug(nameof(BackendTestVoice), $"Testing voice: {voice.ToString()}", eventId);
         // Say the thing
-        var volume = VolumeHelper.GetVoiceVolume(eventId) * voice.Volume;
+        var volume = _volumeService.GetVoiceVolume(eventId) * voice.Volume;
         var voiceMessage = new VoiceMessage
         {
             SpeakerObj = null,
@@ -2121,21 +2259,21 @@ public class ConfigWindow : Window, IDisposable
                 Name = voice.VoiceName,
                 Voice = voice
             },
-            Text = GetTestMessageText(Plugin.ClientState.ClientLanguage),
-            OriginalText = GetTestMessageText(Plugin.ClientState.ClientLanguage),
-            Language = Plugin.ClientState.ClientLanguage,
+            Text = GetTestMessageText(_clientState.ClientLanguage),
+            OriginalText = GetTestMessageText(_clientState.ClientLanguage),
+            Language = _clientState.ClientLanguage,
             EventId = eventId,
-            SpeakerFollowObj = DalamudHelper.LocalPlayer,
+            SpeakerFollowObj = _gameObjects.LocalPlayer,
             Volume = volume
         };
 
 
         if (volume > 0)
-            BackendHelper.OnSay(voiceMessage) ;
+            _backend.ProcessVoiceMessage(voiceMessage);
         else
         {
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Skipping voice inference. Volume is 0", eventId);
-            LogHelper.End(MethodBase.GetCurrentMethod().Name, eventId);
+            _log.Debug(nameof(BackendTestVoice), $"Skipping voice inference. Volume is 0", eventId);
+            _log.End(nameof(BackendTestVoice), eventId);
         }
     }
 
@@ -2158,13 +2296,14 @@ public class ConfigWindow : Window, IDisposable
 
     private void BackendStopVoice()
     {
-        BackendHelper.OnCancel(DialogExtraOptionsWindow.CurrentVoiceMessage);
-        LogHelper.End(MethodBase.GetCurrentMethod().Name, new EKEventId(0, TextSource.AddonTalk));
+        if (DialogState.CurrentVoiceMessage != null)
+            _audioPlayback.StopPlaying(DialogState.CurrentVoiceMessage);
+        _log.End(nameof(BackendStopVoice), new EKEventId(0, TextSource.AddonTalk));
     }
 
     private void ReloadRemoteMappings()
     {
-        JsonLoaderHelper.Initialize(Plugin.ClientState.ClientLanguage);
+        _jsonData.Reload(_clientState.ClientLanguage);
     }
     #endregion
 

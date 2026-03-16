@@ -1,7 +1,6 @@
 using Dalamud.Game.ClientState.Objects.Enums;
 using Echokraut.Enums;
 using Echokraut.Helper;
-using Echokraut.Helper.Data;
 using OtterGui.Widgets;
 using System;
 using System.Collections.Generic;
@@ -10,9 +9,9 @@ namespace Echokraut.DataClasses
 {
     public class NpcMapData : IComparable
     {
-        public string Name { get; set; }
+        public string Name { get; set; } = null!;
         public NpcRaces Race { get; set; }
-        public string RaceStr { get; set; }
+        public string RaceStr { get; set; } = null!;
         public Genders Gender { get; set; }
 
         public bool IsChild { get; set; }
@@ -20,10 +19,12 @@ namespace Echokraut.DataClasses
         public string voice = "";
         internal EchokrautVoice? Voice
         {
-            get => NpcDataHelper.GetVoiceByBackendVoice(voice);
+            get => Voices?.Find(p => p.BackendVoice == voice);
             set => voice = value != null ? value.BackendVoice : string.Empty;
         }
-        public BackendVoiceItem voiceItem { get; set; }
+#pragma warning disable CS0618
+        public BackendVoiceItem? voiceItem { get; set; }
+#pragma warning restore CS0618
 
         public bool DoNotDelete { get; set; }
         public bool IsEnabled { get; set; } = true;
@@ -34,10 +35,10 @@ namespace Echokraut.DataClasses
 
         public ObjectKind ObjectKind { get; set; }
 
-        internal ClippedSelectableCombo<EchokrautVoice> VoicesSelectable { get; set; }
-        internal ClippedSelectableCombo<EchokrautVoice> VoicesSelectableDialogue { get; set; }
+        internal ClippedSelectableCombo<EchokrautVoice> VoicesSelectable { get; set; } = null!;
+        internal ClippedSelectableCombo<EchokrautVoice> VoicesSelectableDialogue { get; set; } = null!;
 
-        internal List<EchokrautVoice> Voices { get; set; }
+        internal List<EchokrautVoice> Voices { get; set; } = null!;
 
         public NpcMapData(ObjectKind objectKind) {
             this.ObjectKind = objectKind;
@@ -48,7 +49,8 @@ namespace Echokraut.DataClasses
             var raceString = Race == NpcRaces.Unknown ? RaceStr : Race.ToString();
             return $"{Gender} - {raceString} - {Name}";
         }
-        public override bool Equals(object obj)
+        public override int GetHashCode() => ToString().ToLowerInvariant().GetHashCode();
+        public override bool Equals(object? obj)
         {
             var item = obj as NpcMapData;
 
@@ -62,8 +64,8 @@ namespace Echokraut.DataClasses
 
         public int CompareTo(object? obj)
         {
-            var otherObj = ((NpcMapData)obj);
-            return otherObj.ToString().ToLower().CompareTo(ToString().ToLower());
+            var otherObj = obj as NpcMapData;
+            return otherObj?.ToString().ToLower().CompareTo(ToString().ToLower()) ?? -1;
         }
 
         public void RefreshSelectable()

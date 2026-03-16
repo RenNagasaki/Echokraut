@@ -1,14 +1,12 @@
 using System;
 using System.Numerics;
-using System.Reflection;
 using Dalamud.Interface.Windowing;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Interface;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
-using Echokraut.Helper.Addons;
-using Echokraut.Helper.Data;
-using Echokraut.Helper.Functional;
+using Echokraut.Services;
+using ManagedBass;
 using OtterGui;
 using OtterGui.Raii;
 
@@ -16,13 +14,24 @@ namespace Echokraut.Windows;
 
 public class DialogExtraOptionsWindow : Window, IDisposable
 {
-    public static VoiceMessage? CurrentVoiceMessage = null;
-    public static bool IsVoiced = false;
+    private readonly ILogService _log;
+    private readonly Echokraut.DataClasses.Configuration _config;
+    private readonly IAudioPlaybackService _audioPlayback;
+    private readonly ILipSyncHelper _lipSync;
+    private readonly ICommandService _commands;
+    private readonly Action _recreateInference;
     // We give this window a constant ID using ###
     // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
     // and the window ID will always be "###XYZ counter window" for ImGui
-    public DialogExtraOptionsWindow() : base("EK-DialogExtraOptionsWindow")
+    public DialogExtraOptionsWindow(ILogService log, Echokraut.DataClasses.Configuration config, IAudioPlaybackService audioPlayback, ILipSyncHelper lipSync, ICommandService commands, Action recreateInference)
+        : base("EK-DialogExtraOptionsWindow")
     {
+        _log = log;
+        _config = config;
+        _audioPlayback = audioPlayback;
+        _lipSync = lipSync;
+        _commands = commands;
+        _recreateInference = recreateInference;
         Flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoBackground |
                 ImGuiWindowFlags.NoNav;
 
@@ -34,6 +43,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
         ForceMainWindow = true;
         RespectCloseHotkey = false;
         DisableWindowSounds = true;
+        IsOpen = true;
     }
 
     public void Dispose() { }
@@ -45,7 +55,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
 
     private void DrawReadyStates()
     {
-        if (Plugin.Configuration.ShowExtraOptionsInDialogue && !IsVoiced && PlayingHelper.InDialog)
+        if (_config.ShowExtraOptionsInDialogue && !DialogState.IsVoiced && _audioPlayback.InDialog)
         {
             var iconSize = new Vector2(24, 24) * AddonTalkHelper.AddonScale;
             var offsetX = 56 * AddonTalkHelper.AddonScale;
@@ -56,41 +66,44 @@ public class DialogExtraOptionsWindow : Window, IDisposable
             var yPos = (AddonTalkHelper.AddonPos.Y + offsetY);
             var sizeExtra = new Vector2(iconSize.X * 3 + offsetXButton * 2, iconSize.Y);
             var sizeExtraExtra = new Vector2(iconSize.X * 15, 0);
-            Size = sizeExtra + (Plugin.Configuration.ShowExtraExtraOptionsInDialogue
+            Size = sizeExtra + (_config.ShowExtraExtraOptionsInDialogue
                                     ? sizeExtraExtra
                                     : new Vector2());
             Position = new Vector2(xPos, yPos);
 
-            var disabled = CurrentVoiceMessage != null && CurrentVoiceMessage.SpeakerObj != null && Plugin.Configuration.MutedNpcDialogues.Contains(CurrentVoiceMessage.SpeakerObj.DataId);
+            var disabled = DialogState.CurrentVoiceMessage != null && DialogState.CurrentVoiceMessage.SpeakerObj != null && _config.MutedNpcDialogues.Contains(DialogState.CurrentVoiceMessage.SpeakerObj.BaseId);
             using (ImRaii.Disabled(disabled))
             {
-                if (PlayingHelper.Playing && CurrentVoiceMessage != null)
+                if (_audioPlayback.IsPlaying && DialogState.CurrentVoiceMessage != null)
                 {
-                    if (PlayingHelper.AudioEngine.GetState(CurrentVoiceMessage.StreamId) != PlaybackState.Playing)
+                    if (_audioPlayback.GetStreamState(DialogState.CurrentVoiceMessage.StreamId) != PlaybackState.Playing)
                     {
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##ResumeDialog",
                                                          iconSize,
                                                          "Resume dialogue", false, true))
-                            Plugin.Resume(CurrentVoiceMessage);
+                            _audioPlayback.ResumePlaying(DialogState.CurrentVoiceMessage);
                     }
-                    else if (PlayingHelper.AudioEngine.GetState(CurrentVoiceMessage.StreamId) == PlaybackState.Playing)
+                    else if (_audioPlayback.GetStreamState(DialogState.CurrentVoiceMessage.StreamId) == PlaybackState.Playing)
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Pause.ToIconString()}##PauseDialog",
                                                          iconSize,
                                                          "Pause dialogue", false, true))
-                            Plugin.Pause(CurrentVoiceMessage);
+                            _audioPlayback.PausePlaying(DialogState.CurrentVoiceMessage);
                 }
                 else
-                    using (ImRaii.Disabled(PlayingHelper.RecreationStarted))
+                    using (ImRaii.Disabled(_audioPlayback.RecreationStarted))
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##RecreateDialog",
                                                          iconSize,
                                                          "Recreate dialogue", false, true))
-                            AddonTalkHelper.RecreateInference();
+                            _recreateInference();
 
                 ImGui.SameLine();
-                using (ImRaii.Disabled(!PlayingHelper.Playing))
+                using (ImRaii.Disabled(!_audioPlayback.IsPlaying))
                     if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Stop.ToIconString()}##StopDialog", iconSize,
-                                                     "Stop dialogue", !PlayingHelper.Playing, true))
-                        Plugin.Cancel(CurrentVoiceMessage);
+                                                     "Stop dialogue", !_audioPlayback.IsPlaying, true))
+                    {
+                        if (DialogState.CurrentVoiceMessage != null) _lipSync.TryStopLipSync(DialogState.CurrentVoiceMessage);
+                        _audioPlayback.StopPlaying(DialogState.CurrentVoiceMessage);
+                    }
             }
 
             ImGui.SameLine();
@@ -100,12 +113,15 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                                                  iconSize,
                                                  "Mute dialogue", false, true))
                 {
-                    LogHelper.Info(MethodBase.GetCurrentMethod().Name,
-                                   $"Muting NPC Dialogue: {CurrentVoiceMessage.SpeakerObj!.Name.TextValue}",
-                                   new EKEventId(0, TextSource.AddonTalk));
-                    Plugin.Configuration.MutedNpcDialogues.Add(CurrentVoiceMessage.SpeakerObj!.DataId);
-                    if (PlayingHelper.Playing)
-                        Plugin.Cancel(CurrentVoiceMessage);
+                    _log.Info(nameof(DrawReadyStates),
+                              $"Muting NPC Dialogue: {DialogState.CurrentVoiceMessage!.SpeakerObj!.Name.TextValue}",
+                              new EKEventId(0, TextSource.AddonTalk));
+                    _config.MutedNpcDialogues.Add(DialogState.CurrentVoiceMessage.SpeakerObj!.BaseId);
+                    if (_audioPlayback.IsPlaying)
+                    {
+                        if (DialogState.CurrentVoiceMessage != null) _lipSync.TryStopLipSync(DialogState.CurrentVoiceMessage);
+                        _audioPlayback.StopPlaying(DialogState.CurrentVoiceMessage);
+                    }
                 }
             }
             else if (ImGuiUtil.DrawDisabledButton(
@@ -113,51 +129,52 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                          iconSize,
                          "Unmute dialogue", false, true))
             {
-                LogHelper.Info(MethodBase.GetCurrentMethod().Name,
-                               $"Unmuting NPC Dialogue: {CurrentVoiceMessage.SpeakerObj!.Name.TextValue}",
-                               new EKEventId(0, TextSource.AddonTalk));
-                Plugin.Configuration.MutedNpcDialogues.Remove(CurrentVoiceMessage.SpeakerObj!.DataId);
-                AddonTalkHelper.RecreateInference();
+                _log.Info(nameof(DrawReadyStates),
+                          $"Unmuting NPC Dialogue: {DialogState.CurrentVoiceMessage!.SpeakerObj!.Name.TextValue}",
+                          new EKEventId(0, TextSource.AddonTalk));
+                _config.MutedNpcDialogues.Remove(DialogState.CurrentVoiceMessage.SpeakerObj!.BaseId);
+                _recreateInference();
             }
 
-            if (Plugin.Configuration.ShowExtraExtraOptionsInDialogue)
+            if (_config.ShowExtraExtraOptionsInDialogue)
             {
                 using (ImRaii.PushColor(ImGuiCol.Text, Constants.BLACKCOLOR))
                 {
                     using (ImRaii.PushColor(ImGuiCol.CheckMark, Constants.BLACKCOLOR))
                     {
                         ImGui.SameLine();
-                        var autoAdvance = Plugin.Configuration!.AutoAdvanceTextAfterSpeechCompleted;
+                        var autoAdvance = _config.AutoAdvanceTextAfterSpeechCompleted;
                         if (ImGui.Checkbox("Auto advance", ref autoAdvance))
                         {
-                            Plugin.Configuration.AutoAdvanceTextAfterSpeechCompleted = autoAdvance;
-                            Plugin.Configuration.Save();
+                            _config.AutoAdvanceTextAfterSpeechCompleted = autoAdvance;
+                            _config.Save();
                         }
                     }
                 }
                 ImGui.SameLine();
-                if (CurrentVoiceMessage != null && CurrentVoiceMessage.Speaker.VoicesSelectableDialogue.Draw(
-                        CurrentVoiceMessage.Speaker.Voice?.VoiceName ?? "", out var selectedIndexVoice))
+                if (DialogState.CurrentVoiceMessage != null && DialogState.CurrentVoiceMessage.Speaker.VoicesSelectableDialogue.Draw(
+                        DialogState.CurrentVoiceMessage.Speaker.Voice?.VoiceName ?? "", out var selectedIndexVoice))
                 {
                     var newVoiceItem =
-                        Plugin.Configuration!.EchokrautVoices.FindAll(f => f.IsSelectable(
-                                                                          CurrentVoiceMessage.Speaker.Name,
-                                                                          CurrentVoiceMessage.Speaker.Gender,
-                                                                          CurrentVoiceMessage.Speaker.Race,
-                                                                          CurrentVoiceMessage.Speaker.IsChild))[
+                        _config.EchokrautVoices.FindAll(f => f.IsSelectable(
+                                                                          DialogState.CurrentVoiceMessage.Speaker.Name,
+                                                                          DialogState.CurrentVoiceMessage.Speaker.Gender,
+                                                                          DialogState.CurrentVoiceMessage.Speaker.Race,
+                                                                          DialogState.CurrentVoiceMessage.Speaker.IsChild))[
                             selectedIndexVoice];
 
-                    if (CurrentVoiceMessage.Speaker.Voice != newVoiceItem)
+                    if (DialogState.CurrentVoiceMessage.Speaker.Voice != newVoiceItem)
                     {
-                        CurrentVoiceMessage.Speaker.Voice = newVoiceItem;
-                        CurrentVoiceMessage.Speaker.DoNotDelete = true;
-                        CurrentVoiceMessage.Speaker.RefreshSelectable();
-                        Plugin.Configuration.Save();
-                        LogHelper.Info(MethodBase.GetCurrentMethod()!.Name,
-                                       $"Updated Voice for {CurrentVoiceMessage.Speaker.Name}: {CurrentVoiceMessage.Speaker.ToString()} from: {CurrentVoiceMessage.Speaker.Voice} to: {newVoiceItem}",
-                                       new EKEventId(0, TextSource.None));
-                        Plugin.Cancel(CurrentVoiceMessage);
-                        AddonTalkHelper.RecreateInference();
+                        DialogState.CurrentVoiceMessage.Speaker.Voice = newVoiceItem;
+                        DialogState.CurrentVoiceMessage.Speaker.DoNotDelete = true;
+                        DialogState.CurrentVoiceMessage.Speaker.RefreshSelectable();
+                        _config.Save();
+                        _log.Info(nameof(DrawReadyStates),
+                                  $"Updated Voice for {DialogState.CurrentVoiceMessage.Speaker.Name}: {DialogState.CurrentVoiceMessage.Speaker.ToString()} from: {DialogState.CurrentVoiceMessage.Speaker.Voice} to: {newVoiceItem}",
+                                  new EKEventId(0, TextSource.None));
+                        if (DialogState.CurrentVoiceMessage != null) _lipSync.TryStopLipSync(DialogState.CurrentVoiceMessage);
+                        _audioPlayback.StopPlaying(DialogState.CurrentVoiceMessage);
+                        _recreateInference();
                     }
                 }
             }
@@ -167,7 +184,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                     iconSize,
                     "Toggle Echokraut config window", false, true))
             {
-                CommandHelper.ToggleConfigUi();
+                _commands.ToggleConfigUi();
             }
         }
     }

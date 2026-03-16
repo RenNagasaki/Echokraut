@@ -21,18 +21,16 @@ namespace Echokraut.DataClasses
             return $"{OriginalText} - {CorrectedText}";
         }
 
+        public override int GetHashCode() => ToString().ToLowerInvariant().GetHashCode();
         public override bool Equals(object? obj)
         {
-            if (((PhoneticCorrection)obj).ToString().ToLower() == ToString().ToLower())
-                return true ;
-
-            return false;
+            return (obj as PhoneticCorrection)?.ToString().ToLower() == ToString().ToLower();
         }
 
         public int CompareTo(object? obj)
         {
-            var otherObj = ((PhoneticCorrection)obj);
-            return otherObj.ToString().ToLower().CompareTo(ToString().ToLower());
+            var otherObj = obj as PhoneticCorrection;
+            return otherObj?.ToString().ToLower().CompareTo(ToString().ToLower()) ?? -1;
         }
     }
 }

@@ -16,6 +16,7 @@ namespace Echokraut.DataClasses
         {
             return $"{Gender} - {Race} - {VoiceName}";
         }
+        public override int GetHashCode() => ToString().ToLowerInvariant().GetHashCode();
         public override bool Equals(object? obj)
         {
             var item = obj as BackendVoiceItem;

@@ -17,11 +17,10 @@ namespace Echokraut.DataClasses
             SpeakerName = speakerName;
         }
 
-        protected SpeechBubbleInfo() { }
+        protected SpeechBubbleInfo() { SpeakerName = SeString.Empty; MessageText = SeString.Empty; }
 
         public bool IsSameMessageAs(SpeechBubbleInfo rhs)
         {
-            //***** TODO: Is there a better comparison that we can easily do on the whole thing, and not just the text value?  Can we encode and compare and get what we want?
             return SpeakerName.TextValue.Equals(rhs.SpeakerName.TextValue) && MessageText.TextValue.Equals(rhs.MessageText.TextValue);
         }
 

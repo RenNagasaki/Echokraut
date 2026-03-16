@@ -1,17 +1,16 @@
 using Echokraut.DataClasses;
-using Echokraut.Helper.Data;
+using Echokraut.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using System;
-using System.Reflection;
 
 namespace Echokraut.Helper.Functional
 {
     public unsafe static class ClickHelper
     {
-        public static void ClickDialogue(nint addon, EKEventId eventId)
+        public static void ClickDialogue(ILogService log, nint addon, EKEventId eventId)
         {
-            LogHelper.Debug(MethodBase.GetCurrentMethod().Name, $"Auto advancing...", eventId);
+            log.Debug(nameof(ClickDialogue), $"Auto advancing...", eventId);
             var unitBase = (AtkUnitBase*)addon;
 
             if (unitBase != null && AtkStage.Instance() != null)
