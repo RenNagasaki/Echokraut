@@ -991,7 +991,7 @@ public class ConfigWindow : Window, IDisposable
                     if (tabItemPlayers)
                     {
                         DrawVoiceSelectionTable("Players", _config.MappedPlayers, ref filteredPlayers,
-                                                ref _updateDataNpcs, ref resetDataPlayers, ref filterGenderPlayers,
+                                                ref _updateDataPlayers, ref resetDataPlayers, ref filterGenderPlayers,
                                                 ref filterRacePlayers, ref filterNamePlayers, ref filterVoicePlayers);
                     }
                 }
@@ -1001,7 +1001,7 @@ public class ConfigWindow : Window, IDisposable
                     if (tabItemBubbles)
                     {
                         DrawVoiceSelectionTable("Bubbles", _config.MappedNpcs, ref filteredBubbles,
-                                                ref _updateDataNpcs, ref resetDataBubbles, ref filterGenderBubbles,
+                                                ref _updateDataBubbles, ref resetDataBubbles, ref filterGenderBubbles,
                                                 ref filterRaceBubbles, ref filterNameBubbles, ref filterVoiceBubbles,
                                                 true);
                     }

@@ -34,7 +34,7 @@ public class TextProcessingService : ITextProcessingService
         return TalkTextHelper.ReplaceSsmlTokens(text);
     }
 
-    public string NormalizePunctuation(string text)
+    public string NormalizePunctuation(string? text)
     {
         return TalkTextHelper.NormalizePunctuation(text);
     }

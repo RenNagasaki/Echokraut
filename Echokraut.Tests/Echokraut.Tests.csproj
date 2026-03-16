@@ -1,0 +1,42 @@
+<Project Sdk="Dalamud.NET.Sdk/14.0.0">
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.9.0" />
+    <PackageReference Include="xunit" Version="2.7.0" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.7">
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="Moq" Version="4.20.70" />
+    <PackageReference Remove="DalamudPackager" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Echokraut\Echokraut.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\Echokraut\bass.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!-- Copy managed Dalamud assemblies to test output so the runner can load Dalamud types at runtime -->
+  <Target Name="CopyDalamudAssemblies" AfterTargets="Build">
+    <ItemGroup>
+      <_DalamudDlls Include="$(DalamudLibPath)*.dll" Exclude="$(DalamudLibPath)bass.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(_DalamudDlls)"
+          DestinationFolder="$(OutputPath)"
+          SkipUnchangedFiles="true"
+          ContinueOnError="true" />
+  </Target>
+
+</Project>
