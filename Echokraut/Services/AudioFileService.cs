@@ -47,12 +47,14 @@ public class AudioFileService : IAudioFileService
 
     public string RemovePlayerNameInText(string text)
     {
-        var name = _gameObjects.LocalPlayer?.Name.TextValue ?? "";
-        var nameArr = name.Split(' ');
+        var name = _gameObjects.LocalPlayerName;
+        if (string.IsNullOrEmpty(name))
+            return text;
 
+        var nameArr = name.Split(' ');
         text = text.Replace(name, "<PLAYERNAME>");
-        if (nameArr.Length > 0) text = text.Replace(nameArr[0], "<PLAYERFIRSTNAME>");
-        if (nameArr.Length > 1) text = text.Replace(nameArr[1], "<PLAYERLASTNAME>");
+        if (nameArr.Length > 0 && !string.IsNullOrEmpty(nameArr[0])) text = text.Replace(nameArr[0], "<PLAYERFIRSTNAME>");
+        if (nameArr.Length > 1 && !string.IsNullOrEmpty(nameArr[1])) text = text.Replace(nameArr[1], "<PLAYERLASTNAME>");
 
         return text;
     }

@@ -1,6 +1,5 @@
 using Dalamud.Game.Command;
 using Dalamud.Plugin;
-using Dalamud.Interface.Windowing;
 using Dalamud.Plugin.Services;
 using Echokraut.Windows;
 using Dalamud.Game;
@@ -41,11 +40,9 @@ public partial class Plugin : IDalamudPlugin
     private readonly IClientState _clientState;
     private readonly IObjectTable _objectTable;
 
-    // Configuration and windows
+    // Configuration and window manager
     private readonly Configuration _configuration;
-    private readonly ConfigWindow _configWindow;
-    private readonly FirstTimeWindow _firstTimeWindow;
-    private readonly DialogExtraOptionsWindow _dialogExtraOptionsWindow;
+    private readonly IWindowManager _windowManager;
 
     // Addon helpers
     private readonly ISoundHelper _soundHelper;
@@ -55,8 +52,6 @@ public partial class Plugin : IDalamudPlugin
     private readonly IAddonCutSceneSelectStringHelper _addonCutSceneSelectStringHelper;
     private readonly IAddonBubbleHelper _addonBubbleHelper;
     private readonly IChatTalkHelper _chatTalkHelper;
-
-    public readonly WindowSystem WindowSystem = new("Echokraut");
 
     public Plugin(
         IDalamudPluginInterface pluginInterface,
@@ -109,58 +104,24 @@ public partial class Plugin : IDalamudPlugin
         _addonBubbleHelper              = _services.GetService<IAddonBubbleHelper>();
         _chatTalkHelper                 = _services.GetService<IChatTalkHelper>();
 
-        (_configWindow, _firstTimeWindow, _dialogExtraOptionsWindow) = CreateWindows(commandManager);
+        if (_configuration.UseNativeUI)
+        {
+            KamiToolKit.KamiToolKitLibrary.Initialize(pluginInterface, "Echokraut");
+            _windowManager = new NativeWindowManager(_services, _configuration, addonLifecycle);
+        }
+        else
+        {
+            _windowManager = new ImGuiWindowManager(_services, _configuration, framework, clientState, commandManager, pluginInterface);
+        }
 
         WireEvents();
 
         _framework.Update += OnFrameworkUpdate;
-        _pluginInterface.UiBuilder.Draw += DrawUI;
+        _pluginInterface.UiBuilder.Draw += _windowManager.Draw;
         _pluginInterface.UiBuilder.OpenConfigUi += _commands.ToggleConfigUi;
         _clientState.Login += OnLogin;
 
         HandleStartup();
-    }
-
-    private (ConfigWindow configWindow, FirstTimeWindow firstTimeWindow, DialogExtraOptionsWindow dialogExtraOptionsWindow) CreateWindows(
-        ICommandManager commandManager)
-    {
-        var lipSync  = _services.GetService<ILipSyncHelper>();
-        var jsonData = _services.GetService<IJsonDataService>();
-        var npcData  = _services.GetService<INpcDataService>();
-
-        var alttalkInstanceWindow = _services.GetService<AlltalkInstanceWindow>();
-
-        var configWindow = new ConfigWindow(
-            _log,
-            _services.GetService<IVolumeService>(),
-            _configuration,
-            _framework,
-            _commands,
-            commandManager,
-            _pluginInterface,
-            _backend,
-            _audioPlayback,
-            _clientState,
-            jsonData,
-            _services.GetService<IAudioFileService>(),
-            _services.GetService<IGameObjectService>(),
-            _googleDrive,
-            npcData,
-            alttalkInstanceWindow);
-
-        var firstTimeWindow = new FirstTimeWindow(
-            _log, _configuration, _framework, alttalkInstanceWindow, configWindow);
-
-        var dialogExtraOptionsWindow = new DialogExtraOptionsWindow(
-            _log, _configuration, _audioPlayback, lipSync, _commands,
-            () => _addonTalkHelper.RecreateInference());
-
-        WindowSystem.AddWindow(configWindow);
-        WindowSystem.AddWindow(alttalkInstanceWindow);
-        WindowSystem.AddWindow(firstTimeWindow);
-        WindowSystem.AddWindow(dialogExtraOptionsWindow);
-
-        return (configWindow, firstTimeWindow, dialogExtraOptionsWindow);
     }
 
     private void WireEvents()
@@ -168,14 +129,14 @@ public partial class Plugin : IDalamudPlugin
         _audioPlayback.AutoAdvanceRequested += eventId => _addonTalkHelper.Click(eventId);
         _audioPlayback.CurrentMessageChanged += msg => DialogState.CurrentVoiceMessage = msg;
 
-        _commands.ToggleConfigRequested    += () => _configWindow.Toggle();
-        _commands.ToggleFirstTimeRequested += () => _firstTimeWindow.Toggle();
+        _commands.ToggleConfigRequested    += _windowManager.ToggleConfig;
+        _commands.ToggleFirstTimeRequested += _windowManager.ToggleFirstTime;
         _commands.CancelAllRequested += _ => _audioPlayback?.ClearQueue();
     }
 
     private void HandleStartup()
     {
-        if (_configuration.FirstTime && !_firstTimeWindow.IsOpen && _clientState.IsLoggedIn)
+        if (_configuration.FirstTime && !_windowManager.IsFirstTimeOpen && _clientState.IsLoggedIn)
             _commands.ToggleFirstTimeUi();
 
         if (!_configuration.FirstTime && _clientState.IsLoggedIn
@@ -186,19 +147,19 @@ public partial class Plugin : IDalamudPlugin
             _alltalkInstance.StartInstance();
             _backend.RefreshBackend();
         }
-
+ 
         if (_configuration.GoogleDriveDownloadPeriodically)
             _googleDrive.StartSync();
     }
 
     private void OnLogin()
     {
-        try
-        {
+        try 
+        { 
             if (_configuration.GoogleDriveDownload)
                 _googleDrive.DownloadFolder(_configuration.LocalSaveLocation, _configuration.GoogleDriveShareLink);
-
-            if (_configuration.FirstTime && !_firstTimeWindow.IsOpen)
+ 
+            if (_configuration.FirstTime && !_windowManager.IsFirstTimeOpen)
                 _commands.ToggleFirstTimeUi();
 
             if (!_configuration.FirstTime
@@ -206,21 +167,21 @@ public partial class Plugin : IDalamudPlugin
                 && _configuration.Alltalk.LocalInstance
                 && !_alltalkInstance.InstanceRunning
                 && !_alltalkInstance.InstanceStarting)
-            {
+            { 
                 _alltalkInstance.StartInstance();
                 _backend.RefreshBackend();
-            }
+            }  
         }
         catch (Exception e)
-        {
+        { 
             _log.Error(nameof(OnLogin), $"Error while starting voice inference: {e}", new EKEventId(0, TextSource.None));
         }
     }
-
+ 
     private unsafe void OnFrameworkUpdate(Dalamud.Plugin.Services.IFramework fw)
     {
-        if (_camera == null)
-        {
+        if (_camera == null) 
+        { 
             var mgr = FFXIVClientStructs.FFXIV.Client.Game.Control.CameraManager.Instance();
             if (mgr != null) _camera = mgr->GetActiveCamera();
         }
@@ -239,7 +200,7 @@ public partial class Plugin : IDalamudPlugin
     public void Dispose()
     {
         _framework.Update -= OnFrameworkUpdate;
-        _pluginInterface.UiBuilder.Draw -= DrawUI;
+        _pluginInterface.UiBuilder.Draw -= _windowManager.Draw;
         _pluginInterface.UiBuilder.OpenConfigUi -= _commands.ToggleConfigUi;
         _clientState.Login -= OnLogin;
         _googleDrive.StopSync();
@@ -252,11 +213,8 @@ public partial class Plugin : IDalamudPlugin
         _chatTalkHelper.Dispose();
 
         _configuration.Save();
-        WindowSystem.RemoveAllWindows();
-        _configWindow.Dispose();
+        _windowManager.Dispose();
         _commands.Dispose();
         _services.Dispose();
     }
-
-    private void DrawUI() => WindowSystem.Draw();
 }

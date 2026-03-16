@@ -18,8 +18,21 @@ public class GameObjectService : IGameObjectService
     private readonly Dictionary<string, bool> _lastUnknownState = new();
     
     private IGameObject? _nextUnknownCharacter;
+    private string _localPlayerName = "";
 
-    public IGameObject? LocalPlayer => _objectTable.LocalPlayer;
+    public IGameObject? LocalPlayer
+    {
+        get
+        {
+            var player = _objectTable.LocalPlayer;
+            if (player != null) _localPlayerName = player.Name.TextValue;
+            return player;
+        }
+    }
+
+    // Safe to read from any thread — updated whenever LocalPlayer is accessed on the main thread.
+    public string LocalPlayerName => _localPlayerName;
+
     public IGameObject? NextUnknownCharacter => _nextUnknownCharacter;
 
     public GameObjectService(

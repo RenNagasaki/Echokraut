@@ -64,6 +64,7 @@ public class Configuration : IPluginConfiguration
     public bool GoogleDriveDownloadPeriodically { get; set; } = false;
     public bool GoogleDriveRequestVoiceLine { get; set; } = false;
     public string GoogleDriveShareLink { get; set; } = "";
+    public bool UseNativeUI { get; set; } = false;
 
     // the below exist just to make saving less cumbersome
     [NonSerialized]
