@@ -12,9 +12,9 @@ public interface IAudioPlaybackService
     bool InDialog { get; set; }
     bool RecreationStarted { get; set; }
 
-    void StopPlaying(VoiceMessage message);
-    void PausePlaying(VoiceMessage message);
-    void ResumePlaying(VoiceMessage message);
+    void StopPlaying(VoiceMessage? message);
+    void PausePlaying(VoiceMessage? message);
+    void ResumePlaying(VoiceMessage? message);
 
     void AddToQueue(VoiceMessage voiceMessage);
     void ClearQueue(TextSource textSource = TextSource.None);

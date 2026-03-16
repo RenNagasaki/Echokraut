@@ -21,12 +21,7 @@ public class Program
     
     static Process? InstallProcess = null;
     static Process? InstanceProcess = null;
-    static bool Installing;
-    static bool InstanceRunning;
-    static bool InstanceStarting;
-    static bool InstanceStopping;
     static bool IsWindows;
-    static bool InstallProcessIsRunning;
     static bool InstanceProcessIsRunning = false;
 
     public static void Main(string[] args)
@@ -89,7 +84,6 @@ public class Program
         try
         {
             Console.WriteLine($"Installing into {installFolder}");
-            Installing = true;
             var installFile = Path.Join(installFolder, "alltalk_tts.zip");
             var installMSBTFile = Path.Join(installFolder, "vs_BuildTools.exe");
             var alltalkFolderNameWrong = Path.GetFileNameWithoutExtension(Constants.ALLTALKURL);
@@ -228,9 +222,7 @@ public class Program
 
                 Console.WriteLine($"Calling atsetup");
                 InstallProcess.Start();
-                InstallProcessIsRunning = true;
                 InstallProcess.WaitForExit();
-                InstallProcessIsRunning = false;
 
                 Console.WriteLine($"Install process ExitCode: {InstallProcess.ExitCode}");
                 if (InstallProcess.ExitCode == 0)
@@ -245,7 +237,7 @@ public class Program
                     }
 
                     Console.WriteLine("Modifying configs:");
-                    dynamic config = JsonConvert.DeserializeObject(File.ReadAllText(confignewFile));
+                    dynamic? config = JsonConvert.DeserializeObject(File.ReadAllText(confignewFile));
                     if (config != null)
                     {
                         config["gradio_port_number"] = 7852;
@@ -256,7 +248,7 @@ public class Program
                         File.WriteAllText(confignewFile, JsonConvert.SerializeObject(config));
                     }
 
-                    dynamic configEngines = JsonConvert.DeserializeObject(File.ReadAllText(ttsEnginesFile));
+                    dynamic? configEngines = JsonConvert.DeserializeObject(File.ReadAllText(ttsEnginesFile));
                     if (configEngines != null)
                     {
                         configEngines["engine_loaded"] = "xtts";
@@ -264,7 +256,7 @@ public class Program
                         File.WriteAllText(ttsEnginesFile, JsonConvert.SerializeObject(configEngines));
                     }
 
-                    dynamic configEngine = JsonConvert.DeserializeObject(File.ReadAllText(modelSettingsFile));
+                    dynamic? configEngine = JsonConvert.DeserializeObject(File.ReadAllText(modelSettingsFile));
                     if (configEngine != null)
                     {
                         configEngine["settings"]["lowvram_enabled"] = false;
@@ -274,10 +266,9 @@ public class Program
                     InstallCustomData(alltalkFolder, customModelUrl, customVoicesUrl).Wait();
 
                     Console.WriteLine($"Done!");
-                    Installing = false;
-                }
+                    }
             }
-            catch (OperationCanceledException ex)
+            catch (OperationCanceledException)
             {
                 StopInstall();
                 Console.WriteLine($"Stopped alltalk install process");
@@ -300,8 +291,6 @@ public class Program
         try
         {
                 Console.WriteLine($"Stopping alltalk install process");
-                Installing = false;
-                InstallProcessIsRunning = false;
                 if (InstallProcess is { HasExited: false })
                 {
                     InstallProcess?.Kill(true);
@@ -324,7 +313,6 @@ public class Program
             
             try
             {
-                InstanceStarting = true;
                 InstanceProcess = new Process();
                 var alltalkFolder = installFolder;
                 Console.WriteLine($"Starting alltalk instance process");
@@ -359,8 +347,6 @@ public class Program
                         if (e.Data.Contains("Server Ready"))
                         {
                             Console.WriteLine("Alltalk instance is ready");
-                            InstanceStarting = false;
-                            InstanceRunning = true;
                             var readyFile = Path.Join(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Ready.txt");
                             if (!File.Exists(readyFile))
                                 File.WriteAllText(readyFile, " ");
@@ -376,7 +362,6 @@ public class Program
                 InstanceProcess.Start();
                 InstanceProcess.BeginOutputReadLine();
                 InstanceProcess.BeginErrorReadLine();
-                InstanceProcessIsRunning = true;
 
                 using (var sw = InstanceProcess.StandardInput)
                 {
@@ -405,10 +390,6 @@ public class Program
                 }
 
                 InstanceProcess.WaitForExit();
-
-                InstanceProcessIsRunning = false;
-                InstanceStarting = false;
-                InstanceRunning = false;
             }
             catch (Exception ex)
             {
@@ -428,10 +409,6 @@ public class Program
         try
         {
             Console.WriteLine($"Stopping alltalk instance process");
-            InstanceRunning = false;
-            InstanceStarting = false;
-            InstanceStopping = true;
-            InstanceProcessIsRunning = false;
             if (InstanceProcess is { HasExited: false })
             {
                 InstanceProcess.CancelOutputRead();
@@ -440,7 +417,6 @@ public class Program
             }
             InstanceProcess?.Dispose();
             InstanceProcess = null;
-            InstanceStopping = false;
             var readyFile = Path.Join(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Ready.txt");
             if (File.Exists(readyFile))
                 File.Delete(readyFile);
@@ -497,7 +473,7 @@ public class Program
                         File.Delete(modelFile);
 
                         var ttsEnginesFile = Path.Join(alltalkFolder, "system", "tts_engines", "tts_engines.json");
-                        dynamic configEngines = JsonConvert.DeserializeObject(File.ReadAllText(ttsEnginesFile));
+                        dynamic? configEngines = JsonConvert.DeserializeObject(File.ReadAllText(ttsEnginesFile));
                         if (configEngines != null)
                         {
                             configEngines["engine_loaded"] = "xtts";
@@ -590,7 +566,7 @@ public class Program
 
             while (!process.HasExited)
             {
-                string output = process.StandardOutput.ReadLine();
+                string? output = process.StandardOutput.ReadLine();
                 Console.WriteLine(output);
             }
         }

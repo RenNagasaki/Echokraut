@@ -15,7 +15,6 @@ using Echokraut.Backend;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using Echokraut.Services;
-using System.Threading.Tasks;
 
 namespace Echokraut;
 
@@ -216,11 +215,6 @@ public partial class Plugin : IDalamudPlugin
         {
             _log.Error(nameof(OnLogin), $"Error while starting voice inference: {e}", new EKEventId(0, TextSource.None));
         }
-    }
-
-    public async Task Say(EKEventId eventId, GameObject? speaker, SeString speakerName, string textValue)
-    {
-        await _voiceProcessor.ProcessSpeechAsync(eventId, speaker, speakerName, textValue);
     }
 
     private unsafe void OnFrameworkUpdate(Dalamud.Plugin.Services.IFramework fw)

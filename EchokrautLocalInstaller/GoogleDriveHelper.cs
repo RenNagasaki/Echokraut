@@ -17,7 +17,7 @@ public static class GoogleDriveHelper
 
         try
         {
-            string fileId = null;
+            string? fileId = null;
 
             if (link.Contains("google"))
             {
@@ -72,7 +72,7 @@ public static class GoogleDriveHelper
         return downloadResponse;
     }
 
-    public static string GetHiddenGoogleDriveInput(string html, string name)
+    public static string? GetHiddenGoogleDriveInput(string html, string name)
     {
         var match = Regex.Match(html, $"<input[^>]*name=[\"']{name}[\"'][^>]*value=[\"']([^\"']+)[\"']", RegexOptions.IgnoreCase);
         return match.Success ? match.Groups[1].Value : null;

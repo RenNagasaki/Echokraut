@@ -10,7 +10,7 @@ public interface ITextProcessingService
 {
     string StripAngleBracketedText(string text);
     string ReplaceSsmlTokens(string text);
-    string NormalizePunctuation(string text);
+    string NormalizePunctuation(string? text);
     string RemoveStutters(string text);
     string RemovePunctuation(string text);
     string ReplaceDate(string text, ClientLanguage language);

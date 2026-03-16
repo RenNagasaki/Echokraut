@@ -26,7 +26,7 @@ public class AudioPlaybackService : IAudioPlaybackService, IDisposable
     private readonly Task _playbackTask;
 
     private readonly ILipSyncHelper _lipSync;
-    private IAudioFileService? _audioFiles;
+    private readonly IAudioFileService _audioFiles;
 
     private bool _inDialog;
     private bool _isPlaying;
@@ -85,7 +85,7 @@ public class AudioPlaybackService : IAudioPlaybackService, IDisposable
         _queue.Enqueue(voiceMessage, isPriority);
     }
 
-    public void StopPlaying(VoiceMessage message)
+    public void StopPlaying(VoiceMessage? message)
     {
         if (message == null) return;
         _isPlaying = false;
@@ -94,7 +94,7 @@ public class AudioPlaybackService : IAudioPlaybackService, IDisposable
             _audioEngine.Stop(message.StreamId);
     }
 
-    public void PausePlaying(VoiceMessage message)
+    public void PausePlaying(VoiceMessage? message)
     {
         if (message == null) return;
         _log.Info(nameof(PausePlaying), "Pausing voice inference", message.EventId);
@@ -102,7 +102,7 @@ public class AudioPlaybackService : IAudioPlaybackService, IDisposable
             _audioEngine.Pause(message.StreamId);
     }
 
-    public void ResumePlaying(VoiceMessage message)
+    public void ResumePlaying(VoiceMessage? message)
     {
         if (message == null) return;
         _log.Info(nameof(ResumePlaying), "Resuming voice inference", message.EventId);
@@ -230,7 +230,7 @@ public class AudioPlaybackService : IAudioPlaybackService, IDisposable
                     message.SpeakerFollowObj?.Position.Z ?? 0));
             }
 
-            _lipSync.TryLipSync(message);
+            _ = _lipSync.TryLipSync(message);
 
             _isPlaying = true;
             _recreationStarted = false;
