@@ -177,8 +177,10 @@ public sealed unsafe class DialogTalkController : IDisposable
             ProcessVoiceSelection(selected);
         }
 
+        var msg = DialogState.CurrentVoiceMessage;
+
         var visible = _config.ShowExtraOptionsInDialogue && !DialogState.IsVoiced && _audioPlayback.InDialog;
-        _layout.IsVisible = visible;
+        _layout!.IsVisible = visible;
         if (!visible) return;
 
         // Safety net: sync _dropDownIsOpen if dropdown physically collapsed without OnCollapsed firing.
@@ -188,17 +190,16 @@ public sealed unsafe class DialogTalkController : IDisposable
         // Resume audio if the dropdown closed this frame without a voice change being made.
         if (_dropDownWasOpen && !_dropDownIsOpen && _pausedForDropDown)
         {
-            var resumeMsg = DialogState.CurrentVoiceMessage;
-            if (resumeMsg != null) _audioPlayback.ResumePlaying(resumeMsg);
+            if (msg != null) _audioPlayback.ResumePlaying(msg);
             _pausedForDropDown = false;
         }
         _dropDownWasOpen = _dropDownIsOpen;
 
         var isMuted    = IsMuted();
-        var hasSpeaker = DialogState.CurrentVoiceMessage?.SpeakerObj != null;
+        var hasSpeaker = msg?.SpeakerObj != null;
 
-        var streamState = DialogState.CurrentVoiceMessage != null
-            ? _audioPlayback.GetStreamState(DialogState.CurrentVoiceMessage.StreamId)
+        var streamState = msg != null
+            ? _audioPlayback.GetStreamState(msg.StreamId)
             : PlaybackState.Stopped;
         var isStreamPlaying = streamState == PlaybackState.Playing;
         var isStreamPaused  = streamState == PlaybackState.Paused;
@@ -220,7 +221,7 @@ public sealed unsafe class DialogTalkController : IDisposable
         if (showExtra)
             _autoAdvanceCheckbox.IsChecked = _config.AutoAdvanceTextAfterSpeechCompleted;
 
-        var speaker = DialogState.CurrentVoiceMessage?.Speaker;
+        var speaker = msg?.Speaker;
         var showVoice = showExtra && speaker != null;
 
         // If the dropdown is hidden while open (speaker gone, extra options toggled off),

@@ -1,4 +1,4 @@
-<Project Sdk="Dalamud.NET.Sdk/14.0.0">
+<Project Sdk="Dalamud.NET.Sdk/14.0.2">
 
   <PropertyGroup>
     <IsPackable>false</IsPackable>

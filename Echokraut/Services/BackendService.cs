@@ -57,8 +57,8 @@ public class BackendService : IBackendService, IDisposable
     {
         if (_config.BackendSelection != TTSBackends.Alltalk) return;
 
-        var canConnect = _config.Alltalk.RemoteInstance ||
-                         (_config.Alltalk.LocalInstance && _alltalkInstance.InstanceRunning);
+        var canConnect = _config.Alltalk.InstanceType == AlltalkInstanceType.Remote ||
+                         (_config.Alltalk.InstanceType == AlltalkInstanceType.Local && _alltalkInstance.InstanceRunning);
 
         if (!canConnect) return;
 
@@ -72,8 +72,8 @@ public class BackendService : IBackendService, IDisposable
     {
         if (backendType != TTSBackends.Alltalk) return;
 
-        if (_config.Alltalk.RemoteInstance ||
-            (_config.Alltalk.LocalInstance && _alltalkInstance.InstanceRunning))
+        if (_config.Alltalk.InstanceType == AlltalkInstanceType.Remote ||
+            (_config.Alltalk.InstanceType == AlltalkInstanceType.Local && _alltalkInstance.InstanceRunning))
         {
             var eventId = new EKEventId(0, TextSource.None);
             _log.Info(nameof(SetBackendType), $"Creating backend instance: {backendType}", eventId);
@@ -157,13 +157,13 @@ public class BackendService : IBackendService, IDisposable
         switch (_config.BackendSelection)
         {
             case TTSBackends.Alltalk:
-                if (_config.Alltalk.LocalInstance && _config.Alltalk.LocalInstall)
+                if (_config.Alltalk.InstanceType == AlltalkInstanceType.Local && _config.Alltalk.LocalInstall)
                     return true; // Checked elsewhere if actually running
-                
-                if (_config.Alltalk.RemoteInstance && !string.IsNullOrWhiteSpace(_config.Alltalk.BaseUrl))
+
+                if (_config.Alltalk.InstanceType == AlltalkInstanceType.Remote && !string.IsNullOrWhiteSpace(_config.Alltalk.BaseUrl))
                     return true;
-                
-                if (_config.Alltalk.NoInstance)
+
+                if (_config.Alltalk.InstanceType == AlltalkInstanceType.None)
                     return true;
                 break;
         }

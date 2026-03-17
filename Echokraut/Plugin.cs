@@ -39,10 +39,13 @@ public partial class Plugin : IDalamudPlugin
     private readonly IFramework _framework;
     private readonly IClientState _clientState;
     private readonly IObjectTable _objectTable;
+    private readonly ICommandManager _commandManager;
+    private readonly IAddonLifecycle _addonLifecycle;
 
     // Configuration and window manager
     private readonly Configuration _configuration;
-    private readonly IWindowManager _windowManager;
+    private IWindowManager _windowManager;
+    private bool _kamiToolKitInitialized;
 
     // Addon helpers
     private readonly ISoundHelper _soundHelper;
@@ -75,6 +78,8 @@ public partial class Plugin : IDalamudPlugin
         _framework = framework;
         _clientState = clientState;
         _objectTable = objectTable;
+        _commandManager = commandManager;
+        _addonLifecycle = addonLifecycle;
 
         _configuration = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         _configuration.Initialize(pluginInterface);
@@ -104,16 +109,7 @@ public partial class Plugin : IDalamudPlugin
         _addonBubbleHelper              = _services.GetService<IAddonBubbleHelper>();
         _chatTalkHelper                 = _services.GetService<IChatTalkHelper>();
 
-        if (_configuration.UseNativeUI)
-        {
-            KamiToolKit.KamiToolKitLibrary.Initialize(pluginInterface, "Echokraut");
-            _windowManager = new NativeWindowManager(_services, _configuration, addonLifecycle);
-        }
-        else
-        {
-            _windowManager = new ImGuiWindowManager(_services, _configuration, framework, clientState, commandManager, pluginInterface);
-        }
-
+        _windowManager = CreateWindowManager();
         WireEvents();
 
         _framework.Update += OnFrameworkUpdate;
@@ -124,6 +120,46 @@ public partial class Plugin : IDalamudPlugin
         HandleStartup();
     }
 
+    private IWindowManager CreateWindowManager()
+    {
+        if (_configuration.UseNativeUI)
+        {
+            if (!_kamiToolKitInitialized)
+            {
+                KamiToolKit.KamiToolKitLibrary.Initialize(_pluginInterface, "Echokraut");
+                _kamiToolKitInitialized = true;
+            }
+            return new NativeWindowManager(_services, _configuration, _addonLifecycle, _commandManager, _clientState);
+        }
+        return new ImGuiWindowManager(_services, _configuration, _framework, _clientState, _commandManager, _pluginInterface);
+    }
+
+    public void SwitchUiMode()
+    {
+        // Defer to next framework tick — can't dispose a window from within its own draw/click callback
+        _framework.RunOnTick(() =>
+        {
+            // Unwire events from old window manager
+            _commands.ToggleConfigRequested    -= _windowManager.ToggleConfig;
+            _commands.ToggleFirstTimeRequested -= _windowManager.ToggleFirstTime;
+            _pluginInterface.UiBuilder.Draw   -= _windowManager.Draw;
+
+            // Dispose old window manager
+            _windowManager.Dispose();
+
+            // Create new window manager
+            _windowManager = CreateWindowManager();
+
+            // Rewire events
+            _commands.ToggleConfigRequested    += _windowManager.ToggleConfig;
+            _commands.ToggleFirstTimeRequested += _windowManager.ToggleFirstTime;
+            _pluginInterface.UiBuilder.Draw   += _windowManager.Draw;
+
+            // Open the config window in the new UI mode
+            _windowManager.ToggleConfig();
+        });
+    }
+
     private void WireEvents()
     {
         _audioPlayback.AutoAdvanceRequested += eventId => _addonTalkHelper.Click(eventId);
@@ -132,6 +168,7 @@ public partial class Plugin : IDalamudPlugin
         _commands.ToggleConfigRequested    += _windowManager.ToggleConfig;
         _commands.ToggleFirstTimeRequested += _windowManager.ToggleFirstTime;
         _commands.CancelAllRequested += _ => _audioPlayback?.ClearQueue();
+        _commands.UiModeSwitchRequested += SwitchUiMode;
     }
 
     private void HandleStartup()
@@ -141,7 +178,7 @@ public partial class Plugin : IDalamudPlugin
 
         if (!_configuration.FirstTime && _clientState.IsLoggedIn
             && _configuration.Alltalk.LocalInstall
-            && _configuration.Alltalk.LocalInstance
+            && _configuration.Alltalk.InstanceType == Echokraut.Enums.AlltalkInstanceType.Local
             && _configuration.Alltalk.AutoStartLocalInstance)
         {
             _alltalkInstance.StartInstance();
@@ -164,7 +201,7 @@ public partial class Plugin : IDalamudPlugin
 
             if (!_configuration.FirstTime
                 && _configuration.Alltalk.LocalInstall
-                && _configuration.Alltalk.LocalInstance
+                && _configuration.Alltalk.InstanceType == Echokraut.Enums.AlltalkInstanceType.Local
                 && !_alltalkInstance.InstanceRunning
                 && !_alltalkInstance.InstanceStarting)
             { 

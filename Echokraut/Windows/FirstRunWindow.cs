@@ -38,12 +38,11 @@ public class FirstTimeWindow : Window, IDisposable
         Size = new Vector2(600, 900);
         SizeCondition = ImGuiCond.FirstUseEver;
 
-        if (!_config.Alltalk.LocalInstance && !_config.Alltalk.RemoteInstance)
+        if (_config.Alltalk.InstanceType == Echokraut.Enums.AlltalkInstanceType.None)
         {
-            if (!string.IsNullOrWhiteSpace(_config.Alltalk.BaseUrl) && !_config.Alltalk.BaseUrl.Contains("127.0.0.1"))
-                _config.Alltalk.RemoteInstance = true;
-            else
-                _config.Alltalk.LocalInstance = true;
+            _config.Alltalk.InstanceType = !string.IsNullOrWhiteSpace(_config.Alltalk.BaseUrl) && !_config.Alltalk.BaseUrl.Contains("127.0.0.1")
+                ? Echokraut.Enums.AlltalkInstanceType.Remote
+                : Echokraut.Enums.AlltalkInstanceType.Local;
         }
     }
 
@@ -90,7 +89,7 @@ public class FirstTimeWindow : Window, IDisposable
                     "Pressing this button will close the install window and enable you to fully use & configure Echokraut.");
                 ImGui.Text("Use /ek in chat to open the full configuration window.");
 
-                using (ImRaii.Disabled(!(_config.Alltalk.RemoteInstance || (_config.Alltalk.LocalInstance && _config.Alltalk.LocalInstall))))
+                using (ImRaii.Disabled(!(_config.Alltalk.InstanceType == Echokraut.Enums.AlltalkInstanceType.Remote || (_config.Alltalk.InstanceType == Echokraut.Enums.AlltalkInstanceType.Local && _config.Alltalk.LocalInstall))))
                 {
                     if (ImGui.Button("I Understand"))
                     {

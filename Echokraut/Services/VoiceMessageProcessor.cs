@@ -108,20 +108,20 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
             }
 
             // Step 5: Assign voice if needed
-            if (npcData.Voice == null && !onlyRequest && !_config.Alltalk.NoInstance)
+            if (npcData.Voice == null && !onlyRequest && _config.Alltalk.InstanceType != AlltalkInstanceType.None)
             {
                 _log.Info(nameof(ProcessSpeechAsync), "Getting voice since not set.", eventId);
                 _backend.GetVoiceOrRandom(eventId, npcData);
             }
 
-            if (npcData.Voice == null && !onlyRequest && !_config.Alltalk.NoInstance)
+            if (npcData.Voice == null && !onlyRequest && _config.Alltalk.InstanceType != AlltalkInstanceType.None)
             {
                 _log.Info(nameof(ProcessSpeechAsync), "Skipping voice inference. No Voice set.", eventId);
                 _log.End(nameof(ProcessSpeechAsync), eventId);
                 return;
             }
 
-            if (npcData.Voice != null && npcData.Voice.Volume == 0f && !onlyRequest && !_config.Alltalk.NoInstance)
+            if (npcData.Voice != null && npcData.Voice.Volume == 0f && !onlyRequest && _config.Alltalk.InstanceType != AlltalkInstanceType.None)
             {
                 _log.Info(nameof(ProcessSpeechAsync), $"Voice is muted: {npcData}", eventId);
                 _log.End(nameof(ProcessSpeechAsync), eventId);
