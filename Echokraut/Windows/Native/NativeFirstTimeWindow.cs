@@ -12,7 +12,7 @@ namespace Echokraut.Windows.Native;
 
 /// <summary>
 /// Native first-time setup window shown when the plugin is used for the first time.
-/// Guides the user through Alltalk instance setup.
+/// Uses NativeAlltalkBuilder for local/remote instance sections (shared with NativeConfigWindow).
 /// </summary>
 public sealed unsafe class NativeFirstTimeWindow : NativeAddon
 {
@@ -26,29 +26,22 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
     private CheckboxNode? _remoteCheck;
     private CheckboxNode? _noInstanceCheck;
 
-    // Local section nodes
-    private TextInputNode? _localInstallPathInput;
-    private CheckboxNode? _isWindows11Check;
-    private CheckboxNode? _autoStartCheck;
-    private TextButtonNode? _installButton;
-    private TextButtonNode? _startButton;
-    private TextButtonNode? _stopButton;
-    private HorizontalListNode? _startStopRow;
-    private TextNode? _localInstallLabel;
+    // Shared builder nodes
+    private NativeAlltalkBuilder.LocalInstanceNodes? _localNodes;
+    private NodeBase[]? _localAllNodes;
     private HorizontalLineNode? _localSep;
 
-    // Remote section nodes
-    private TextNode? _remoteLabel;
-    private TextInputNode? _baseUrlInput;
+    private NativeAlltalkBuilder.RemoteInstanceNodes? _remoteNodes;
+    private NodeBase[]? _remoteAllNodes;
     private HorizontalLineNode? _remoteSep;
 
-    // No instance section nodes
+    // No instance warning
     private TextNode? _noInstanceWarning1;
     private TextNode? _noInstanceWarning2;
     private TextNode? _noInstanceWarning3;
     private HorizontalLineNode? _noInstanceSep;
 
-    // Finish button
+    // Finish
     private TextButtonNode? _finishButton;
 
     public NativeFirstTimeWindow(
@@ -62,7 +55,6 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         _backend = backend;
         _onComplete = onComplete;
 
-        // Migrate instance type if needed
         if (_config.Alltalk.InstanceType == AlltalkInstanceType.None
             && !_config.Alltalk.LocalInstance && !_config.Alltalk.RemoteInstance)
         {
@@ -124,74 +116,21 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         list.AddNode(_noInstanceCheck);
         list.AddNode(Sep(w));
 
-        // ── Local instance section ───────────────────────────────────────────
-        _localInstallLabel = Lbl("Local instance install path:", w);
-        list.AddNode(_localInstallLabel);
-
-        _localInstallPathInput = new TextInputNode
-        {
-            Size = new Vector2(w, 28),
-            MaxCharacters = 128,
-            PlaceholderString = "Install path (no spaces or dashes)",
-            String = _config.Alltalk.LocalInstallPath,
-        };
-        _localInstallPathInput.OnInputReceived = s => { _config.Alltalk.LocalInstallPath = s.ToString(); _config.Save(); };
-        list.AddNode(_localInstallPathInput);
-
-        _isWindows11Check = new CheckboxNode
-        {
-            Size = new Vector2(w, 24),
-            String = "Is Windows 11",
-            IsChecked = _config.Alltalk.IsWindows11,
-            OnClick = v => { _config.Alltalk.IsWindows11 = v; _config.Save(); },
-        };
-        list.AddNode(_isWindows11Check);
-
-        _installButton = new TextButtonNode { Size = new Vector2(200, 24), String = _config.Alltalk.LocalInstall ? "Reinstall" : "Install" };
-        _installButton.OnClick = () =>
-        {
-            if (_alltalkInstance.InstanceRunning || _alltalkInstance.InstanceStarting)
-                _alltalkInstance.StopInstance(new EKEventId(0, TextSource.Backend));
-            _alltalkInstance.Install();
-        };
-        list.AddNode(_installButton);
-
-        _autoStartCheck = new CheckboxNode
-        {
-            Size = new Vector2(w, 24),
-            String = "Auto start local instance on plugin load",
-            IsChecked = _config.Alltalk.AutoStartLocalInstance,
-            OnClick = v => { _config.Alltalk.AutoStartLocalInstance = v; _config.Save(); },
-        };
-        list.AddNode(_autoStartCheck);
-
-        _startButton = new TextButtonNode { Size = new Vector2(80, 24), String = "Start" };
-        _startButton.OnClick = () => _alltalkInstance.StartInstance();
-        _stopButton = new TextButtonNode { Size = new Vector2(80, 24), String = "Stop" };
-        _stopButton.OnClick = () => _alltalkInstance.StopInstance(new EKEventId(0, TextSource.Backend));
-
-        _startStopRow = new HorizontalListNode { Size = new Vector2(w, 26), ItemSpacing = 4 };
-        _startStopRow.AddNode(_startButton);
-        _startStopRow.AddNode(_stopButton);
-        list.AddNode(_startStopRow);
-
+        // ── Local instance section (shared builder) ──────────────────────────
+        _localNodes = NativeAlltalkBuilder.BuildLocalInstance(w, _config, _alltalkInstance);
+        _localAllNodes = _localNodes.AllNodes;
+        foreach (var n in _localAllNodes) list.AddNode(n);
         _localSep = Sep(w);
         list.AddNode(_localSep);
 
-        // ── Remote instance section ──────────────────────────────────────────
-        _remoteLabel = Lbl("Remote instance URL:", w);
-        list.AddNode(_remoteLabel);
+        // ── Remote instance section (shared builder) ─────────────────────────
+        _remoteNodes = NativeAlltalkBuilder.BuildRemoteInstance(w, _config, _backend);
+        _remoteAllNodes = _remoteNodes.AllNodes;
 
-        _baseUrlInput = new TextInputNode
-        {
-            Size = new Vector2(w, 28),
-            MaxCharacters = 80,
-            PlaceholderString = "Alltalk base URL (e.g. http://192.168.1.100:7851)",
-            String = _config.Alltalk.BaseUrl,
-        };
-        _baseUrlInput.OnInputReceived = s => { _config.Alltalk.BaseUrl = s.ToString(); _config.Save(); };
-        list.AddNode(_baseUrlInput);
+        // Wire test connection button
+        _remoteNodes.TestConnectionButton.OnClick = () => TestConnection();
 
+        foreach (var n in _remoteAllNodes) list.AddNode(n);
         _remoteSep = Sep(w);
         list.AddNode(_remoteSep);
 
@@ -202,7 +141,6 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         list.AddNode(_noInstanceWarning1);
         list.AddNode(_noInstanceWarning2);
         list.AddNode(_noInstanceWarning3);
-
         _noInstanceSep = Sep(w);
         list.AddNode(_noInstanceSep);
 
@@ -219,7 +157,6 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
             Close();
         };
         list.AddNode(_finishButton);
-
         list.AddNode(Sep(w));
 
         // Links
@@ -248,17 +185,16 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         Dim(_noInstanceCheck, !isNone);
 
         // Local section visibility
-        SetVisible(_localInstallLabel, isLocal);
-        SetVisible(_localInstallPathInput, isLocal);
-        SetVisible(_isWindows11Check, isLocal);
-        SetVisible(_installButton, isLocal);
-        SetVisible(_autoStartCheck, isLocal);
-        SetVisible(_startStopRow, isLocal);
+        if (_localAllNodes != null)
+            foreach (var n in _localAllNodes) SetVisible(n, isLocal);
         SetVisible(_localSep, isLocal);
 
+        // Update local controls state
+        if (isLocal) _localNodes?.Update(_config, _alltalkInstance);
+
         // Remote section visibility
-        SetVisible(_remoteLabel, isRemote);
-        SetVisible(_baseUrlInput, isRemote);
+        if (_remoteAllNodes != null)
+            foreach (var n in _remoteAllNodes) SetVisible(n, isRemote);
         SetVisible(_remoteSep, isRemote);
 
         // No instance warning visibility
@@ -267,27 +203,27 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         SetVisible(_noInstanceWarning3, isNone);
         SetVisible(_noInstanceSep, isNone);
 
-        // Install button state
-        if (_installButton != null)
-        {
-            _installButton.String = _alltalkInstance.Installing
-                ? "Installing..."
-                : _config.Alltalk.LocalInstall ? "Reinstall" : "Install";
-            Dim(_installButton, !_alltalkInstance.Installing);
-        }
-
-        // Start/stop button state
-        if (_startButton != null)
-        {
-            _startButton.String = _alltalkInstance.InstanceStarting ? "Starting..." : _alltalkInstance.InstanceRunning ? "Running" : "Start";
-            Dim(_startButton, !_alltalkInstance.InstanceRunning && !_alltalkInstance.InstanceStarting);
-        }
-        if (_stopButton != null)
-            Dim(_stopButton, (_alltalkInstance.InstanceRunning || _alltalkInstance.InstanceStarting) && !_alltalkInstance.InstanceStopping);
-
-        // Finish button — only enabled when setup is valid
+        // Finish button
         var canFinish = isRemote || (isLocal && _config.Alltalk.LocalInstall) || isNone;
         Dim(_finishButton, !canFinish);
+    }
+
+    private void TestConnection()
+    {
+        if (_remoteNodes == null) return;
+        _remoteNodes.ConnectionResultLabel.String = "Testing...";
+
+        var task = _config.BackendSelection == TTSBackends.Alltalk
+            ? _backend.CheckReady(new EKEventId(0, TextSource.None))
+            : System.Threading.Tasks.Task.FromResult("No backend selected");
+
+        task.ContinueWith(t =>
+        {
+            if (_remoteNodes == null) return;
+            _remoteNodes.ConnectionResultLabel.String = t.IsFaulted
+                ? $"Error: {t.Exception?.InnerException?.Message}"
+                : $"Result: {t.Result}";
+        });
     }
 
     private void SetInstanceType(AlltalkInstanceType type)
