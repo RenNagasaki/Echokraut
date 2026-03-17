@@ -93,6 +93,14 @@ public class BackendService : IBackendService, IDisposable
         _log.Info(nameof(MapVoices), "Loading and mapping voices", eventId);
         var backendVoices = _backend!.GetAvailableVoices(eventId);
 
+        // null means backend was unavailable (connection error, timeout, etc.)
+        // — skip voice mapping entirely to avoid wiping existing voice assignments.
+        if (backendVoices == null)
+        {
+            _log.Warning(nameof(MapVoices), "Backend unavailable, skipping voice mapping to preserve existing data", eventId);
+            return;
+        }
+
         var newVoices = backendVoices.FindAll(p =>
             _config.EchokrautVoices.Find(f => f.BackendVoice == p) == null);
 
@@ -237,8 +245,14 @@ public class BackendService : IBackendService, IDisposable
     public async Task<string> CheckReady(EKEventId eventId)
     {
         if (_backend == null)
-            return "Backend not initialized";
-        
+        {
+            if (_config.BackendSelection != TTSBackends.Alltalk)
+                return "No backend selected";
+
+            _log.Info(nameof(CheckReady), "Backend not initialized, creating instance for connection test", eventId);
+            _backend = new AlltalkBackend(_config, _log, _audioFiles);
+        }
+
         return await _backend.CheckReady(eventId);
     }
 

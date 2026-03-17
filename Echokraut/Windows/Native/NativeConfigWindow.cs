@@ -120,17 +120,12 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private CheckboxNode? _atLocalCheck;
     private CheckboxNode? _atRemoteCheck;
     private CheckboxNode? _atNoInstanceCheck;
-    private CheckboxNode? _atAutoStartCheck;
-    private TextButtonNode? _atStartButton;
-    private TextButtonNode? _atStopButton;
-    private TextInputNode? _atBaseUrlInput;
-    private TextButtonNode? _atTestConnectionButton;
-    private TextNode? _atConnectionResultLabel;
+    private NativeAlltalkBuilder.LocalInstanceNodes? _atLocalNodes;
+    private NativeAlltalkBuilder.RemoteInstanceNodes? _atRemoteNodes;
     private CheckboxNode? _atStreamingCheck;
     private TextInputNode? _atReloadModelInput;
     private TextButtonNode? _atReloadModelButton;
     private TextButtonNode? _atReloadVoicesButton;
-    private HorizontalListNode? _atStartStopRow;
     // Collapsible section toggle buttons + content arrays for per-frame visibility control
     private TextButtonNode? _localSectionToggle;
     private NodeBase[]? _localSectionContent;
@@ -385,6 +380,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         SetVisible(_localSectionToggle, showLocal);
         if (!showLocal && _localSectionContent != null)
             foreach (var n in _localSectionContent) SetVisible(n, false);
+        if (showLocal) _atLocalNodes?.Update(_config, _alltalkInstance);
 
         // Remote section: toggle button + content
         SetVisible(_remoteSectionToggle, showRemote);
@@ -395,14 +391,6 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         SetVisible(_serviceSectionToggle, showService);
         if (!showService && _serviceSectionContent != null)
             foreach (var n in _serviceSectionContent) SetVisible(n, false);
-
-        if (_atStartButton != null)
-        {
-            _atStartButton.String = _alltalkInstance.InstanceStarting ? "Starting..." : _alltalkInstance.InstanceRunning ? "Running" : "Start";
-            Dim(_atStartButton, !_alltalkInstance.InstanceRunning && !_alltalkInstance.InstanceStarting);
-        }
-        if (_atStopButton != null)
-            Dim(_atStopButton, (_alltalkInstance.InstanceRunning || _alltalkInstance.InstanceStarting) && !_alltalkInstance.InstanceStopping);
 
         // Partial class updates
         UpdateVoiceSelection();
@@ -820,34 +808,12 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             _atNoInstanceCheck!.IsChecked = true;
         });
 
-        // Local instance controls
-        _atAutoStartCheck = Check("Auto start local instance on plugin load", w,
-            _config.Alltalk.AutoStartLocalInstance,
-            v =>
-            {
-                _config.Alltalk.AutoStartLocalInstance = v;
-                _config.Save();
-                if (v && _config.Alltalk.LocalInstall && !_alltalkInstance.InstanceRunning && !_alltalkInstance.InstanceStarting)
-                    _alltalkInstance.StartInstance();
-            });
-        _atStartButton = Button("Start", 80, () => _alltalkInstance.StartInstance());
-        _atStopButton = Button("Stop", 80, () => _alltalkInstance.StopInstance(new EKEventId(0, TextSource.Backend)));
+        // Local instance (shared builder)
+        _atLocalNodes = NativeAlltalkBuilder.BuildLocalInstance(w, _config, _alltalkInstance);
 
-        _atStartStopRow = new HorizontalListNode { Size = new Vector2(w, 26), ItemSpacing = 4 };
-        _atStartStopRow.AddNode(_atStartButton);
-        _atStartStopRow.AddNode(_atStopButton);
-
-        // Remote instance controls
-        _atBaseUrlInput = Input("Alltalk base URL", w, 80, _config.Alltalk.BaseUrl,
-            v => { _config.Alltalk.BaseUrl = v; _config.Save(); });
-        _atTestConnectionButton = Button("Test", 60, () => TestConnection());
-        _atConnectionResultLabel = new TextNode
-        {
-            Size     = new Vector2(w, 20),
-            String   = " ",
-            FontType = FontType.Axis,
-            FontSize = 12,
-        };
+        // Remote instance (shared builder)
+        _atRemoteNodes = NativeAlltalkBuilder.BuildRemoteInstance(w, _config, _backend);
+        _atRemoteNodes.TestConnectionButton.OnClick = () => TestConnection();
 
         // Service options (shared between local & remote)
         _atStreamingCheck = Check("Streaming generation (play audio before full text is generated)", w,
@@ -868,10 +834,10 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         CreateCollapsibleSection(list, "Instance type", w, false,
             [_atLocalCheck, _atRemoteCheck, _atNoInstanceCheck]);
 
-        _localSectionContent = [_atAutoStartCheck, _atStartStopRow!];
+        _localSectionContent = _atLocalNodes.AllNodes;
         _localSectionToggle = CreateCollapsibleSection(list, "Local instance", w, false, _localSectionContent);
 
-        _remoteSectionContent = [_atBaseUrlInput, _atTestConnectionButton, _atConnectionResultLabel!];
+        _remoteSectionContent = _atRemoteNodes.AllNodes;
         _remoteSectionToggle = CreateCollapsibleSection(list, "Remote connection", w, false, _remoteSectionContent);
 
         _serviceSectionContent = [_atStreamingCheck, _atReloadModelInput, _atReloadModelButton, _atReloadVoicesButton];
@@ -882,8 +848,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
 
     private void TestConnection()
     {
-        if (_atConnectionResultLabel != null)
-            _atConnectionResultLabel.String = "Testing...";
+        if (_atRemoteNodes == null) return;
+        _atRemoteNodes.ConnectionResultLabel.String = "Testing...";
 
         var task = _config.BackendSelection == TTSBackends.Alltalk
             ? _backend.CheckReady(new EKEventId(0, TextSource.None))
@@ -891,8 +857,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
 
         task.ContinueWith(t =>
         {
-            if (_atConnectionResultLabel == null) return;
-            _atConnectionResultLabel.String = t.IsFaulted
+            if (_atRemoteNodes == null) return;
+            _atRemoteNodes.ConnectionResultLabel.String = t.IsFaulted
                 ? $"Error: {t.Exception?.InnerException?.Message}"
                 : $"Result: {t.Result}";
         });

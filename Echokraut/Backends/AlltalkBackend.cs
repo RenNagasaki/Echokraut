@@ -81,27 +81,27 @@ namespace Echokraut.Backend
             return null;
         }
 
-        public List<string> GetAvailableVoices(EKEventId eventId)
+        public List<string>? GetAvailableVoices(EKEventId eventId)
         {
             _log.Info(nameof(GetAvailableVoices), "Loading Alltalk Voices", eventId);
-            var mappedVoices = new List<string>();
             try
             {
                 var uriBuilder = new UriBuilder(_configuration.Alltalk.BaseUrl) { Path = _configuration.Alltalk.VoicesPath };
                 var resultStr = _httpClient.GetStringAsync(uriBuilder.Uri).GetAwaiter().GetResult().Replace("\\", "");
                 var voices = System.Text.Json.JsonSerializer.Deserialize<AlltalkVoices>(resultStr);
 
+                var mappedVoices = new List<string>();
                 foreach (string voice in voices?.voices ?? [])
                     mappedVoices.Add(voice);
 
-                _log.Info(nameof(GetAvailableVoices), "Done", eventId);
+                _log.Info(nameof(GetAvailableVoices), $"Done, found {mappedVoices.Count} voices", eventId);
+                return mappedVoices;
             }
             catch (Exception ex)
             {
                 _log.Error(nameof(GetAvailableVoices), ex.ToString(), eventId);
+                return null; // null = backend unavailable, distinct from empty list (0 voices)
             }
-
-            return mappedVoices;
         }
 
         public async Task StopGenerating(EKEventId eventId)

@@ -463,7 +463,7 @@ public sealed unsafe partial class NativeConfigWindow
         {
             InternalName = "EKVoiceConfig",
             Title = $"Voice: {voice.VoiceName}",
-            Size = new System.Numerics.Vector2(500, 500),
+            Size = new System.Numerics.Vector2(500, 700),
         };
         _voiceConfigWindow.Open();
     }

@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using System.Numerics;
 using Dalamud.Game;
 using Dalamud.Game.ClientState.Objects.Enums;
@@ -217,33 +218,39 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
         };
         list.AddNode(allCheck);
 
-        // Individual race checkboxes (2 per row)
+        // Individual race checkboxes — absolute grid positioning for uniform columns
+        const int cols = 4;
+        const float rowH = 26f;
         var raceList = Constants.RACELIST;
-        for (var i = 0; i < raceList.Count; i += 2)
+        var colW = w / cols;
+        var rows = (int)Math.Ceiling(raceList.Count / (float)cols);
+        var gridHeight = rows * rowH;
+
+        var raceGrid = new SimpleComponentNode { Size = new Vector2(w, gridHeight) };
+        for (var i = 0; i < raceList.Count; i++)
         {
-            var row = new HorizontalListNode { Size = new Vector2(w, 24), ItemSpacing = 4 };
-            for (var j = i; j < Math.Min(i + 2, raceList.Count); j++)
+            var race = raceList[i];
+            var col = i % cols;
+            var row = i / cols;
+            var rCheck = new CheckboxNode
             {
-                var race = raceList[j];
-                var rCheck = new CheckboxNode
+                Size = new Vector2(colW, 24),
+                Position = new Vector2(col * colW, row * rowH),
+                String = race.ToString(),
+                IsChecked = _voice.AllowedRaces.Contains(race),
+                OnClick = v =>
                 {
-                    Size = new Vector2(w / 2 - 2, 24),
-                    String = race.ToString(),
-                    IsChecked = _voice.AllowedRaces.Contains(race),
-                    OnClick = v =>
-                    {
-                        if (v && !_voice.AllowedRaces.Contains(race))
-                            _voice.AllowedRaces.Add(race);
-                        else if (!v && _voice.AllowedRaces.Contains(race))
-                            _voice.AllowedRaces.Remove(race);
-                        _npcData.RefreshSelectables(_config.EchokrautVoices);
-                        Save();
-                    },
-                };
-                row.AddNode(rCheck);
-            }
-            list.AddNode(row);
+                    if (v && !_voice.AllowedRaces.Contains(race))
+                        _voice.AllowedRaces.Add(race);
+                    else if (!v && _voice.AllowedRaces.Contains(race))
+                        _voice.AllowedRaces.Remove(race);
+                    _npcData.RefreshSelectables(_config.EchokrautVoices);
+                    Save();
+                },
+            };
+            rCheck.AttachNode(raceGrid);
         }
+        list.AddNode(raceGrid);
 
         var resetRaceBtn = new TextButtonNode { Size = new Vector2(120, 24), String = "Reset races" };
         resetRaceBtn.OnClick = () =>
