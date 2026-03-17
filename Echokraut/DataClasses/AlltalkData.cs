@@ -1,8 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using Echokraut.Enums;
 
 namespace Echokraut.DataClasses
 {
@@ -18,13 +14,36 @@ namespace Echokraut.DataClasses
         public string CustomModelUrl = "";
         public string CustomVoicesUrl = "";
         public bool LocalInstall { get; set; } = false;
-        public bool LocalInstance { get; set; } = false;
-        public bool RemoteInstance { get; set; } = false;
-        public bool NoInstance { get; set; } = false;
         public bool AutoStartLocalInstance { get; set; } = false;
         public string LocalInstallPath { get; set; }  = "";
         public bool StreamingGeneration { get; set; } = true;
         public bool IsWindows11 { get; set; } = true;
+
+        // TODO: Remove LocalInstance, RemoteInstance, NoInstance fields in a future update
+        //       once all users have migrated to InstanceType. Keep for deserialization compat.
+        public bool LocalInstance { get; set; } = false;
+        public bool RemoteInstance { get; set; } = false;
+        public bool NoInstance { get; set; } = false;
+
+        /// <summary>
+        /// The canonical instance type. Reads from InstanceType if set, otherwise migrates
+        /// from the legacy boolean fields. Setter updates both the enum and the legacy fields.
+        /// </summary>
+        public AlltalkInstanceType InstanceType
+        {
+            get
+            {
+                if (LocalInstance) return AlltalkInstanceType.Local;
+                if (RemoteInstance) return AlltalkInstanceType.Remote;
+                return AlltalkInstanceType.None;
+            }
+            set
+            {
+                LocalInstance  = value == AlltalkInstanceType.Local;
+                RemoteInstance = value == AlltalkInstanceType.Remote;
+                NoInstance     = value == AlltalkInstanceType.None;
+            }
+        }
 
         public override string ToString()
         {

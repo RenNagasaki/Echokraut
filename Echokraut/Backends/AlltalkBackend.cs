@@ -110,7 +110,7 @@ namespace Echokraut.Backend
             try
             {
                 var content = new StringContent("");
-                await _httpClient.PutAsync(_configuration.Alltalk.BaseUrl + _configuration.Alltalk.StopPath, content).ConfigureAwait(false);
+                await _httpClient.PutAsync(_configuration.Alltalk.BaseUrl.TrimEnd('/') + _configuration.Alltalk.StopPath, content).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -123,7 +123,7 @@ namespace Echokraut.Backend
             _log.Info(nameof(CheckReady), "Checking if Alltalk is ready", eventId);
             try
             {
-                var res = await _httpClient.GetAsync(_configuration.Alltalk.BaseUrl + _configuration.Alltalk.ReadyPath).ConfigureAwait(false);
+                var res = await _httpClient.GetAsync(_configuration.Alltalk.BaseUrl.TrimEnd('/') + _configuration.Alltalk.ReadyPath).ConfigureAwait(false);
                 var responseString = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
                 _log.Debug(nameof(CheckReady), "Ready", eventId);
                 return responseString;
@@ -162,7 +162,7 @@ namespace Echokraut.Backend
             try
             {
                 var content = new StringContent("");
-                await _httpClient.PostAsync(_configuration.Alltalk.BaseUrl + _configuration.Alltalk.ReloadPath + reloadModel, content).ConfigureAwait(false);
+                await _httpClient.PostAsync(_configuration.Alltalk.BaseUrl.TrimEnd('/') + _configuration.Alltalk.ReloadPath + reloadModel, content).ConfigureAwait(false);
                 return true;
             }
             catch (Exception ex)

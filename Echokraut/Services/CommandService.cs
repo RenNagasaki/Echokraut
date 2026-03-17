@@ -27,6 +27,7 @@ public class CommandService : ICommandService
     public event Action? ToggleConfigRequested;
     public event Action? ToggleFirstTimeRequested;
     public event Action<EKEventId>? CancelAllRequested;
+    public event Action? UiModeSwitchRequested;
 
     public List<string> CommandKeys { get; private set; } = new();
 
@@ -58,6 +59,7 @@ public class CommandService : ICommandService
         _commandManager.AddHandler("/ekdb", new CommandInfo(OnCommand) { HelpMessage = "Echoes current debug info" });
         _commandManager.AddHandler("/ekdel", new CommandInfo(OnCommand) { HelpMessage = "/ekdel n -> Deletes last 'n' local saved files. Default 10" });
         _commandManager.AddHandler("/ekdelmin", new CommandInfo(OnCommand) { HelpMessage = "/ekdelmin n -> Deletes last 'n' minutes generated local saved files. Default 10" });
+        _commandManager.AddHandler("/ekfirst", new CommandInfo(OnCommand) { HelpMessage = "Opens the first-time setup window" });
 
         CommandKeys = _commandManager.Commands.Keys.ToList().FindAll(p => p.StartsWith("/ek"));
         CommandKeys.Sort();
@@ -74,6 +76,9 @@ public class CommandService : ICommandService
             case "/ek":
                 if (!_config.FirstTime)
                     ToggleConfigUi();
+                break;
+            case "/ekfirst":
+                ToggleFirstTimeUi();
                 break;
             case "/ekid":
                 PrintTargetInfo();
@@ -106,7 +111,7 @@ public class CommandService : ICommandService
                 }
                 break;
             case "/ekt":
-                _config.Enabled = !_config.Enabled;
+                _config.Enabled = !_config.Enabled; 
                 _config.Save();
                 if (!_config.Enabled)
                     CancelAllRequested?.Invoke(new EKEventId(0, TextSource.None));
@@ -168,6 +173,7 @@ public class CommandService : ICommandService
     }
 
     public void ToggleFirstTimeUi() => ToggleFirstTimeRequested?.Invoke();
+    public void RequestUiModeSwitch() => UiModeSwitchRequested?.Invoke();
 
     private unsafe void PrintTargetInfo()
     {
@@ -226,5 +232,6 @@ public class CommandService : ICommandService
         _commandManager.RemoveHandler("/ekdel");
         _commandManager.RemoveHandler("/ekdelmin");
         _commandManager.RemoveHandler("/ektchat");
+        _commandManager.RemoveHandler("/ekfirst");
     }
 }

@@ -334,16 +334,15 @@ public class AlltalkInstanceWindow : Window, IDisposable
     {
         try
         {
-            var remoteInstance = _config.Alltalk.RemoteInstance;
-            var localInstance = _config.Alltalk.LocalInstance;
-            var noInstance = _config.Alltalk.NoInstance;
+            var instanceType = _config.Alltalk.InstanceType;
+            var localInstance = instanceType == Enums.AlltalkInstanceType.Local;
+            var remoteInstance = instanceType == Enums.AlltalkInstanceType.Remote;
+            var noInstance = instanceType == Enums.AlltalkInstanceType.None;
             using (ImRaii.Disabled(localInstance || _alltalkInstance.Installing))
             {
                 if (ImGui.Checkbox("Local instance##EKLocalATInstance", ref localInstance))
                 {
-                    _config.Alltalk.LocalInstance = localInstance;
-                    _config.Alltalk.RemoteInstance = false;
-                    _config.Alltalk.NoInstance = false;
+                    _config.Alltalk.InstanceType = Enums.AlltalkInstanceType.Local;
                     _config.Save();
                 }
             }
@@ -352,9 +351,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
             {
                 if (ImGui.Checkbox("Remote instance##EKRemoteATInstance", ref remoteInstance))
                 {
-                    _config.Alltalk.LocalInstance = false;
-                    _config.Alltalk.RemoteInstance = remoteInstance;
-                    _config.Alltalk.NoInstance = false;
+                    _config.Alltalk.InstanceType = Enums.AlltalkInstanceType.Remote;
                     _config.Save();
                 }
             }
@@ -363,9 +360,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
             {
                 if (ImGui.Checkbox("No instance##EKNoATInstance", ref noInstance))
                 {
-                    _config.Alltalk.LocalInstance = false;
-                    _config.Alltalk.RemoteInstance = false;
-                    _config.Alltalk.NoInstance = noInstance;
+                    _config.Alltalk.InstanceType = Enums.AlltalkInstanceType.None;
                     _config.Save();
                 }
             }

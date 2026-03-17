@@ -509,6 +509,14 @@ public class ConfigWindow : Window, IDisposable
             _config.Save();
         }
 
+        var useNativeUi = _config.UseNativeUI;
+        if (ImGui.Checkbox("Use native FFXIV UI", ref useNativeUi))
+        {
+            _config.UseNativeUI = useNativeUi;
+            _config.Save();
+            _commands.RequestUiModeSwitch();
+        }
+
         using (ImRaii.Disabled(!enabled))
         {
             var generateBySentence = _config.GenerateBySentence;
