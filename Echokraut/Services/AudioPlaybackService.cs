@@ -206,6 +206,16 @@ public class AudioPlaybackService : IAudioPlaybackService, IDisposable
         var message = entry.Message;
         var eventId = message.EventId;
 
+        // Skip dialogue audio if the dialog closed while this message was queued
+        var isDialogueSource = message.Source is TextSource.AddonTalk or TextSource.AddonBattleTalk;
+        if (isDialogueSource && _configuration.CancelSpeechOnTextAdvance && !_inDialog)
+        {
+            _log.Info(nameof(PlayAudioAsync), "Skipping queued audio — dialog closed", eventId);
+            _queue.MarkAsCompleted(entry.Id);
+            message.Stream?.Dispose();
+            return;
+        }
+
         try
         {
             _log.Info(nameof(PlayAudioAsync), "Playing next queue item", eventId);
