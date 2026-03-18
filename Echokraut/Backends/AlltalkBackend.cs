@@ -123,18 +123,39 @@ namespace Echokraut.Backend
             _log.Info(nameof(CheckReady), "Checking if Alltalk is ready", eventId);
             try
             {
-                var res = await _httpClient.GetAsync(_configuration.Alltalk.BaseUrl.TrimEnd('/') + _configuration.Alltalk.ReadyPath).ConfigureAwait(false);
+                var url = _configuration.Alltalk.BaseUrl.TrimEnd('/') + _configuration.Alltalk.ReadyPath;
+                var res = await _httpClient.GetAsync(url).ConfigureAwait(false);
+                if (!res.IsSuccessStatusCode)
+                {
+                    var body = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
+                    var msg = $"Server returned {(int)res.StatusCode} {res.ReasonPhrase}";
+                    if (!string.IsNullOrWhiteSpace(body))
+                        msg += $" — {body.Trim()}";
+                    _log.Error(nameof(CheckReady), msg, eventId);
+                    return msg;
+                }
                 var responseString = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
                 _log.Debug(nameof(CheckReady), "Ready", eventId);
                 return responseString;
             }
+            catch (HttpRequestException ex)
+            {
+                var msg = $"Connection failed: {ex.Message}";
+                _log.Error(nameof(CheckReady), msg, eventId);
+                return msg;
+            }
+            catch (TaskCanceledException)
+            {
+                const string msg = "Connection timed out";
+                _log.Error(nameof(CheckReady), msg, eventId);
+                return msg;
+            }
             catch (Exception ex)
             {
-                _log.Error(nameof(CheckReady), ex.ToString(), eventId);
+                var msg = $"Unexpected error: {ex.Message}";
+                _log.Error(nameof(CheckReady), msg, eventId);
+                return msg;
             }
-
-            _log.Debug(nameof(CheckReady), "Not ready", eventId);
-            return "NotReady";
         }
 
         private static void EnsureSuccessStatusCode(HttpResponseMessage res)

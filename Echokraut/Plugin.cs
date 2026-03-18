@@ -81,6 +81,8 @@ public partial class Plugin : IDalamudPlugin
         _commandManager = commandManager;
         _addonLifecycle = addonLifecycle;
 
+        Localization.Loc.Init(clientState.ClientLanguage);
+
         _configuration = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
         _configuration.Initialize(pluginInterface);
         pluginInterface.UiBuilder.DisableCutsceneUiHide = !_configuration.HideUiInCutscenes;
@@ -118,6 +120,8 @@ public partial class Plugin : IDalamudPlugin
         _clientState.Login += OnLogin;
 
         HandleStartup();
+
+        _log.Info(nameof(Plugin), "Echokraut initialized", new EKEventId(0, TextSource.None));
     }
 
     private IWindowManager CreateWindowManager()
@@ -236,6 +240,7 @@ public partial class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
+        _log.Info(nameof(Dispose), "Echokraut shutting down", new EKEventId(0, TextSource.None));
         _framework.Update -= OnFrameworkUpdate;
         _pluginInterface.UiBuilder.Draw -= _windowManager.Draw;
         _pluginInterface.UiBuilder.OpenConfigUi -= _commands.ToggleConfigUi;

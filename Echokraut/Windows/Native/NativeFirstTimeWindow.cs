@@ -3,6 +3,7 @@ using System.Numerics;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
 using Echokraut.Helper.Functional;
+using Echokraut.Localization;
 using Echokraut.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
@@ -11,8 +12,11 @@ using KamiToolKit.Nodes;
 namespace Echokraut.Windows.Native;
 
 /// <summary>
-/// Native first-time setup window shown when the plugin is used for the first time.
-/// Uses NativeAlltalkBuilder for local/remote instance sections (shared with NativeConfigWindow).
+/// Native first-time setup window with a step-by-step wizard.
+/// Step 0: Welcome — choose Local/Remote/None.
+/// Step 1: Configure — instance-specific settings + Back/Next.
+/// Step 2: Finish — summary + I Understand button.
+/// All nodes are created in OnSetup; visibility managed in OnUpdate.
 /// </summary>
 public sealed unsafe class NativeFirstTimeWindow : NativeAddon
 {
@@ -21,28 +25,49 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
     private readonly IBackendService _backend;
     private readonly Action _onComplete;
 
-    // Instance type checkboxes
-    private CheckboxNode? _localCheck;
-    private CheckboxNode? _remoteCheck;
-    private CheckboxNode? _noInstanceCheck;
+    private int _wizardStep;
 
-    // Shared builder nodes
+    // ── Step 0: Welcome ──────────────────────────────────────────────────
+    private TextNode? _welcomeTitle;
+    private TextNode? _welcomeDesc;
+    private HorizontalLineNode? _welcomeSep;
+    private TextButtonNode? _choiceLocalBtn;
+    private TextNode? _choiceLocalDesc;
+    private TextButtonNode? _choiceRemoteBtn;
+    private TextNode? _choiceRemoteDesc;
+    private TextButtonNode? _choiceNoneBtn;
+    private TextNode? _choiceNoneDesc;
+
+    // ── Step 1: Configure ────────────────────────────────────────────────
+    private TextButtonNode? _backButton1;
+
+    // Local instance nodes
     private NativeAlltalkBuilder.LocalInstanceNodes? _localNodes;
-    private NodeBase[]? _localAllNodes;
-    private HorizontalLineNode? _localSep;
+    private NodeBase[]? _localEssentialNodes;
+    private NodeBase[]? _localAdvancedNodes;
+    private NodeBase[]? _localPostAdvancedNodes;
+    private TextButtonNode? _localAdvancedToggle;
 
+    // Remote instance nodes
     private NativeAlltalkBuilder.RemoteInstanceNodes? _remoteNodes;
     private NodeBase[]? _remoteAllNodes;
-    private HorizontalLineNode? _remoteSep;
 
-    // No instance warning
-    private TextNode? _noInstanceWarning1;
-    private TextNode? _noInstanceWarning2;
-    private TextNode? _noInstanceWarning3;
-    private HorizontalLineNode? _noInstanceSep;
+    // No instance nodes
+    private TextNode? _noInstanceWarning;
+    private TextInputNode? _noInstancePathInput;
+    private CheckboxNode? _noInstanceGdCheck;
+    private TextInputNode? _noInstanceGdLinkInput;
 
-    // Finish
+    private TextButtonNode? _nextButton;
+
+    // ── Step 2: Finish ───────────────────────────────────────────────────
+    private TextButtonNode? _backButton2;
+    private TextNode? _finishSummary;
+    private TextNode? _finishHelp;
     private TextButtonNode? _finishButton;
+
+    // ── Links (always visible) ───────────────────────────────────────────
+    private HorizontalListNode? _linksRow;
 
     public NativeFirstTimeWindow(
         Configuration config,
@@ -54,14 +79,6 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         _alltalkInstance = alltalkInstance;
         _backend = backend;
         _onComplete = onComplete;
-
-        if (_config.Alltalk.InstanceType == AlltalkInstanceType.None
-            && !_config.Alltalk.LocalInstance && !_config.Alltalk.RemoteInstance)
-        {
-            _config.Alltalk.InstanceType = !string.IsNullOrWhiteSpace(_config.Alltalk.BaseUrl) && !_config.Alltalk.BaseUrl.Contains("127.0.0.1")
-                ? AlltalkInstanceType.Remote
-                : AlltalkInstanceType.Local;
-        }
     }
 
     protected override void OnSetup(AtkUnitBase* addon)
@@ -78,134 +95,180 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
             ItemSpacing = 4,
         };
 
-        // ── Intro ────────────────────────────────────────────────────────────
-        list.AddNode(Lbl("Welcome to Echokraut!", w, 14));
-        list.AddNode(Lbl("This plugin gives nearly every text in the game a voice.", w));
-        list.AddNode(Lbl("It uses Alltalk by erew123 for text-to-speech generation.", w));
-        list.AddNode(Lbl("You can install a local instance (runs on your GPU),", w));
-        list.AddNode(Lbl("connect to a remote one, or use audio files only.", w));
-        list.AddNode(Sep(w));
+        // ── Step 0: Welcome ──────────────────────────────────────────────
+        _welcomeTitle = Lbl(Loc.S("Welcome to Echokraut!"), w, 14);
+        _welcomeDesc = Lbl(Loc.S("Choose how you want to set up text-to-speech:"), w);
+        _welcomeSep = Sep(w);
 
-        // ── Instance type selection ──────────────────────────────────────────
-        list.AddNode(Lbl("Select your instance type:", w, 14));
-
-        _localCheck = new CheckboxNode
+        _choiceLocalBtn = Btn(Loc.S("Local TTS"), w, () =>
         {
-            Size = new Vector2(w, 24),
-            String = "Local instance (runs on your GPU)",
-            IsChecked = _config.Alltalk.InstanceType == AlltalkInstanceType.Local,
-            OnClick = v => { if (v) SetInstanceType(AlltalkInstanceType.Local); },
-        };
-        _remoteCheck = new CheckboxNode
-        {
-            Size = new Vector2(w, 24),
-            String = "Remote instance (connect to a server)",
-            IsChecked = _config.Alltalk.InstanceType == AlltalkInstanceType.Remote,
-            OnClick = v => { if (v) SetInstanceType(AlltalkInstanceType.Remote); },
-        };
-        _noInstanceCheck = new CheckboxNode
-        {
-            Size = new Vector2(w, 24),
-            String = "No instance (audio files only, no generation)",
-            IsChecked = _config.Alltalk.InstanceType == AlltalkInstanceType.None,
-            OnClick = v => { if (v) SetInstanceType(AlltalkInstanceType.None); },
-        };
+            _config.Alltalk.InstanceType = AlltalkInstanceType.Local;
+            _config.Save();
+            _wizardStep = 1;
+        });
+        _choiceLocalDesc = Lbl(Loc.S("Runs on your GPU — best quality, requires ~20GB disk space"), w);
 
-        list.AddNode(_localCheck);
-        list.AddNode(_remoteCheck);
-        list.AddNode(_noInstanceCheck);
-        list.AddNode(Sep(w));
+        _choiceRemoteBtn = Btn(Loc.S("Remote Server"), w, () =>
+        {
+            _config.Alltalk.InstanceType = AlltalkInstanceType.Remote;
+            _config.Save();
+            _wizardStep = 1;
+        });
+        _choiceRemoteDesc = Lbl(Loc.S("Connect to a server running Alltalk (yours or someone else's)"), w);
 
-        // ── Local instance section (shared builder) ──────────────────────────
+        _choiceNoneBtn = Btn(Loc.S("Audio Files Only"), w, () =>
+        {
+            _config.Alltalk.InstanceType = AlltalkInstanceType.None;
+            _config.Save();
+            _wizardStep = 1;
+        });
+        _choiceNoneDesc = Lbl(Loc.S("No generation — use pre-made audio from friends or Google Drive"), w);
+
+        list.AddNode(_welcomeTitle);
+        list.AddNode(_welcomeDesc);
+        list.AddNode(_welcomeSep);
+        list.AddNode(_choiceLocalBtn);
+        list.AddNode(_choiceLocalDesc);
+        list.AddNode(_choiceRemoteBtn);
+        list.AddNode(_choiceRemoteDesc);
+        list.AddNode(_choiceNoneBtn);
+        list.AddNode(_choiceNoneDesc);
+
+        // ── Step 1: Configure ────────────────────────────────────────────
+        _backButton1 = Btn(Loc.S("Back"), 80, () => { _wizardStep = 0; });
+        list.AddNode(_backButton1);
+
+        // Local instance
         _localNodes = NativeAlltalkBuilder.BuildLocalInstance(w, _config, _alltalkInstance);
-        _localAllNodes = _localNodes.AllNodes;
-        foreach (var n in _localAllNodes) list.AddNode(n);
-        _localSep = Sep(w);
-        list.AddNode(_localSep);
+        _localEssentialNodes = _localNodes.EssentialNodes;
+        _localAdvancedNodes = _localNodes.AdvancedNodes;
+        _localPostAdvancedNodes = _localNodes.PostAdvancedNodes;
+        foreach (var n in _localEssentialNodes) list.AddNode(n);
 
-        // ── Remote instance section (shared builder) ─────────────────────────
+        _localAdvancedToggle = Btn(Loc.S("[+] Advanced Options"), w, () =>
+        {
+            var isHidden = _localAdvancedNodes!.Length > 0 && !_localAdvancedNodes[0].IsVisible;
+            foreach (var n in _localAdvancedNodes!) n.IsVisible = isHidden;
+            _localAdvancedToggle!.String = isHidden ? Loc.S("[-] Advanced Options") : Loc.S("[+] Advanced Options");
+        });
+        list.AddNode(_localAdvancedToggle);
+        foreach (var n in _localAdvancedNodes) list.AddNode(n);
+        foreach (var n in _localPostAdvancedNodes) list.AddNode(n);
+
+        // Remote instance
         _remoteNodes = NativeAlltalkBuilder.BuildRemoteInstance(w, _config, _backend);
         _remoteAllNodes = _remoteNodes.AllNodes;
-
-        // Wire test connection button
         _remoteNodes.TestConnectionButton.OnClick = () => TestConnection();
-
         foreach (var n in _remoteAllNodes) list.AddNode(n);
-        _remoteSep = Sep(w);
-        list.AddNode(_remoteSep);
 
-        // ── No instance warning ──────────────────────────────────────────────
-        _noInstanceWarning1 = Lbl("WARNING: Selecting 'No Instance' means no audio will be generated.", w);
-        _noInstanceWarning2 = Lbl("You will need to get audio files from a friend or via Google Drive Share.", w);
-        _noInstanceWarning3 = Lbl("Only use this if you are unable to use Alltalk at all.", w);
-        list.AddNode(_noInstanceWarning1);
-        list.AddNode(_noInstanceWarning2);
-        list.AddNode(_noInstanceWarning3);
-        _noInstanceSep = Sep(w);
-        list.AddNode(_noInstanceSep);
+        // No instance
+        _noInstanceWarning = Lbl(Loc.S("No audio will be generated. Use pre-made audio from friends or Google Drive."), w);
+        _noInstancePathInput = Inp(Loc.S("Local audio directory"), w, 260, _config.LocalSaveLocation,
+            v => { _config.LocalSaveLocation = v; _config.Save(); });
+        _noInstanceGdCheck = Chk(Loc.S("Download from Google Drive"), w, _config.GoogleDriveDownload,
+            v => { _config.GoogleDriveDownload = v; _config.Save(); });
+        _noInstanceGdLinkInput = Inp(Loc.S("Google Drive share link"), w, 100, _config.GoogleDriveShareLink,
+            v => { _config.GoogleDriveShareLink = v; _config.Save(); });
 
-        // ── Finish ───────────────────────────────────────────────────────────
-        list.AddNode(Lbl("Once ready, press the button below to start using Echokraut.", w));
-        list.AddNode(Lbl("Use /ek in chat to open the full configuration window.", w));
+        list.AddNode(_noInstanceWarning);
+        list.AddNode(_noInstancePathInput);
+        list.AddNode(_noInstanceGdCheck);
+        list.AddNode(_noInstanceGdLinkInput);
 
-        _finishButton = new TextButtonNode { Size = new Vector2(200, 28), String = "I Understand" };
-        _finishButton.OnClick = () =>
+        _nextButton = Btn(Loc.S("Next"), 80, () => { _wizardStep = 2; });
+        list.AddNode(_nextButton);
+
+        // ── Step 2: Finish ───────────────────────────────────────────────
+        _backButton2 = Btn(Loc.S("Back"), 80, () => { _wizardStep = 1; });
+        _finishSummary = Lbl(Loc.S("You're all set!"), w, 14);
+        _finishHelp = Lbl(Loc.S("Use /ek in chat to open the full configuration window."), w);
+        _finishButton = Btn(Loc.S("I Understand"), 200, () =>
         {
             _config.FirstTime = false;
             _config.Save();
             _onComplete();
             Close();
-        };
+        });
+
+        list.AddNode(_backButton2);
+        list.AddNode(_finishSummary);
+        list.AddNode(_finishHelp);
         list.AddNode(_finishButton);
         list.AddNode(Sep(w));
 
-        // Links
-        var linksRow = new HorizontalListNode { Size = new Vector2(w, 26), ItemSpacing = 4 };
-        var discordBtn = new TextButtonNode { Size = new Vector2(160, 24), String = "Join discord server" };
-        discordBtn.OnClick = () => CMDHelper.OpenUrl(Constants.DISCORDURL);
-        var githubBtn = new TextButtonNode { Size = new Vector2(120, 24), String = "Alltalk Github" };
-        githubBtn.OnClick = () => CMDHelper.OpenUrl(Constants.ALLTALKGITHUBURL);
-        linksRow.AddNode(discordBtn);
-        linksRow.AddNode(githubBtn);
-        list.AddNode(linksRow);
+        // ── Links ────────────────────────────────────────────────────────
+        _linksRow = new HorizontalListNode { Size = new Vector2(w, 26), ItemSpacing = 4 };
+        var discordBtn = Btn(Loc.S("Join discord server"), 160, () => CMDHelper.OpenUrl(Constants.DISCORDURL));
+        var githubBtn = Btn(Loc.S("Alltalk Github"), 120, () => CMDHelper.OpenUrl(Constants.ALLTALKGITHUBURL));
+        _linksRow.AddNode(discordBtn);
+        _linksRow.AddNode(githubBtn);
+        list.AddNode(_linksRow);
 
         AddNode(list);
     }
 
     protected override void OnUpdate(AtkUnitBase* addon)
     {
+        var step = _wizardStep;
         var instanceType = _config.Alltalk.InstanceType;
-        var isLocal  = instanceType == AlltalkInstanceType.Local;
+        var isLocal = instanceType == AlltalkInstanceType.Local;
         var isRemote = instanceType == AlltalkInstanceType.Remote;
-        var isNone   = instanceType == AlltalkInstanceType.None;
+        var isNone = instanceType == AlltalkInstanceType.None;
 
-        // Dim already-selected instance type
-        Dim(_localCheck, !isLocal);
-        Dim(_remoteCheck, !isRemote);
-        Dim(_noInstanceCheck, !isNone);
+        // ── Step 0 visibility ────────────────────────────────────────────
+        var s0 = step == 0;
+        SetVisible(_welcomeTitle, s0);
+        SetVisible(_welcomeDesc, s0);
+        SetVisible(_welcomeSep, s0);
+        SetVisible(_choiceLocalBtn, s0);
+        SetVisible(_choiceLocalDesc, s0);
+        SetVisible(_choiceRemoteBtn, s0);
+        SetVisible(_choiceRemoteDesc, s0);
+        SetVisible(_choiceNoneBtn, s0);
+        SetVisible(_choiceNoneDesc, s0);
 
-        // Local section visibility
-        if (_localAllNodes != null)
-            foreach (var n in _localAllNodes) SetVisible(n, isLocal);
-        SetVisible(_localSep, isLocal);
+        // ── Step 1 visibility ────────────────────────────────────────────
+        var s1 = step == 1;
+        SetVisible(_backButton1, s1);
 
-        // Update local controls state
-        if (isLocal) _localNodes?.Update(_config, _alltalkInstance);
+        // Local nodes
+        if (_localEssentialNodes != null)
+            foreach (var n in _localEssentialNodes) SetVisible(n, s1 && isLocal);
+        SetVisible(_localAdvancedToggle, s1 && isLocal);
+        if (!s1 || !isLocal)
+        {
+            if (_localAdvancedNodes != null)
+                foreach (var n in _localAdvancedNodes) SetVisible(n, false);
+        }
+        if (_localPostAdvancedNodes != null)
+            foreach (var n in _localPostAdvancedNodes) SetVisible(n, s1 && isLocal);
+        if (s1 && isLocal) _localNodes?.Update(_config, _alltalkInstance);
 
-        // Remote section visibility
+        // Remote nodes
         if (_remoteAllNodes != null)
-            foreach (var n in _remoteAllNodes) SetVisible(n, isRemote);
-        SetVisible(_remoteSep, isRemote);
+            foreach (var n in _remoteAllNodes) SetVisible(n, s1 && isRemote);
 
-        // No instance warning visibility
-        SetVisible(_noInstanceWarning1, isNone);
-        SetVisible(_noInstanceWarning2, isNone);
-        SetVisible(_noInstanceWarning3, isNone);
-        SetVisible(_noInstanceSep, isNone);
+        // No instance nodes
+        SetVisible(_noInstanceWarning, s1 && isNone);
+        SetVisible(_noInstancePathInput, s1 && isNone);
+        SetVisible(_noInstanceGdCheck, s1 && isNone);
+        SetVisible(_noInstanceGdLinkInput, s1 && isNone);
+        Dim(_noInstanceGdLinkInput, _config.GoogleDriveDownload);
 
-        // Finish button
-        var canFinish = isRemote || (isLocal && _config.Alltalk.LocalInstall) || isNone;
-        Dim(_finishButton, !canFinish);
+        // Next button — dim if local but not installed
+        SetVisible(_nextButton, s1);
+        var canNext = isRemote || (isLocal && _config.Alltalk.LocalInstall) || isNone;
+        Dim(_nextButton, canNext);
+
+        // ── Step 2 visibility ────────────────────────────────────────────
+        var s2 = step == 2;
+        SetVisible(_backButton2, s2);
+        SetVisible(_finishSummary, s2);
+        SetVisible(_finishHelp, s2);
+        SetVisible(_finishButton, s2);
+
+        if (s2 && _finishSummary != null)
+            _finishSummary.String = $"Setup mode: {instanceType}. You're all set!";
     }
 
     private void TestConnection()
@@ -224,15 +287,6 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
                 ? $"Error: {t.Exception?.InnerException?.Message}"
                 : $"Result: {t.Result}";
         });
-    }
-
-    private void SetInstanceType(AlltalkInstanceType type)
-    {
-        _config.Alltalk.InstanceType = type;
-        _config.Save();
-        _localCheck!.IsChecked  = type == AlltalkInstanceType.Local;
-        _remoteCheck!.IsChecked = type == AlltalkInstanceType.Remote;
-        _noInstanceCheck!.IsChecked = type == AlltalkInstanceType.None;
     }
 
     private static void Dim(NodeBase? node, bool enabled)
@@ -257,4 +311,34 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
     {
         Size = new Vector2(width, 4),
     };
+
+    private static TextButtonNode Btn(string label, float minWidth, Action onClick)
+    {
+        var node = new TextButtonNode { Size = new Vector2(minWidth, 24), String = label };
+        var textW = node.LabelNode.GetTextDrawSize(label).X + 36;
+        if (textW > minWidth) node.Size = new Vector2(textW, 24);
+        node.OnClick = onClick;
+        return node;
+    }
+
+    private static CheckboxNode Chk(string label, float width, bool initial, Action<bool> onChange) => new()
+    {
+        Size = new Vector2(width, 24),
+        String = label,
+        IsChecked = initial,
+        OnClick = onChange,
+    };
+
+    private static TextInputNode Inp(string placeholder, float width, int maxChars, string initial, Action<string> onComplete)
+    {
+        var node = new TextInputNode
+        {
+            Size = new Vector2(width, 28),
+            MaxCharacters = maxChars,
+            PlaceholderString = placeholder,
+            String = initial,
+        };
+        node.OnInputReceived = s => onComplete(s.ToString());
+        return node;
+    }
 }

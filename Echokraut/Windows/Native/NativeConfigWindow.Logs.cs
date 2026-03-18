@@ -4,6 +4,8 @@ using System.Linq;
 using System.Numerics;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
+using Echokraut.Localization;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
 
@@ -32,6 +34,19 @@ public sealed unsafe partial class NativeConfigWindow
 
     private int _activeLogTab;
 
+    // Filter state — persists across full panel rebuilds
+    private string _logsFilterMethod  = "";
+    private string _logsFilterMessage = "";
+    private string _logsFilterId      = "";
+    private bool _logsFilterExpanded;  // tracks collapsible open/closed state
+
+    // Column widths
+    private const float LogColTimestamp = 85f;
+    private const float LogColMethod   = 120f;
+    private const float LogColId       = 40f;
+
+    private float LogColMessage => _contentWidth - LogColTimestamp - LogColMethod - LogColId - 3 * 4 - 20;
+
     private void SetupLogs()
     {
         var w = _contentWidth;
@@ -42,10 +57,6 @@ public sealed unsafe partial class NativeConfigWindow
         {
             _logsPanels[i] = Panel(_innerContentPos, _innerContentSize);
             _logsDirty[i] = true;
-
-            var idx = i;
-            // Build initial options for each log panel
-            BuildLogPanelOptions(idx);
         }
 
         for (var i = 0; i < LogTabs.Length; i++)
@@ -54,7 +65,6 @@ public sealed unsafe partial class NativeConfigWindow
             _logsTabBar.AddTab(LogTabs[i].Label, () => ShowLogPanel(idx));
         }
 
-        // Subscribe to log updates
         _log.LogUpdated += OnLogUpdated;
     }
 
@@ -90,7 +100,6 @@ public sealed unsafe partial class NativeConfigWindow
 
     private void OnLogUpdated(TextSource source)
     {
-        // Mark all matching tabs as dirty
         for (var i = 0; i < LogTabs.Length; i++)
         {
             if (LogTabs[i].Source == source)
@@ -102,7 +111,6 @@ public sealed unsafe partial class NativeConfigWindow
     {
         if (_activeTopTab != 3) return;
 
-        // Update main-thread logs
         _log.UpdateMainThreadLogs();
 
         if (_logsDirty[_activeLogTab])
@@ -112,57 +120,10 @@ public sealed unsafe partial class NativeConfigWindow
         }
     }
 
-    private void BuildLogPanelOptions(int index)
-    {
-        var panel = _logsPanels[index];
-        if (panel == null) return;
-
-        var w = _contentWidth;
-        var source = LogTabs[index].Source;
-
-        var showDebug = GetShowDebug(source);
-        var showError = GetShowError(source);
-        var showId0 = GetShowId0(source);
-
-        var debugCheck = Check("Show debug logs", w, showDebug, v =>
-        {
-            SetShowDebug(source, v);
-            _config.Save();
-            _logsDirty[index] = true;
-        });
-
-        var errorCheck = Check("Show error logs", w, showError, v =>
-        {
-            SetShowError(source, v);
-            _config.Save();
-            _logsDirty[index] = true;
-        });
-
-        var clearButton = Button("Clear logs", 120, () =>
-        {
-            _log.ClearLogs(source);
-            _logsDirty[index] = true;
-        });
-
-        // Build content nodes list for collapsible section
-        var optionNodes = new List<NodeBase> { debugCheck, errorCheck };
-
-        if (source != TextSource.None)
-        {
-            var id0Check = Check("Show Id 0 entries", w, showId0, v =>
-            {
-                SetShowId0(source, v);
-                _config.Save();
-                _logsDirty[index] = true;
-            });
-            optionNodes.Add(id0Check);
-        }
-        optionNodes.Add(clearButton);
-
-        CreateCollapsibleSection(panel, "Filter Options", w, true, optionNodes.ToArray());
-        panel.AddNode(Separator(w));
-    }
-
+    /// <summary>
+    /// Full rebuild of a log panel: options section, column headers, filter row, data rows.
+    /// Filter input values persist in fields so they survive rebuilds.
+    /// </summary>
     private void RebuildLogPanel(int index)
     {
         var panel = _logsPanels[index];
@@ -173,41 +134,158 @@ public sealed unsafe partial class NativeConfigWindow
 
         panel.Clear();
 
-        // Re-add options
-        BuildLogPanelOptions(index);
-
+        // ── Filter options (collapsible) ─────────────────────────────────
         var showDebug = GetShowDebug(source);
         var showError = GetShowError(source);
         var showId0 = GetShowId0(source);
 
-        var logs = _log.GetLogsForSource(source);
-
-        // Apply filters
-        var filtered = logs.Where(log =>
+        var debugCheck = Check(Loc.S("Show debug logs"), w, showDebug, v =>
         {
-            if (log.type == LogType.Debug && !showDebug) return false;
-            if (log.type == LogType.Error && !showError) return false;
-            if (!showId0 && source != TextSource.None && log.eventId?.Id == 0) return false;
-            return true;
-        }).ToList();
+            SetShowDebug(source, v);
+            _config.Save();
+            _logsDirty[index] = true;
+        });
 
-        // Show last 200 entries max for performance
-        var toShow = filtered.Count > 200 ? filtered.Skip(filtered.Count - 200).ToList() : filtered;
+        var errorCheck = Check(Loc.S("Show error logs"), w, showError, v =>
+        {
+            SetShowError(source, v);
+            _config.Save();
+            _logsDirty[index] = true;
+        });
+
+        var clearButton = Button(Loc.S("Clear logs"), 100, () =>
+        {
+            _log.ClearLogs(source);
+            _logsDirty[index] = true;
+        });
+        var clearRow = new HorizontalListNode { Size = new Vector2(w, 26), ItemSpacing = 4 };
+        clearRow.AddNode(clearButton);
+
+        var id0Check = Check(Loc.S("Show ID 0 entries"), w, showId0, v =>
+        {
+            SetShowId0(source, v);
+            _config.Save();
+            _logsDirty[index] = true;
+        });
+
+        var jumpToBottom = GetJumpToBottom(source);
+        var jumpCheck = Check(Loc.S("Always jump to bottom"), w, jumpToBottom, v =>
+        {
+            SetJumpToBottom(source, v);
+            _config.Save();
+        });
+
+        var filterContent = new NodeBase[] { debugCheck, errorCheck, id0Check, jumpCheck, clearRow };
+        var filterToggle = CreateCollapsibleSection(panel, Loc.S("Filter Options"), w, !_logsFilterExpanded, filterContent);
+
+        // Track expand/collapse state across rebuilds
+        var prevOnClick = filterToggle.OnClick;
+        filterToggle.OnClick = () =>
+        {
+            prevOnClick?.Invoke();
+            _logsFilterExpanded = filterContent.Length > 0 && filterContent[0].IsVisible;
+        };
+
+        // ── Column headers ───────────────────────────────────────────────
+        var headerRow = new HorizontalListNode { Size = new Vector2(w, 20), ItemSpacing = 4 };
+        headerRow.AddNode(Label(Loc.S("Timestamp"), LogColTimestamp));
+        headerRow.AddNode(Label(Loc.S("Method"), LogColMethod));
+        headerRow.AddNode(Label(Loc.S("Message"), LogColMessage));
+        headerRow.AddNode(Label(Loc.S("ID"), LogColId));
+        panel.AddNode(headerRow);
+
+        // ── Filter inputs ────────────────────────────────────────────────
+        var filterRow = new HorizontalListNode { Size = new Vector2(w, 28), ItemSpacing = 4 };
+        filterRow.AddNode(Spacer(LogColTimestamp, 28));
+        filterRow.AddNode(Input(Loc.S("Filter"), LogColMethod, 40, _logsFilterMethod, v =>
+        {
+            _logsFilterMethod = v;
+            _logsDirty[_activeLogTab] = true;
+        }));
+        filterRow.AddNode(Input(Loc.S("Filter"), LogColMessage, 80, _logsFilterMessage, v =>
+        {
+            _logsFilterMessage = v;
+            _logsDirty[_activeLogTab] = true;
+        }));
+        filterRow.AddNode(Input(Loc.S("Filter"), LogColId, 10, _logsFilterId, v =>
+        {
+            _logsFilterId = v;
+            _logsDirty[_activeLogTab] = true;
+        }));
+        panel.AddNode(filterRow);
+
+        panel.AddNode(Separator(w));
+
+        // ── Data rows ────────────────────────────────────────────────────
+        IEnumerable<LogMessage> filtered = _log.GetLogsForSource(source);
+
+        // Visibility filters
+        if (!showDebug) filtered = filtered.Where(log => log.type != LogType.Debug);
+        if (!showError) filtered = filtered.Where(log => log.type != LogType.Error);
+        if (!showId0) filtered = filtered.Where(log => log.eventId?.Id != 0);
+
+        // Text filters
+        if (!string.IsNullOrEmpty(_logsFilterMethod))
+            filtered = filtered.Where(log => log.method.Contains(_logsFilterMethod, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrEmpty(_logsFilterMessage))
+            filtered = filtered.Where(log => log.message.Contains(_logsFilterMessage, StringComparison.OrdinalIgnoreCase));
+        if (!string.IsNullOrEmpty(_logsFilterId))
+            filtered = filtered.Where(log => log.eventId != null && log.eventId.Id.ToString().Contains(_logsFilterId));
+
+        var list = filtered.OrderBy(log => log.timeStamp).ToList();
+        var toShow = list.Count > 200 ? list.Skip(list.Count - 200).ToList() : list;
 
         foreach (var log in toShow)
         {
-            var timestamp = log.timeStamp.ToString("HH:mm:ss");
-            var text = $"[{timestamp}] {log.method}: {log.message}";
-            var label = Label(text, w);
-            label.Size = new Vector2(w, 16);
-            label.FontSize = 11;
-            panel.AddNode(label);
+            var hasColor = log.color != Vector4.Zero;
+
+            var methodLabel = Label(log.method, LogColMethod);
+            methodLabel.FontSize = 11;
+            methodLabel.AddTextFlags(TextFlags.WordWrap, TextFlags.MultiLine);
+            methodLabel.Size = new Vector2(LogColMethod, 14);
+            if (hasColor) methodLabel.TextColor = log.color;
+
+            var msgLabel = Label(log.message, LogColMessage);
+            msgLabel.FontSize = 11;
+            msgLabel.AddTextFlags(TextFlags.WordWrap, TextFlags.MultiLine);
+            msgLabel.Size = new Vector2(LogColMessage, 14);
+            if (hasColor) msgLabel.TextColor = log.color;
+
+            // Measure wrapped text height to size the row correctly
+            var methodH = methodLabel.GetTextDrawSize(false).Y;
+            var msgH = msgLabel.GetTextDrawSize(false).Y;
+            var rowH = Math.Max(16f, Math.Max(methodH, msgH) + 2);
+
+            methodLabel.Size = new Vector2(LogColMethod, rowH);
+            msgLabel.Size = new Vector2(LogColMessage, rowH);
+
+            var row = new HorizontalListNode { Size = new Vector2(w, rowH), ItemSpacing = 4 };
+
+            var tsLabel = Label(log.timeStamp.ToString("HH:mm:ss"), LogColTimestamp);
+            tsLabel.FontSize = 11;
+            tsLabel.Size = new Vector2(LogColTimestamp, rowH);
+            if (hasColor) tsLabel.TextColor = log.color;
+            row.AddNode(tsLabel);
+
+            row.AddNode(methodLabel);
+            row.AddNode(msgLabel);
+
+            var idLabel = Label(log.eventId?.Id.ToString() ?? "", LogColId);
+            idLabel.FontSize = 11;
+            idLabel.Size = new Vector2(LogColId, rowH);
+            if (hasColor) idLabel.TextColor = log.color;
+            row.AddNode(idLabel);
+
+            panel.AddNode(row);
         }
 
         if (toShow.Count == 0)
-            panel.AddNode(Label("No log entries.", w));
+            panel.AddNode(Label(Loc.S("No log entries."), w));
 
         panel.RecalculateLayout();
+
+        if (GetJumpToBottom(source))
+            panel.ScrollPosition = int.MaxValue;
     }
 
     // ── LogConfig accessor helpers ───────────────────────────────────────────
@@ -270,6 +348,7 @@ public sealed unsafe partial class NativeConfigWindow
 
     private bool GetShowId0(TextSource source) => source switch
     {
+        TextSource.None                    => _config.logConfig.ShowGeneralId0,
         TextSource.Chat                    => _config.logConfig.ShowChatId0,
         TextSource.AddonTalk               => _config.logConfig.ShowTalkId0,
         TextSource.AddonBattleTalk         => _config.logConfig.ShowBattleTalkId0,
@@ -284,6 +363,7 @@ public sealed unsafe partial class NativeConfigWindow
     {
         switch (source)
         {
+            case TextSource.None:                    _config.logConfig.ShowGeneralId0 = value; break;
             case TextSource.Chat:                    _config.logConfig.ShowChatId0 = value; break;
             case TextSource.AddonTalk:               _config.logConfig.ShowTalkId0 = value; break;
             case TextSource.AddonBattleTalk:         _config.logConfig.ShowBattleTalkId0 = value; break;
@@ -291,6 +371,34 @@ public sealed unsafe partial class NativeConfigWindow
             case TextSource.AddonCutsceneSelectString: _config.logConfig.ShowCutsceneSelectStringId0 = value; break;
             case TextSource.AddonSelectString:       _config.logConfig.ShowSelectStringId0 = value; break;
             case TextSource.Backend:                 _config.logConfig.ShowBackendId0 = value; break;
+        }
+    }
+
+    private bool GetJumpToBottom(TextSource source) => source switch
+    {
+        TextSource.None                    => _config.logConfig.GeneralJumpToBottom,
+        TextSource.Chat                    => _config.logConfig.ChatJumpToBottom,
+        TextSource.AddonTalk               => _config.logConfig.TalkJumpToBottom,
+        TextSource.AddonBattleTalk         => _config.logConfig.BattleTalkJumpToBottom,
+        TextSource.AddonBubble             => _config.logConfig.BubbleJumpToBottom,
+        TextSource.AddonCutsceneSelectString => _config.logConfig.CutsceneSelectStringJumpToBottom,
+        TextSource.AddonSelectString       => _config.logConfig.SelectStringJumpToBottom,
+        TextSource.Backend                 => _config.logConfig.BackendJumpToBottom,
+        _ => true,
+    };
+
+    private void SetJumpToBottom(TextSource source, bool value)
+    {
+        switch (source)
+        {
+            case TextSource.None:                    _config.logConfig.GeneralJumpToBottom = value; break;
+            case TextSource.Chat:                    _config.logConfig.ChatJumpToBottom = value; break;
+            case TextSource.AddonTalk:               _config.logConfig.TalkJumpToBottom = value; break;
+            case TextSource.AddonBattleTalk:         _config.logConfig.BattleTalkJumpToBottom = value; break;
+            case TextSource.AddonBubble:             _config.logConfig.BubbleJumpToBottom = value; break;
+            case TextSource.AddonCutsceneSelectString: _config.logConfig.CutsceneSelectStringJumpToBottom = value; break;
+            case TextSource.AddonSelectString:       _config.logConfig.SelectStringJumpToBottom = value; break;
+            case TextSource.Backend:                 _config.logConfig.BackendJumpToBottom = value; break;
         }
     }
 }

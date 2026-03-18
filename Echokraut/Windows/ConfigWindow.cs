@@ -14,6 +14,7 @@ using Dalamud.Interface.Utility.Raii;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using Echokraut.Helper.Functional;
+using Echokraut.Localization;
 using Echokraut.Services;
 using OtterGui;
 using Dalamud.Plugin;
@@ -42,6 +43,8 @@ public class ConfigWindow : Window, IDisposable
     private readonly FileDialogManager? fileDialogManager;
     private unsafe Camera* camera;
     #region Voice Selection
+    private string _unifiedVoiceSearch = "";
+    private bool _showAdvancedFilters;
     private List<NpcMapData> filteredNpcs = [];
     private bool _updateDataNpcs;
     private bool resetDataNpcs;
@@ -233,7 +236,7 @@ public class ConfigWindow : Window, IDisposable
             case TextSource.None:
                 showDebug = _config.logConfig.ShowGeneralDebugLog;
                 showError = _config.logConfig.ShowGeneralErrorLog;
-                showId0 = true;
+                showId0 = _config.logConfig.ShowGeneralId0;
                 break;
             case TextSource.Chat:
                 showDebug = _config.logConfig.ShowChatDebugLog;
@@ -315,25 +318,25 @@ public class ConfigWindow : Window, IDisposable
             using var tabBar = ImRaii.TabBar("All Settings##EKAllSettingsTabBar");
             if (tabBar)
             {
-                using (var tabItemSettings = ImRaii.TabItem("Settings"))
+                using (var tabItemSettings = ImRaii.TabItem(Loc.S("Settings")))
                 {
                     if (tabItemSettings)
                         DrawSettings();
                 }
 
-                using (var tabItemVoiceSel = ImRaii.TabItem("Voice selection"))
+                using (var tabItemVoiceSel = ImRaii.TabItem(Loc.S("Voice selection")))
                 {
                     if (tabItemVoiceSel)
                         DrawVoiceSelection();
                 }
 
-                using (var tabItemPhonCor = ImRaii.TabItem("Phonetic corrections"))
+                using (var tabItemPhonCor = ImRaii.TabItem(Loc.S("Phonetic corrections")))
                 {
                     if (tabItemPhonCor)
                         DrawPhoneticCorrections();
                 }
 
-                using (var tabItemLogs = ImRaii.TabItem("Logs"))
+                using (var tabItemLogs = ImRaii.TabItem(Loc.S("Logs")))
                 {
                     if (tabItemLogs)
                         DrawLogs();
@@ -342,7 +345,7 @@ public class ConfigWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(Draw), $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
+            _log.Error(nameof(Draw), ex.ToString(), new EKEventId(0, TextSource.None));
         }
     }
 
@@ -354,18 +357,18 @@ public class ConfigWindow : Window, IDisposable
             using var tabBar = ImRaii.TabBar("Settings##EKSettingsTab");
             if (tabBar)
             {
-                using (var tabItemGeneral = ImRaii.TabItem("General"))
+                using (var tabItemGeneral = ImRaii.TabItem(Loc.S("General")))
                 {
                     if (tabItemGeneral)
                     {
                         DrawGeneralSettings();
                         DrawExternalLinkButtons(ImGui.GetContentRegionAvail(), new Vector2(0, 60));
 
-                        if (ImGui.CollapsingHeader("Unrecoverable actions:"))
+                        if (ImGui.CollapsingHeader(Loc.S("Reset Data:")))
                         {
                             if (deleteMappedNpcs)
                             {
-                                if (ImGui.Button("Click again to confirm!##clearnpc"))
+                                if (ImGui.Button($"{Loc.S("Click again to confirm deletion!")}##clearnpc"))
                                 {
                                     deleteMappedNpcs = false;
                                     foreach (NpcMapData npcMapData in
@@ -381,7 +384,7 @@ public class ConfigWindow : Window, IDisposable
                                     _config.Save();
                                 }
                             }
-                            else if (ImGui.Button("Clear mapped npcs##clearnpc") && !deleteMappedNpcs)
+                            else if (ImGui.Button($"{Loc.S("Clear mapped NPCs")}##clearnpc") && !deleteMappedNpcs)
                             {
                                 lastDeleteClick = DateTime.Now;
                                 deleteMappedNpcs = true;
@@ -390,7 +393,7 @@ public class ConfigWindow : Window, IDisposable
                             ImGui.SameLine();
                             if (deleteMappedPlayers)
                             {
-                                if (ImGui.Button("Click again to confirm!##clearplayers"))
+                                if (ImGui.Button($"{Loc.S("Click again to confirm deletion!")}##clearplayers"))
                                 {
                                     deleteMappedPlayers = false;
                                     foreach (NpcMapData playerMapData in
@@ -405,7 +408,7 @@ public class ConfigWindow : Window, IDisposable
                                     _config.Save();
                                 }
                             }
-                            else if (ImGui.Button("Clear mapped players##clearplayers") && !deleteMappedPlayers)
+                            else if (ImGui.Button($"{Loc.S("Clear mapped players")}##clearplayers") && !deleteMappedPlayers)
                             {
                                 lastDeleteClick = DateTime.Now;
                                 deleteMappedPlayers = true;
@@ -414,7 +417,7 @@ public class ConfigWindow : Window, IDisposable
                             ImGui.SameLine();
                             if (deleteMappedBubbles)
                             {
-                                if (ImGui.Button("Click again to confirm!##clearbubblenpc"))
+                                if (ImGui.Button($"{Loc.S("Click again to confirm deletion!")}##clearbubblenpc"))
                                 {
                                     deleteMappedBubbles = false;
                                     foreach (NpcMapData npcMapData in
@@ -430,20 +433,20 @@ public class ConfigWindow : Window, IDisposable
                                     _config.Save();
                                 }
                             }
-                            else if (ImGui.Button("Clear mapped bubbles##clearbubblenpc"))
+                            else if (ImGui.Button($"{Loc.S("Clear mapped bubbles")}##clearbubblenpc"))
                             {
                                 lastDeleteClick = DateTime.Now;
                                 deleteMappedBubbles = true;
                             }
 
-                            if (ImGui.Button("Reload remote mappings##reloadremote"))
+                            if (ImGui.Button($"{Loc.S("Reload remote mappings")}##reloadremote"))
                             {
                                 ReloadRemoteMappings();
                             }
 
                         }
                         ImGui.NewLine();
-                        ImGui.TextUnformatted("Available commands:");
+                        ImGui.TextUnformatted(Loc.S("Available commands"));
                         foreach (var commandKey in _commands.CommandKeys)
                         {
                             var command = _commandManager.Commands[commandKey];
@@ -456,37 +459,25 @@ public class ConfigWindow : Window, IDisposable
 
                 using (ImRaii.Disabled(!_config.Enabled))
                 {
-                    using (var tabItemDialogue = ImRaii.TabItem("Dialogue"))
+                    using (var tabItemDialogue = ImRaii.TabItem(Loc.S("Dialogue")))
                     {
                         if (tabItemDialogue)
                             DrawDialogueSettings();
                     }
 
-                    using (var tabItemBDialogue = ImRaii.TabItem("Battle dialogue"))
-                    {
-                        if (tabItemBDialogue)
-                            DrawBattleDialogueSettings();
-                    }
-
-                    using (var tabItemChat = ImRaii.TabItem("Chat"))
+                    using (var tabItemChat = ImRaii.TabItem(Loc.S("Chat")))
                     {
                         if (tabItemChat)
                             DrawChatSettings();
                     }
 
-                    using (var tabItemBubbles = ImRaii.TabItem("Bubbles"))
-                    {
-                        if (tabItemBubbles)
-                            DrawBubbleSettings();
-                    }
-
-                    using (var tabItemSaveLoad = ImRaii.TabItem("Save/Load"))
+                    using (var tabItemSaveLoad = ImRaii.TabItem(Loc.S("Storage")))
                     {
                         if (tabItemSaveLoad)
                             DrawSaveSettings();
                     }
 
-                    using (var tabItemBackend = ImRaii.TabItem("Backend"))
+                    using (var tabItemBackend = ImRaii.TabItem(Loc.S("Backend")))
                     {
                         if (tabItemBackend)
                             DrawBackendSettings();
@@ -496,21 +487,21 @@ public class ConfigWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(DrawSettings), $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
+            _log.Error(nameof(DrawSettings), ex.ToString(), new EKEventId(0, TextSource.None));
         }
     }
 
     private void DrawGeneralSettings()
     {
         var enabled = _config.Enabled;
-        if (ImGui.Checkbox("Enabled", ref enabled))
+        if (ImGui.Checkbox(Loc.S("Enabled"), ref enabled))
         {
             _config.Enabled = enabled;
             _config.Save();
         }
 
         var useNativeUi = _config.UseNativeUI;
-        if (ImGui.Checkbox("Use native FFXIV UI", ref useNativeUi))
+        if (ImGui.Checkbox(Loc.S("Use native FFXIV UI"), ref useNativeUi))
         {
             _config.UseNativeUI = useNativeUi;
             _config.Save();
@@ -520,31 +511,38 @@ public class ConfigWindow : Window, IDisposable
         using (ImRaii.Disabled(!enabled))
         {
             var generateBySentence = _config.GenerateBySentence;
-            if (ImGui.Checkbox("Generate text per sentence instead of all at once(shorter sentences may sound weird, only needed if using CPU for inference)", ref generateBySentence))
+            if (ImGui.Checkbox(Loc.S("Generate per sentence (shorter latency, recommended for CPU inference)"), ref generateBySentence))
             {
                 _config.GenerateBySentence = generateBySentence;
                 _config.Save();
             }
             
             var removeStutters = _config.RemoveStutters;
-            if (ImGui.Checkbox("Remove stutters", ref removeStutters))
+            if (ImGui.Checkbox(Loc.S("Remove stutters"), ref removeStutters))
             {
                 _config.RemoveStutters = removeStutters;
                 _config.Save();
             }
 
             var hideUiInCutscenes = _config.HideUiInCutscenes;
-            if (ImGui.Checkbox("Hide UI in Cutscenes", ref hideUiInCutscenes))
+            if (ImGui.Checkbox(Loc.S("Hide UI in cutscenes"), ref hideUiInCutscenes))
             {
                 _config.HideUiInCutscenes = hideUiInCutscenes;
                 _config.Save();
                 _pluginInterface.UiBuilder.DisableCutsceneUiHide = !hideUiInCutscenes;
             }
             ImGui.NewLine();
-            if (ImGui.CollapsingHeader("Experimental options:"))
+            var removePunctuation = _config.RemovePunctuation;
+            if (ImGui.Checkbox(Loc.S("Remove punctuation (may reduce speech hallucinations)"), ref removePunctuation))
+            {
+                _config.RemovePunctuation = removePunctuation;
+                _config.Save();
+            }
+
+            if (ImGui.CollapsingHeader(Loc.S("In-Game Controls:")))
             {
                 var showExtraOptionsInDialogue = _config.ShowExtraOptionsInDialogue;
-                if (ImGui.Checkbox("Shows Pause/Resume, Stop/Play and Mute buttons below the text in dialogues",
+                if (ImGui.Checkbox(Loc.S("Show Play/Pause, Stop and Mute buttons in dialogue"),
                                    ref showExtraOptionsInDialogue))
                 {
                     _config.ShowExtraOptionsInDialogue = showExtraOptionsInDialogue;
@@ -554,19 +552,12 @@ public class ConfigWindow : Window, IDisposable
                 using (ImRaii.Disabled(!showExtraOptionsInDialogue))
                 {
                     var showExtraExtraOptionsInDialogue = _config.ShowExtraExtraOptionsInDialogue;
-                    if (ImGui.Checkbox("Shows even more options below the text in dialogues",
+                    if (ImGui.Checkbox(Loc.S("Show extended options (voice selector, auto-advance)"),
                                        ref showExtraExtraOptionsInDialogue))
                     {
                         _config.ShowExtraExtraOptionsInDialogue = showExtraExtraOptionsInDialogue;
                         _config.Save();
                     }
-                }
-            
-                var removePunctuation = _config.RemovePunctuation;
-                if (ImGui.Checkbox("Remove punctuation from the text (Experimental – may reduce end-of-speech hallucinations)", ref removePunctuation))
-                {
-                    _config.RemovePunctuation = removePunctuation;
-                    _config.Save();
                 }
             }
         }
@@ -575,7 +566,7 @@ public class ConfigWindow : Window, IDisposable
     private void DrawDialogueSettings()
     {
         var voiceDialog = _config.VoiceDialogue;
-        if (ImGui.Checkbox("Voice dialog", ref voiceDialog))
+        if (ImGui.Checkbox(Loc.S("Voice dialogue"), ref voiceDialog))
         {
             _config.VoiceDialogue = voiceDialog;
             _config.Save();
@@ -584,7 +575,7 @@ public class ConfigWindow : Window, IDisposable
         using (ImRaii.Disabled(!voiceDialog))
         {
             var voiceDialogueIn3D = _config.VoiceDialogueIn3D;
-            if (ImGui.Checkbox("Voice dialogue in 3D Space", ref voiceDialogueIn3D))
+            if (ImGui.Checkbox(Loc.S("Voice dialogue in 3D space"), ref voiceDialogueIn3D))
             {
                 _config.VoiceDialogueIn3D = voiceDialogueIn3D;
                 _config.Save();
@@ -593,7 +584,7 @@ public class ConfigWindow : Window, IDisposable
             if (voiceDialogueIn3D)
             {
                 var voiceBubbleAudibleRange = _config.Voice3DAudibleRange;
-                if (ImGui.SliderFloat("3D Space audible dropoff (shared setting), higher = lesser range, 0 = on player", ref voiceBubbleAudibleRange, 0f, 1f))
+                if (ImGui.SliderFloat(Loc.S("3D audible range (shared) — higher = shorter range, 0 = on player"), ref voiceBubbleAudibleRange, 0f, 1f))
                 {
                     _config.Voice3DAudibleRange = voiceBubbleAudibleRange;
                     _config.Save();
@@ -604,45 +595,56 @@ public class ConfigWindow : Window, IDisposable
         }
 
         var voicePlayerChoicesCutscene = _config.VoicePlayerChoicesCutscene;
-        if (ImGui.Checkbox("Voice player choices in cutscene", ref voicePlayerChoicesCutscene))
+        if (ImGui.Checkbox(Loc.S("Voice player choices in cutscenes"), ref voicePlayerChoicesCutscene))
         {
             _config.VoicePlayerChoicesCutscene = voicePlayerChoicesCutscene;
             _config.Save();
         }
 
         var voicePlayerChoices = _config.VoicePlayerChoices;
-        if (ImGui.Checkbox("Voice player choices outside of cutscene", ref voicePlayerChoices))
+        if (ImGui.Checkbox(Loc.S("Voice player choices outside cutscenes"), ref voicePlayerChoices))
         {
             _config.VoicePlayerChoices = voicePlayerChoices;
             _config.Save();
         }
 
         var cancelAdvance = _config.CancelSpeechOnTextAdvance;
-        if (ImGui.Checkbox("Cancel voice on text advance", ref cancelAdvance))
+        if (ImGui.Checkbox(Loc.S("Cancel voice on text advance"), ref cancelAdvance))
         {
             _config.CancelSpeechOnTextAdvance = cancelAdvance;
             _config.Save();
         }
 
         var autoAdvanceOnSpeechCompletion = _config.AutoAdvanceTextAfterSpeechCompleted;
-        if (ImGui.Checkbox("Click dialogue window after speech completion", ref autoAdvanceOnSpeechCompletion))
+        if (ImGui.Checkbox(Loc.S("Auto-advance dialogue after speech completes"), ref autoAdvanceOnSpeechCompletion))
         {
             _config.AutoAdvanceTextAfterSpeechCompleted = autoAdvanceOnSpeechCompletion;
             _config.Save();
         }
 
         var voiceRetainers = _config.VoiceRetainers;
-        if (ImGui.Checkbox("Voice retainer dialogues", ref voiceRetainers))
+        if (ImGui.Checkbox(Loc.S("Voice retainer dialogue"), ref voiceRetainers))
         {
             _config.VoiceRetainers = voiceRetainers;
             _config.Save();
+        }
+
+        ImGui.NewLine();
+        if (ImGui.CollapsingHeader(Loc.S("Battle Dialogue")))
+        {
+            DrawBattleDialogueSettings();
+        }
+
+        if (ImGui.CollapsingHeader(Loc.S("NPC Bubbles")))
+        {
+            DrawBubbleSettings();
         }
     }
 
     private void DrawBattleDialogueSettings()
     {
         var voiceBattleDialog = _config.VoiceBattleDialogue;
-        if (ImGui.Checkbox("Voice battle dialog", ref voiceBattleDialog))
+        if (ImGui.Checkbox(Loc.S("Voice battle dialogue"), ref voiceBattleDialog))
         {
             _config.VoiceBattleDialogue = voiceBattleDialog;
             _config.Save();
@@ -651,7 +653,7 @@ public class ConfigWindow : Window, IDisposable
         using (ImRaii.Disabled(!voiceBattleDialog))
         {
             var voiceBattleDialogQueued = _config.VoiceBattleDialogQueued;
-            if (ImGui.Checkbox("Voice battle dialog in a queue", ref voiceBattleDialogQueued))
+            if (ImGui.Checkbox(Loc.S("Queue battle dialogue"), ref voiceBattleDialogQueued))
             {
                 _config.VoiceBattleDialogQueued = voiceBattleDialogQueued;
                 _config.Save();
@@ -664,7 +666,7 @@ public class ConfigWindow : Window, IDisposable
         var backends = Enum.GetValues<TTSBackends>().ToArray();
         var backendsDisplay = backends.Select(b => b.ToString()).ToArray();
         var presetIndex = Enum.GetValues<TTSBackends>().ToList().IndexOf(_config.BackendSelection);
-        if (ImGui.Combo($"Select Backend##EKCBoxBackend", ref presetIndex, backendsDisplay, backendsDisplay.Length))
+        if (ImGui.Combo($"{Loc.S("Select Backend")}##EKCBoxBackend", ref presetIndex, backendsDisplay, backendsDisplay.Length))
         {
             var backendSelection = backends[presetIndex];
             _config.BackendSelection = backendSelection;
@@ -681,13 +683,13 @@ public class ConfigWindow : Window, IDisposable
     private void DrawSaveSettings()
     {
         var loadLocalFirst = _config.LoadFromLocalFirst;
-        if (ImGui.Checkbox("Search audio locally first before generating", ref loadLocalFirst))
+        if (ImGui.Checkbox(Loc.S("Search for audio locally before generating"), ref loadLocalFirst))
         {
             _config.LoadFromLocalFirst = loadLocalFirst;
             _config.Save();
         }
         var saveLocally = _config.SaveToLocal;
-        if (ImGui.Checkbox("Save generated audio locally", ref saveLocally))
+        if (ImGui.Checkbox(Loc.S("Save generated audio locally"), ref saveLocally))
         {
             _config.SaveToLocal = saveLocally;
             _config.Save();
@@ -696,7 +698,7 @@ public class ConfigWindow : Window, IDisposable
         using (ImRaii.Disabled(!saveLocally))
         {
             var createMissingLocalSave = _config.CreateMissingLocalSaveLocation;
-            if (ImGui.Checkbox("Create directory if not existing", ref createMissingLocalSave))
+            if (ImGui.Checkbox(Loc.S("Create directory if missing"), ref createMissingLocalSave))
             {
                 _config.CreateMissingLocalSaveLocation = createMissingLocalSave;
                 _config.Save();
@@ -713,14 +715,14 @@ public class ConfigWindow : Window, IDisposable
             }
             ImGui.SameLine();
             if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Folder.ToIconString()}##import", new Vector2(25, 25),
-                    "Select a directory via dialog.", false, true))
+                    Loc.S("Select a directory via dialog."), false, true))
             {
                 var startDir = _config.LocalSaveLocation.Length > 0 && Directory.Exists(_config.LocalSaveLocation)
                 ? _config.LocalSaveLocation
                     : null;
 
-                _log.Debug(nameof(DrawSaveSettings), $"Connection test result: {startDir}", new EKEventId(0, TextSource.None));
-                fileDialogManager!.OpenFolderDialog("Choose audio files directory", (b, s) =>
+                _log.Debug(nameof(DrawSaveSettings), $"Opening folder dialog, startDir={startDir}", new EKEventId(0, TextSource.None));
+                fileDialogManager!.OpenFolderDialog(Loc.S("Choose audio files directory"), (b, s) =>
                 {
                     if (!b)
                         return;
@@ -735,11 +737,11 @@ public class ConfigWindow : Window, IDisposable
 
         ImGui.NewLine();
 
-        if (ImGui.CollapsingHeader("Google Drive:"))
+        if (ImGui.CollapsingHeader(Loc.S("Google Drive")))
         {
             var googleDriveRequestVoiceLine = _config.GoogleDriveRequestVoiceLine;
-            ImGui.LabelText("", "This setting may tremendously help in the future. Please consider helping out.");
-            if (ImGui.Checkbox("Send any dialogue line to my (Ren Nagasaki's) Share for a full database of needed voice lines.", ref googleDriveRequestVoiceLine))
+            ImGui.LabelText("", Loc.S("Helping build a voice line database benefits everyone. Please consider opting in."));
+            if (ImGui.Checkbox(Loc.S("Send dialogue lines to Ren Nagasaki's share for a voice line database"), ref googleDriveRequestVoiceLine))
             {
                 _config.GoogleDriveRequestVoiceLine = googleDriveRequestVoiceLine;
                 _config.Save();
@@ -752,7 +754,7 @@ public class ConfigWindow : Window, IDisposable
             using (ImRaii.Disabled(!saveLocally))
             {
                 var googleDriveUpload = _config.GoogleDriveUpload;
-                if (ImGui.Checkbox("Upload to Google Drive (requires 'Save generated audio locally')", ref googleDriveUpload))
+                if (ImGui.Checkbox(Loc.S("Upload to Google Drive (requires local save)"), ref googleDriveUpload))
                 {
                     _config.GoogleDriveUpload = googleDriveUpload;
                     _config.Save();
@@ -760,7 +762,7 @@ public class ConfigWindow : Window, IDisposable
             }
 
             var googleDriveDownload = _config.GoogleDriveDownload;
-            if (ImGui.Checkbox("Download from Google Drive Share", ref googleDriveDownload))
+            if (ImGui.Checkbox(Loc.S("Download from Google Drive share"), ref googleDriveDownload))
             {
                 _config.GoogleDriveDownload = googleDriveDownload;
                 _config.Save();
@@ -769,14 +771,14 @@ public class ConfigWindow : Window, IDisposable
             using (ImRaii.Disabled(!googleDriveDownload))
             {
                 var googleDriveDownloadPeriodically = _config.GoogleDriveDownloadPeriodically;
-                if (ImGui.Checkbox("Download periodically (every 60 minutes, only updating/downloading new files)",
+                if (ImGui.Checkbox(Loc.S("Download periodically (every 60 min, new files only)"),
                                    ref googleDriveDownloadPeriodically))
                 {
                     _config.GoogleDriveDownloadPeriodically = googleDriveDownloadPeriodically;
                     _config.Save();
                 }
 
-                ImGui.LabelText("", "Google Drive share link");
+                ImGui.LabelText("", Loc.S("Google Drive share link"));
                 var googleDriveShareLink = _config.GoogleDriveShareLink;
                 if (ImGui.InputText($"##EKGDShareLink", ref googleDriveShareLink, 100))
                 {
@@ -784,7 +786,7 @@ public class ConfigWindow : Window, IDisposable
                     _config.Save();
                 }
                 ImGui.SameLine();
-                if (ImGui.Button("Download now##EKGDDownloadNow"))
+                if (ImGui.Button($"{Loc.S("Download now")}##EKGDDownloadNow"))
                 {
                     _googleDrive.DownloadFolder(_config.LocalSaveLocation, _config.GoogleDriveShareLink);
                 }
@@ -795,7 +797,7 @@ public class ConfigWindow : Window, IDisposable
     private unsafe void DrawBubbleSettings()
     {
         var voiceBubbles = _config.VoiceBubble;
-        if (ImGui.Checkbox("Voice NPC Bubbles", ref voiceBubbles))
+        if (ImGui.Checkbox(Loc.S("Voice NPC bubbles"), ref voiceBubbles))
         {
             _config.VoiceBubble = voiceBubbles;
             _config.Save();
@@ -804,21 +806,21 @@ public class ConfigWindow : Window, IDisposable
         using (ImRaii.Disabled(!voiceBubbles))
         {
             var voiceBubblesInCity = _config.VoiceBubblesInCity;
-            if (ImGui.Checkbox("Voice NPC Bubbles in City", ref voiceBubblesInCity))
+            if (ImGui.Checkbox(Loc.S("Voice NPC bubbles in cities"), ref voiceBubblesInCity))
             {
                 _config.VoiceBubblesInCity = voiceBubblesInCity;
                 _config.Save();
             }
 
             var voiceSourceCam = _config.VoiceSourceCam;
-            if (ImGui.Checkbox("Voice Bubbles with camera as center", ref voiceSourceCam))
+            if (ImGui.Checkbox(Loc.S("Use camera as 3D sound source"), ref voiceSourceCam))
             {
                 _config.VoiceSourceCam = voiceSourceCam;
                 _config.Save();
             }
 
             var voiceBubbleAudibleRange = _config.Voice3DAudibleRange;
-            if (ImGui.SliderFloat("3D Space audible dropoff (shared setting), higher = lesser range, 0 = on player", ref voiceBubbleAudibleRange, 0f, 1f))
+            if (ImGui.SliderFloat(Loc.S("3D audible range (shared) — higher = shorter range, 0 = on player"), ref voiceBubbleAudibleRange, 0f, 1f))
             {
                 _config.Voice3DAudibleRange = voiceBubbleAudibleRange;
                 _config.Save();
@@ -834,7 +836,7 @@ public class ConfigWindow : Window, IDisposable
             if (_config.VoiceSourceCam)
                 position = camera->CameraBase.SceneCamera.Position;
 
-            if (ImGui.CollapsingHeader("3D space debug info##3DSpaceDebug"))
+            if (ImGui.CollapsingHeader($"{Loc.S("3D Space Debug Info")}##3DSpaceDebug"))
             {
                 ImGui.TextUnformatted($"Pos-X: {position.X}");
                 ImGui.TextUnformatted($"Pos-Y: {position.Y}");
@@ -854,7 +856,7 @@ public class ConfigWindow : Window, IDisposable
     private void DrawChatSettings()
     {
         var voiceChat = _config.VoiceChat;
-        if (ImGui.Checkbox("Voice Chat", ref voiceChat))
+        if (ImGui.Checkbox(Loc.S("Voice chat"), ref voiceChat))
         {
             _config.VoiceChat = voiceChat;
             _config.Save();
@@ -865,20 +867,20 @@ public class ConfigWindow : Window, IDisposable
             if (voiceChat)
             {
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                ImGui.TextUnformatted("Detect Language is the service used for automatically detecting the language of the written chat, it's not perfect but works well. To register for free visit: ");
+                ImGui.TextUnformatted(Loc.S("DetectLanguage automatically detects the language of chat messages. Register for a free API key at:"));
                 ImGui.SameLine();
-                if (ImGui.Button("DetectLanguage.com"))
+                if (ImGui.Button(Loc.S("DetectLanguage.com")))
                     System.Diagnostics.Process.Start("https://detectlanguage.com/");
             }
             var voiceChatLanguageApiKey = _config.VoiceChatLanguageAPIKey;
-            if (ImGui.InputText("Detect Language API Key", ref voiceChatLanguageApiKey, 32))
+            if (ImGui.InputText(Loc.S("Detect Language API Key"), ref voiceChatLanguageApiKey, 32))
             {
                 _config.VoiceChatLanguageAPIKey = voiceChatLanguageApiKey;
                 _config.Save();
             }
 
             var voiceChatIn3D = _config.VoiceChatIn3D;
-            if (ImGui.Checkbox("Voice Chat in 3D Space", ref voiceChatIn3D))
+            if (ImGui.Checkbox(Loc.S("Voice chat in 3D space"), ref voiceChatIn3D))
             {
                 _config.VoiceChatIn3D = voiceChatIn3D;
                 _config.Save();
@@ -887,7 +889,7 @@ public class ConfigWindow : Window, IDisposable
             if (voiceChatIn3D)
             {
                 var voiceBubbleAudibleRange = _config.Voice3DAudibleRange;
-                if (ImGui.SliderFloat("3D Space audible dropoff (shared setting), higher = lesser range, 0 = on player", ref voiceBubbleAudibleRange, 0f, 1f))
+                if (ImGui.SliderFloat(Loc.S("3D audible range (shared) — higher = shorter range, 0 = on player"), ref voiceBubbleAudibleRange, 0f, 1f))
                 {
                     _config.Voice3DAudibleRange = voiceBubbleAudibleRange;
                     _config.Save();
@@ -897,77 +899,77 @@ public class ConfigWindow : Window, IDisposable
             }
 
             var voiceChatPlayer = _config.VoiceChatPlayer;
-            if (ImGui.Checkbox("Voice your own Chat", ref voiceChatPlayer))
+            if (ImGui.Checkbox(Loc.S("Voice your own chat"), ref voiceChatPlayer))
             {
                 _config.VoiceChatPlayer = voiceChatPlayer;
                 _config.Save();
             }
 
             var voiceChatSay = _config.VoiceChatSay;
-            if (ImGui.Checkbox("Voice say Chat", ref voiceChatSay))
+            if (ImGui.Checkbox(Loc.S("Voice Say"), ref voiceChatSay))
             {
                 _config.VoiceChatSay = voiceChatSay;
                 _config.Save();
             }
 
             var voiceChatYell = _config.VoiceChatYell;
-            if (ImGui.Checkbox("Voice yell Chat", ref voiceChatYell))
+            if (ImGui.Checkbox(Loc.S("Voice Yell"), ref voiceChatYell))
             {
                 _config.VoiceChatYell = voiceChatYell;
                 _config.Save();
             }
 
             var voiceChatShout = _config.VoiceChatShout;
-            if (ImGui.Checkbox("Voice shout Chat", ref voiceChatShout))
+            if (ImGui.Checkbox(Loc.S("Voice Shout"), ref voiceChatShout))
             {
                 _config.VoiceChatShout = voiceChatShout;
                 _config.Save();
             }
 
             var voiceChatFreeCompany = _config.VoiceChatFreeCompany;
-            if (ImGui.Checkbox("Voice free company Chat", ref voiceChatFreeCompany))
+            if (ImGui.Checkbox(Loc.S("Voice Free Company"), ref voiceChatFreeCompany))
             {
                 _config.VoiceChatFreeCompany = voiceChatFreeCompany;
                 _config.Save();
             }
 
             var voiceChatTell = _config.VoiceChatTell;
-            if (ImGui.Checkbox("Voice tell Chat", ref voiceChatTell))
+            if (ImGui.Checkbox(Loc.S("Voice Tell"), ref voiceChatTell))
             {
                 _config.VoiceChatTell = voiceChatTell;
                 _config.Save();
             }
 
             var voiceChatParty = _config.VoiceChatParty;
-            if (ImGui.Checkbox("Voice party Chat", ref voiceChatParty))
+            if (ImGui.Checkbox(Loc.S("Voice Party"), ref voiceChatParty))
             {
                 _config.VoiceChatParty = voiceChatParty;
                 _config.Save();
             }
 
             var voiceChatAlliance = _config.VoiceChatAlliance;
-            if (ImGui.Checkbox("Voice alliance Chat", ref voiceChatAlliance))
+            if (ImGui.Checkbox(Loc.S("Voice Alliance"), ref voiceChatAlliance))
             {
                 _config.VoiceChatAlliance = voiceChatAlliance;
                 _config.Save();
             }
 
             var voiceChatNoviceNetwork = _config.VoiceChatNoviceNetwork;
-            if (ImGui.Checkbox("Voice novice network Chat", ref voiceChatNoviceNetwork))
+            if (ImGui.Checkbox(Loc.S("Voice Novice Network"), ref voiceChatNoviceNetwork))
             {
                 _config.VoiceChatNoviceNetwork = voiceChatNoviceNetwork;
                 _config.Save();
             }
 
             var voiceChatLinkshell = _config.VoiceChatLinkshell;
-            if (ImGui.Checkbox("Voice Linkshells", ref voiceChatLinkshell))
+            if (ImGui.Checkbox(Loc.S("Voice linkshells"), ref voiceChatLinkshell))
             {
                 _config.VoiceChatLinkshell = voiceChatLinkshell;
                 _config.Save();
             }
 
             var voiceChatCrossLinkshell = _config.VoiceChatCrossLinkshell;
-            if (ImGui.Checkbox("Voice Cross Linkshells", ref voiceChatCrossLinkshell))
+            if (ImGui.Checkbox(Loc.S("Voice cross-world linkshells"), ref voiceChatCrossLinkshell))
             {
                 _config.VoiceChatCrossLinkshell = voiceChatCrossLinkshell;
                 _config.Save();
@@ -981,10 +983,21 @@ public class ConfigWindow : Window, IDisposable
     {
         try
         {
+            ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+            if (ImGui.InputTextWithHint("##EKUnifiedVoiceSearch", Loc.S("Search..."), ref _unifiedVoiceSearch, 80))
+            {
+                _updateDataNpcs = true;
+                _updateDataPlayers = true;
+                _updateDataBubbles = true;
+                _updateDataVoices = true;
+            }
+
+            _showAdvancedFilters = ImGui.CollapsingHeader(Loc.S("Advanced Filters"));
+
             using var tabBar = ImRaii.TabBar("Voices##EKVoicesTab");
             if (tabBar)
             {
-                using (var tabItemNPCs = ImRaii.TabItem("NPCs"))
+                using (var tabItemNPCs = ImRaii.TabItem(Loc.S("NPCs")))
                 {
                     if (tabItemNPCs)
                     {
@@ -994,7 +1007,7 @@ public class ConfigWindow : Window, IDisposable
                     }
                 }
 
-                using (var tabItemPlayers = ImRaii.TabItem("Players"))
+                using (var tabItemPlayers = ImRaii.TabItem(Loc.S("Players")))
                 {
                     if (tabItemPlayers)
                     {
@@ -1004,7 +1017,7 @@ public class ConfigWindow : Window, IDisposable
                     }
                 }
 
-                using (var tabItemBubbles = ImRaii.TabItem("Bubbles"))
+                using (var tabItemBubbles = ImRaii.TabItem(Loc.S("Bubbles")))
                 {
                     if (tabItemBubbles)
                     {
@@ -1015,7 +1028,7 @@ public class ConfigWindow : Window, IDisposable
                     }
                 }
 
-                using (var tabItemVoices = ImRaii.TabItem("Voices"))
+                using (var tabItemVoices = ImRaii.TabItem(Loc.S("Voices")))
                 {
                     if (tabItemVoices)
                     {
@@ -1026,7 +1039,7 @@ public class ConfigWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(DrawVoiceSelection), $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
+            _log.Error(nameof(DrawVoiceSelection), ex.ToString(), new EKEventId(0, TextSource.None));
         }
     }
 
@@ -1034,7 +1047,7 @@ public class ConfigWindow : Window, IDisposable
     {
         var voiceArr = _config.EchokrautVoices.ConvertAll(p => p.ToString()).ToArray();
         var defaultVoiceIndex = _config.EchokrautVoices.FindIndex(p => p.IsDefault);
-        if (ImGui.Combo($"Default Voice:##EKDefaultVoice", ref defaultVoiceIndex, voiceArr, voiceArr.Length))
+        if (ImGui.Combo($"{Loc.S("Default Voice:")}##EKDefaultVoice", ref defaultVoiceIndex, voiceArr, voiceArr.Length))
         {
             // Clear all defaults
             foreach (var voice in _config.EchokrautVoices)
@@ -1053,6 +1066,17 @@ public class ConfigWindow : Window, IDisposable
             resetDataVoices = false;
         }
 
+        // Apply unified search filter
+        if (_unifiedVoiceSearch.Length > 0 && _updateDataVoices)
+        {
+            var search = _unifiedVoiceSearch.ToLower();
+            filteredVoices = filteredVoices.FindAll(p =>
+                p.VoiceName.ToLower().Contains(search) ||
+                p.Note.ToLower().Contains(search) ||
+                p.AllowedGenders.Any(g => g.ToString().ToLower().Contains(search)) ||
+                p.AllowedRaces.Any(r => r.ToString().ToLower().Contains(search)));
+        }
+
         using var child = ImRaii.Child("VoicesChild");
         if (child)
         {
@@ -1062,17 +1086,20 @@ public class ConfigWindow : Window, IDisposable
                                            ImGuiTableFlags.ScrollY);
             if (table)
             {
-                ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
+                ImGui.TableSetupScrollFreeze(0, _showAdvancedFilters ? 2 : 1);
                 ImGui.TableSetupColumn("##Play", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
                 ImGui.TableSetupColumn("##Stop", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
-                ImGui.TableSetupColumn("Use##Enabled", ImGuiTableColumnFlags.WidthFixed, 35);
-                ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthFixed, 200);
-                ImGui.TableSetupColumn("Note", ImGuiTableColumnFlags.WidthStretch, 300);
-                ImGui.TableSetupColumn("Options##Enabled", ImGuiTableColumnFlags.WidthFixed, 120);
-                ImGui.TableSetupColumn("Genders", ImGuiTableColumnFlags.WidthFixed, 100);
-                ImGui.TableSetupColumn("Races", ImGuiTableColumnFlags.WidthFixed, 320);
-                ImGui.TableSetupColumn("Volume", ImGuiTableColumnFlags.WidthFixed, 75);
+                ImGui.TableSetupColumn($"{Loc.S("Use")}##Enabled", ImGuiTableColumnFlags.WidthFixed, 35);
+                ImGui.TableSetupColumn(Loc.S("Name"), ImGuiTableColumnFlags.WidthFixed, 200);
+                ImGui.TableSetupColumn(Loc.S("Note"), ImGuiTableColumnFlags.WidthStretch, 300);
+                ImGui.TableSetupColumn($"{Loc.S("Options")}##Enabled", ImGuiTableColumnFlags.WidthFixed, 120);
+                ImGui.TableSetupColumn(Loc.S("Genders"), ImGuiTableColumnFlags.WidthFixed, 100);
+                ImGui.TableSetupColumn(Loc.S("Races"), ImGuiTableColumnFlags.WidthFixed, 320);
+                ImGui.TableSetupColumn(Loc.S("Volume"), ImGuiTableColumnFlags.WidthFixed, 75);
                 ImGui.TableHeadersRow();
+
+                if (_showAdvancedFilters)
+                {
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
                 ImGui.TableNextColumn();
@@ -1112,6 +1139,8 @@ public class ConfigWindow : Window, IDisposable
                     _updateDataVoices = true;
                     resetDataVoices = true;
                 }
+                } // end _showAdvancedFilters
+
                 var sortSpecs = ImGui.TableGetSortSpecs();
                 if (sortSpecs.SpecsDirty)
                 {
@@ -1165,13 +1194,13 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                    if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##testvoice{voice}", new Vector2(25, 25), "Test Voice", false, true))
+                    if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##testvoice{voice}", new Vector2(25, 25), Loc.S("Test Voice"), false, true))
                     {
                         BackendTestVoice(voice);
                     }
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                    if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Stop.ToIconString()}##stopvoice{voice}", new Vector2(25, 25), "Stop Voice", false, true))
+                    if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Stop.ToIconString()}##stopvoice{voice}", new Vector2(25, 25), Loc.S("Stop Voice"), false, true))
                     {
                         BackendStopVoice();
                     }
@@ -1195,7 +1224,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     var headerText = voice.UseAsRandom ? "Random - " : "";
                     headerText += voice.IsChildVoice ? "Child - " : "";
-                    headerText = headerText.Length >= 3 ? headerText.Substring(0, headerText.Length - 3) : "None";
+                    headerText = headerText.Length >= 3 ? headerText.Substring(0, headerText.Length - 3) : Loc.S("None");
                     if (ImGui.CollapsingHeader($"{headerText}##EKVoiceOptions{voice}"))
                     {
                         ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1206,7 +1235,7 @@ public class ConfigWindow : Window, IDisposable
                                 ImGui.TableSetupColumn($"##{voice}options", ImGuiTableColumnFlags.WidthFixed, 120);
                                 ImGui.TableNextColumn();
                                 var useAsRandom = voice.UseAsRandom;
-                                if (ImGui.Checkbox($"Random NPC##EKVoiceUseAsRandom{voice}", ref useAsRandom))
+                                if (ImGui.Checkbox($"{Loc.S("Random NPC")}##EKVoiceUseAsRandom{voice}", ref useAsRandom))
                                 {
                                     voice.UseAsRandom = useAsRandom;
                                     _config.Save();
@@ -1215,7 +1244,7 @@ public class ConfigWindow : Window, IDisposable
                                 ImGui.TableNextRow();
                                 ImGui.TableNextColumn();
                                 var isChildVoice = voice.IsChildVoice;
-                                if (ImGui.Checkbox($"Child Voice##EKVoiceIsChildVoice{voice}", ref isChildVoice))
+                                if (ImGui.Checkbox($"{Loc.S("Child Voice")}##EKVoiceIsChildVoice{voice}", ref isChildVoice))
                                 {
                                     voice.IsChildVoice = isChildVoice;
                                     _config.Save();
@@ -1228,7 +1257,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     headerText = "";
                     voice.AllowedGenders.OrderBy(p => p.ToString()).ToList().ForEach(p => headerText += $"{p} - ");
-                    headerText = headerText.Length >= 3 ? headerText.Substring(0, headerText.Length - 3) : "None";
+                    headerText = headerText.Length >= 3 ? headerText.Substring(0, headerText.Length - 3) : Loc.S("None");
                     if (ImGui.CollapsingHeader($"{headerText}##EKVoiceAllowedGenders{voice}"))
                     {
                         using (var tableGenders = ImRaii.Table($"##GendersTable{voice}", 1))
@@ -1237,7 +1266,7 @@ public class ConfigWindow : Window, IDisposable
                             {
                                 ImGui.TableSetupColumn($"##{voice}gender", ImGuiTableColumnFlags.WidthFixed, 100);
                                 ImGui.TableNextColumn();
-                                if (ImGui.Button($"Reset##EKVoiceAllowedGender{voice}Reset"))
+                                if (ImGui.Button($"{Loc.S("Reset")}##EKVoiceAllowedGender{voice}Reset"))
                                 {
                                     _npcData.ReSetVoiceGenders(voice);
                                 }
@@ -1274,7 +1303,7 @@ public class ConfigWindow : Window, IDisposable
                     if (headerText.Length >= 3)
                         headerText = headerText.Substring(0, headerText.Length - 3);
                     else
-                        headerText = "None";
+                        headerText = Loc.S("None");
                     if (ImGui.CollapsingHeader($"{headerText}##EKVoiceAllowedRaces{voice}"))
                     {
                         using (var tableRaces = ImRaii.Table($"##Racestable{voice}", 3))
@@ -1287,7 +1316,7 @@ public class ConfigWindow : Window, IDisposable
                                 ImGui.TableNextColumn();
 
                                 var allRaces = voice.AllowedRaces.Count == Constants.RACELIST.Count;
-                                if (ImGui.Checkbox($"All##EKVoiceAllowedRace{voice}All", ref allRaces))
+                                if (ImGui.Checkbox($"{Loc.S("All")}##EKVoiceAllowedRace{voice}All", ref allRaces))
                                 {
                                     if (allRaces)
                                     {
@@ -1306,7 +1335,7 @@ public class ConfigWindow : Window, IDisposable
 
                                 ImGui.TableNextColumn();
                                 ImGui.TableNextColumn();
-                                if (ImGui.Button($"Reset##EKVoiceAllowedRace{voice}Reset"))
+                                if (ImGui.Button($"{Loc.S("Reset")}##EKVoiceAllowedRace{voice}Reset"))
                                 {
                                     _npcData.ReSetVoiceRaces(voice);
                                 }
@@ -1373,22 +1402,36 @@ public class ConfigWindow : Window, IDisposable
             resetData = false;
         }
 
+        // Apply unified search filter
+        if (_unifiedVoiceSearch.Length > 0 && updateData)
+        {
+            var search = _unifiedVoiceSearch.ToLower();
+            filteredData = filteredData.FindAll(p =>
+                p.Gender.ToString().ToLower().Contains(search) ||
+                p.Race.ToString().ToLower().Contains(search) ||
+                p.Name.ToLower().Contains(search) ||
+                (p.Voice != null && p.Voice.ToString().ToLower().Contains(search)));
+        }
+
         using var table = ImRaii.Table($"{dataType} Table##{dataType}Table", 11, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY);
         if (table)
         {
-            ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
+            ImGui.TableSetupScrollFreeze(0, _showAdvancedFilters ? 2 : 1);
             ImGui.TableSetupColumn("##Play", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
             ImGui.TableSetupColumn("##Stop", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
-            ImGui.TableSetupColumn("Lock", ImGuiTableColumnFlags.WidthFixed, 40f);
-            ImGui.TableSetupColumn("Use", ImGuiTableColumnFlags.WidthFixed, 35f);
-            ImGui.TableSetupColumn("Gender", ImGuiTableColumnFlags.WidthFixed, 125);
-            ImGui.TableSetupColumn("Race", ImGuiTableColumnFlags.WidthFixed, 125);
-            ImGui.TableSetupColumn("Name", ImGuiTableColumnFlags.WidthFixed, 200);
-            ImGui.TableSetupColumn("Voice", ImGuiTableColumnFlags.WidthStretch, 250);
-            ImGui.TableSetupColumn("Volume", ImGuiTableColumnFlags.WidthFixed, 200f);
+            ImGui.TableSetupColumn(Loc.S("Lock"), ImGuiTableColumnFlags.WidthFixed, 40f);
+            ImGui.TableSetupColumn(Loc.S("Use"), ImGuiTableColumnFlags.WidthFixed, 35f);
+            ImGui.TableSetupColumn(Loc.S("Gender"), ImGuiTableColumnFlags.WidthFixed, 125);
+            ImGui.TableSetupColumn(Loc.S("Race"), ImGuiTableColumnFlags.WidthFixed, 125);
+            ImGui.TableSetupColumn(Loc.S("Name"), ImGuiTableColumnFlags.WidthFixed, 200);
+            ImGui.TableSetupColumn(Loc.S("Voice"), ImGuiTableColumnFlags.WidthStretch, 250);
+            ImGui.TableSetupColumn(Loc.S("Volume"), ImGuiTableColumnFlags.WidthFixed, 200f);
             ImGui.TableSetupColumn($"##{dataType}saves", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25f);
             ImGui.TableSetupColumn($"##{dataType}mapping", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25f);
             ImGui.TableHeadersRow();
+
+            if (_showAdvancedFilters)
+            {
             ImGui.TableNextColumn();
             ImGui.TableNextColumn();
             ImGui.TableNextColumn();
@@ -1429,6 +1472,7 @@ public class ConfigWindow : Window, IDisposable
                 updateData = true;
                 resetData = true;
             }
+            } // end _showAdvancedFilters
 
             var sortSpecs = ImGui.TableGetSortSpecs();
             if (sortSpecs.SpecsDirty || updateData)
@@ -1489,13 +1533,13 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##testvoice{mapData}", new Vector2(25, 25), "Test Voice", false, true))
+                if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##testvoice{mapData}", new Vector2(25, 25), Loc.S("Test Voice"), false, true))
                 {
                     if (mapData.Voice != null) BackendTestVoice(mapData.Voice);
                 }
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Stop.ToIconString()}##stopvoice{mapData}", new Vector2(25, 25), "Stop Voice", false, true))
+                if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Stop.ToIconString()}##stopvoice{mapData}", new Vector2(25, 25), Loc.S("Stop Voice"), false, true))
                 {
                     BackendStopVoice();
                 }
@@ -1602,7 +1646,7 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (ImGuiUtil.DrawDisabledButton(
                             $"✅##del{dataType}saves{mapData.ToString()}",
-                            new Vector2(25, 25), "Click again to confirm deletion!",
+                            new Vector2(25, 25), Loc.S("Click again to confirm deletion!"),
                             false,
                             true
                             )
@@ -1615,7 +1659,7 @@ public class ConfigWindow : Window, IDisposable
                 }
                 else if (ImGuiUtil.DrawDisabledButton(
                              $"{FontAwesomeIcon.TrashAlt.ToIconString()}##del{dataType}saves{mapData.ToString()}",
-                             new Vector2(25, 25), "Will remove all local saved audio files for this character",
+                             new Vector2(25, 25), Loc.S("Will remove all local saved audio files for this character"),
                              false,
                              true) && !deleteSingleAudioData
                          )
@@ -1629,7 +1673,7 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (ImGuiUtil.DrawDisabledButton(
                             $"✅##del{dataType}{mapData.ToString()}",
-                            new Vector2(25, 25), "Click again to confirm deletion!",
+                            new Vector2(25, 25), Loc.S("Click again to confirm deletion!"),
                             false,
                             true
                         )
@@ -1698,8 +1742,8 @@ public class ConfigWindow : Window, IDisposable
             {
                 ImGui.TableSetupScrollFreeze(0, 3); // Make top row always visible
                 ImGui.TableSetupColumn("##delete", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25f);
-                ImGui.TableSetupColumn("Original", ImGuiTableColumnFlags.WidthStretch, 150);
-                ImGui.TableSetupColumn("Corrected", ImGuiTableColumnFlags.WidthStretch, 150);
+                ImGui.TableSetupColumn(Loc.S("Original"), ImGuiTableColumnFlags.WidthStretch, 150);
+                ImGui.TableSetupColumn(Loc.S("Corrected"), ImGuiTableColumnFlags.WidthStretch, 150);
                 ImGui.TableHeadersRow();
                 ImGui.TableNextColumn();
                 ImGui.TableNextColumn();
@@ -1743,7 +1787,7 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Plus.ToIconString()}##addphoncorr", new Vector2(25, 25), "Add phonetic correction", false, true))
+                if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Plus.ToIconString()}##addphoncorr", new Vector2(25, 25), Loc.S("Add phonetic correction"), false, true))
                 {
                     if (!string.IsNullOrWhiteSpace(originalText) && !string.IsNullOrWhiteSpace(correctedText))
                     {
@@ -1773,7 +1817,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                    if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Trash.ToIconString()}##delphoncorr{phoneticCorrection.ToString()}", new Vector2(25, 25), "Remove phonetic correction", false, true))
+                    if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Trash.ToIconString()}##delphoncorr{phoneticCorrection.ToString()}", new Vector2(25, 25), Loc.S("Remove phonetic correction"), false, true))
                     {
                         toBeRemoved = phoneticCorrection;
                     }
@@ -1800,7 +1844,7 @@ public class ConfigWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(DrawPhoneticCorrections), $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
+            _log.Error(nameof(DrawPhoneticCorrections), ex.ToString(), new EKEventId(0, TextSource.None));
         }
     }
     #endregion
@@ -1813,7 +1857,7 @@ public class ConfigWindow : Window, IDisposable
             using var tabBar = ImRaii.TabBar($"Logs##EKLogsTab");
             if (tabBar)
             {
-                using (var tabItemGeneral = ImRaii.TabItem("General"))
+                using (var tabItemGeneral = ImRaii.TabItem(Loc.S("General")))
                 {
                     if (tabItemGeneral)
                     {
@@ -1832,7 +1876,7 @@ public class ConfigWindow : Window, IDisposable
                     }
                 }
 
-                using (var tabItemDialogue = ImRaii.TabItem("Dialogue"))
+                using (var tabItemDialogue = ImRaii.TabItem(Loc.S("Dialogue")))
                 {
                     if (tabItemDialogue)
                     {
@@ -1851,7 +1895,7 @@ public class ConfigWindow : Window, IDisposable
                     }
                 }
 
-                using (var tabItemBDialogue = ImRaii.TabItem("Battle Dialogue"))
+                using (var tabItemBDialogue = ImRaii.TabItem(Loc.S("Battle Dialogue")))
                 {
                     if (tabItemBDialogue)
                     {
@@ -1870,7 +1914,7 @@ public class ConfigWindow : Window, IDisposable
                     }
                 }
 
-                using (var tabItemChat = ImRaii.TabItem("Chat"))
+                using (var tabItemChat = ImRaii.TabItem(Loc.S("Chat")))
                 {
                     if (tabItemChat)
                     {
@@ -1889,7 +1933,7 @@ public class ConfigWindow : Window, IDisposable
                     }
                 }
 
-                using (var tabItemBubbles = ImRaii.TabItem("Bubbles"))
+                using (var tabItemBubbles = ImRaii.TabItem(Loc.S("Bubbles")))
                 {
                     if (tabItemBubbles)
                     {
@@ -1908,7 +1952,7 @@ public class ConfigWindow : Window, IDisposable
                     }
                 }
 
-                using (var tabItemCutChoice = ImRaii.TabItem("Player choice in cutscenes"))
+                using (var tabItemCutChoice = ImRaii.TabItem(Loc.S("Player choice in cutscenes")))
                 {
                     if (tabItemCutChoice)
                     {
@@ -1927,7 +1971,7 @@ public class ConfigWindow : Window, IDisposable
                     }
                 }
 
-                using (var tabItemChoice = ImRaii.TabItem("Player choice"))
+                using (var tabItemChoice = ImRaii.TabItem(Loc.S("Player choice")))
                 {
                     if (tabItemChoice)
                     {
@@ -1946,7 +1990,7 @@ public class ConfigWindow : Window, IDisposable
                     }
                 }
 
-                using (var tabItemChoice = ImRaii.TabItem("Backend"))
+                using (var tabItemChoice = ImRaii.TabItem(Loc.S("Backend")))
                 {
                     if (tabItemChoice)
                     {
@@ -1968,16 +2012,16 @@ public class ConfigWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(DrawLogs), $"Something went wrong: {ex}", new EKEventId(0, TextSource.None));
+            _log.Error(nameof(DrawLogs), ex.ToString(), new EKEventId(0, TextSource.None));
         }
     }
 
     internal void DrawLogTableSettings(TextSource textSource, bool configJumpToBottom, bool configShowDebugLog, bool configShowErrorLog, bool configShowId0, ref bool updateLogs){
-        if (ImGui.CollapsingHeader("Options:"))
+        if (ImGui.CollapsingHeader(Loc.S("Options:")))
         {
             using (ImRaii.Disabled(_log.Updating))
             {
-                if (ImGui.Checkbox("Show debug logs", ref configShowDebugLog))
+                if (ImGui.Checkbox(Loc.S("Show debug logs"), ref configShowDebugLog))
                 {
                     switch (textSource)
                     {
@@ -2011,7 +2055,7 @@ public class ConfigWindow : Window, IDisposable
                     updateLogs = true;
                 }
 
-                if (ImGui.Checkbox("Show error logs", ref configShowErrorLog))
+                if (ImGui.Checkbox(Loc.S("Show error logs"), ref configShowErrorLog))
                 {
                     switch (textSource)
                     {
@@ -2045,10 +2089,13 @@ public class ConfigWindow : Window, IDisposable
                     updateLogs = true;
                 }
 
-                if (ImGui.Checkbox("Show ID: 0", ref configShowId0))
+                if (ImGui.Checkbox(Loc.S("Show ID 0 entries"), ref configShowId0))
                 {
                     switch (textSource)
                     {
+                        case TextSource.None:
+                            _config.logConfig.ShowGeneralId0 = configShowId0;
+                            break;
                         case TextSource.AddonBubble:
                             _config.logConfig.ShowBubbleId0 = configShowId0;
                             break;
@@ -2076,7 +2123,7 @@ public class ConfigWindow : Window, IDisposable
                     updateLogs = true;
                 }
 
-                if (ImGui.Checkbox("Always jump to bottom", ref configJumpToBottom))
+                if (ImGui.Checkbox(Loc.S("Always jump to bottom"), ref configJumpToBottom))
                 {
                     switch (textSource)
                     {
@@ -2115,7 +2162,7 @@ public class ConfigWindow : Window, IDisposable
     internal void DrawLogTable(string logType, TextSource source, bool jumpToBottom, bool showDebugLog, bool showErrorLog, bool showId0, ref List<LogMessage> filteredLogs, ref bool updateLogs, ref bool resetLogs, ref string filterMethod, ref string filterMessage, ref string filterId)
     {
         var newData = false;
-        if (ImGui.CollapsingHeader("Log:"))
+        if (ImGui.CollapsingHeader(Loc.S("Log:")))
         {
             DrawLogTableSettings(source, jumpToBottom, showDebugLog, showErrorLog, showId0, ref updateLogs);
             if (filteredLogs.Count == 0)
@@ -2139,10 +2186,10 @@ public class ConfigWindow : Window, IDisposable
                 if (table)
                 {
                     ImGui.TableSetupScrollFreeze(0, 2); // Make top row always visible
-                    ImGui.TableSetupColumn("Timestamp", ImGuiTableColumnFlags.WidthFixed, 75f);
-                    ImGui.TableSetupColumn("Method", ImGuiTableColumnFlags.WidthFixed, 150f);
-                    ImGui.TableSetupColumn("Message", ImGuiTableColumnFlags.None, 500f);
-                    ImGui.TableSetupColumn("ID", ImGuiTableColumnFlags.WidthFixed, 40f);
+                    ImGui.TableSetupColumn(Loc.S("Timestamp"), ImGuiTableColumnFlags.WidthFixed, 75f);
+                    ImGui.TableSetupColumn(Loc.S("Method"), ImGuiTableColumnFlags.WidthFixed, 150f);
+                    ImGui.TableSetupColumn(Loc.S("Message"), ImGuiTableColumnFlags.None, 500f);
+                    ImGui.TableSetupColumn(Loc.S("ID"), ImGuiTableColumnFlags.WidthFixed, 40f);
                     ImGui.TableHeadersRow();
                     ImGui.TableNextColumn();
                     ImGui.TableNextColumn();
@@ -2223,7 +2270,7 @@ public class ConfigWindow : Window, IDisposable
                     foreach (var logMessage in filteredLogs)
                     {
                         ImGui.TableNextRow();
-                        using (ImRaii.PushColor(ImGuiCol.Text, logMessage.color))
+                        using (logMessage.color != Vector4.Zero ? ImRaii.PushColor(ImGuiCol.Text, logMessage.color) : null)
                         {
                             using (ImRaii.TextWrapPos(0))
                             {
@@ -2322,13 +2369,13 @@ public class ConfigWindow : Window, IDisposable
         ImGui.SetCursorPosY(offset.Y + 30);
         using (ImRaii.PushColor(ImGuiCol.Button, Constants.DISCORDCOLOR))
         {
-            if (ImGui.Button($"Join discord server##EKDiscordLink"))
+            if (ImGui.Button($"{Loc.S("Join discord server")}##EKDiscordLink"))
                 CMDHelper.OpenUrl(Constants.DISCORDURL);
         }
 
         ImGui.SetCursorPosX(size.X + offset.X - 75);
         ImGui.SetCursorPosY(offset.Y + 60);
-        if (ImGui.Button($"Alltalk Github##EKAlltalkGithub"))
+        if (ImGui.Button($"{Loc.S("Alltalk Github")}##EKAlltalkGithub"))
             CMDHelper.OpenUrl(Constants.ALLTALKGITHUBURL);
         ImGui.SetCursorPos(cursorPos);
     }

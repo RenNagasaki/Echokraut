@@ -138,7 +138,7 @@ namespace Echokraut.Services
                 }
                 catch (Exception ex)
                 {
-                    _log.Error(nameof(TryLipSync), $"Error: {ex.Message}\r\nStacktrace: {ex.StackTrace}", message.EventId);
+                    _log.Error(nameof(TryLipSync), ex.ToString(), message.EventId);
                 } finally
                 {
                     await _framework.RunOnFrameworkThread(() =>
@@ -168,7 +168,7 @@ namespace Echokraut.Services
                 }
                 catch (Exception ex)
                 {
-                    _log.Error(nameof(TryStopLipSync), $"Error: {ex.Message}\r\nStacktrace: {ex.StackTrace}", message.EventId);
+                    _log.Error(nameof(TryStopLipSync), ex.ToString(), message.EventId);
                 }
             }
         }

@@ -129,7 +129,8 @@ public static class ServiceBuilder
 
         container.RegisterFactory<IAddonCancelService>(c => new AddonCancelService(
             c.GetService<IAudioPlaybackService>(),
-            c.GetService<ILipSyncHelper>()));
+            c.GetService<ILipSyncHelper>(),
+            c.GetService<ILogService>()));
 
         container.RegisterFactory<ICommandService>(c => new CommandService(
             commandManager,

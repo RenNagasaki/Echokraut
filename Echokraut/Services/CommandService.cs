@@ -93,8 +93,9 @@ public class CommandService : ICommandService
                     var deleted = _audioFiles.DeleteLastNFiles(n);
                     PrintText("", $"Deleted {deleted} generated audio files");
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _log.Error(nameof(OnCommand), $"Command failed: {ex.Message}", new EKEventId(0, TextSource.None));
                     errorText = "Please enter a valid number or leave empty";
                 }
                 break;
@@ -105,8 +106,9 @@ public class CommandService : ICommandService
                     var deleted = _audioFiles.DeleteLastNMinutesFiles(n);
                     PrintText("", $"Deleted {deleted} generated audio files");
                 }
-                catch
+                catch (Exception ex)
                 {
+                    _log.Error(nameof(OnCommand), $"Command failed: {ex.Message}", new EKEventId(0, TextSource.None));
                     errorText = "Please enter a valid number or leave empty";
                 }
                 break;

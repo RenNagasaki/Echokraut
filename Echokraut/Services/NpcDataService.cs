@@ -157,6 +157,7 @@ public class NpcDataService : INpcDataService
         {
             _config.MappedNpcs.ForEach(p => { p.Voices = voices; p.RefreshSelectable(); });
             _config.MappedPlayers.ForEach(p => { p.Voices = voices; p.RefreshSelectable(); });
+            _log.Debug(nameof(RefreshSelectables), $"Refreshed selectables: {_config.MappedNpcs.Count} NPCs, {_config.MappedPlayers.Count} players", new EKEventId(0, TextSource.None));
         }
         catch (Exception ex)
         {

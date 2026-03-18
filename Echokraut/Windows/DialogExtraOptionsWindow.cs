@@ -9,6 +9,7 @@ using Echokraut.Services;
 using ManagedBass;
 using OtterGui;
 using OtterGui.Raii;
+using Echokraut.Localization;
 
 namespace Echokraut.Windows;
 
@@ -78,26 +79,26 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                     {
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##ResumeDialog",
                                                          iconSize,
-                                                         "Resume dialogue", false, true))
+                                                         Loc.S("Resume dialogue"), false, true))
                             _audioPlayback.ResumePlaying(DialogState.CurrentVoiceMessage);
                     }
                     else if (_audioPlayback.GetStreamState(DialogState.CurrentVoiceMessage.StreamId) == PlaybackState.Playing)
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Pause.ToIconString()}##PauseDialog",
                                                          iconSize,
-                                                         "Pause dialogue", false, true))
+                                                         Loc.S("Pause dialogue"), false, true))
                             _audioPlayback.PausePlaying(DialogState.CurrentVoiceMessage);
                 }
                 else
                     using (ImRaii.Disabled(_audioPlayback.RecreationStarted))
                         if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##RecreateDialog",
                                                          iconSize,
-                                                         "Recreate dialogue", false, true))
+                                                         Loc.S("Replay dialogue"), false, true))
                             _recreateInference();
 
                 ImGui.SameLine();
                 using (ImRaii.Disabled(!_audioPlayback.IsPlaying))
                     if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Stop.ToIconString()}##StopDialog", iconSize,
-                                                     "Stop dialogue", !_audioPlayback.IsPlaying, true))
+                                                     Loc.S("Stop dialogue"), !_audioPlayback.IsPlaying, true))
                     {
                         if (DialogState.CurrentVoiceMessage != null) _lipSync.TryStopLipSync(DialogState.CurrentVoiceMessage);
                         _audioPlayback.StopPlaying(DialogState.CurrentVoiceMessage);
@@ -109,7 +110,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
             {
                 if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Microphone.ToIconString()}##MuteDialogue",
                                                  iconSize,
-                                                 "Mute dialogue", false, true))
+                                                 Loc.S("Mute dialogue"), false, true))
                 {
                     _log.Info(nameof(DrawReadyStates),
                               $"Muting NPC Dialogue: {DialogState.CurrentVoiceMessage!.SpeakerObj!.Name.TextValue}",
@@ -125,7 +126,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
             else if (ImGuiUtil.DrawDisabledButton(
                          $"{FontAwesomeIcon.MicrophoneSlash.ToIconString()}##UnmuteDialogue",
                          iconSize,
-                         "Unmute dialogue", false, true))
+                         Loc.S("Unmute dialogue"), false, true))
             {
                 _log.Info(nameof(DrawReadyStates),
                           $"Unmuting NPC Dialogue: {DialogState.CurrentVoiceMessage!.SpeakerObj!.Name.TextValue}",
@@ -142,7 +143,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                     {
                         ImGui.SameLine();
                         var autoAdvance = _config.AutoAdvanceTextAfterSpeechCompleted;
-                        if (ImGui.Checkbox("Auto advance", ref autoAdvance))
+                        if (ImGui.Checkbox(Loc.S("Auto-advance"), ref autoAdvance))
                         {
                             _config.AutoAdvanceTextAfterSpeechCompleted = autoAdvance;
                             _config.Save();

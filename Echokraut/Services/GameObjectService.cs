@@ -5,6 +5,7 @@ using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Echokraut.Enums;
 using Character = Dalamud.Game.ClientState.Objects.Types.ICharacter;
 
 namespace Echokraut.Services;
@@ -81,10 +82,17 @@ public class GameObjectService : IGameObjectService
 
             _lastUnknownState[character.Name.TextValue] = character.IsTargetable;
         }
+
+        _logService.Debug(nameof(TryGetNextUnknownCharacter),
+            _nextUnknownCharacter != null
+                ? $"Found next unknown character: {_nextUnknownCharacter.Name}"
+                : "No new unknown character found",
+            eventId);
     }
 
     public void ClearLastUnknownState()
     {
+        _logService.Debug(nameof(ClearLastUnknownState), "Clearing last unknown state", new EKEventId(0, TextSource.None));
         _lastUnknownState.Clear();
         _nextUnknownCharacter = null;
     }
