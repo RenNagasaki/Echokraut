@@ -4,3 +4,4 @@ bin/
 *.user
 ApiKeys.json
 *.Secrets.cs
+CLAUDE.md

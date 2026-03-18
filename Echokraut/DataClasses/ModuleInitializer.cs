@@ -47,9 +47,9 @@ namespace Echokraut.DataClasses
 
         private static string ResolvePath(string assemblyPath)
         {
-            var location = Assembly.GetCallingAssembly().Location;
-            var targetLocation = assemblyPath;// Path.Join(location, "..", assemblyPath);
-            return targetLocation;
+            var location = Assembly.GetExecutingAssembly().Location;
+            var directory = Path.GetDirectoryName(location) ?? ".";
+            return Path.Join(directory, assemblyPath);
         }
     }
 }
