@@ -32,7 +32,8 @@ public class NativeWindowManager : IWindowManager
             services.GetService<IAudioPlaybackService>(),
             services.GetService<ILipSyncHelper>(),
             () => addonTalk.RecreateInference(),
-            addonLifecycle);
+            addonLifecycle,
+            services.GetService<ILogService>());
 
         _configWindow = new NativeConfigWindow(
             config,

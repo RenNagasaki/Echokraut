@@ -34,7 +34,8 @@ public class DialogExtraOptionsWindow : Window, IDisposable
         _audioPlayback = audioPlayback;
         _lipSync = lipSync;
         _recreateInference = recreateInference;
-        Flags = ImGuiWindowFlags.NoDecoration | ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoFocusOnAppearing | ImGuiWindowFlags.NoBackground |
+        Flags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse |
+                ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoFocusOnAppearing |
                 ImGuiWindowFlags.NoNav;
 
         SizeConstraints = new WindowSizeConstraints()
@@ -50,6 +51,11 @@ public class DialogExtraOptionsWindow : Window, IDisposable
 
     public void Dispose() { }
 
+    public override bool DrawConditions()
+    {
+        return _config.ShowExtraOptionsInDialogue && !DialogState.IsVoiced && _audioPlayback.InDialog;
+    }
+
     public override void Draw()
     {
         DrawReadyStates();
@@ -57,23 +63,23 @@ public class DialogExtraOptionsWindow : Window, IDisposable
 
     private void DrawReadyStates()
     {
-        if (_config.ShowExtraOptionsInDialogue && !DialogState.IsVoiced && _audioPlayback.InDialog)
-        {
-            var iconSize = new Vector2(24, 24) * AddonTalkHelper.AddonScale;
-            var offsetX = 56 * AddonTalkHelper.AddonScale;
-            var offsetXButton = 16 * AddonTalkHelper.AddonScale;
-            var offsetY = 104 * AddonTalkHelper.AddonScale;
+        var iconSize = new Vector2(24, 24) * AddonTalkHelper.AddonScale;
+        var offsetX = 56 * AddonTalkHelper.AddonScale;
+        var offsetXButton = 16 * AddonTalkHelper.AddonScale;
 
-            var xPos = (AddonTalkHelper.AddonPos.X + offsetX);
-            var yPos = (AddonTalkHelper.AddonPos.Y + offsetY);
-            var sizeExtra = new Vector2(iconSize.X * 3 + offsetXButton * 2, iconSize.Y);
-            var sizeExtraExtra = new Vector2(iconSize.X * 15, 0);
-            Size = sizeExtra + (_config.ShowExtraExtraOptionsInDialogue
-                                    ? sizeExtraExtra
-                                    : new Vector2());
-            Position = new Vector2(xPos, yPos);
+        var yPos = AddonTalkHelper.AddonPos.Y + AddonTalkHelper.AddonHeight - (31 * AddonTalkHelper.AddonScale);
+        var sizeExtra = new Vector2(iconSize.X * 3 + offsetXButton * 2, iconSize.Y);
+        var sizeExtraExtra = new Vector2(iconSize.X * 15, 0);
+        Size = sizeExtra + (_config.ShowExtraExtraOptionsInDialogue
+                                ? sizeExtraExtra
+                                : new Vector2()) - new Vector2(50, 0);
+        var windowW = Size!.Value.X;
+        var xPos = AddonTalkHelper.AddonPos.X + (AddonTalkHelper.AddonWidth - windowW) / 2f;
+        Position = new Vector2(xPos, yPos);
 
-            var disabled = DialogState.CurrentVoiceMessage != null && DialogState.CurrentVoiceMessage.SpeakerObj != null && _config.MutedNpcDialogues.Contains(DialogState.CurrentVoiceMessage.SpeakerObj.BaseId);
+        ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 5);
+
+        var disabled = DialogState.CurrentVoiceMessage != null && DialogState.CurrentVoiceMessage.SpeakerObj != null && _config.MutedNpcDialogues.Contains(DialogState.CurrentVoiceMessage.SpeakerObj.BaseId);
             using (ImRaii.Disabled(disabled))
             {
                 if (_audioPlayback.IsPlaying && DialogState.CurrentVoiceMessage != null)
@@ -140,13 +146,23 @@ public class DialogExtraOptionsWindow : Window, IDisposable
 
             if (_config.ShowExtraExtraOptionsInDialogue)
             {
-                using (ImRaii.PushColor(ImGuiCol.Text, Constants.BLACKCOLOR))
                 {
-                    using (ImRaii.PushColor(ImGuiCol.CheckMark, Constants.BLACKCOLOR))
+                    var white = new Vector4(1f, 1f, 1f, 1f);
+                    var black = new Vector4(0f, 0f, 0f, 1f);
+                    using (ImRaii.PushColor(ImGuiCol.Text, white))
+                    using (ImRaii.PushColor(ImGuiCol.CheckMark, white))
                     {
                         ImGui.SameLine();
+                        var cursorPos = ImGui.GetCursorScreenPos();
                         var autoAdvance = _config.AutoAdvanceTextAfterSpeechCompleted;
-                        if (ImGui.Checkbox(Loc.S("Auto-advance"), ref autoAdvance))
+
+                        // Draw shadow text behind the checkbox label
+                        var textOffset = new Vector2(ImGui.GetFrameHeight() + ImGui.GetStyle().ItemInnerSpacing.X, ImGui.GetStyle().FramePadding.Y);
+                        var drawList = ImGui.GetWindowDrawList();
+                        var label = Loc.S("Auto-advance");
+                        drawList.AddText(cursorPos + textOffset + new Vector2(1, 1), ImGui.GetColorU32(black), label);
+
+                        if (ImGui.Checkbox(label, ref autoAdvance))
                         {
                             _config.AutoAdvanceTextAfterSpeechCompleted = autoAdvance;
                             _config.Save();
@@ -180,6 +196,5 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                     }
                 }
             }
-        }
     }
 }

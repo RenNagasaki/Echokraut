@@ -32,7 +32,7 @@ public class FirstTimeWindow : Window, IDisposable
     private int _wizardStep;
 
     public FirstTimeWindow(ILogService log, Configuration config, IFramework framework, AlltalkInstanceWindow alttalkInstanceWindow, ConfigWindow configWindow)
-        : base($"{Loc.S("First time using Echokraut")}###EKFirstTime")
+        : base($"{Loc.S("First time using Echokraut")} {Plugin.PluginVersion}###EKFirstTime")
     {
         _log = log;
         _config = config;

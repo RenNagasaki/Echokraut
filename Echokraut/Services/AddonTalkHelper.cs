@@ -36,6 +36,7 @@ public unsafe class AddonTalkHelper : IAddonTalkHelper
 
     public static Vector2 AddonPos { get; private set; }
     public static float AddonWidth { get; private set; }
+    public static float AddonHeight { get; private set; }
     public static float AddonScale { get; private set; } = 1f;
 
     private bool nextIsVoice = false;
@@ -141,6 +142,7 @@ public unsafe class AddonTalkHelper : IAddonTalkHelper
         {
             AddonPos = new Vector2(addonTalk->GetX(), addonTalk->GetY());
             AddonWidth = addonTalk->GetScaledWidth(true);
+            AddonHeight = addonTalk->GetScaledHeight(true);
             AddonScale = addonTalk->Scale;
             Handle(addonTalk);
         }

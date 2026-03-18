@@ -23,6 +23,9 @@ namespace Echokraut;
 
 public partial class Plugin : IDalamudPlugin
 {
+    public static readonly string PluginVersion =
+        $"v{System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!.ToString(3)}";
+
     // Service container for dependency injection
     private readonly ServiceContainer _services;
 
@@ -138,7 +141,7 @@ public partial class Plugin : IDalamudPlugin
         {
             if (!_kamiToolKitInitialized)
             {
-                KamiToolKit.KamiToolKitLibrary.Initialize(_pluginInterface, "Echokraut");
+                KamiToolKit.KamiToolKitLibrary.Initialize(_pluginInterface, $"Echokraut {PluginVersion}");
                 _kamiToolKitInitialized = true;
             }
             return new NativeWindowManager(_services, _configuration, _addonLifecycle, _commandManager, _clientState);

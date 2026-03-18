@@ -167,7 +167,7 @@ public class ConfigWindow : Window, IDisposable
         IGameObjectService gameObjects,
         IGoogleDriveSyncService googleDrive,
         INpcDataService npcData,
-        AlltalkInstanceWindow alttalkInstanceWindow) : base($"Echokraut Configuration###EKSettings")
+        AlltalkInstanceWindow alttalkInstanceWindow) : base($"Echokraut {Plugin.PluginVersion} Configuration###EKSettings")
     {
         _log = log;
         _volumeService = volumeService;

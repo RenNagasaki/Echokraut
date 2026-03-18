@@ -104,7 +104,7 @@ public static class Loc
             { DE, "Erweiterte Optionen anzeigen (Stimmenwahl, Auto-Weiter)" },
             { FR, "Afficher les options avancées (sélection vocale, avance auto)" },
             { JP, "拡張オプションを表示（ボイス選択、自動進行）" },
-        },
+        }, 
 
         // ── Dialogue settings ─────────────────────────────────────────────
         ["Voice dialogue"] = new() { { DE, "Dialog vertonen" }, { FR, "Dialogues vocaux" }, { JP, "ダイアログをボイス化" } },
