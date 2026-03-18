@@ -1,4 +1,5 @@
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Lumina.Excel.Sheets;
 
 namespace Echokraut.Services;

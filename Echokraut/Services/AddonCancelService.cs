@@ -1,6 +1,9 @@
+using Echotools.Logging.Services;
 using System;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 
 namespace Echokraut.Services;
 

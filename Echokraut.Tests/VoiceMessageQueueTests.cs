@@ -1,6 +1,8 @@
 using Dalamud.Game.ClientState.Objects.Enums;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using Echokraut.Services.Queue;
 using Xunit;
 

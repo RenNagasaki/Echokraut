@@ -3,10 +3,13 @@ using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using System;
 using Echokraut.Services;
+using Echotools.Logging.Services;
 
 namespace Echokraut.Services
 {

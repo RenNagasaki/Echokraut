@@ -4,6 +4,7 @@ using Dalamud.Hooking;
 using Dalamud.Memory;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Common.Math;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
@@ -14,7 +15,9 @@ using static Dalamud.Plugin.Services.IFramework;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Utility;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using Echokraut.Services;
+using Echotools.Logging.Services;
 
 namespace Echokraut.Services
 {

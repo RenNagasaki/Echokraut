@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Numerics;
 using Dalamud.Interface.Windowing;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using System.Linq;
 using Dalamud.Interface;
 using System.IO;
@@ -16,6 +18,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using Echokraut.Helper.Functional;
 using Echokraut.Localization;
 using Echokraut.Services;
+using Echotools.Logging.Services;
 using OtterGui;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -275,11 +278,11 @@ public class ConfigWindow : Window, IDisposable
                 break;
         }
 
-        if (!showDebug) logListFiltered.RemoveAll(p => p.type == LogType.Debug);
-        if (!showError) logListFiltered.RemoveAll(p => p.type == LogType.Error);
-        if (!showId0)   logListFiltered.RemoveAll(p => p.eventId.Id == 0);
+        if (!showDebug) logListFiltered.RemoveAll(p => p.Type == LogType.Debug);
+        if (!showError) logListFiltered.RemoveAll(p => p.Type == LogType.Error);
+        if (!showId0)   logListFiltered.RemoveAll(p => p.EventId.Id == 0);
 
-        logListFiltered.Sort((p, q) => p.timeStamp.CompareTo(q.timeStamp));
+        logListFiltered.Sort((p, q) => p.TimeStamp.CompareTo(q.TimeStamp));
         return logListFiltered;
     }
 
@@ -2198,7 +2201,7 @@ public class ConfigWindow : Window, IDisposable
                         (filterMethod.Length > 0 && updateLogs))
                     {
                         var method = filterMethod;
-                        filteredLogs = filteredLogs.FindAll(p => p.method.ToLower().Contains(method.ToLower()));
+                        filteredLogs = filteredLogs.FindAll(p => p.Method.ToLower().Contains(method.ToLower()));
                         updateLogs = true;
                         resetLogs = true;
                         newData = true;
@@ -2210,7 +2213,7 @@ public class ConfigWindow : Window, IDisposable
                         (filterMessage.Length > 0 && updateLogs))
                     {
                         var message = filterMessage;
-                        filteredLogs = filteredLogs.FindAll(p => p.message.ToLower().Contains(message.ToLower()));
+                        filteredLogs = filteredLogs.FindAll(p => p.Message.ToLower().Contains(message.ToLower()));
                         updateLogs = true;
                         resetLogs = true;
                         newData = true;
@@ -2223,7 +2226,7 @@ public class ConfigWindow : Window, IDisposable
                     {
                         var id = filterId;
                         filteredLogs =
-                            filteredLogs.FindAll(p => p.eventId.Id.ToString().ToLower().Contains(id.ToLower()));
+                            filteredLogs.FindAll(p => p.EventId.Id.ToString().ToLower().Contains(id.ToLower()));
                         updateLogs = true;
                         resetLogs = true;
                         newData = true;
@@ -2236,29 +2239,29 @@ public class ConfigWindow : Window, IDisposable
                         {
                             case 0:
                                 if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
-                                    filteredLogs.Sort((a, b) => DateTime.Compare(a.timeStamp, b.timeStamp));
+                                    filteredLogs.Sort((a, b) => DateTime.Compare(a.TimeStamp, b.TimeStamp));
                                 else
-                                    filteredLogs.Sort((a, b) => DateTime.Compare(b.timeStamp, a.timeStamp));
+                                    filteredLogs.Sort((a, b) => DateTime.Compare(b.TimeStamp, a.TimeStamp));
                                 break;
                             case 1:
                                 if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
-                                    filteredLogs.Sort((a, b) => String.CompareOrdinal(a.method, b.method));
+                                    filteredLogs.Sort((a, b) => String.CompareOrdinal(a.Method, b.Method));
                                 else
-                                    filteredLogs.Sort((a, b) => String.CompareOrdinal(b.method, a.method));
+                                    filteredLogs.Sort((a, b) => String.CompareOrdinal(b.Method, a.Method));
                                 break;
                             case 2:
                                 if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
-                                    filteredLogs.Sort((a, b) => String.CompareOrdinal(a.message, b.message));
+                                    filteredLogs.Sort((a, b) => String.CompareOrdinal(a.Message, b.Message));
                                 else
-                                    filteredLogs.Sort((a, b) => String.CompareOrdinal(b.message, a.message));
+                                    filteredLogs.Sort((a, b) => String.CompareOrdinal(b.Message, a.Message));
                                 break;
                             case 3:
                                 if (sortSpecs.Specs.SortDirection == ImGuiSortDirection.Ascending)
                                     filteredLogs.Sort(
-                                        (a, b) => String.CompareOrdinal(a.eventId.Id.ToString(), b.eventId.Id.ToString()));
+                                        (a, b) => String.CompareOrdinal(a.EventId.Id.ToString(), b.EventId.Id.ToString()));
                                 else
                                     filteredLogs.Sort(
-                                        (a, b) => String.CompareOrdinal(b.eventId.Id.ToString(), a.eventId.Id.ToString()));
+                                        (a, b) => String.CompareOrdinal(b.EventId.Id.ToString(), a.EventId.Id.ToString()));
                                 break;
                         }
 
@@ -2270,18 +2273,18 @@ public class ConfigWindow : Window, IDisposable
                     foreach (var logMessage in filteredLogs)
                     {
                         ImGui.TableNextRow();
-                        using (logMessage.color != Vector4.Zero ? ImRaii.PushColor(ImGuiCol.Text, logMessage.color) : null)
+                        using (logMessage.Color != Vector4.Zero ? ImRaii.PushColor(ImGuiCol.Text, logMessage.Color) : null)
                         {
                             using (ImRaii.TextWrapPos(0))
                             {
                                 ImGui.TableNextColumn();
-                                ImGui.TextUnformatted(logMessage.timeStamp.ToString("HH:mm:ss.fff"));
+                                ImGui.TextUnformatted(logMessage.TimeStamp.ToString("HH:mm:ss.fff"));
                                 ImGui.TableNextColumn();
-                                ImGui.TextUnformatted(logMessage.method);
+                                ImGui.TextUnformatted(logMessage.Method);
                                 ImGui.TableNextColumn();
-                                ImGui.TextUnformatted(logMessage.message);
+                                ImGui.TextUnformatted(logMessage.Message);
                                 ImGui.TableNextColumn();
-                                ImGui.TextUnformatted(logMessage.eventId.Id.ToString());
+                                ImGui.TextUnformatted(logMessage.EventId.Id.ToString());
                             }
                         }
                     }

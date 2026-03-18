@@ -1,4 +1,5 @@
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;

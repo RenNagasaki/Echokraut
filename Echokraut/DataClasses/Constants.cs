@@ -13,8 +13,6 @@ namespace Echokraut.DataClasses
         public const string ALLTALKGITHUBURL = "https://github.com/erew123";
         public const string DISCORDURL = "https://discord.gg/5gesjDfDBr";
         public static readonly Vector4 DISCORDCOLOR = new Vector4(0.345f, 0.396f, 0.949f, 1f);
-        public static readonly Vector4 DEBUGLOGCOLOR = new Vector4(0.4f, 0.8f, 0.4f, 1f);
-        public static readonly Vector4 ERRORLOGCOLOR = new Vector4(1.0f, 0.35f, 0.35f, 1f);
         public static readonly Vector4 BLACKCOLOR = new Vector4(0.0f, 0.0f, 0.0f, 1f);
         public static readonly List<Genders> GENDERLIST = new List<Genders>() { 
             Genders.None, 

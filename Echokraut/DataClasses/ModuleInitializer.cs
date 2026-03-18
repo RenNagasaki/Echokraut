@@ -1,55 +1,33 @@
-using Dalamud.Plugin.Services;
-using Echokraut.Helper;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.CodeAnalysis;
 using System.IO;
-using System.Linq;
 using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Loader;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Echokraut.DataClasses
 {
-    public static class ModuleInitializer
+    public static class NativeLibraryLoader
     {
-        [ModuleInitializer]
-        [SuppressMessage("Usage", "CA2255:The \'ModuleInitializer\' attribute should not be used in libraries")]
-        public static void Initialize()
+        /// <summary>
+        /// Pre-loads native libraries from the plugin's assembly directory so that
+        /// shadow-loading doesn't break P/Invoke resolution.
+        /// Call this from the Plugin constructor before any ManagedBass code runs.
+        /// </summary>
+        /// <param name="assemblyDir">
+        /// The directory containing the plugin DLL and its native dependencies
+        /// (e.g. <c>Path.GetDirectoryName(pluginInterface.AssemblyLocation.FullName)</c>).
+        /// </param>
+        public static void Initialize(string assemblyDir)
         {
-            /*
-             * Manually pre-load dependencies so that shadow-loading doesn't break our assembly.
-             * This invokes AssemblyLoadContext.LoadUnmanagedDll.
-             * https://github.com/goatcorp/Dalamud/issues/1238
-             * https://learn.microsoft.com/en-us/dotnet/api/System.Runtime.InteropServices.NativeLibrary.Load?view=net-7.0
-             */
             var nativeLibraries = new List<nint>();
-            LoadLibrary(nativeLibraries, "bass.dll");
-            //LoadLibrary(nativeLibraries, "ManagedBass.dll");
+            var handle = NativeLibrary.Load(Path.Combine(assemblyDir, "bass.dll"));
+            nativeLibraries.Add(handle);
 
             var assemblyLoadContext = AssemblyLoadContext.GetLoadContext(Assembly.GetExecutingAssembly());
             if (assemblyLoadContext == null) return;
             nativeLibraries.Reverse();
             assemblyLoadContext.Unloading += _ => { nativeLibraries.ForEach(NativeLibrary.Free); };
-        }
-
-        private static void LoadLibrary(ICollection<nint> handles, string assemblyName)
-        {
-            var handle = NativeLibrary.Load(
-                ResolvePath(assemblyName),
-                Assembly.GetExecutingAssembly(),
-                DllImportSearchPath.AssemblyDirectory);
-            handles.Add(handle);
-        }
-
-        private static string ResolvePath(string assemblyPath)
-        {
-            var location = Assembly.GetExecutingAssembly().Location;
-            var directory = Path.GetDirectoryName(location) ?? ".";
-            return Path.Join(directory, assemblyPath);
         }
     }
 }

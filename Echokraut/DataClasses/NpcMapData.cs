@@ -1,5 +1,6 @@
 using Dalamud.Game.ClientState.Objects.Enums;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using Echokraut.Helper;
 using OtterGui.Widgets;
 using System;

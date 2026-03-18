@@ -1,7 +1,10 @@
+using Echotools.Logging.Services;
 using Dalamud.Game;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Game.ClientState.Objects.Types;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
+using Echotools.Logging.Enums;
 using Echokraut.Helper.Functional;
 using System;
 using System.Collections.Generic;
@@ -51,27 +54,27 @@ public class TextProcessingService : ITextProcessingService
 
     public string ReplaceDate(string text, ClientLanguage language)
     {
-        return TalkTextHelper.ReplaceDate(_log, new EKEventId(0, Enums.TextSource.None), text, language);
+        return TalkTextHelper.ReplaceDate(_log, new EKEventId(0, TextSource.None), text, language);
     }
 
     public string ReplaceTime(string text, ClientLanguage language)
     {
-        return TalkTextHelper.ReplaceTime(_log, new EKEventId(0, Enums.TextSource.None), text, language);
+        return TalkTextHelper.ReplaceTime(_log, new EKEventId(0, TextSource.None), text, language);
     }
 
     public string ReplaceRomanNumbers(string text)
     {
-        return TalkTextHelper.ReplaceRomanNumbers(_log, new EKEventId(0, Enums.TextSource.None), text);
+        return TalkTextHelper.ReplaceRomanNumbers(_log, new EKEventId(0, TextSource.None), text);
     }
 
     public string ReplaceCurrency(string text)
     {
-        return TalkTextHelper.ReplaceCurrency(_log, new EKEventId(0, Enums.TextSource.None), text);
+        return TalkTextHelper.ReplaceCurrency(_log, new EKEventId(0, TextSource.None), text);
     }
 
     public string ReplaceIntWithVerbal(string text, ClientLanguage language)
     {
-        return TalkTextHelper.ReplaceIntWithVerbal(_log, new EKEventId(0, Enums.TextSource.None), text, language);
+        return TalkTextHelper.ReplaceIntWithVerbal(_log, new EKEventId(0, TextSource.None), text, language);
     }
 
     public string ReplacePhonetics(string text, List<PhoneticCorrection> phoneticCorrections)
@@ -86,7 +89,7 @@ public class TextProcessingService : ITextProcessingService
 
     public string ReplaceEmoticons(string text)
     {
-        return TalkTextHelper.ReplaceEmoticons(_log, new EKEventId(0, Enums.TextSource.None), text, _jsonData.Emoticons);
+        return TalkTextHelper.ReplaceEmoticons(_log, new EKEventId(0, TextSource.None), text, _jsonData.Emoticons);
     }
 
     public bool IsSpeakable(string text)

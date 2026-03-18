@@ -2,7 +2,7 @@
 <Project Sdk="Dalamud.NET.Sdk/14.0.2">
 
   <PropertyGroup>
-    <Version>0.18.0.1</Version>
+    <Version>0.18.0.2</Version>
     <Description>A TTS Dalamud Plugin that breaks the silence! For self hosted TTS Services.</Description>
     <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
@@ -48,7 +48,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <None Update="bass.dll">
+    <None Include="bass.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Echokraut.png">
@@ -74,5 +74,6 @@
   <ItemGroup>
     <ProjectReference Include="..\OtterGui\OtterGui.csproj" />
     <ProjectReference Include="..\KamiToolKit\KamiToolKit.csproj" />
+    <ProjectReference Include="..\Echotools\Logging\Logging.csproj" />
   </ItemGroup>
 </Project>

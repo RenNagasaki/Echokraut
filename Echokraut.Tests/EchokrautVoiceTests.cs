@@ -1,5 +1,6 @@
 using Echokraut.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using Xunit;
 
 namespace Echokraut.Tests;

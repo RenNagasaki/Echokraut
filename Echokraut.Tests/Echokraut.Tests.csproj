@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Echokraut\Echokraut.csproj" />
+    <ProjectReference Include="..\Echotools\Logging\Logging.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -33,10 +34,7 @@
     <ItemGroup>
       <_DalamudDlls Include="$(DalamudLibPath)*.dll" Exclude="$(DalamudLibPath)bass.dll" />
     </ItemGroup>
-    <Copy SourceFiles="@(_DalamudDlls)"
-          DestinationFolder="$(OutputPath)"
-          SkipUnchangedFiles="true"
-          ContinueOnError="true" />
+    <Copy SourceFiles="@(_DalamudDlls)" DestinationFolder="$(OutputPath)" SkipUnchangedFiles="true" ContinueOnError="true" />
   </Target>
 
 </Project>

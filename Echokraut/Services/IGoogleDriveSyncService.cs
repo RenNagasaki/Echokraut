@@ -1,4 +1,5 @@
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using System.Net.Http;
 using System.Threading.Tasks;
 

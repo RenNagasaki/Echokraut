@@ -10,10 +10,13 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using Echokraut.Helper.Functional;
 using Echokraut.Localization;
 using Echokraut.Services;
+using Echotools.Logging.Services;
 using OtterGui;
 
 namespace Echokraut.Windows;
@@ -125,7 +128,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
                         _config.Alltalk.LocalInstallPath.Contains("-"))
                     {
                         error = true;
-                        using (ImRaii.PushColor(ImGuiCol.Text, Constants.ERRORLOGCOLOR))
+                        using (ImRaii.PushColor(ImGuiCol.Text, LogConstants.ErrorLogColor))
                         {
                             ImGui.Text(
                                 Loc.S("The Alltalk path must not contain spaces or dashes.\r\nPlease make sure it's formatted correctly."));
@@ -135,7 +138,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
                     if (string.IsNullOrWhiteSpace(_config.Alltalk.LocalInstallPath))
                     {
                         error = true;
-                        using (ImRaii.PushColor(ImGuiCol.Text, Constants.ERRORLOGCOLOR))
+                        using (ImRaii.PushColor(ImGuiCol.Text, LogConstants.ErrorLogColor))
                         {
                             ImGui.Text(Loc.S("The Alltalk path must not be empty.\r\nPlease enter a valid path."));
                         }
@@ -144,7 +147,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
                     if (!_alltalkInstance.IsCudaInstalled && !_alltalkInstance.IsWindows)
                     {
                         error = true;
-                        using (ImRaii.PushColor(ImGuiCol.Text, Constants.ERRORLOGCOLOR))
+                        using (ImRaii.PushColor(ImGuiCol.Text, LogConstants.ErrorLogColor))
                         {
                             ImGui.Text(
                                 Loc.S("The CUDA Toolkit does not appear to be installed.\r\nIt is required for local Alltalk instances."));
@@ -366,7 +369,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
 
             if (!_alltalkInstance.IsWindows)
             {
-                using (ImRaii.PushColor(ImGuiCol.Text, Constants.ERRORLOGCOLOR))
+                using (ImRaii.PushColor(ImGuiCol.Text, LogConstants.ErrorLogColor))
                 {
                     ImGui.Text(
                         Loc.S("You are not on Windows. Additional setup steps are required to use Alltalk locally."));
@@ -392,7 +395,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
                     }
                     else if (noInstance)
                     {
-                        using (ImRaii.PushColor(ImGuiCol.Text, Constants.ERRORLOGCOLOR))
+                        using (ImRaii.PushColor(ImGuiCol.Text, LogConstants.ErrorLogColor))
                         {
                             ImGui.Text(
                                 Loc.S("No audio will be generated in this mode."));

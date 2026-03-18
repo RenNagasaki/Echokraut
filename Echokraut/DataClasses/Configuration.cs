@@ -1,6 +1,7 @@
 using Dalamud.Configuration;
 using Dalamud.Plugin;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using System;
 using System.Collections.Generic;
 

@@ -3,7 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using Echokraut.Localization;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
@@ -220,36 +222,36 @@ public sealed unsafe partial class NativeConfigWindow
         IEnumerable<LogMessage> filtered = _log.GetLogsForSource(source);
 
         // Visibility filters
-        if (!showDebug) filtered = filtered.Where(log => log.type != LogType.Debug);
-        if (!showError) filtered = filtered.Where(log => log.type != LogType.Error);
-        if (!showId0) filtered = filtered.Where(log => log.eventId?.Id != 0);
+        if (!showDebug) filtered = filtered.Where(log => log.Type != LogType.Debug);
+        if (!showError) filtered = filtered.Where(log => log.Type != LogType.Error);
+        if (!showId0) filtered = filtered.Where(log => log.EventId?.Id != 0);
 
         // Text filters
         if (!string.IsNullOrEmpty(_logsFilterMethod))
-            filtered = filtered.Where(log => log.method.Contains(_logsFilterMethod, StringComparison.OrdinalIgnoreCase));
+            filtered = filtered.Where(log => log.Method.Contains(_logsFilterMethod, StringComparison.OrdinalIgnoreCase));
         if (!string.IsNullOrEmpty(_logsFilterMessage))
-            filtered = filtered.Where(log => log.message.Contains(_logsFilterMessage, StringComparison.OrdinalIgnoreCase));
+            filtered = filtered.Where(log => log.Message.Contains(_logsFilterMessage, StringComparison.OrdinalIgnoreCase));
         if (!string.IsNullOrEmpty(_logsFilterId))
-            filtered = filtered.Where(log => log.eventId != null && log.eventId.Id.ToString().Contains(_logsFilterId));
+            filtered = filtered.Where(log => log.EventId != null && log.EventId.Id.ToString().Contains(_logsFilterId));
 
-        var list = filtered.OrderBy(log => log.timeStamp).ToList();
+        var list = filtered.OrderBy(log => log.TimeStamp).ToList();
         var toShow = list.Count > 200 ? list.Skip(list.Count - 200).ToList() : list;
 
         foreach (var log in toShow)
         {
-            var hasColor = log.color != Vector4.Zero;
+            var hasColor = log.Color != Vector4.Zero;
 
-            var methodLabel = Label(log.method, LogColMethod);
+            var methodLabel = Label(log.Method, LogColMethod);
             methodLabel.FontSize = 11;
             methodLabel.AddTextFlags(TextFlags.WordWrap, TextFlags.MultiLine);
             methodLabel.Size = new Vector2(LogColMethod, 14);
-            if (hasColor) methodLabel.TextColor = log.color;
+            if (hasColor) methodLabel.TextColor = log.Color;
 
-            var msgLabel = Label(log.message, LogColMessage);
+            var msgLabel = Label(log.Message, LogColMessage);
             msgLabel.FontSize = 11;
             msgLabel.AddTextFlags(TextFlags.WordWrap, TextFlags.MultiLine);
             msgLabel.Size = new Vector2(LogColMessage, 14);
-            if (hasColor) msgLabel.TextColor = log.color;
+            if (hasColor) msgLabel.TextColor = log.Color;
 
             // Measure wrapped text height to size the row correctly
             var methodH = methodLabel.GetTextDrawSize(false).Y;
@@ -261,19 +263,19 @@ public sealed unsafe partial class NativeConfigWindow
 
             var row = new HorizontalListNode { Size = new Vector2(w, rowH), ItemSpacing = 4 };
 
-            var tsLabel = Label(log.timeStamp.ToString("HH:mm:ss"), LogColTimestamp);
+            var tsLabel = Label(log.TimeStamp.ToString("HH:mm:ss"), LogColTimestamp);
             tsLabel.FontSize = 11;
             tsLabel.Size = new Vector2(LogColTimestamp, rowH);
-            if (hasColor) tsLabel.TextColor = log.color;
+            if (hasColor) tsLabel.TextColor = log.Color;
             row.AddNode(tsLabel);
 
             row.AddNode(methodLabel);
             row.AddNode(msgLabel);
 
-            var idLabel = Label(log.eventId?.Id.ToString() ?? "", LogColId);
+            var idLabel = Label(log.EventId?.Id.ToString() ?? "", LogColId);
             idLabel.FontSize = 11;
             idLabel.Size = new Vector2(LogColId, rowH);
-            if (hasColor) idLabel.TextColor = log.color;
+            if (hasColor) idLabel.TextColor = log.Color;
             row.AddNode(idLabel);
 
             panel.AddNode(row);

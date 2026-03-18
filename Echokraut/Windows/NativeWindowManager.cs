@@ -4,6 +4,7 @@ using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Localization;
 using Echokraut.Services;
+using Echotools.Logging.Services;
 using Echokraut.Windows.Native;
 using KamiToolKit;
 

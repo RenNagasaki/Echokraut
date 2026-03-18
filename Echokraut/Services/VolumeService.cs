@@ -1,5 +1,7 @@
+using Echotools.Logging.Services;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using FFXIVClientStructs.FFXIV.Client.Sound;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 

@@ -1,6 +1,7 @@
 using Dalamud.Game;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;

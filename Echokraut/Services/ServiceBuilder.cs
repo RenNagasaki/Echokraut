@@ -1,3 +1,4 @@
+using Echotools.Logging.Services;
 using Dalamud.Plugin.Services;
 using Dalamud.Plugin;
 using Echokraut.DataClasses;

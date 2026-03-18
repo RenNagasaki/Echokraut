@@ -137,6 +137,9 @@
           "System.CodeDom": "7.0.0"
         }
       },
+      "Echotools.Logging": {
+        "type": "Project"
+      },
       "kamitoolkit": {
         "type": "Project",
         "dependencies": {

@@ -5,9 +5,11 @@ using System.Net.Http;
 using System.Threading.Tasks;
 using System.Web;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Exceptions;
 using Dalamud.Game;
 using Echokraut.Services;
+using Echotools.Logging.Services;
 using System.Net;
 
 namespace Echokraut.Backend

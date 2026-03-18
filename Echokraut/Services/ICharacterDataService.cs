@@ -1,6 +1,8 @@
 using Dalamud.Game.ClientState.Objects.Types;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 
 namespace Echokraut.Services;
 

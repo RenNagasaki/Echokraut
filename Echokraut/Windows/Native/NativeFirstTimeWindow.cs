@@ -1,7 +1,9 @@
 using System;
 using System.Numerics;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using Echokraut.Helper.Functional;
 using Echokraut.Localization;
 using Echokraut.Services;

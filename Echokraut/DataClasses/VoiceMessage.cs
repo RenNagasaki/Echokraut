@@ -1,6 +1,8 @@
 using Dalamud.Game;
 using Dalamud.Game.ClientState.Objects.Types;
 using Echokraut.Enums;
+using Echotools.Logging.DataClasses;
+using Echotools.Logging.Enums;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using System;
 using System.Collections.Generic;
