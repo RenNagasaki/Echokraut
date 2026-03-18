@@ -1,5 +1,8 @@
+using Echotools.Logging.Services;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -216,7 +219,7 @@ public class NpcDataService : INpcDataService
 
     private List<NpcMapData> GetCharacterMapDatas(EKEventId eventId)
     {
-        switch (eventId.textSource)
+        switch (eventId.TextSource)
         {
             case TextSource.AddonTalk:
             case TextSource.AddonBattleTalk:

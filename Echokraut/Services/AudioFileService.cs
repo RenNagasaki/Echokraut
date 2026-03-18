@@ -1,5 +1,8 @@
+using Echotools.Logging.Services;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using Echokraut.Helper.Functional;
 using System;
 using System.Collections.Generic;

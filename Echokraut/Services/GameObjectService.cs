@@ -1,3 +1,4 @@
+using Echotools.Logging.Services;
 using System.Collections.Generic;
 using System.Linq;
 using Dalamud.Game.ClientState.Objects.SubKinds;
@@ -5,7 +6,9 @@ using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using Character = Dalamud.Game.ClientState.Objects.Types.ICharacter;
 
 namespace Echokraut.Services;

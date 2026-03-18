@@ -1,5 +1,7 @@
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using System;
 using System.Threading.Tasks;
 

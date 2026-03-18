@@ -1,6 +1,9 @@
+using Echotools.Logging.Services;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using EKConfiguration = Echokraut.DataClasses.Configuration;
 using Echokraut.Services.Queue;
 

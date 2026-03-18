@@ -7,8 +7,11 @@ using Dalamud.Game;
 using Dalamud.Hooking;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using Echokraut.Services;
+using Echotools.Logging.Services;
 using FFXIVClientStructs.FFXIV.Client.System.Resource.Handle;
 
 namespace Echokraut.Services;

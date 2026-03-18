@@ -1,5 +1,7 @@
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Services;
+using Echotools.Logging.Services;
 using FFXIVClientStructs.FFXIV.Client.Game.Event;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using System;

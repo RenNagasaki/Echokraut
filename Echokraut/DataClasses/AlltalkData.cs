@@ -1,4 +1,5 @@
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 
 namespace Echokraut.DataClasses
 {

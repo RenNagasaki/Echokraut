@@ -1,6 +1,7 @@
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Text.SeStringHandling;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 
 namespace Echokraut.Services;
 

@@ -12,9 +12,12 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using Echokraut.Helper.Functional;
 using Echokraut.Services;
+using Echotools.Logging.Services;
 using Echokraut.Localization;
 
 namespace Echokraut.Windows;
@@ -144,7 +147,7 @@ public class FirstTimeWindow : Window, IDisposable
         {
             using (ImRaii.TextWrapPos(0))
             {
-                using (ImRaii.PushColor(ImGuiCol.Text, Constants.ERRORLOGCOLOR))
+                using (ImRaii.PushColor(ImGuiCol.Text, LogConstants.ErrorLogColor))
                 {
                     ImGui.Text(Loc.S("No audio will be generated in this mode."));
                     ImGui.Text(Loc.S("You will need to get audio files from a friend or via Google Drive."));

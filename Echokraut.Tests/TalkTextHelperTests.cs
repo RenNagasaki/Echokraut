@@ -1,7 +1,10 @@
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using Echokraut.Helper.Functional;
 using Echokraut.Services;
+using Echotools.Logging.Services;
 using Moq;
 using Xunit;
 

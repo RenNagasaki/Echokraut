@@ -1,9 +1,12 @@
+using Echotools.Logging.Services;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Text.SeStringHandling;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -75,7 +78,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
                 }
             }
 
-            var source = eventId.textSource;
+            var source = eventId.TextSource;
             var language = _clientState.ClientLanguage;
             _log.Debug(nameof(ProcessSpeechAsync), $"Preparing for Inference: {speakerName} - {textValue} - {source}", eventId);
 

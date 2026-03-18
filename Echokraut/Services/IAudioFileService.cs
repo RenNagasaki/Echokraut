@@ -1,4 +1,5 @@
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using System.IO;
 using System.Threading.Tasks;
 

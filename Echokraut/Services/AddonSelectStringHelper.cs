@@ -3,6 +3,7 @@ using Echokraut.DataClasses;
 using Dalamud.Game.ClientState.Conditions;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -11,6 +12,7 @@ using System.Linq;
 using Echokraut.Helper.Functional;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using Echokraut.Services;
+using Echotools.Logging.Services;
 using System;
 
 namespace Echokraut.Services;

@@ -4,6 +4,7 @@ using Dalamud.Interface.Windowing;
 using Dalamud.Plugin;
 using Echokraut.DataClasses;
 using Echokraut.Services;
+using Echotools.Logging.Services;
 
 namespace Echokraut.Windows;
 

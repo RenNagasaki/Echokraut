@@ -1,6 +1,7 @@
 using Dalamud.Game;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using System.Collections.Generic;
 
 namespace Echokraut.Services;

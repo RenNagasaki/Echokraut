@@ -1,7 +1,10 @@
+using Echotools.Logging.Services;
 using Dalamud.Game;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using System;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net.Http;

@@ -1,3 +1,4 @@
+using Echotools.Logging.Services;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Plugin.Services;
 using System;

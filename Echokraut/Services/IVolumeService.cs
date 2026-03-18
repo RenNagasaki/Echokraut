@@ -1,4 +1,5 @@
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 
 namespace Echokraut.Services;
 

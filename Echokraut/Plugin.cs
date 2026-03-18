@@ -4,8 +4,11 @@ using Dalamud.Plugin.Services;
 using Echokraut.Windows;
 using Dalamud.Game;
 using Echokraut.Enums;
+using Echotools.Logging.Enums;
 using System;
+using System.IO;
 using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
 using Dalamud.Game.Text.SeStringHandling;
 using GameObject = Dalamud.Game.ClientState.Objects.Types.IGameObject;
 using Dalamud.Game.ClientState.Objects.Enums;
@@ -14,6 +17,7 @@ using Echokraut.Backend;
 using FFXIVClientStructs.FFXIV.Client.Game;
 using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using Echokraut.Services;
+using Echotools.Logging.Services;
 
 namespace Echokraut;
 
@@ -74,6 +78,9 @@ public partial class Plugin : IDalamudPlugin
         IAddonLifecycle addonLifecycle,
         ITextureProvider textureProvider)
     {
+        NativeLibraryLoader.Initialize(
+            Path.GetDirectoryName(pluginInterface.AssemblyLocation.FullName)!);
+
         _pluginInterface = pluginInterface;
         _framework = framework;
         _clientState = clientState;
@@ -117,6 +124,7 @@ public partial class Plugin : IDalamudPlugin
         _framework.Update += OnFrameworkUpdate;
         _pluginInterface.UiBuilder.Draw += _windowManager.Draw;
         _pluginInterface.UiBuilder.OpenConfigUi += _commands.ToggleConfigUi;
+        _pluginInterface.UiBuilder.OpenMainUi += _commands.ToggleConfigUi;
         _clientState.Login += OnLogin;
 
         HandleStartup();
@@ -244,6 +252,7 @@ public partial class Plugin : IDalamudPlugin
         _framework.Update -= OnFrameworkUpdate;
         _pluginInterface.UiBuilder.Draw -= _windowManager.Draw;
         _pluginInterface.UiBuilder.OpenConfigUi -= _commands.ToggleConfigUi;
+        _pluginInterface.UiBuilder.OpenMainUi -= _commands.ToggleConfigUi;
         _clientState.Login -= OnLogin;
         _googleDrive.StopSync();
         _soundHelper.Dispose();
