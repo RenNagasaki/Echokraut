@@ -6,6 +6,7 @@ using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
 using Echokraut.Helper.Functional;
+using Echokraut.Localization;
 using Echokraut.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
@@ -17,7 +18,8 @@ namespace Echokraut.Windows.Native;
 /// <summary>
 /// Native FFXIV-style settings window with top-level tabs
 /// (Settings, Voice Sel., Phonetics, Logs) where Settings contains
-/// the original 7 sub-tabs (General, Dialogue, Battle, Chat, Bubbles, Save/Load, Backend).
+/// 5 sub-tabs (General, Dialogue, Chat, Storage, Backend).
+/// Battle Dialogue and NPC Bubbles are collapsible sections inside Dialogue.
 /// </summary>
 public sealed unsafe partial class NativeConfigWindow : NativeAddon
 {
@@ -41,7 +43,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private const int TopTabCount = 4;
 
     // Settings sub-panels (index matches inner tab order)
-    private readonly ScrollingListNode?[] _settingsPanels = new ScrollingListNode?[7];
+    private readonly ScrollingListNode?[] _settingsPanels = new ScrollingListNode?[5];
     private TabBarNode? _settingsTabBar;
 
     // Positions cached from OnSetup for partial-class builders
@@ -126,13 +128,22 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private TextInputNode? _atReloadModelInput;
     private TextButtonNode? _atReloadModelButton;
     private TextButtonNode? _atReloadVoicesButton;
+    private HorizontalListNode? _atReloadRow;
     // Collapsible section toggle buttons + content arrays for per-frame visibility control
     private TextButtonNode? _localSectionToggle;
     private NodeBase[]? _localSectionContent;
+    private TextButtonNode? _localAdvancedToggle;
+    private NodeBase[]? _localAdvancedContent;
+    private NodeBase[]? _localPostAdvancedContent;
     private TextButtonNode? _remoteSectionToggle;
     private NodeBase[]? _remoteSectionContent;
     private TextButtonNode? _serviceSectionToggle;
     private NodeBase[]? _serviceSectionContent;
+
+    // Track previous backend visibility state to recalculate layout only on change
+    private bool _prevShowLocal;
+    private bool _prevShowRemote;
+    private bool _prevShowService;
 
     public NativeConfigWindow(
         EKConfig config,
@@ -193,19 +204,15 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
 
         _settingsPanels[0] = BuildGeneralPanel(_innerContentPos, _innerContentSize);
         _settingsPanels[1] = BuildDialoguePanel(_innerContentPos, _innerContentSize);
-        _settingsPanels[2] = BuildBattlePanel(_innerContentPos, _innerContentSize);
-        _settingsPanels[3] = BuildChatPanel(_innerContentPos, _innerContentSize);
-        _settingsPanels[4] = BuildBubblesPanel(_innerContentPos, _innerContentSize);
-        _settingsPanels[5] = BuildSaveLoadPanel(_innerContentPos, _innerContentSize);
-        _settingsPanels[6] = BuildBackendPanel(_innerContentPos, _innerContentSize);
+        _settingsPanels[2] = BuildChatPanel(_innerContentPos, _innerContentSize);
+        _settingsPanels[3] = BuildSaveLoadPanel(_innerContentPos, _innerContentSize);
+        _settingsPanels[4] = BuildBackendPanel(_innerContentPos, _innerContentSize);
 
-        _settingsTabBar.AddTab("General",   () => ShowSettingsPanel(0));
-        _settingsTabBar.AddTab("Dialogue",  () => ShowSettingsPanel(1));
-        _settingsTabBar.AddTab("Battle",    () => ShowSettingsPanel(2));
-        _settingsTabBar.AddTab("Chat",      () => ShowSettingsPanel(3));
-        _settingsTabBar.AddTab("Bubbles",   () => ShowSettingsPanel(4));
-        _settingsTabBar.AddTab("Save/Load", () => ShowSettingsPanel(5));
-        _settingsTabBar.AddTab("Backend",   () => ShowSettingsPanel(6));
+        _settingsTabBar.AddTab(Loc.S("General"),   () => ShowSettingsPanel(0));
+        _settingsTabBar.AddTab(Loc.S("Dialogue"),  () => ShowSettingsPanel(1));
+        _settingsTabBar.AddTab(Loc.S("Chat"),      () => ShowSettingsPanel(2));
+        _settingsTabBar.AddTab(Loc.S("Storage"),   () => ShowSettingsPanel(3));
+        _settingsTabBar.AddTab(Loc.S("Backend"),   () => ShowSettingsPanel(4));
 
         // Link buttons — positioned top-right, only visible on Settings tab
         const float discordW = 160f;
@@ -213,11 +220,11 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         const float btnGap   = 4f;
         var rightEdge = pos.X + size.X;
 
-        _githubButton = Button("Alltalk Github", githubW,
+        _githubButton = Button(Loc.S("Alltalk Github"), githubW,
             () => CMDHelper.OpenUrl(Constants.ALLTALKGITHUBURL));
         _githubButton.Position = new Vector2(rightEdge - githubW, _innerContentPos.Y + 2);
 
-        _discordButton = Button("Join discord server", discordW,
+        _discordButton = Button(Loc.S("Join discord server"), discordW,
             () => CMDHelper.OpenUrl(Constants.DISCORDURL));
         _discordButton.Position = new Vector2(rightEdge - githubW - btnGap - discordW, _innerContentPos.Y + 2);
 
@@ -231,10 +238,10 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         SetupLogs();
 
         // ── Top-level tabs ───────────────────────────────────────────────────
-        topTabBar.AddTab("Settings",   () => ShowTopPanel(0));
-        topTabBar.AddTab("Voice Sel.", () => ShowTopPanel(1));
-        topTabBar.AddTab("Phonetics",  () => ShowTopPanel(2));
-        topTabBar.AddTab("Logs",       () => ShowTopPanel(3));
+        topTabBar.AddTab(Loc.S("Settings"),   () => ShowTopPanel(0));
+        topTabBar.AddTab(Loc.S("Voice Sel."), () => ShowTopPanel(1));
+        topTabBar.AddTab(Loc.S("Phonetics"),  () => ShowTopPanel(2));
+        topTabBar.AddTab(Loc.S("Logs"),       () => ShowTopPanel(3));
 
         // ── Add all nodes to addon ───────────────────────────────────────────
         AddNode(topTabBar);
@@ -306,9 +313,9 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             _deleteNpcsArmed = false;
             _deletePlayersArmed = false;
             _deleteBubblesArmed = false;
-            if (_clearNpcsButton != null)    _clearNpcsButton.String    = "Clear mapped NPCs";
-            if (_clearPlayersButton != null) _clearPlayersButton.String = "Clear mapped players";
-            if (_clearBubblesButton != null) _clearBubblesButton.String = "Clear mapped bubbles";
+            if (_clearNpcsButton != null)    _clearNpcsButton.String    = Loc.S("Clear mapped NPCs");
+            if (_clearPlayersButton != null) _clearPlayersButton.String = Loc.S("Clear mapped players");
+            if (_clearBubblesButton != null) _clearBubblesButton.String = Loc.S("Clear mapped bubbles");
         }
 
         // Backend dropdown deferred selection (same crash-safe pattern as DialogTalkController)
@@ -380,6 +387,11 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         SetVisible(_localSectionToggle, showLocal);
         if (!showLocal && _localSectionContent != null)
             foreach (var n in _localSectionContent) SetVisible(n, false);
+        SetVisible(_localAdvancedToggle, showLocal);
+        if (!showLocal && _localAdvancedContent != null)
+            foreach (var n in _localAdvancedContent) SetVisible(n, false);
+        if (_localPostAdvancedContent != null)
+            foreach (var n in _localPostAdvancedContent) SetVisible(n, showLocal);
         if (showLocal) _atLocalNodes?.Update(_config, _alltalkInstance);
 
         // Remote section: toggle button + content
@@ -391,6 +403,15 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         SetVisible(_serviceSectionToggle, showService);
         if (!showService && _serviceSectionContent != null)
             foreach (var n in _serviceSectionContent) SetVisible(n, false);
+
+        // Recalculate backend panel layout when visibility changes
+        if (showLocal != _prevShowLocal || showRemote != _prevShowRemote || showService != _prevShowService)
+        {
+            _prevShowLocal = showLocal;
+            _prevShowRemote = showRemote;
+            _prevShowService = showService;
+            _settingsPanels[4]?.RecalculateLayout();
+        }
 
         // Partial class updates
         UpdateVoiceSelection();
@@ -417,45 +438,45 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var w    = size.X;
         var list = Panel(pos, size);
 
-        var enabledCheck = Check("Enabled", w, _config.Enabled,
+        var enabledCheck = Check(Loc.S("Enabled"), w, _config.Enabled,
             v => { _config.Enabled = v; _config.Save(); });
 
-        var useNativeUiCheck = Check("Use native FFXIV UI", w, _config.UseNativeUI,
+        var useNativeUiCheck = Check(Loc.S("Use native FFXIV UI"), w, _config.UseNativeUI,
             v => { _config.UseNativeUI = v; _config.Save(); _commands.RequestUiModeSwitch(); });
 
         _generateBySentenceCheck = Check(
-            "Generate per sentence (shorter latency, recommended for CPU inference)", w,
+            Loc.S("Generate per sentence (shorter latency, recommended for CPU inference)"), w,
             _config.GenerateBySentence,
             v => { _config.GenerateBySentence = v; _config.Save(); });
 
-        var removeStuttersCheck = Check("Remove stutters", w, _config.RemoveStutters,
+        var removeStuttersCheck = Check(Loc.S("Remove stutters"), w, _config.RemoveStutters,
             v => { _config.RemoveStutters = v; _config.Save(); });
 
-        _hideUiCheck = Check("Hide UI in cutscenes", w, _config.HideUiInCutscenes,
+        _hideUiCheck = Check(Loc.S("Hide UI in cutscenes"), w, _config.HideUiInCutscenes,
             v => { _config.HideUiInCutscenes = v; _config.Save(); });
 
         _showExtraOptionsCheck = Check(
-            "Show Play/Pause, Stop and Mute buttons in dialogues", w,
+            Loc.S("Show Play/Pause, Stop and Mute buttons in dialogue"), w,
             _config.ShowExtraOptionsInDialogue,
             v => { _config.ShowExtraOptionsInDialogue = v; _config.Save(); });
 
         _showExtraExtraCheck = Check(
-            "Show extended dialogue options (voice selector, auto-advance)", w,
+            Loc.S("Show extended options (voice selector, auto-advance)"), w,
             _config.ShowExtraExtraOptionsInDialogue,
             v => { _config.ShowExtraExtraOptionsInDialogue = v; _config.Save(); });
 
         _removePunctuationCheck = Check(
-            "Remove punctuation (may reduce end-of-speech hallucinations)", w,
+            Loc.S("Remove punctuation (may reduce speech hallucinations)"), w,
             _config.RemovePunctuation,
             v => { _config.RemovePunctuation = v; _config.Save(); });
 
         // Unrecoverable actions
-        _clearNpcsButton = Button("Clear mapped NPCs", 160, () =>
+        _clearNpcsButton = Button(Loc.S("Clear mapped NPCs"), 160, () =>
         {
             if (_deleteNpcsArmed)
             {
                 _deleteNpcsArmed = false;
-                _clearNpcsButton!.String = "Clear mapped NPCs";
+                _clearNpcsButton!.String = Loc.S("Clear mapped NPCs");
                 foreach (var npc in _config.MappedNpcs.FindAll(p => !p.Name.StartsWith("BB") && !p.DoNotDelete))
                 {
                     _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation, npc.Name);
@@ -467,15 +488,15 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             {
                 _lastDeleteClick = DateTime.Now;
                 _deleteNpcsArmed = true;
-                _clearNpcsButton!.String = "Confirm clear NPCs!";
+                _clearNpcsButton!.String = Loc.S("Confirm clear NPCs!");
             }
         });
-        _clearPlayersButton = Button("Clear mapped players", 160, () =>
+        _clearPlayersButton = Button(Loc.S("Clear mapped players"), 160, () =>
         {
             if (_deletePlayersArmed)
             {
                 _deletePlayersArmed = false;
-                _clearPlayersButton!.String = "Clear mapped players";
+                _clearPlayersButton!.String = Loc.S("Clear mapped players");
                 foreach (var p in _config.MappedPlayers.FindAll(p => !p.DoNotDelete))
                 {
                     _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation, p.Name);
@@ -487,15 +508,15 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             {
                 _lastDeleteClick = DateTime.Now;
                 _deletePlayersArmed = true;
-                _clearPlayersButton!.String = "Confirm clear players!";
+                _clearPlayersButton!.String = Loc.S("Confirm clear players!");
             }
         });
-        _clearBubblesButton = Button("Clear mapped bubbles", 160, () =>
+        _clearBubblesButton = Button(Loc.S("Clear mapped bubbles"), 160, () =>
         {
             if (_deleteBubblesArmed)
             {
                 _deleteBubblesArmed = false;
-                _clearBubblesButton!.String = "Clear mapped bubbles";
+                _clearBubblesButton!.String = Loc.S("Clear mapped bubbles");
                 foreach (var npc in _config.MappedNpcs.FindAll(p => p.Name.StartsWith("BB") && !p.DoNotDelete))
                 {
                     _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation, npc.Name);
@@ -507,10 +528,10 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             {
                 _lastDeleteClick = DateTime.Now;
                 _deleteBubblesArmed = true;
-                _clearBubblesButton!.String = "Confirm clear bubbles!";
+                _clearBubblesButton!.String = Loc.S("Confirm clear bubbles!");
             }
         });
-        var reloadRemoteButton = Button("Reload remote mappings", 180,
+        var reloadRemoteButton = Button(Loc.S("Reload remote mappings"), 180,
             () => _jsonData.Reload(_clientState.ClientLanguage));
 
         // Available commands
@@ -540,14 +561,15 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         list.AddNode(useNativeUiCheck);
         list.AddNode(_generateBySentenceCheck);
         list.AddNode(removeStuttersCheck);
+        list.AddNode(_removePunctuationCheck);
         list.AddNode(_hideUiCheck);
 
-        CreateCollapsibleSection(list, "Experimental options", w, true,
-            [_showExtraOptionsCheck, _showExtraExtraCheck, _removePunctuationCheck]);
+        CreateCollapsibleSection(list, Loc.S("In-Game Controls"), w, true,
+            [_showExtraOptionsCheck, _showExtraExtraCheck]);
 
-        CreateCollapsibleSection(list, "Unrecoverable actions", w, true, [row1, row2]);
+        CreateCollapsibleSection(list, Loc.S("Reset Data"), w, true, [row1, row2]);
 
-        CreateCollapsibleSection(list, "Available commands", w, true,
+        CreateCollapsibleSection(list, Loc.S("Available commands"), w, true,
             commandNodes.Where(n => n != null).Cast<NodeBase>().ToArray());
         return list;
     }
@@ -561,33 +583,53 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var w    = size.X;
         var list = Panel(pos, size);
 
-        var voiceDialogueCheck = Check("Voice dialogue", w, _config.VoiceDialogue,
+        var voiceDialogueCheck = Check(Loc.S("Voice dialogue"), w, _config.VoiceDialogue,
             v => { _config.VoiceDialogue = v; _config.Save(); });
 
-        _voiceDialogueIn3DCheck = Check("Voice dialogue in 3D space", w, _config.VoiceDialogueIn3D,
+        _voiceDialogueIn3DCheck = Check(Loc.S("Voice dialogue in 3D space"), w, _config.VoiceDialogueIn3D,
             v => { _config.VoiceDialogueIn3D = v; _config.Save(); });
 
         _dialogue3DSlider = Slider(w, _config.Voice3DAudibleRange,
             v => { _config.Voice3DAudibleRange = v; _config.Save(); _audioPlayback.Update3DFactors(v); });
 
         var voicePlayerCutsceneCheck = Check(
-            "Voice player choices in cutscene", w, _config.VoicePlayerChoicesCutscene,
+            Loc.S("Voice player choices in cutscenes"), w, _config.VoicePlayerChoicesCutscene,
             v => { _config.VoicePlayerChoicesCutscene = v; _config.Save(); });
 
         var voicePlayerChoicesCheck = Check(
-            "Voice player choices outside cutscene", w, _config.VoicePlayerChoices,
+            Loc.S("Voice player choices outside cutscenes"), w, _config.VoicePlayerChoices,
             v => { _config.VoicePlayerChoices = v; _config.Save(); });
 
-        var cancelAdvanceCheck = Check("Cancel voice on text advance", w,
+        var cancelAdvanceCheck = Check(Loc.S("Cancel voice on text advance"), w,
             _config.CancelSpeechOnTextAdvance,
             v => { _config.CancelSpeechOnTextAdvance = v; _config.Save(); });
 
-        var autoAdvanceCheck = Check("Click dialogue after speech completion", w,
+        var autoAdvanceCheck = Check(Loc.S("Auto-advance dialogue after speech completes"), w,
             _config.AutoAdvanceTextAfterSpeechCompleted,
             v => { _config.AutoAdvanceTextAfterSpeechCompleted = v; _config.Save(); });
 
-        var voiceRetainersCheck = Check("Voice retainer dialogues", w, _config.VoiceRetainers,
+        var voiceRetainersCheck = Check(Loc.S("Voice retainer dialogue"), w, _config.VoiceRetainers,
             v => { _config.VoiceRetainers = v; _config.Save(); });
+
+        // Battle dialogue
+        var voiceBattleCheck = Check(Loc.S("Voice battle dialogue"), w, _config.VoiceBattleDialogue,
+            v => { _config.VoiceBattleDialogue = v; _config.Save(); });
+
+        _voiceBattleQueuedCheck = Check(Loc.S("Queue battle dialogue"), w, _config.VoiceBattleDialogQueued,
+            v => { _config.VoiceBattleDialogQueued = v; _config.Save(); });
+
+        // NPC Bubbles
+        var voiceBubblesCheck = Check(Loc.S("Voice NPC bubbles"), w, _config.VoiceBubble,
+            v => { _config.VoiceBubble = v; _config.Save(); });
+
+        _voiceBubblesInCityCheck = Check(Loc.S("Voice bubbles in cities"), w, _config.VoiceBubblesInCity,
+            v => { _config.VoiceBubblesInCity = v; _config.Save(); });
+
+        _voiceSourceCamCheck = Check(Loc.S("Use camera as 3D sound source"), w, _config.VoiceSourceCam,
+            v => { _config.VoiceSourceCam = v; _config.Save(); });
+
+        _bubbles3DSlider = Slider(w, _config.Voice3DAudibleRange,
+            v => { _config.Voice3DAudibleRange = v; _config.Save(); _audioPlayback.Update3DFactors(v); });
 
         list.AddNode(voiceDialogueCheck);
         list.AddNode(_voiceDialogueIn3DCheck);
@@ -599,26 +641,13 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         list.AddNode(cancelAdvanceCheck);
         list.AddNode(autoAdvanceCheck);
         list.AddNode(voiceRetainersCheck);
-        return list;
-    }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // Battle dialogue tab
-    // ─────────────────────────────────────────────────────────────────────────
+        CreateCollapsibleSection(list, Loc.S("Battle Dialogue"), w, true,
+            [voiceBattleCheck, _voiceBattleQueuedCheck]);
 
-    private ScrollingListNode BuildBattlePanel(Vector2 pos, Vector2 size)
-    {
-        var w    = size.X;
-        var list = Panel(pos, size);
+        CreateCollapsibleSection(list, Loc.S("NPC Bubbles"), w, true,
+            [voiceBubblesCheck, _voiceBubblesInCityCheck, _voiceSourceCamCheck, _bubbles3DSlider]);
 
-        var voiceBattleCheck = Check("Voice battle dialogue", w, _config.VoiceBattleDialogue,
-            v => { _config.VoiceBattleDialogue = v; _config.Save(); });
-
-        _voiceBattleQueuedCheck = Check("Queue battle dialogue", w, _config.VoiceBattleDialogQueued,
-            v => { _config.VoiceBattleDialogQueued = v; _config.Save(); });
-
-        list.AddNode(voiceBattleCheck);
-        list.AddNode(_voiceBattleQueuedCheck);
         return list;
     }
 
@@ -631,38 +660,38 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var w    = size.X;
         var list = Panel(pos, size);
 
-        var voiceChatCheck = Check("Voice chat", w, _config.VoiceChat,
+        var voiceChatCheck = Check(Loc.S("Voice chat"), w, _config.VoiceChat,
             v => { _config.VoiceChat = v; _config.Save(); });
 
-        _chatApiKeyInput = Input("Detect Language API key (detectlanguage.com)", w, 32,
+        _chatApiKeyInput = Input(Loc.S("Detect Language API key (detectlanguage.com)"), w, 32,
             _config.VoiceChatLanguageAPIKey,
             v => { _config.VoiceChatLanguageAPIKey = v; _config.Save(); });
 
-        _voiceChatIn3DCheck = Check("Voice chat in 3D space", w, _config.VoiceChatIn3D,
+        _voiceChatIn3DCheck = Check(Loc.S("Voice chat in 3D space"), w, _config.VoiceChatIn3D,
             v => { _config.VoiceChatIn3D = v; _config.Save(); });
 
         _chat3DSlider = Slider(w, _config.Voice3DAudibleRange,
             v => { _config.Voice3DAudibleRange = v; _config.Save(); _audioPlayback.Update3DFactors(v); });
 
-        _voiceChatPlayerCheck        = Check("Voice your own chat",            w, _config.VoiceChatPlayer,         v => { _config.VoiceChatPlayer         = v; _config.Save(); });
-        _voiceChatSayCheck           = Check("Voice say",                      w, _config.VoiceChatSay,            v => { _config.VoiceChatSay            = v; _config.Save(); });
-        _voiceChatYellCheck          = Check("Voice yell",                     w, _config.VoiceChatYell,           v => { _config.VoiceChatYell           = v; _config.Save(); });
-        _voiceChatShoutCheck         = Check("Voice shout",                    w, _config.VoiceChatShout,          v => { _config.VoiceChatShout          = v; _config.Save(); });
-        _voiceChatFCCheck            = Check("Voice free company",             w, _config.VoiceChatFreeCompany,    v => { _config.VoiceChatFreeCompany    = v; _config.Save(); });
-        _voiceChatTellCheck          = Check("Voice tell",                     w, _config.VoiceChatTell,           v => { _config.VoiceChatTell           = v; _config.Save(); });
-        _voiceChatPartyCheck         = Check("Voice party",                    w, _config.VoiceChatParty,          v => { _config.VoiceChatParty          = v; _config.Save(); });
-        _voiceChatAllianceCheck      = Check("Voice alliance",                 w, _config.VoiceChatAlliance,       v => { _config.VoiceChatAlliance       = v; _config.Save(); });
-        _voiceChatNoviceCheck        = Check("Voice novice network",           w, _config.VoiceChatNoviceNetwork,  v => { _config.VoiceChatNoviceNetwork  = v; _config.Save(); });
-        _voiceChatLinkshellCheck     = Check("Voice linkshells",               w, _config.VoiceChatLinkshell,      v => { _config.VoiceChatLinkshell      = v; _config.Save(); });
-        _voiceChatCrossLinkshellCheck= Check("Voice cross-world linkshells",   w, _config.VoiceChatCrossLinkshell, v => { _config.VoiceChatCrossLinkshell = v; _config.Save(); });
+        _voiceChatPlayerCheck        = Check(Loc.S("Voice your own chat"),                      w, _config.VoiceChatPlayer,         v => { _config.VoiceChatPlayer         = v; _config.Save(); });
+        _voiceChatSayCheck           = Check(Loc.S("Voice Say"),                                w, _config.VoiceChatSay,            v => { _config.VoiceChatSay            = v; _config.Save(); });
+        _voiceChatYellCheck          = Check(Loc.S("Voice Yell"),                               w, _config.VoiceChatYell,           v => { _config.VoiceChatYell           = v; _config.Save(); });
+        _voiceChatShoutCheck         = Check(Loc.S("Voice Shout"),                              w, _config.VoiceChatShout,          v => { _config.VoiceChatShout          = v; _config.Save(); });
+        _voiceChatFCCheck            = Check(Loc.S("Voice Free Company"),                       w, _config.VoiceChatFreeCompany,    v => { _config.VoiceChatFreeCompany    = v; _config.Save(); });
+        _voiceChatTellCheck          = Check(Loc.S("Voice Tell"),                               w, _config.VoiceChatTell,           v => { _config.VoiceChatTell           = v; _config.Save(); });
+        _voiceChatPartyCheck         = Check(Loc.S("Voice Party"),                              w, _config.VoiceChatParty,          v => { _config.VoiceChatParty          = v; _config.Save(); });
+        _voiceChatAllianceCheck      = Check(Loc.S("Voice Alliance"),                           w, _config.VoiceChatAlliance,       v => { _config.VoiceChatAlliance       = v; _config.Save(); });
+        _voiceChatNoviceCheck        = Check(Loc.S("Voice Novice Network"),                     w, _config.VoiceChatNoviceNetwork,  v => { _config.VoiceChatNoviceNetwork  = v; _config.Save(); });
+        _voiceChatLinkshellCheck     = Check(Loc.S("Voice linkshells"),                         w, _config.VoiceChatLinkshell,      v => { _config.VoiceChatLinkshell      = v; _config.Save(); });
+        _voiceChatCrossLinkshellCheck= Check(Loc.S("Voice cross-world linkshells"),   w, _config.VoiceChatCrossLinkshell, v => { _config.VoiceChatCrossLinkshell = v; _config.Save(); });
 
         list.AddNode(voiceChatCheck);
         list.AddNode(_chatApiKeyInput);
 
-        CreateCollapsibleSection(list, "3D Space", w, true,
+        CreateCollapsibleSection(list, Loc.S("3D Space"), w, true,
             [_voiceChatIn3DCheck, _chat3DSlider]);
 
-        CreateCollapsibleSection(list, "Chat channels", w, false,
+        CreateCollapsibleSection(list, Loc.S("Chat channels"), w, false,
             [_voiceChatPlayerCheck, _voiceChatSayCheck, _voiceChatYellCheck,
              _voiceChatShoutCheck, _voiceChatFCCheck, _voiceChatTellCheck,
              _voiceChatPartyCheck, _voiceChatAllianceCheck, _voiceChatNoviceCheck,
@@ -672,37 +701,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Bubbles tab
-    // ─────────────────────────────────────────────────────────────────────────
-
-    private ScrollingListNode BuildBubblesPanel(Vector2 pos, Vector2 size)
-    {
-        var w    = size.X;
-        var list = Panel(pos, size);
-
-        var voiceBubblesCheck = Check("Voice NPC bubbles", w, _config.VoiceBubble,
-            v => { _config.VoiceBubble = v; _config.Save(); });
-
-        _voiceBubblesInCityCheck = Check("Voice bubbles in city", w, _config.VoiceBubblesInCity,
-            v => { _config.VoiceBubblesInCity = v; _config.Save(); });
-
-        _voiceSourceCamCheck = Check("Use camera as 3D sound source", w, _config.VoiceSourceCam,
-            v => { _config.VoiceSourceCam = v; _config.Save(); });
-
-        _bubbles3DSlider = Slider(w, _config.Voice3DAudibleRange,
-            v => { _config.Voice3DAudibleRange = v; _config.Save(); _audioPlayback.Update3DFactors(v); });
-
-        list.AddNode(voiceBubblesCheck);
-        list.AddNode(_voiceBubblesInCityCheck);
-
-        CreateCollapsibleSection(list, "3D Space", w, true,
-            [_voiceSourceCamCheck, _bubbles3DSlider]);
-
-        return list;
-    }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Save/Load tab
+    // Storage tab
     // ─────────────────────────────────────────────────────────────────────────
 
     private ScrollingListNode BuildSaveLoadPanel(Vector2 pos, Vector2 size)
@@ -710,19 +709,19 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var w    = size.X;
         var list = Panel(pos, size);
 
-        var loadLocalFirst = Check("Search audio locally before generating", w,
+        var loadLocalFirst = Check(Loc.S("Search for audio locally before generating"), w,
             _config.LoadFromLocalFirst, v => { _config.LoadFromLocalFirst = v; _config.Save(); });
-        var saveLocally = Check("Save generated audio locally", w, _config.SaveToLocal,
+        var saveLocally = Check(Loc.S("Save generated audio locally"), w, _config.SaveToLocal,
             v => { _config.SaveToLocal = v; _config.Save(); });
-        _createMissingDirCheck = Check("Create directory if missing", w,
+        _createMissingDirCheck = Check(Loc.S("Create directory if missing"), w,
             _config.CreateMissingLocalSaveLocation,
             v => { _config.CreateMissingLocalSaveLocation = v; _config.Save(); });
-        _localPathInput = Input("Local audio directory path", w, 260, _config.LocalSaveLocation,
+        _localPathInput = Input(Loc.S("Local audio directory path"), w, 260, _config.LocalSaveLocation,
             v => { _config.LocalSaveLocation = v; _config.Save(); });
 
         // Google Drive
         var gdRequestVoiceLine = Check(
-            "Send dialogue lines to Ren Nagasaki's share for a voice line database", w,
+            Loc.S("Send dialogue lines to Ren Nagasaki's share for a voice line database"), w,
             _config.GoogleDriveRequestVoiceLine,
             v =>
             {
@@ -731,19 +730,19 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
                 if (v) _ = _googleDrive.CreateDriveServicePkceAsync();
             });
 
-        _gdUploadCheck = Check("Upload to Google Drive (requires local save)", w,
+        _gdUploadCheck = Check(Loc.S("Upload to Google Drive (requires local save)"), w,
             _config.GoogleDriveUpload,
             v => { _config.GoogleDriveUpload = v; _config.Save(); });
 
-        var gdDownload = Check("Download from Google Drive share", w, _config.GoogleDriveDownload,
+        var gdDownload = Check(Loc.S("Download from Google Drive share"), w, _config.GoogleDriveDownload,
             v => { _config.GoogleDriveDownload = v; _config.Save(); });
         _gdDownloadPeriodicCheck = Check(
-            "Download periodically (every 60 min, new files only)", w,
+            Loc.S("Download periodically (every 60 min, new files only)"), w,
             _config.GoogleDriveDownloadPeriodically,
             v => { _config.GoogleDriveDownloadPeriodically = v; _config.Save(); });
-        _gdShareLinkInput = Input("Google Drive share link", w, 260, _config.GoogleDriveShareLink,
+        _gdShareLinkInput = Input(Loc.S("Google Drive share link"), w, 260, _config.GoogleDriveShareLink,
             v => { _config.GoogleDriveShareLink = v; _config.Save(); });
-        _gdDownloadNowButton = Button("Download now", 120, () =>
+        _gdDownloadNowButton = Button(Loc.S("Download now"), 120, () =>
             _googleDrive.DownloadFolder(_config.LocalSaveLocation, _config.GoogleDriveShareLink));
 
         list.AddNode(loadLocalFirst);
@@ -751,7 +750,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         list.AddNode(_createMissingDirCheck);
         list.AddNode(_localPathInput);
 
-        CreateCollapsibleSection(list, "Google Drive", w, false,
+        CreateCollapsibleSection(list, Loc.S("Google Drive"), w, false,
             [gdRequestVoiceLine, _gdUploadCheck, gdDownload,
              _gdDownloadPeriodicCheck, _gdShareLinkInput, _gdDownloadNowButton]);
 
@@ -780,7 +779,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _backendDropDown.OnOptionSelected = option => _pendingBackendSelection = option;
 
         // Alltalk instance type — radio-style mutual exclusion via enum
-        _atLocalCheck = Check("Local instance", w, _config.Alltalk.InstanceType == AlltalkInstanceType.Local, v =>
+        _atLocalCheck = Check(Loc.S("Local instance"), w, _config.Alltalk.InstanceType == AlltalkInstanceType.Local, v =>
         {
             if (!v) return;
             _config.Alltalk.InstanceType = AlltalkInstanceType.Local;
@@ -789,7 +788,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             _atRemoteCheck!.IsChecked = false;
             _atNoInstanceCheck!.IsChecked = false;
         });
-        _atRemoteCheck = Check("Remote instance", w, _config.Alltalk.InstanceType == AlltalkInstanceType.Remote, v =>
+        _atRemoteCheck = Check(Loc.S("Remote instance"), w, _config.Alltalk.InstanceType == AlltalkInstanceType.Remote, v =>
         {
             if (!v) return;
             _config.Alltalk.InstanceType = AlltalkInstanceType.Remote;
@@ -798,7 +797,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             _atRemoteCheck!.IsChecked = true;
             _atNoInstanceCheck!.IsChecked = false;
         });
-        _atNoInstanceCheck = Check("No instance", w, _config.Alltalk.InstanceType == AlltalkInstanceType.None, v =>
+        _atNoInstanceCheck = Check(Loc.S("No instance"), w, _config.Alltalk.InstanceType == AlltalkInstanceType.None, v =>
         {
             if (!v) return;
             _config.Alltalk.InstanceType = AlltalkInstanceType.None;
@@ -816,32 +815,41 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _atRemoteNodes.TestConnectionButton.OnClick = () => TestConnection();
 
         // Service options (shared between local & remote)
-        _atStreamingCheck = Check("Streaming generation (play audio before full text is generated)", w,
+        _atStreamingCheck = Check(Loc.S("Streaming generation (play audio before full text is generated)"), w,
             _config.Alltalk.StreamingGeneration,
             v => { _config.Alltalk.StreamingGeneration = v; _config.Save(); });
-        _atReloadModelInput = Input("Model name to reload", w, 40, _config.Alltalk.ReloadModel,
+        _atReloadModelInput = Input(Loc.S("Model name to reload"), w, 40, _config.Alltalk.ReloadModel,
             v => { _config.Alltalk.ReloadModel = v; _config.Save(); });
-        _atReloadModelButton = Button("Reload model", 120, () =>
+        _atReloadModelButton = Button(Loc.S("Reload model"), 100, () =>
             _backend.ReloadService(_config.Alltalk.ReloadModel, new EKEventId(0, TextSource.None)));
-        _atReloadVoicesButton = Button("Reload voices", 120, () =>
+        _atReloadVoicesButton = Button(Loc.S("Reload voices"), 100, () =>
         {
             _backend.SetBackendType(_config.BackendSelection);
             _backend.NotifyCharacterMapped();
         });
+        _atReloadRow = new HorizontalListNode { Size = new Vector2(w, 26), ItemSpacing = 4 };
+        _atReloadRow.AddNode(_atReloadModelButton);
+        _atReloadRow.AddNode(_atReloadVoicesButton);
 
         list.AddNode(_backendDropDown);
 
-        CreateCollapsibleSection(list, "Instance type", w, false,
+        CreateCollapsibleSection(list, Loc.S("Instance type"), w, false,
             [_atLocalCheck, _atRemoteCheck, _atNoInstanceCheck]);
 
-        _localSectionContent = _atLocalNodes.AllNodes;
-        _localSectionToggle = CreateCollapsibleSection(list, "Local instance", w, false, _localSectionContent);
+        _localSectionContent = _atLocalNodes.EssentialNodes;
+        _localSectionToggle = CreateCollapsibleSection(list, Loc.S("Local instance"), w, false, _localSectionContent);
+
+        _localAdvancedContent = _atLocalNodes.AdvancedNodes;
+        _localAdvancedToggle = CreateCollapsibleSection(list, Loc.S("Advanced options"), w, true, _localAdvancedContent);
+
+        _localPostAdvancedContent = _atLocalNodes.PostAdvancedNodes;
+        foreach (var n in _localPostAdvancedContent) list.AddNode(n);
 
         _remoteSectionContent = _atRemoteNodes.AllNodes;
-        _remoteSectionToggle = CreateCollapsibleSection(list, "Remote connection", w, false, _remoteSectionContent);
+        _remoteSectionToggle = CreateCollapsibleSection(list, Loc.S("Remote connection"), w, false, _remoteSectionContent);
 
-        _serviceSectionContent = [_atStreamingCheck, _atReloadModelInput, _atReloadModelButton, _atReloadVoicesButton];
-        _serviceSectionToggle = CreateCollapsibleSection(list, "Service options", w, true, _serviceSectionContent);
+        _serviceSectionContent = [_atStreamingCheck, _atReloadModelInput, _atReloadRow];
+        _serviceSectionToggle = CreateCollapsibleSection(list, Loc.S("Service options"), w, true, _serviceSectionContent);
 
         return list;
     }
@@ -941,9 +949,11 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         FontSize = 12,
     };
 
-    private static TextButtonNode Button(string label, float width, Action onClick)
+    private static TextButtonNode Button(string label, float minWidth, Action onClick)
     {
-        var node = new TextButtonNode { Size = new Vector2(width, 24), String = label };
+        var node = new TextButtonNode { Size = new Vector2(minWidth, 24), String = label };
+        var textW = node.LabelNode.GetTextDrawSize(label).X + 36;
+        if (textW > minWidth) node.Size = new Vector2(textW, 24);
         node.OnClick = onClick;
         return node;
     }

@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Numerics;
 using Echokraut.DataClasses;
+using Echokraut.Localization;
 using KamiToolKit.Nodes;
 
 namespace Echokraut.Windows.Native;
@@ -45,8 +46,8 @@ public sealed unsafe partial class NativeConfigWindow
             ItemSpacing = 4,
             Position = new Vector2(x, y),
         };
-        _phonFilterRow.AddNode(Label("Original", PhonColOrig));
-        _phonFilterRow.AddNode(Label("Corrected", PhonColCorr));
+        _phonFilterRow.AddNode(Label(Loc.S("Original"), PhonColOrig));
+        _phonFilterRow.AddNode(Label(Loc.S("Corrected"), PhonColCorr));
         _phonFilterRow.AddNode(Label("", PhonColDel));
 
         // Row 2: Filter inputs below headers
@@ -56,9 +57,9 @@ public sealed unsafe partial class NativeConfigWindow
             ItemSpacing = 4,
             Position = new Vector2(x, y + 20),
         };
-        _phonAddRow.AddNode(Input("Filter", PhonColOrig, 40, "",
+        _phonAddRow.AddNode(Input(Loc.S("Filter"), PhonColOrig, 40, "",
             v => { _phonFilterOrigText = v; _phonNeedRebuild = true; }));
-        _phonAddRow.AddNode(Input("Filter", PhonColCorr, 40, "",
+        _phonAddRow.AddNode(Input(Loc.S("Filter"), PhonColCorr, 40, "",
             v => { _phonFilterCorrText = v; _phonNeedRebuild = true; }));
         _phonAddRow.AddNode(Spacer(PhonColDel, 28));
 
@@ -75,11 +76,11 @@ public sealed unsafe partial class NativeConfigWindow
             ItemSpacing = 4,
             Position = new Vector2(x, y + 56),
         };
-        _phonHeaderSep2.AddNode(Input("New original", PhonColOrig, 40, "",
+        _phonHeaderSep2.AddNode(Input(Loc.S("New original"), PhonColOrig, 40, "",
             v => { _phonNewOrigText = v; }));
-        _phonHeaderSep2.AddNode(Input("New corrected", PhonColCorr, 40, "",
+        _phonHeaderSep2.AddNode(Input(Loc.S("New corrected"), PhonColCorr, 40, "",
             v => { _phonNewCorrText = v; }));
-        _phonHeaderSep2.AddNode(Button("Add", PhonColDel, () =>
+        _phonHeaderSep2.AddNode(Button(Loc.S("Add"), PhonColDel, () =>
         {
             if (string.IsNullOrWhiteSpace(_phonNewOrigText)) return;
             var correction = new PhoneticCorrection(_phonNewOrigText.Trim(), _phonNewCorrText.Trim());
@@ -156,7 +157,7 @@ public sealed unsafe partial class NativeConfigWindow
             var row = new HorizontalListNode { Size = new Vector2(w, 24), ItemSpacing = 4 };
             row.AddNode(Label(corr.OriginalText, PhonColOrig));
             row.AddNode(Label(corr.CorrectedText, PhonColCorr));
-            row.AddNode(Button("Delete", PhonColDel, () =>
+            row.AddNode(Button(Loc.S("Delete"), PhonColDel, () =>
             {
                 _config.PhoneticCorrections.Remove(corr);
                 _config.Save();
@@ -166,7 +167,7 @@ public sealed unsafe partial class NativeConfigWindow
         }
 
         if (corrections.Count == 0)
-            panel.AddNode(Label("No phonetic corrections found.", w));
+            panel.AddNode(Label(Loc.S("No phonetic corrections found."), w));
 
         panel.RecalculateLayout();
     }

@@ -389,7 +389,7 @@ public sealed class Live3DAudioEngine : IDisposable
                     if (looksWav)
                     {
                         var ok = TryConsumeAllWavHeadersSeekable(_engine._log, _source, out var fmt);
-                        _engine._log.Info("", $"WAV seek parse ok={ok}, posNow={_source.Position}", new EKEventId(0, TextSource.None));
+                        _engine._log.Info(nameof(Start), $"WAV seek parse ok={ok}, posNow={_source.Position}", new EKEventId(0, TextSource.None));
 
                         if (ok)
                         {
@@ -451,7 +451,7 @@ public sealed class Live3DAudioEngine : IDisposable
                 outFlags = (_isIEEEFloatIn || _convertToFloat) ? BassFlags.Float : BassFlags.Default;
             _bytesPerSampleOut = (_isIEEEFloatIn || _convertToFloat) ? 4 : 2;
 
-            _engine._log.Info("",
+            _engine._log.Info(nameof(Start),
                            $"FMT DECIDED: sr={_sr} ch={_ch} bits={_bitsIn} ieeeFloat={_isIEEEFloatIn} convertToFloat={_convertToFloat} use3d={_use3d}",
                            new EKEventId(0, TextSource.None));
 
@@ -998,7 +998,7 @@ public sealed class Live3DAudioEngine : IDisposable
                 _dumped = true;
                 var take = Math.Min(64, data.Length);
                 var hex = BitConverter.ToString(data, 0, take);
-                _engine._log.Info("", $"FIRST PUTDATA BYTES: {hex}", new EKEventId(0, TextSource.None));
+                _engine._log.Info(nameof(PushAll), $"FIRST PUTDATA BYTES: {hex}", new EKEventId(0, TextSource.None));
             }
             
             int offset = 0;

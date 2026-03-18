@@ -12,6 +12,7 @@ using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
 using Echokraut.Helper.Functional;
+using Echokraut.Localization;
 using Echokraut.Services;
 using OtterGui;
 
@@ -67,7 +68,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(Draw), $"Something went wrong: {ex}", new EKEventId(0, TextSource.Backend));
+            _log.Error(nameof(Draw), ex.ToString(), new EKEventId(0, TextSource.Backend));
         }
     }
 
@@ -75,11 +76,11 @@ public class AlltalkInstanceWindow : Window, IDisposable
     {
         try
         {
-            if (ImGui.CollapsingHeader("Install process:"))
+            if (ImGui.CollapsingHeader(Loc.S("Install process:")))
             {
                 using (ImRaii.Disabled(_alltalkInstance.Installing))
                 {
-                    ImGui.Text("Local instance path:");
+                    ImGui.Text(Loc.S("Local instance path:"));
                     using (ImRaii.Disabled(true))
                     {
                         var localInstallPath = _config.Alltalk.LocalInstallPath;
@@ -89,7 +90,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
                     ImGui.SameLine();
                     if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Folder.ToIconString()}##EKLocalATPathButton",
                                                      new Vector2(25, 25),
-                                                     "Select a directory via dialog.", _alltalkInstance.Installing,
+                                                     Loc.S("Select a directory via dialog."), _alltalkInstance.Installing,
                                                      true))
                     {
                         var startDir = _config.Alltalk.LocalInstallPath.Length > 0 &&
@@ -97,7 +98,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
                                            ? _config.Alltalk.LocalInstallPath
                                            : "";
 
-                        fileDialogManager.OpenFolderDialog("Choose alltalk instance directory",
+                        fileDialogManager.OpenFolderDialog(Loc.S("Choose alltalk instance directory"),
                                                            (selected, selectedPath) =>
                                                            {
                                                                if (!selected)
@@ -127,7 +128,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
                         using (ImRaii.PushColor(ImGuiCol.Text, Constants.ERRORLOGCOLOR))
                         {
                             ImGui.Text(
-                                "The alltalk path may not contain any spaces \" \" or dashes \"-\".\r\nPlease make sure its formed correctly.");
+                                Loc.S("The Alltalk path must not contain spaces or dashes.\r\nPlease make sure it's formatted correctly."));
                         }
                     }
 
@@ -136,7 +137,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
                         error = true;
                         using (ImRaii.PushColor(ImGuiCol.Text, Constants.ERRORLOGCOLOR))
                         {
-                            ImGui.Text("The alltalk path may not be empty.\r\nPlease make sure its formed correctly.");
+                            ImGui.Text(Loc.S("The Alltalk path must not be empty.\r\nPlease enter a valid path."));
                         }
                     }
 
@@ -146,68 +147,66 @@ public class AlltalkInstanceWindow : Window, IDisposable
                         using (ImRaii.PushColor(ImGuiCol.Text, Constants.ERRORLOGCOLOR))
                         {
                             ImGui.Text(
-                                "It seems you don't have the CUDA Toolkit installed.\r\nIn order to use a local install you need to install it.");
+                                Loc.S("The CUDA Toolkit does not appear to be installed.\r\nIt is required for local Alltalk instances."));
                         }
                     }
 
-                    var isWindows11 = _config.Alltalk.IsWindows11;
-                    if (ImGui.Checkbox("Is Windows 11##EKIsWin11", ref isWindows11))
+                    if (ImGui.CollapsingHeader(Loc.S("Advanced options")))
                     {
-                        _config.Alltalk.IsWindows11 = isWindows11;
-                        _config.Save();
-                    }
+                        var isWindows11 = _config.Alltalk.IsWindows11;
+                        if (ImGui.Checkbox($"{Loc.S("Is Windows 11")}##EKIsWin11", ref isWindows11))
+                        {
+                            _config.Alltalk.IsWindows11 = isWindows11;
+                            _config.Save();
+                        }
 
-                    if (ImGui.CollapsingHeader("Custom(trained) data:"))
-                    {
-                        using (ImRaii.Disabled(_alltalkInstance.Installing))
-                        { 
-                            ImGui.Text(
-                                "If you prefer a custom trained xtts model, enter the direct download url here. (It needs to be a zip where all files are within one root folder)");
-                            if (ImGui.InputText($"Custom model URL##EKCustomModelUrl",
-                                                ref _config.Alltalk.CustomModelUrl, 256))
-                                _config.Save();
+                        ImGui.Text(
+                            Loc.S("Custom XTTS model URL (zip file with all files in one root folder):"));
+                        if (ImGui.InputText($"{Loc.S("Custom model URL")}##EKCustomModelUrl",
+                                            ref _config.Alltalk.CustomModelUrl, 256))
+                            _config.Save();
 
-                            ImGui.Text(
-                                "If you prefer custom voices, enter the direct download url here. (It needs to be a zip where all files are within one root folder called \"voices\")");
-                            if (ImGui.InputText($"Custom voices URL##EKCustomModelUrl",
-                                                ref _config.Alltalk.CustomVoicesUrl, 256))
-                                _config.Save();
+                        ImGui.Text(
+                            Loc.S("Custom voices URL (zip file with a \"voices\" root folder):"));
+                        if (ImGui.InputText($"{Loc.S("Custom voices URL")}##EKCustomModelUrl",
+                                            ref _config.Alltalk.CustomVoicesUrl, 256))
+                            _config.Save();
 
-                            if (_config.Alltalk.LocalInstall && ImGui.Button("Install only custom data"))
+                        using (ImRaii.Disabled(!_config.Alltalk.LocalInstall || _alltalkInstance.Installing))
+                        {
+                            if (ImGui.Button(Loc.S("Install only custom data")))
                                 _alltalkInstance.InstallCustomData(new EKEventId(0, TextSource.Backend), false);
                         }
-                    }
 
-                    var autoStartLocalInstance = _config.Alltalk.AutoStartLocalInstance;
-                    if (ImGui.Checkbox("Auto start local instance when plugin loads##EKAutoStartLocalInstance",
-                                       ref autoStartLocalInstance))
-                    {
-                        if (autoStartLocalInstance && !firstTime && _config.Alltalk.LocalInstall &&
-                            !_alltalkInstance.InstanceRunning && !_alltalkInstance.InstanceStarting)
-                            _alltalkInstance.StartInstance();
+                        var autoStartLocalInstance = _config.Alltalk.AutoStartLocalInstance;
+                        if (ImGui.Checkbox($"{Loc.S("Auto-start local instance on plugin load")}##EKAutoStartLocalInstance",
+                                           ref autoStartLocalInstance))
+                        {
+                            if (autoStartLocalInstance && !firstTime && _config.Alltalk.LocalInstall &&
+                                !_alltalkInstance.InstanceRunning && !_alltalkInstance.InstanceStarting)
+                                _alltalkInstance.StartInstance();
 
-                        _config.Alltalk.AutoStartLocalInstance = autoStartLocalInstance;
-                        _config.Save();
+                            _config.Alltalk.AutoStartLocalInstance = autoStartLocalInstance;
+                            _config.Save();
+                        }
                     }
 
                     using (ImRaii.Disabled(error))
                     {
                         var buttonText = _alltalkInstance.Installing
-                                             ? "Installing..."
-                                             :
-                                             _config.Alltalk.LocalInstall
-                                                 ?
-                                                 "Reinstall (delete alltalk and install fresh)"
-                                                 : "Install";
+                                             ? Loc.S("Installing...")
+                                             : _config.Alltalk.LocalInstall
+                                                 ? Loc.S("Reinstall (removes existing and installs fresh)")
+                                                 : Loc.S("Install");
                         if (ImGui.Button(buttonText))
                         {
                             if (_config.Alltalk.LocalInstall && (_alltalkInstance.InstanceRunning || _alltalkInstance.InstanceStarting))
                                 _alltalkInstance.StopInstance(new EKEventId(0, TextSource.Backend));
                             _alltalkInstance.Install();
                         }
-                        
-                        ImGui.Text("Please be aware that the install process needs about 20GB of space on disk and, depending on your connection, may take quite some time to install");
-                        ImGui.Text("The process should open up to two shell/cmd windows while installing, you can follow the process there");
+
+                        ImGui.Text(Loc.S("The installation requires about 20 GB of disk space and may take a while depending on your connection."));
+                        ImGui.Text(Loc.S("Up to two shell windows may open during installation — you can follow the progress there."));
                     }
 
                     if (_alltalkInstance.Installing)
@@ -219,7 +218,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
             {
                 using (ImRaii.Disabled(_alltalkInstance.InstanceRunning || _alltalkInstance.InstanceStarting))
                 {
-                    var buttonText = _alltalkInstance.InstanceStarting ? "Starting..." : _alltalkInstance.InstanceRunning ? "Running" : "Start";
+                    var buttonText = _alltalkInstance.InstanceStarting ? Loc.S("Starting...") : _alltalkInstance.InstanceRunning ? Loc.S("Running") : Loc.S("Start");
                     if (ImGui.Button(buttonText))
                         _alltalkInstance.StartInstance();
                 }
@@ -230,7 +229,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
                 ImGui.SameLine();
                 using (ImRaii.Disabled(_alltalkInstance.InstanceStopping || (!_alltalkInstance.InstanceRunning && !_alltalkInstance.InstanceStarting)))
                 {
-                    var buttonText = _alltalkInstance.InstanceStopping ? "Stopping..." : "Stop";
+                    var buttonText = _alltalkInstance.InstanceStopping ? Loc.S("Stopping...") : Loc.S("Stop");
                     if (ImGui.Button(buttonText))
                         _alltalkInstance.StopInstance(new EKEventId(0, TextSource.Backend));
                 }
@@ -242,7 +241,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(DrawLocalInstance), $"Something went wrong: {ex}", new EKEventId(0, TextSource.Backend));
+            _log.Error(nameof(DrawLocalInstance), ex.ToString(), new EKEventId(0, TextSource.Backend));
         }
     }
 
@@ -281,7 +280,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(DrawLoadSpinner), $"Something went wrong: {ex}", new EKEventId(0, TextSource.Backend));
+            _log.Error(nameof(DrawLoadSpinner), ex.ToString(), new EKEventId(0, TextSource.Backend));
         }
     }
 
@@ -289,10 +288,10 @@ public class AlltalkInstanceWindow : Window, IDisposable
     {
         try
         {
-            if (ImGui.InputText($"Base Url##EKBaseUrl", ref _config.Alltalk.BaseUrl, 80))
+            if (ImGui.InputText($"{Loc.S("Base Url")}##EKBaseUrl", ref _config.Alltalk.BaseUrl, 80))
                 _config.Save();
             ImGui.SameLine();
-            if (ImGui.Button($"Test Connection##EKTestConnection"))
+            if (ImGui.Button($"{Loc.S("Test Connection")}##EKTestConnection"))
             {
                 BackendCheckReady(new EKEventId(0, TextSource.None));
             }
@@ -304,27 +303,27 @@ public class AlltalkInstanceWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(DrawRemoteInstance), $"Something went wrong: {ex}", new EKEventId(0, TextSource.Backend));
+            _log.Error(nameof(DrawRemoteInstance), ex.ToString(), new EKEventId(0, TextSource.Backend));
         }
     }
 
     public void DrawAlltalkServiceOptions()
     {
         var streamingGeneration = _config.Alltalk.StreamingGeneration;
-        if (ImGui.Checkbox("Generate streaming(Do not wait for whole text to be generated before playing audio)##EKGenerateStreaming", ref streamingGeneration))
+        if (ImGui.Checkbox($"{Loc.S("Streaming generation (play audio before full text is generated)")}##EKGenerateStreaming", ref streamingGeneration))
         {
             _config.Alltalk.StreamingGeneration = streamingGeneration;
             _config.Save();
         }
-        if (ImGui.InputText($"Model to reload##EKBaseUrl", ref _config.Alltalk.ReloadModel, 40))
+        if (ImGui.InputText($"{Loc.S("Model to reload")}##EKBaseUrl", ref _config.Alltalk.ReloadModel, 40))
             _config.Save();
         ImGui.SameLine();
-        if (ImGui.Button($"Reload model##EKReloadModel"))
+        if (ImGui.Button($"{Loc.S("Reload model")}##EKReloadModel"))
         {
             BackendReloadService(_config.Alltalk.ReloadModel);
         }
 
-        if (ImGui.Button($"Reload Voices##EKReloadVoices"))
+        if (ImGui.Button($"{Loc.S("Reload voices")}##EKReloadVoices"))
         {
             BackendGetVoices();
         }
@@ -340,7 +339,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
             var noInstance = instanceType == Enums.AlltalkInstanceType.None;
             using (ImRaii.Disabled(localInstance || _alltalkInstance.Installing))
             {
-                if (ImGui.Checkbox("Local instance##EKLocalATInstance", ref localInstance))
+                if (ImGui.Checkbox($"{Loc.S("Local instance")}##EKLocalATInstance", ref localInstance))
                 {
                     _config.Alltalk.InstanceType = Enums.AlltalkInstanceType.Local;
                     _config.Save();
@@ -349,7 +348,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
             ImGui.SameLine();
             using (ImRaii.Disabled(remoteInstance || _alltalkInstance.Installing))
             {
-                if (ImGui.Checkbox("Remote instance##EKRemoteATInstance", ref remoteInstance))
+                if (ImGui.Checkbox($"{Loc.S("Remote instance")}##EKRemoteATInstance", ref remoteInstance))
                 {
                     _config.Alltalk.InstanceType = Enums.AlltalkInstanceType.Remote;
                     _config.Save();
@@ -358,7 +357,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
             ImGui.SameLine();
             using (ImRaii.Disabled(noInstance || _alltalkInstance.Installing))
             {
-                if (ImGui.Checkbox("No instance##EKNoATInstance", ref noInstance))
+                if (ImGui.Checkbox($"{Loc.S("No instance")}##EKNoATInstance", ref noInstance))
                 {
                     _config.Alltalk.InstanceType = Enums.AlltalkInstanceType.None;
                     _config.Save();
@@ -370,10 +369,10 @@ public class AlltalkInstanceWindow : Window, IDisposable
                 using (ImRaii.PushColor(ImGuiCol.Text, Constants.ERRORLOGCOLOR))
                 {
                     ImGui.Text(
-                        "You're not on windows, this means you need to fulfill some extra steps in order to use alltalk locally.");
+                        Loc.S("You are not on Windows. Additional setup steps are required to use Alltalk locally."));
                     ImGui.Text(
-                        "Please refer to my discord or if you prefer, the install intructions from erew123 by using the link above.");
-                    ImGui.Text("If you already did all necessary steps, ignore this message.");
+                        Loc.S("Please refer to the Discord or the install instructions from erew123 (link above)."));
+                    ImGui.Text(Loc.S("If you have already completed these steps, you can ignore this message."));
                 }
             }
             using var style = ImRaii.PushStyle(ImGuiStyleVar.ItemSpacing, Vector2.Zero);
@@ -396,11 +395,11 @@ public class AlltalkInstanceWindow : Window, IDisposable
                         using (ImRaii.PushColor(ImGuiCol.Text, Constants.ERRORLOGCOLOR))
                         {
                             ImGui.Text(
-                                "Please be aware that selecting 'No Instance' is only meant to be used if you're unable to use Alltalk at all.");
+                                Loc.S("No audio will be generated in this mode."));
                             ImGui.Text(
-                                "It will result in you not generating any audio.");
+                                Loc.S("Only use this if you are unable to run Alltalk at all."));
                             ImGui.Text(
-                                "You will need to procure the audio files directly from a friend or via the Google Drive Share Link.");
+                                Loc.S("You will need to obtain audio files from a friend or via a Google Drive share link."));
                         }
                     }
                 }
@@ -410,7 +409,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(DrawAlltalk), $"Something went wrong: {ex}", new EKEventId(0, TextSource.Backend));
+            _log.Error(nameof(DrawAlltalk), ex.ToString(), new EKEventId(0, TextSource.Backend));
         }
     }
     private async void BackendCheckReady(EKEventId eventId)

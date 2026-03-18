@@ -184,8 +184,7 @@ public class BackendService : IBackendService, IDisposable
         if (voiceMessage == null) throw new ArgumentNullException(nameof(voiceMessage));
         
         var eventId = voiceMessage.EventId;
-        _log.Info(nameof(ProcessVoiceMessage), $"Processing voice message: {voiceMessage.Language}", eventId);
-        _log.Info(nameof(ProcessVoiceMessage), voiceMessage.Text, eventId);
+        _log.Info(nameof(ProcessVoiceMessage), $"Processing [{voiceMessage.Language}]: {voiceMessage.Text[..Math.Min(100, voiceMessage.Text.Length)]}...", eventId);
         
         // Determine priority - dialogue gets priority over bubbles
         var isPriority = voiceMessage.Source switch

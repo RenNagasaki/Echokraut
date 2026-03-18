@@ -58,13 +58,11 @@ public class SoundHelper : ISoundHelper
             loadSoundFileHook =
                 gameInteropProvider.HookFromAddress<LoadSoundFileDelegate>(loadSoundFilePtr, LoadSoundFileDetour);
             loadSoundFileHook.Enable();
-            _log.Debug(nameof(SoundHelper), "Hooked into LoadSoundFile", new EKEventId(0, TextSource.AddonBattleTalk));
-            _log.Debug(nameof(SoundHelper), "Hooked into LoadSoundFile", new EKEventId(0, TextSource.AddonTalk));
+            _log.Info(nameof(SoundHelper), "Hooked into LoadSoundFile", new EKEventId(0, TextSource.None));
         }
         else
         {
-            _log.Error(nameof(SoundHelper), "Failed to hook into LoadSoundFile", new EKEventId(0, TextSource.AddonBattleTalk));
-            _log.Error(nameof(SoundHelper), "Failed to hook into LoadSoundFile", new EKEventId(0, TextSource.AddonTalk));
+            _log.Error(nameof(SoundHelper), "Failed to hook into LoadSoundFile", new EKEventId(0, TextSource.None));
         }
 
         if (sigScanner.TryScanText(PlaySpecificSoundSig, out var playSpecificSoundPtr))
@@ -72,13 +70,11 @@ public class SoundHelper : ISoundHelper
             playSpecificSoundHook =
                 gameInteropProvider.HookFromAddress<PlaySpecificSoundDelegate>(playSpecificSoundPtr, PlaySpecificSoundDetour);
             playSpecificSoundHook.Enable();
-            _log.Debug(nameof(SoundHelper), "Hooked into PlaySpecificSound", new EKEventId(0, TextSource.AddonBattleTalk));
-            _log.Debug(nameof(SoundHelper), "Hooked into PlaySpecificSound", new EKEventId(0, TextSource.AddonTalk));
+            _log.Info(nameof(SoundHelper), "Hooked into PlaySpecificSound", new EKEventId(0, TextSource.None));
         }
         else
         {
-            _log.Error(nameof(SoundHelper), "Failed to hook into PlaySpecificSound", new EKEventId(0, TextSource.AddonBattleTalk));
-            _log.Error(nameof(SoundHelper), "Failed to hook into PlaySpecificSound", new EKEventId(0, TextSource.AddonTalk));
+            _log.Error(nameof(SoundHelper), "Failed to hook into PlaySpecificSound", new EKEventId(0, TextSource.None));
         }
     }
 
@@ -117,8 +113,7 @@ public class SoundHelper : ISoundHelper
 
                     if (isVoiceLine)
                     {
-                        _log.Debug(nameof(LoadSoundFileDetour),$"Discovered voice line at address {resourceDataPtr:x}", new EKEventId(0, TextSource.AddonBattleTalk));
-                        _log.Debug(nameof(LoadSoundFileDetour),$"Discovered voice line at address {resourceDataPtr:x}", new EKEventId(0, TextSource.AddonTalk));
+                        _log.Debug(nameof(LoadSoundFileDetour), $"Discovered voice line at address {resourceDataPtr:x}: {fileName}", new EKEventId(0, TextSource.None));
                         knownVoiceLinePtrs.Add(resourceDataPtr);
                         knownVoiceLinesMap.Add(resourceDataPtr, fileName);
                     }
@@ -129,8 +124,7 @@ public class SoundHelper : ISoundHelper
                         if (knownVoiceLinePtrs.Remove(resourceDataPtr))
                         {
                             knownVoiceLinesMap.Remove(resourceDataPtr);
-                            _log.Debug(nameof(LoadSoundFileDetour),$"Cleared voice line from address {resourceDataPtr:x} (address reused by: {fileName})", new EKEventId(0, TextSource.AddonBattleTalk));
-                            _log.Debug(nameof(LoadSoundFileDetour),$"Cleared voice line from address {resourceDataPtr:x} (address reused by: {fileName})", new EKEventId(0, TextSource.AddonTalk));
+                            _log.Debug(nameof(LoadSoundFileDetour), $"Cleared voice line from address {resourceDataPtr:x} (reused by: {fileName})", new EKEventId(0, TextSource.None));
                         }
                     }
                 }
@@ -138,8 +132,7 @@ public class SoundHelper : ISoundHelper
         }
         catch (Exception exc)
         {
-            _log.Error(nameof(LoadSoundFileDetour),$"Error in LoadSoundFile detour: {exc}", new EKEventId(0, TextSource.AddonBattleTalk));
-            _log.Error(nameof(LoadSoundFileDetour),$"Error in LoadSoundFile detour: {exc}", new EKEventId(0, TextSource.AddonTalk));
+            _log.Error(nameof(LoadSoundFileDetour), exc.ToString(), new EKEventId(0, TextSource.None));
         }
 
         return result;
@@ -161,24 +154,19 @@ public class SoundHelper : ISoundHelper
 
                 if (Path.GetFileNameWithoutExtension(fileName)?.Length == 10)
                 {
-                    _log.Debug(nameof(PlaySpecificSoundDetour),$"Caught playback of known voice line at address {soundDataPtr:x}", new EKEventId(0, TextSource.AddonBattleTalk));
-                    _log.Info(nameof(PlaySpecificSoundDetour),$"Filename: {fileName}", new EKEventId(0, TextSource.AddonBattleTalk));
-                    _log.Debug(nameof(PlaySpecificSoundDetour),$"Caught playback of known voice line at address {soundDataPtr:x}", new EKEventId(0, TextSource.AddonBubble));
-                    _log.Info(nameof(PlaySpecificSoundDetour),$"Filename: {fileName}", new EKEventId(0, TextSource.AddonBubble));
+                    _log.Debug(nameof(PlaySpecificSoundDetour), $"Battle/bubble voice line at {soundDataPtr:x}: {fileName}", new EKEventId(0, TextSource.AddonBattleTalk));
                     BattleBubbleVoiceLine?.Invoke();
                 }
                 else
                 {
-                    _log.Debug(nameof(PlaySpecificSoundDetour),$"Caught playback of known voice line at address {soundDataPtr:x}", new EKEventId(0, TextSource.AddonTalk));
-                    _log.Info(nameof(PlaySpecificSoundDetour),$"Filename: {fileName}", new EKEventId(0, TextSource.AddonTalk));
+                    _log.Debug(nameof(PlaySpecificSoundDetour), $"Talk voice line at {soundDataPtr:x}: {fileName}", new EKEventId(0, TextSource.AddonTalk));
                     TalkVoiceLine?.Invoke();
                 }
             }
         }
         catch (Exception exc)
         {
-            _log.Error(nameof(PlaySpecificSoundDetour),$"Error in PlaySpecificSound detour: {exc}", new EKEventId(0, TextSource.AddonBattleTalk));
-            _log.Error(nameof(PlaySpecificSoundDetour),$"Error in PlaySpecificSound detour: {exc}", new EKEventId(0, TextSource.AddonTalk));
+            _log.Error(nameof(PlaySpecificSoundDetour), exc.ToString(), new EKEventId(0, TextSource.None));
         }
 
         return result;

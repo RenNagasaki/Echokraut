@@ -4,6 +4,7 @@ using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Echokraut.Localization;
 using Echokraut.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
@@ -30,6 +31,7 @@ public sealed unsafe class DialogTalkController : IDisposable
     private readonly ILipSyncHelper _lipSync;
     private readonly Action _recreateInference;
     private readonly IAddonLifecycle _addonLifecycle;
+    private Func<Vector2, bool>? _isInsideOwnedWindow;
 
     private readonly AddonController _talkController;
 
@@ -77,6 +79,12 @@ public sealed unsafe class DialogTalkController : IDisposable
         _addonLifecycle.RegisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
     }
 
+    /// <summary>
+    /// Registers a hit-test callback so clicks inside owned native windows
+    /// (e.g., config window) suppress Talk addon advance.
+    /// </summary>
+    public void SetWindowHitTest(Func<Vector2, bool> hitTest) => _isInsideOwnedWindow = hitTest;
+
     public void Dispose()
     {
         _addonLifecycle.UnregisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
@@ -103,19 +111,24 @@ public sealed unsafe class DialogTalkController : IDisposable
 
     private void OnAttach(AtkUnitBase* addon)
     {
-        _playPauseButton = new TextButtonNode { Size = new Vector2(60, 24), String = "Play" };
+        _playPauseButton = new TextButtonNode { Size = new Vector2(60, 24), String = Loc.S("Play") };
         _playPauseButton.OnClick = OnPlayPauseClick;
+        // Size to fit the longest label (Play vs Pause)
+        var playW = _playPauseButton.LabelNode.GetTextDrawSize(Loc.S("Play")).X;
+        var pauseW = _playPauseButton.LabelNode.GetTextDrawSize(Loc.S("Pause")).X;
+        _playPauseButton.Size = new Vector2(Math.Max(playW, pauseW) + 36, 24);
 
-        _stopButton = new TextButtonNode { Size = new Vector2(60, 24), String = "Stop" };
+        _stopButton = new TextButtonNode { Size = new Vector2(60, 24), String = Loc.S("Stop") };
         _stopButton.OnClick = OnStopClick;
+        _stopButton.Size = new Vector2(_stopButton.LabelNode.GetTextDrawSize(Loc.S("Stop")).X + 36, 24);
 
-        _muteCheckbox = new CheckboxNode { Size = new Vector2(60, 24), String = "Mute" };
+        _muteCheckbox = new CheckboxNode { Size = new Vector2(60, 24), String = Loc.S("Mute") };
         _muteCheckbox.OnClick = OnMuteClick;
 
-        _autoAdvanceCheckbox = new CheckboxNode { Size = new Vector2(130, 24), String = "Auto advance" };
+        _autoAdvanceCheckbox = new CheckboxNode { Size = new Vector2(130, 24), String = Loc.S("Auto-advance") };
         _autoAdvanceCheckbox.OnClick = OnAutoAdvanceClick;
 
-        _voiceDropDown = new TextDropDownNode { Size = new Vector2(200, 24), Options = [] };
+        _voiceDropDown = new TextDropDownNode { Size = new Vector2(185, 24), Options = [] };
 
         // OnOptionSelected fires as the first line of OptionSelectedHandler, before UpdateLabel.
         // UpdateLabel then crashes (LabelNode.Node null after Uncollapse's ReattachNode triggers
@@ -205,7 +218,7 @@ public sealed unsafe class DialogTalkController : IDisposable
         var isStreamPaused  = streamState == PlaybackState.Paused;
         var isActive        = _audioPlayback.IsPlaying || isStreamPaused;
 
-        _playPauseButton!.String = isStreamPlaying ? "Pause" : "Play";
+        _playPauseButton!.String = isStreamPlaying ? Loc.S("Pause") : Loc.S("Play");
         SetEnabled(_playPauseButton, !isMuted && (isActive || !_audioPlayback.RecreationStarted));
         SetEnabled(_stopButton!, isActive && !isMuted);
 
@@ -330,7 +343,11 @@ public sealed unsafe class DialogTalkController : IDisposable
         if (_dropDownIsOpen && !_suppressNextAdvance && !_layout.CheckCollision(eventData))
             _voiceDropDown?.Collapse(false); // fires OnCollapsed: _dropDownIsOpen=false, _suppressNextAdvance=true
 
-        if (_layout.CheckCollision(eventData) || _suppressNextAdvance || _dropDownIsOpen)
+        // Check if the click landed inside any owned Echokraut native window
+        var clickedOwnedWindow = _isInsideOwnedWindow != null
+            && _isInsideOwnedWindow(new Vector2(eventData->MouseData.PosX, eventData->MouseData.PosY));
+
+        if (_layout.CheckCollision(eventData) || _suppressNextAdvance || _dropDownIsOpen || clickedOwnedWindow)
         {
             _suppressNextAdvance = false;
             eventArgs.AtkEventType = 0;
@@ -356,16 +373,20 @@ public sealed unsafe class DialogTalkController : IDisposable
 
     private void OnPlayPauseClick()
     {
-        var streamState = DialogState.CurrentVoiceMessage != null
-            ? _audioPlayback.GetStreamState(DialogState.CurrentVoiceMessage.StreamId)
-            : PlaybackState.Stopped;
+        var msg = DialogState.CurrentVoiceMessage;
 
-        if (streamState == PlaybackState.Playing)
-            _audioPlayback.PausePlaying(DialogState.CurrentVoiceMessage);
-        else if (streamState == PlaybackState.Paused && DialogState.CurrentVoiceMessage != null)
-            _audioPlayback.ResumePlaying(DialogState.CurrentVoiceMessage);
+        if (_audioPlayback.IsPlaying && msg != null)
+        {
+            var streamState = _audioPlayback.GetStreamState(msg.StreamId);
+            if (streamState == PlaybackState.Playing)
+                _audioPlayback.PausePlaying(msg);
+            else
+                _audioPlayback.ResumePlaying(msg);
+        }
         else if (!_audioPlayback.RecreationStarted)
+        {
             _recreateInference();
+        }
     }
 
     private void OnStopClick()

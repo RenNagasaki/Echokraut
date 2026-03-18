@@ -41,6 +41,7 @@ public class CharacterDataService : ICharacterDataService
 
         if (speaker.ObjectKind is ObjectKind.Player)
         {
+            _logService.Debug(nameof(GetCharacterGender), $"Player \"{speaker.Name}\" mapped to gender: {actorGender}", eventId);
             return actorGender;
         }
 
@@ -100,6 +101,7 @@ public class CharacterDataService : ICharacterDataService
         else
         {
             raceStr = raceEnum.ToString();
+            _logService.Debug(nameof(GetSpeakerRace), $"No race data found for \"{speaker.Name}\", defaulting to {raceEnum}", eventId);
         }
 
         return raceEnum;

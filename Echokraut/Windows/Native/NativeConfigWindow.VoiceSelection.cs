@@ -6,6 +6,7 @@ using Dalamud.Game;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
+using Echokraut.Localization;
 using Echokraut.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
@@ -15,6 +16,10 @@ namespace Echokraut.Windows.Native;
 public sealed unsafe partial class NativeConfigWindow
 {
     // ── Voice Selection fields ───────────────────────────────────────────────
+    private TextInputNode? _vsUnifiedSearch;
+    private TextButtonNode? _vsAdvancedToggle;
+    private bool _vsAdvancedFiltersVisible;
+    private string _vsUnifiedFilter = "";
     private TabBarNode? _vsTabBar;
 
     // Static header area per tab (filter inputs + column headers) — never cleared
@@ -71,53 +76,74 @@ public sealed unsafe partial class NativeConfigWindow
     {
         var w = _contentWidth;
 
-        _vsTabBar = new TabBarNode { Size = new Vector2(w, 32), Position = _topContentPos };
+        // Unified search bar above the tab bar
+        _vsUnifiedSearch = Input(Loc.S("Search..."), w, 80, "", v =>
+        {
+            _vsUnifiedFilter = v;
+            TriggerActiveRebuild();
+        });
+        _vsUnifiedSearch.Position = _topContentPos;
 
-        // Position for headers (right below inner tab bar)
-        var headerY = _innerContentPos.Y;
+        // Advanced filters toggle
+        _vsAdvancedToggle = Button(Loc.S("[+] Advanced Filters"), w, () =>
+        {
+            _vsAdvancedFiltersVisible = !_vsAdvancedFiltersVisible;
+            _vsAdvancedToggle!.String = _vsAdvancedFiltersVisible ? Loc.S("[-] Advanced Filters") : Loc.S("[+] Advanced Filters");
+            for (var j = 0; j < 3; j++)
+                SetVisible(_vsFilterRows[j], _vsAdvancedFiltersVisible && j == _activeVsTab);
+        });
+        _vsAdvancedToggle.Position = _topContentPos + new Vector2(0, 30);
+
+        _vsTabBar = new TabBarNode { Size = new Vector2(w, 32), Position = _topContentPos + new Vector2(0, 56) };
+
+        // Position for headers (below tab bar + search bar + toggle)
+        var headerY = _innerContentPos.Y + 56;
         // Position for data list (below headers: header 20 + filter 28 + sep 4 + gap)
-        var dataY = headerY + 20 + 28 + 8;
-        var dataH = _innerContentSize.Y - (dataY - _innerContentPos.Y);
+        var dataYWithFilter = headerY + 20 + 28 + 8;
+        var dataYNoFilter = headerY + 20 + 8;
+        var dataH = _innerContentSize.Y - (dataYWithFilter - _innerContentPos.Y);
 
         // Create header rows, filter rows, separators for NPCs/Players/Bubbles (indices 0-2)
         for (var i = 0; i < 3; i++)
         {
             _vsHeaders[i] = new HorizontalListNode { Size = new Vector2(w, 20), ItemSpacing = 4, Position = new Vector2(_innerContentPos.X, headerY) };
-            _vsHeaders[i]!.AddNode(Label("Test", ColPlay));
-            _vsHeaders[i]!.AddNode(Label("Lock", ColLock));
-            _vsHeaders[i]!.AddNode(Label("Use", ColUse));
-            _vsHeaders[i]!.AddNode(Label("Gender", ColGender));
-            _vsHeaders[i]!.AddNode(Label("Race", ColRace));
-            _vsHeaders[i]!.AddNode(Label("Name", ColName));
-            _vsHeaders[i]!.AddNode(Label("Voice", ColVoice));
-            _vsHeaders[i]!.AddNode(Label("Volume", VsVolWidth));
+            _vsHeaders[i]!.AddNode(Label(Loc.S("Test"), ColPlay));
+            _vsHeaders[i]!.AddNode(Label(Loc.S("Lock"), ColLock));
+            _vsHeaders[i]!.AddNode(Label(Loc.S("Use"), ColUse));
+            _vsHeaders[i]!.AddNode(Label(Loc.S("Gender"), ColGender));
+            _vsHeaders[i]!.AddNode(Label(Loc.S("Race"), ColRace));
+            _vsHeaders[i]!.AddNode(Label(Loc.S("Name"), ColName));
+            _vsHeaders[i]!.AddNode(Label(Loc.S("Voice"), ColVoice));
+            _vsHeaders[i]!.AddNode(Label(Loc.S("Volume"), VsVolWidth));
 
             _vsFilterRows[i] = new HorizontalListNode { Size = new Vector2(w, 28), ItemSpacing = 4, Position = new Vector2(_innerContentPos.X, headerY + 20) };
             _vsFilterRows[i]!.AddNode(Spacer(ColPlay, 28));
             _vsFilterRows[i]!.AddNode(Spacer(ColLock, 28));
             _vsFilterRows[i]!.AddNode(Spacer(ColUse, 28));
-            _vsFilterRows[i]!.AddNode(Input("Filter", ColGender, 20, "", v => { _vsFilterGender = v; TriggerActiveRebuild(); }));
-            _vsFilterRows[i]!.AddNode(Input("Filter", ColRace, 20, "", v => { _vsFilterRace = v; TriggerActiveRebuild(); }));
-            _vsFilterRows[i]!.AddNode(Input("Filter", ColName, 40, "", v => { _vsFilterName = v; TriggerActiveRebuild(); }));
-            _vsFilterRows[i]!.AddNode(Input("Filter", ColVoice, 40, "", v => { _vsFilterVoice = v; TriggerActiveRebuild(); }));
+            _vsFilterRows[i]!.AddNode(Input(Loc.S("Filter"), ColGender, 20, "", v => { _vsFilterGender = v; TriggerActiveRebuild(); }));
+            _vsFilterRows[i]!.AddNode(Input(Loc.S("Filter"), ColRace, 20, "", v => { _vsFilterRace = v; TriggerActiveRebuild(); }));
+            _vsFilterRows[i]!.AddNode(Input(Loc.S("Filter"), ColName, 40, "", v => { _vsFilterName = v; TriggerActiveRebuild(); }));
+            _vsFilterRows[i]!.AddNode(Input(Loc.S("Filter"), ColVoice, 40, "", v => { _vsFilterVoice = v; TriggerActiveRebuild(); }));
             _vsFilterRows[i]!.AddNode(Spacer(VsVolWidth, 28));
 
             _vsHeaderSeps[i] = new HorizontalLineNode { Size = new Vector2(w, 4), Position = new Vector2(_innerContentPos.X, headerY + 20 + 28 + 2) };
 
-            _vsDataLists[i] = Panel(new Vector2(_innerContentPos.X, dataY), new Vector2(w, dataH));
+            _vsDataLists[i] = Panel(new Vector2(_innerContentPos.X, dataYWithFilter), new Vector2(w, dataH));
         }
 
-        // Voices tab — uses full inner content area (no separate header, voices are collapsible categories)
-        _vsDataLists[3] = Panel(_innerContentPos, _innerContentSize);
+        // Voices tab — uses area below search + toggle + tab bar
+        _vsDataLists[3] = Panel(new Vector2(_innerContentPos.X, headerY), new Vector2(w, _innerContentSize.Y - (headerY - _innerContentPos.Y)));
 
-        _vsTabBar.AddTab("NPCs",    () => ShowVsPanel(0));
-        _vsTabBar.AddTab("Players", () => ShowVsPanel(1));
-        _vsTabBar.AddTab("Bubbles", () => ShowVsPanel(2));
-        _vsTabBar.AddTab("Voices",  () => ShowVsPanel(3));
+        _vsTabBar.AddTab(Loc.S("NPCs"),    () => ShowVsPanel(0));
+        _vsTabBar.AddTab(Loc.S("Players"), () => ShowVsPanel(1));
+        _vsTabBar.AddTab(Loc.S("Bubbles"), () => ShowVsPanel(2));
+        _vsTabBar.AddTab(Loc.S("Voices"),  () => ShowVsPanel(3));
     }
 
     private void AddVoiceSelectionNodes()
     {
+        AddNode(_vsUnifiedSearch!);
+        AddNode(_vsAdvancedToggle!);
         AddNode(_vsTabBar!);
         for (var i = 0; i < 3; i++)
         {
@@ -131,6 +157,8 @@ public sealed unsafe partial class NativeConfigWindow
 
     private void ShowVoiceSelectionSection(bool visible)
     {
+        SetVisible(_vsUnifiedSearch, visible);
+        SetVisible(_vsAdvancedToggle, visible);
         SetVisible(_vsTabBar, visible);
         if (visible)
         {
@@ -163,7 +191,7 @@ public sealed unsafe partial class NativeConfigWindow
         if (index < 3)
         {
             SetVisible(_vsHeaders[index], true);
-            SetVisible(_vsFilterRows[index], true);
+            SetVisible(_vsFilterRows[index], _vsAdvancedFiltersVisible);
             SetVisible(_vsHeaderSeps[index], true);
             SetVisible(_vsDataLists[index], true);
         }
@@ -217,6 +245,18 @@ public sealed unsafe partial class NativeConfigWindow
             ? source.Where(n => n.HasBubbles)
             : source.Where(n => !n.Name.StartsWith("BB-"));
 
+        // Unified search filter
+        if (!string.IsNullOrEmpty(_vsUnifiedFilter))
+        {
+            var search = _vsUnifiedFilter;
+            data = data.Where(n =>
+                n.Gender.ToString().Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                n.Race.ToString().Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                n.Name.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (n.Voice != null && n.Voice.VoiceName.Contains(search, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        // Per-column filters (advanced)
         if (!string.IsNullOrEmpty(_vsFilterName))
             data = data.Where(n => n.Name.Contains(_vsFilterName, StringComparison.OrdinalIgnoreCase));
         if (!string.IsNullOrEmpty(_vsFilterGender))
@@ -244,7 +284,7 @@ public sealed unsafe partial class NativeConfigWindow
 
         if (entries.Count == 0)
         {
-            panel.AddNode(Label("No entries found.", _contentWidth));
+            panel.AddNode(Label(Loc.S("No entries found."), _contentWidth));
             panel.RecalculateLayout();
             // Clear pending
             switch (tabIndex) { case 0: _vsPendingNpcs = null; break; case 1: _vsPendingPlayers = null; break; case 2: _vsPendingBubbles = null; break; }
@@ -293,17 +333,17 @@ public sealed unsafe partial class NativeConfigWindow
         // Play/Stop toggle button
         var capturedNpcForPlay = npc;
         TextButtonNode? playBtn = null;
-        playBtn = Button("Play", ColPlay, () =>
+        playBtn = Button(Loc.S("Play"), ColPlay, () =>
         {
             if (_audioPlayback.IsPlaying)
             {
                 StopVoice();
-                playBtn!.String = "Play";
+                playBtn!.String = Loc.S("Play");
             }
             else if (capturedNpcForPlay.Voice != null)
             {
                 TestVoice(capturedNpcForPlay.Voice);
-                playBtn!.String = "Stop";
+                playBtn!.String = Loc.S("Stop");
             }
         });
 
@@ -389,20 +429,28 @@ public sealed unsafe partial class NativeConfigWindow
 
         // Header
         var header = new HorizontalListNode { Size = new Vector2(w, 20), ItemSpacing = 4 };
-        header.AddNode(Label("En", 30));
-        header.AddNode(Label("Voice Name", 200));
-        header.AddNode(Label("Note", 200));
-        header.AddNode(Label("Volume", 150));
+        header.AddNode(Label(Loc.S("En"), 30));
+        header.AddNode(Label(Loc.S("Voice Name"), 200));
+        header.AddNode(Label(Loc.S("Note"), 200));
+        header.AddNode(Label(Loc.S("Volume"), 150));
         header.AddNode(Label("", 80));
         panel.AddNode(header);
         panel.AddNode(Separator(w));
 
-        _vsPendingVoices = _config.EchokrautVoices.OrderBy(v => v.VoiceName).ToList();
+        IEnumerable<EchokrautVoice> voiceData = _config.EchokrautVoices;
+        if (!string.IsNullOrEmpty(_vsUnifiedFilter))
+        {
+            var search = _vsUnifiedFilter;
+            voiceData = voiceData.Where(v =>
+                v.VoiceName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                v.Note.Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+        _vsPendingVoices = voiceData.OrderBy(v => v.VoiceName).ToList();
         _vsPendingIndex = 0;
 
         if (_vsPendingVoices.Count == 0)
         {
-            panel.AddNode(Label("No voices configured.", w));
+            panel.AddNode(Label(Loc.S("No voices configured."), w));
             panel.RecalculateLayout();
             _vsPendingVoices = null;
         }
@@ -426,7 +474,7 @@ public sealed unsafe partial class NativeConfigWindow
             row.AddNode(Check("   ", 30, voice.IsEnabled, v =>
             { voice.IsEnabled = v; _config.Save(); }));
             row.AddNode(Label(voice.VoiceName, 200));
-            row.AddNode(Input("Note", 200, 80, voice.Note, v =>
+            row.AddNode(Input(Loc.S("Note"), 200, 80, voice.Note, v =>
             { voice.Note = v; _config.Save(); }));
 
             var volSlider = new SliderNode
@@ -440,7 +488,7 @@ public sealed unsafe partial class NativeConfigWindow
             row.AddNode(volSlider);
 
             var capturedVoice = voice;
-            row.AddNode(Button("Configure", 80, () => OpenVoiceConfig(capturedVoice)));
+            row.AddNode(Button(Loc.S("Configure"), 80, () => OpenVoiceConfig(capturedVoice)));
             panel.AddNode(row);
         }
 

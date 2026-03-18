@@ -5,6 +5,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 
 namespace Echokraut.Services;
 
@@ -86,7 +87,7 @@ public class LogService : ILogService
                 LogType.Debug   => Constants.DEBUGLOGCOLOR,
                 LogType.Error   => Constants.ERRORLOGCOLOR,
                 LogType.Warning => Constants.ERRORLOGCOLOR,
-                _               => Constants.INFOLOGCOLOR
+                _               => Vector4.Zero
             }
         };
 

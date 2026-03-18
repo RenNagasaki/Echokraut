@@ -55,19 +55,28 @@ public partial class GoogleDriveSyncService : IGoogleDriveSyncService
 
     private async Task RunAsync(CancellationToken token)
     {
+        var eventId = new EKEventId(0, TextSource.None);
         try
         {
             while (!token.IsCancellationRequested)
             {
                 await Task.Delay(TimeSpan.FromMinutes(60), token);
 
-                _log.Debug(nameof(RunAsync), $"Syncing GoogleDrive", new EKEventId(0, TextSource.None));
-                DownloadFolder(_config.LocalSaveLocation, _config.GoogleDriveShareLink);
+                _log.Debug(nameof(RunAsync), $"Syncing GoogleDrive", eventId);
+                try
+                {
+                    DownloadFolder(_config.LocalSaveLocation, _config.GoogleDriveShareLink);
+                }
+                catch (TaskCanceledException) { throw; }
+                catch (Exception ex)
+                {
+                    _log.Error(nameof(RunAsync), $"Periodic sync failed: {ex.Message}", eventId);
+                }
             }
         }
         catch (TaskCanceledException)
         {
-            _log.Debug(nameof(RunAsync), $"Stopping periodic GoogleDrive sync", new EKEventId(0, TextSource.None));
+            _log.Debug(nameof(RunAsync), $"Stopping periodic GoogleDrive sync", eventId);
         }
     }
 

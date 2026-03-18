@@ -6,6 +6,7 @@ using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
+using Echokraut.Localization;
 using Echokraut.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
@@ -73,7 +74,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
         var enabledCheck = new CheckboxNode
         {
             Size = new Vector2(w, 24),
-            String = "Enabled",
+            String = Loc.S("Enabled"),
             IsChecked = _voice.IsEnabled,
             OnClick = v => { _voice.IsEnabled = v; Save(); },
         };
@@ -81,7 +82,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
         var randomCheck = new CheckboxNode
         {
             Size = new Vector2(w, 24),
-            String = "Use as random NPC voice",
+            String = Loc.S("Use as random NPC voice"),
             IsChecked = _voice.UseAsRandom,
             OnClick = v => { _voice.UseAsRandom = v; Save(); },
         };
@@ -89,7 +90,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
         var childCheck = new CheckboxNode
         {
             Size = new Vector2(w, 24),
-            String = "Child voice",
+            String = Loc.S("Child voice"),
             IsChecked = _voice.IsChildVoice,
             OnClick = v => { _voice.IsChildVoice = v; Save(); },
         };
@@ -99,7 +100,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
         {
             Size = new Vector2(w, 28),
             MaxCharacters = 80,
-            PlaceholderString = "Note",
+            PlaceholderString = Loc.S("Note"),
             String = _voice.Note,
         };
         noteInput.OnInputReceived = s => { _voice.Note = s.ToString(); Save(); };
@@ -116,19 +117,22 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
 
         // Play/Stop
         TextButtonNode? playBtn = null;
-        playBtn = new TextButtonNode { Size = new Vector2(80, 24), String = "Play" };
+        playBtn = new TextButtonNode { Size = new Vector2(80, 24), String = Loc.S("Play") };
+        var playMaxW = new[] { Loc.S("Play"), Loc.S("Stop") }
+            .Max(s => playBtn.LabelNode.GetTextDrawSize(s).X) + 36;
+        if (playMaxW > 80) playBtn.Size = new Vector2(playMaxW, 24);
         playBtn.OnClick = () =>
         {
             if (_audioPlayback.IsPlaying)
             {
                 if (DialogState.CurrentVoiceMessage != null)
                     _audioPlayback.StopPlaying(DialogState.CurrentVoiceMessage);
-                playBtn.String = "Play";
+                playBtn.String = Loc.S("Play");
             }
             else
             {
                 TestVoice();
-                playBtn.String = "Stop";
+                playBtn.String = Loc.S("Stop");
             }
         };
 
@@ -146,7 +150,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
         var genderLabel = new TextNode
         {
             Size = new Vector2(w, 18),
-            String = "Allowed Genders",
+            String = Loc.S("Allowed genders"),
             FontType = FontType.Axis,
             FontSize = 14,
         };
@@ -158,7 +162,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
             var gCheck = new CheckboxNode
             {
                 Size = new Vector2(w, 24),
-                String = g.ToString(),
+                String = Loc.S(g.ToString()),
                 IsChecked = _voice.AllowedGenders.Contains(g),
                 OnClick = v =>
                 {
@@ -173,7 +177,10 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
             list.AddNode(gCheck);
         }
 
-        var resetGenderBtn = new TextButtonNode { Size = new Vector2(120, 24), String = "Reset genders" };
+        var resetGenderLabel = Loc.S("Reset genders");
+        var resetGenderBtn = new TextButtonNode { Size = new Vector2(120, 24), String = resetGenderLabel };
+        var rgW = resetGenderBtn.LabelNode.GetTextDrawSize(resetGenderLabel).X + 36;
+        if (rgW > 120) resetGenderBtn.Size = new Vector2(rgW, 24);
         resetGenderBtn.OnClick = () =>
         {
             _npcData.ReSetVoiceGenders(_voice);
@@ -189,7 +196,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
         var raceLabel = new TextNode
         {
             Size = new Vector2(w, 18),
-            String = "Allowed Races",
+            String = Loc.S("Allowed races"),
             FontType = FontType.Axis,
             FontSize = 14,
         };
@@ -200,7 +207,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
         var allCheck = new CheckboxNode
         {
             Size = new Vector2(w, 24),
-            String = "All",
+            String = Loc.S("All"),
             IsChecked = allRaces,
             OnClick = v =>
             {
@@ -236,7 +243,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
             {
                 Size = new Vector2(colW, 24),
                 Position = new Vector2(col * colW, row * rowH),
-                String = race.ToString(),
+                String = Loc.S(race.ToString()),
                 IsChecked = _voice.AllowedRaces.Contains(race),
                 OnClick = v =>
                 {
@@ -252,7 +259,10 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
         }
         list.AddNode(raceGrid);
 
-        var resetRaceBtn = new TextButtonNode { Size = new Vector2(120, 24), String = "Reset races" };
+        var resetRaceLabel = Loc.S("Reset races");
+        var resetRaceBtn = new TextButtonNode { Size = new Vector2(120, 24), String = resetRaceLabel };
+        var rrW = resetRaceBtn.LabelNode.GetTextDrawSize(resetRaceLabel).X + 36;
+        if (rrW > 120) resetRaceBtn.Size = new Vector2(rrW, 24);
         resetRaceBtn.OnClick = () =>
         {
             _npcData.ReSetVoiceRaces(_voice);

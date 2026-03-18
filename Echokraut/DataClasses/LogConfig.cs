@@ -11,6 +11,7 @@ namespace Echokraut.DataClasses
         #region General
         public bool ShowGeneralDebugLog { get; set; } = true;
         public bool ShowGeneralErrorLog { get; set; } = true;
+        public bool ShowGeneralId0 { get; set; } = true;
         public bool GeneralJumpToBottom { get; set; } = true;
         #endregion
         #region Chat

@@ -2,8 +2,10 @@ using System.Numerics;
 using Dalamud.Game.Command;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Echokraut.Localization;
 using Echokraut.Services;
 using Echokraut.Windows.Native;
+using KamiToolKit;
 
 namespace Echokraut.Windows;
 
@@ -48,8 +50,9 @@ public class NativeWindowManager : IWindowManager
             services.GetService<IGameObjectService>())
         {
             InternalName = "EchokrautSettings",
-            Title = "Echokraut Configuration",
+            Title = Loc.S("Configuration"),
             Size = new Vector2(900, 650),
+            RespectCloseAll = false,
         };
 
         _firstTimeWindow = new NativeFirstTimeWindow(
@@ -59,9 +62,24 @@ public class NativeWindowManager : IWindowManager
             () => _configWindow.Toggle())
         {
             InternalName = "EchokrautFirstTime",
-            Title = "First time using Echokraut",
+            Title = Loc.S("First Time Setup"),
             Size = new Vector2(550, 600),
+            RespectCloseAll = false,
         };
+
+        // Suppress Talk advance when clicking inside our native windows
+        _dialogController.SetWindowHitTest(pos => IsInsideWindow(_configWindow, pos) || IsInsideWindow(_firstTimeWindow, pos));
+    }
+
+    private static unsafe bool IsInsideWindow(NativeAddon window, Vector2 pos)
+    {
+        if (!window.IsOpen) return false;
+        var addon = (FFXIVClientStructs.FFXIV.Component.GUI.AtkUnitBase*)window;
+        if (addon == null) return false;
+        var x = addon->GetX();
+        var y = addon->GetY();
+        return pos.X >= x && pos.X <= x + window.Size.X
+            && pos.Y >= y && pos.Y <= y + window.Size.Y;
     }
 
     public void ToggleConfig() => _configWindow.Toggle();
