@@ -20,11 +20,15 @@ namespace Echokraut.DataClasses
         /// </param>
         public static void Initialize(string assemblyDir)
         {
+            var assembly = Assembly.GetExecutingAssembly();
             var nativeLibraries = new List<nint>();
-            var handle = NativeLibrary.Load(Path.Combine(assemblyDir, "bass.dll"));
+            var handle = NativeLibrary.Load(
+                Path.Combine(assemblyDir, "bass.dll"),
+                assembly,
+                DllImportSearchPath.AssemblyDirectory);
             nativeLibraries.Add(handle);
 
-            var assemblyLoadContext = AssemblyLoadContext.GetLoadContext(Assembly.GetExecutingAssembly());
+            var assemblyLoadContext = AssemblyLoadContext.GetLoadContext(assembly);
             if (assemblyLoadContext == null) return;
             nativeLibraries.Reverse();
             assemblyLoadContext.Unloading += _ => { nativeLibraries.ForEach(NativeLibrary.Free); };

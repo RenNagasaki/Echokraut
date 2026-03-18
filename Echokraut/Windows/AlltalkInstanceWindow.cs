@@ -34,7 +34,7 @@ public class AlltalkInstanceWindow : Window, IDisposable
     private string testConnectionRes = "";
 
     public AlltalkInstanceWindow(ILogService log, Configuration config, IAlltalkInstanceService alltalkInstance, IBackendService backend, IDalamudPluginInterface pluginInterface)
-        : base($"Echokraut Alltalk Installation###EKAlltalkInstall")
+        : base($"Echokraut {Plugin.PluginVersion} Alltalk Installation###EKAlltalkInstall")
     {
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _config = config ?? throw new ArgumentNullException(nameof(config));

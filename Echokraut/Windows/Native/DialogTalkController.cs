@@ -6,8 +6,12 @@ using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Localization;
 using Echokraut.Services;
+using Echotools.Logging.DataClasses;
+using Echotools.Logging.Enums;
+using Echotools.Logging.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
+using KamiToolKit.Classes;
 using KamiToolKit.Controllers;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
@@ -30,11 +34,13 @@ public sealed unsafe class DialogTalkController : IDisposable
     private readonly IAudioPlaybackService _audioPlayback;
     private readonly ILipSyncHelper _lipSync;
     private readonly Action _recreateInference;
+    private readonly ILogService _log;
     private readonly IAddonLifecycle _addonLifecycle;
     private Func<Vector2, bool>? _isInsideOwnedWindow;
 
     private readonly AddonController _talkController;
 
+    private SimpleImageNode? _background;
     private HorizontalListNode? _layout;
     private TextButtonNode?   _playPauseButton;
     private TextButtonNode?   _stopButton;
@@ -62,8 +68,10 @@ public sealed unsafe class DialogTalkController : IDisposable
         IAudioPlaybackService audioPlayback,
         ILipSyncHelper lipSync,
         Action recreateInference,
-        IAddonLifecycle addonLifecycle)
+        IAddonLifecycle addonLifecycle,
+        ILogService log)
     {
+        _log = log;
         _config = config;
         _audioPlayback = audioPlayback;
         _lipSync = lipSync;
@@ -94,6 +102,8 @@ public sealed unsafe class DialogTalkController : IDisposable
 
     private void DisposeNodes()
     {
+        _background?.Dispose();
+        _background = null;
         _layout?.Dispose();
         _layout = null;
         _playPauseButton = null;
@@ -147,9 +157,13 @@ public sealed unsafe class DialogTalkController : IDisposable
             _suppressNextAdvance = true;
         };
 
+        const int padding = 10;
+        const int overlap = 52;
+        const int buttonH = 28;
+
         _layout = new HorizontalListNode
         {
-            Size = new Vector2(530, 28),
+            Size = new Vector2(530, buttonH),
             Alignment = HorizontalListAnchor.Left,
             ItemSpacing = 4,
         };
@@ -159,7 +173,24 @@ public sealed unsafe class DialogTalkController : IDisposable
         _layout.AddNode(_autoAdvanceCheckbox);
         _layout.AddNode(_voiceDropDown);
 
-        _layout.Position = new Vector2(56, 104);
+        var addonW = addon->RootNode->Width;
+        var addonH = addon->RootNode->Height;
+        var bgW = addonW - 40;
+        var bgH = (int)(bgW * 128f / 512f / 2f) - 5; // preserve Talk_Basic.tex aspect ratio (512:128)
+        var bgX = (addonW - bgW) / 2f;
+
+        _background = new SimpleImageNode
+        {
+            TexturePath = "ui/uld/Talk_Basic.tex",
+            TextureCoordinates = Vector2.Zero,
+            TextureSize = new Vector2(544, 144),
+            Size = new Vector2(544, 144),
+            Position = new Vector2(bgX, addonH - overlap),
+            Scale = new Vector2(bgW / 544f, bgH / 144f),
+        };
+        _background.AttachNode(addon, NodePosition.AsFirstChild);
+
+        _layout.Position = new Vector2(bgX + (bgW - _layout.Size.X) / 2f - 25, addonH - overlap + (bgH - buttonH) / 2f);
         _layout.AttachNode(addon);
     }
 
@@ -194,7 +225,21 @@ public sealed unsafe class DialogTalkController : IDisposable
 
         var visible = _config.ShowExtraOptionsInDialogue && !DialogState.IsVoiced && _audioPlayback.InDialog;
         _layout!.IsVisible = visible;
+        if (_background != null) _background.IsVisible = visible;
         if (!visible) return;
+
+        // Keep controls and background anchored below the Talk addon (height can change with text length).
+        const int overlap = 52;
+        const int buttonH = 28;
+        var addonW = addon->RootNode->Width;
+        var addonH = addon->RootNode->Height;
+        var bgW = addonW - 40;
+        var bgH = (int)(bgW * 128f / 512f / 2f) - 5;
+        var bgX = (addonW - bgW) / 2f;
+
+        _background!.Scale = new Vector2(bgW / 544f, bgH / 144f);
+        _background.Position = new Vector2(bgX, addonH - overlap);
+        _layout.Position = new Vector2(bgX + (bgW - _layout.Size.X) / 2f - 25, addonH - overlap + (bgH - buttonH) / 2f);
 
         // Safety net: sync _dropDownIsOpen if dropdown physically collapsed without OnCollapsed firing.
         if (_dropDownIsOpen && _voiceDropDown is { IsCollapsed: true })
@@ -347,7 +392,9 @@ public sealed unsafe class DialogTalkController : IDisposable
         var clickedOwnedWindow = _isInsideOwnedWindow != null
             && _isInsideOwnedWindow(new Vector2(eventData->MouseData.PosX, eventData->MouseData.PosY));
 
-        if (_layout.CheckCollision(eventData) || _suppressNextAdvance || _dropDownIsOpen || clickedOwnedWindow)
+        var clickedBackground = _background != null && _background.IsVisible && _background.CheckCollision(eventData);
+
+        if (_layout.CheckCollision(eventData) || clickedBackground || _suppressNextAdvance || _dropDownIsOpen || clickedOwnedWindow)
         {
             _suppressNextAdvance = false;
             eventArgs.AtkEventType = 0;
