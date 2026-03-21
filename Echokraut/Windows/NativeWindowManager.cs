@@ -49,7 +49,8 @@ public class NativeWindowManager : IWindowManager
             services.GetService<ILogService>(),
             services.GetService<INpcDataService>(),
             services.GetService<IVolumeService>(),
-            services.GetService<IGameObjectService>())
+            services.GetService<IGameObjectService>(),
+            services.GetService<IVoiceTestService>())
         {
             InternalName = "EchokrautSettings",
             Title = Loc.S("Configuration"),

@@ -159,6 +159,9 @@ public class AudioPlaybackService : IAudioPlaybackService, IDisposable
 
         _isPlaying = false;
 
+        if (message.Source == TextSource.VoiceTest)
+            CurrentMessageChanged?.Invoke(null);
+
         if (message.IsLastInDialogue && _configuration.AutoAdvanceTextAfterSpeechCompleted)
         {
             try
@@ -185,7 +188,14 @@ public class AudioPlaybackService : IAudioPlaybackService, IDisposable
             try
             {
                 if (!_isPlaying && _queue.TryDequeueReadyToPlay(out var entry) && entry != null)
+                {
+                    if (entry.State == Queue.VoiceMessageState.Cancelled)
+                    {
+                        entry.Message.Stream?.Dispose();
+                        continue;
+                    }
                     await PlayAudioAsync(entry, cancellationToken);
+                }
 
                 await Task.Delay(100, cancellationToken);
             }

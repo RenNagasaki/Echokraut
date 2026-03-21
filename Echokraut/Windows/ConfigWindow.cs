@@ -42,6 +42,7 @@ public class ConfigWindow : Window, IDisposable
     private readonly IGameObjectService _gameObjects;
     private readonly IGoogleDriveSyncService _googleDrive;
     private readonly INpcDataService _npcData;
+    private readonly IVoiceTestService _voiceTest;
     private readonly AlltalkInstanceWindow _alttalkInstanceWindow;
     private readonly FileDialogManager? fileDialogManager;
     private unsafe Camera* camera;
@@ -167,6 +168,7 @@ public class ConfigWindow : Window, IDisposable
         IGameObjectService gameObjects,
         IGoogleDriveSyncService googleDrive,
         INpcDataService npcData,
+        IVoiceTestService voiceTest,
         AlltalkInstanceWindow alttalkInstanceWindow) : base($"Echokraut {Plugin.PluginVersion} Configuration###EKSettings")
     {
         _log = log;
@@ -184,6 +186,7 @@ public class ConfigWindow : Window, IDisposable
         _gameObjects = gameObjects;
         _googleDrive = googleDrive;
         _npcData = npcData;
+        _voiceTest = voiceTest;
         _alttalkInstanceWindow = alttalkInstanceWindow;
         fileDialogManager = new FileDialogManager();
 
@@ -1083,15 +1086,14 @@ public class ConfigWindow : Window, IDisposable
         using var child = ImRaii.Child("VoicesChild");
         if (child)
         {
-            using var table = ImRaii.Table("Voice Table##VoiceTable", 9,
+            using var table = ImRaii.Table("Voice Table##VoiceTable", 8,
                                            ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg |
                                            ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX |
                                            ImGuiTableFlags.ScrollY);
             if (table)
             {
                 ImGui.TableSetupScrollFreeze(0, _showAdvancedFilters ? 2 : 1);
-                ImGui.TableSetupColumn("##Play", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
-                ImGui.TableSetupColumn("##Stop", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
+                ImGui.TableSetupColumn("##PlayStop", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
                 ImGui.TableSetupColumn($"{Loc.S("Use")}##Enabled", ImGuiTableColumnFlags.WidthFixed, 35);
                 ImGui.TableSetupColumn(Loc.S("Name"), ImGuiTableColumnFlags.WidthFixed, 200);
                 ImGui.TableSetupColumn(Loc.S("Note"), ImGuiTableColumnFlags.WidthStretch, 300);
@@ -1104,7 +1106,6 @@ public class ConfigWindow : Window, IDisposable
                 if (_showAdvancedFilters)
                 {
                 ImGui.TableNextRow();
-                ImGui.TableNextColumn();
                 ImGui.TableNextColumn();
                 ImGui.TableNextColumn();
                 ImGui.TableNextColumn();
@@ -1197,15 +1198,15 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.TableNextRow();
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                    if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##testvoice{voice}", new Vector2(25, 25), Loc.S("Test Voice"), false, true))
+                    var isPlayingThis = _voiceTest.IsTestingVoice(voice);
+                    var icon = isPlayingThis ? FontAwesomeIcon.Stop : FontAwesomeIcon.Play;
+                    var tooltip = isPlayingThis ? Loc.S("Stop Voice") : Loc.S("Test Voice");
+                    if (ImGuiUtil.DrawDisabledButton($"{icon.ToIconString()}##playstop{voice}", new Vector2(25, 25), tooltip, false, true))
                     {
-                        BackendTestVoice(voice);
-                    }
-                    ImGui.TableNextColumn();
-                    ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                    if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Stop.ToIconString()}##stopvoice{voice}", new Vector2(25, 25), Loc.S("Stop Voice"), false, true))
-                    {
-                        BackendStopVoice();
+                        if (isPlayingThis)
+                            _voiceTest.StopVoice();
+                        else
+                            _voiceTest.TestVoice(voice);
                     }
                     ImGui.TableNextColumn();
                     var isEnabled = voice.IsEnabled;
@@ -1416,12 +1417,11 @@ public class ConfigWindow : Window, IDisposable
                 (p.Voice != null && p.Voice.ToString().ToLower().Contains(search)));
         }
 
-        using var table = ImRaii.Table($"{dataType} Table##{dataType}Table", 11, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY);
+        using var table = ImRaii.Table($"{dataType} Table##{dataType}Table", 10, ImGuiTableFlags.BordersInnerH | ImGuiTableFlags.RowBg | ImGuiTableFlags.Sortable | ImGuiTableFlags.ScrollX | ImGuiTableFlags.ScrollY);
         if (table)
         {
             ImGui.TableSetupScrollFreeze(0, _showAdvancedFilters ? 2 : 1);
-            ImGui.TableSetupColumn("##Play", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
-            ImGui.TableSetupColumn("##Stop", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
+            ImGui.TableSetupColumn("##PlayStop", ImGuiTableColumnFlags.WidthFixed | ImGuiTableColumnFlags.NoSort, 25);
             ImGui.TableSetupColumn(Loc.S("Lock"), ImGuiTableColumnFlags.WidthFixed, 40f);
             ImGui.TableSetupColumn(Loc.S("Use"), ImGuiTableColumnFlags.WidthFixed, 35f);
             ImGui.TableSetupColumn(Loc.S("Gender"), ImGuiTableColumnFlags.WidthFixed, 125);
@@ -1435,7 +1435,6 @@ public class ConfigWindow : Window, IDisposable
 
             if (_showAdvancedFilters)
             {
-            ImGui.TableNextColumn();
             ImGui.TableNextColumn();
             ImGui.TableNextColumn();
             ImGui.TableNextColumn();
@@ -1536,15 +1535,15 @@ public class ConfigWindow : Window, IDisposable
                 ImGui.TableNextRow();
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Play.ToIconString()}##testvoice{mapData}", new Vector2(25, 25), Loc.S("Test Voice"), false, true))
+                var isPlayingThisNpc = mapData.Voice != null && _voiceTest.IsTestingVoice(mapData.Voice);
+                var npcIcon = isPlayingThisNpc ? FontAwesomeIcon.Stop : FontAwesomeIcon.Play;
+                var npcTooltip = isPlayingThisNpc ? Loc.S("Stop Voice") : Loc.S("Test Voice");
+                if (ImGuiUtil.DrawDisabledButton($"{npcIcon.ToIconString()}##playstop{mapData}", new Vector2(25, 25), npcTooltip, false, true))
                 {
-                    if (mapData.Voice != null) BackendTestVoice(mapData.Voice);
-                }
-                ImGui.TableNextColumn();
-                ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
-                if (ImGuiUtil.DrawDisabledButton($"{FontAwesomeIcon.Stop.ToIconString()}##stopvoice{mapData}", new Vector2(25, 25), Loc.S("Stop Voice"), false, true))
-                {
-                    BackendStopVoice();
+                    if (isPlayingThisNpc)
+                        _voiceTest.StopVoice();
+                    else if (mapData.Voice != null)
+                        _voiceTest.TestVoice(mapData.Voice);
                 }
                 ImGui.TableNextColumn();
                 var doNotDelete = mapData.DoNotDelete;
@@ -2298,66 +2297,6 @@ public class ConfigWindow : Window, IDisposable
     #endregion
 
     #region Helper Functions
-
-    private async void BackendTestVoice(EchokrautVoice voice)
-    {
-        BackendStopVoice();
-        var eventId = _log.Start(nameof(BackendTestVoice), TextSource.AddonTalk);
-        _log.Debug(nameof(BackendTestVoice), $"Testing voice: {voice.ToString()}", eventId);
-        // Say the thing
-        var volume = _volumeService.GetVoiceVolume(eventId) * voice.Volume;
-        var voiceMessage = new VoiceMessage
-        {
-            SpeakerObj = null,
-            Source = TextSource.VoiceTest,
-            Speaker = new NpcMapData(Dalamud.Game.ClientState.Objects.Enums.ObjectKind.None)
-            {
-                Gender = voice.AllowedGenders.Count > 0 ? voice.AllowedGenders[0] : Genders.Male,
-                Race = voice.AllowedRaces.Count > 0 ? voice.AllowedRaces[0] : NpcRaces.Hyur,
-                Name = voice.VoiceName,
-                Voice = voice
-            },
-            Text = GetTestMessageText(_clientState.ClientLanguage),
-            OriginalText = GetTestMessageText(_clientState.ClientLanguage),
-            Language = _clientState.ClientLanguage,
-            EventId = eventId,
-            SpeakerFollowObj = _gameObjects.LocalPlayer,
-            Volume = volume
-        };
-
-
-        if (volume > 0)
-            _backend.ProcessVoiceMessage(voiceMessage);
-        else
-        {
-            _log.Debug(nameof(BackendTestVoice), $"Skipping voice inference. Volume is 0", eventId);
-            _log.End(nameof(BackendTestVoice), eventId);
-        }
-    }
-
-    private string GetTestMessageText(ClientLanguage clientLanguage)
-    {
-        switch (clientLanguage)
-        {
-            case ClientLanguage.English:
-                return Constants.TESTMESSAGEEN;
-            case ClientLanguage.French:
-                return Constants.TESTMESSAGEFR;
-            case ClientLanguage.German:
-                return Constants.TESTMESSAGEDE;
-            case ClientLanguage.Japanese:
-                return Constants.TESTMESSAGEJP;
-        }
-
-        return Constants.TESTMESSAGEEN;
-    }
-
-    private void BackendStopVoice()
-    {
-        if (DialogState.CurrentVoiceMessage != null)
-            _audioPlayback.StopPlaying(DialogState.CurrentVoiceMessage);
-        _log.End(nameof(BackendStopVoice), new EKEventId(0, TextSource.AddonTalk));
-    }
 
     private void ReloadRemoteMappings()
     {

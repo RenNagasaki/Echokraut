@@ -42,6 +42,25 @@ public sealed unsafe partial class NativeConfigWindow
     private string _logsFilterId      = "";
     private bool _logsFilterExpanded;  // tracks collapsible open/closed state
 
+    // Pagination state
+    private const int LogsPageSize = 100;
+    private const int LogsRowsPerFrame = 10;
+    private readonly List<LogMessage>?[] _logsFilteredData = new List<LogMessage>?[LogTabs.Length];
+    private readonly int[] _logsPage = new int[LogTabs.Length];
+
+    // Progressive loading within current page
+    private int _logsProgressiveIndex;
+    private int _logsProgressiveTab = -1; // -1 = idle
+
+    // Deferred page change (set by button click, processed in UpdateLogs)
+    private int _logsPendingPageDelta;
+    private int _logsPendingPageTab = -1;
+
+    // Pagination nodes (individually positioned)
+    private readonly TextButtonNode?[] _logsPrevButtons = new TextButtonNode?[LogTabs.Length];
+    private readonly TextButtonNode?[] _logsNextButtons = new TextButtonNode?[LogTabs.Length];
+    private readonly TextNode?[] _logsPageLabels = new TextNode?[LogTabs.Length];
+
     // Column widths
     private const float LogColTimestamp = 85f;
     private const float LogColMethod   = 120f;
@@ -52,13 +71,17 @@ public sealed unsafe partial class NativeConfigWindow
     private void SetupLogs()
     {
         var w = _contentWidth;
+        var paginationH = 28f;
 
         _logsTabBar = new TabBarNode { Size = new Vector2(w, 32), Position = _topContentPos };
 
         for (var i = 0; i < LogTabs.Length; i++)
         {
-            _logsPanels[i] = Panel(_innerContentPos, _innerContentSize);
+            var panelH = _innerContentSize.Y - paginationH - 4;
+            _logsPanels[i] = Panel(_innerContentPos, new Vector2(_innerContentSize.X, panelH));
             _logsDirty[i] = true;
+
+            CreateLogsPaginationNodes(i, w, _innerContentPos.Y + panelH + 4);
         }
 
         for (var i = 0; i < LogTabs.Length; i++)
@@ -70,11 +93,37 @@ public sealed unsafe partial class NativeConfigWindow
         _log.LogUpdated += OnLogUpdated;
     }
 
+    private void CreateLogsPaginationNodes(int index, float w, float y)
+    {
+        var idx = index;
+        const float btnW = 30f;
+        const float labelW = 150f;
+
+        _logsPrevButtons[index] = Button("<", btnW, () => LogsChangePage(idx, -1));
+        _logsNextButtons[index] = Button(">", btnW, () => LogsChangePage(idx, 1));
+        _logsPageLabels[index] = Label("", labelW);
+
+        // Buttons centered in the window
+        const float btnGap = 20f;
+        var centerX = _innerContentPos.X + (w - btnW * 2 - btnGap) / 2f;
+        _logsPrevButtons[index]!.Position = new Vector2(centerX, y);
+        _logsNextButtons[index]!.Position = new Vector2(centerX + btnW + btnGap, y);
+
+        // Label right-aligned
+        _logsPageLabels[index]!.Position = new Vector2(_innerContentPos.X + w - labelW, y + 4);
+    }
+
     private void AddLogsNodes()
     {
         AddNode(_logsTabBar!);
         foreach (var p in _logsPanels)
             if (p != null) AddNode(p);
+        for (var i = 0; i < LogTabs.Length; i++)
+        {
+            if (_logsPrevButtons[i] != null) AddNode(_logsPrevButtons[i]!);
+            if (_logsNextButtons[i] != null) AddNode(_logsNextButtons[i]!);
+            if (_logsPageLabels[i] != null) AddNode(_logsPageLabels[i]!);
+        }
     }
 
     private void ShowLogsSection(bool visible)
@@ -88,6 +137,12 @@ public sealed unsafe partial class NativeConfigWindow
         {
             foreach (var p in _logsPanels)
                 SetVisible(p, false);
+            for (var i = 0; i < LogTabs.Length; i++)
+            {
+                SetVisible(_logsPrevButtons[i], false);
+                SetVisible(_logsNextButtons[i], false);
+                SetVisible(_logsPageLabels[i], false);
+            }
         }
     }
 
@@ -95,7 +150,12 @@ public sealed unsafe partial class NativeConfigWindow
     {
         _activeLogTab = index;
         for (var i = 0; i < _logsPanels.Length; i++)
+        {
             SetVisible(_logsPanels[i], i == index);
+            SetVisible(_logsPrevButtons[i], i == index);
+            SetVisible(_logsNextButtons[i], i == index);
+            SetVisible(_logsPageLabels[i], i == index);
+        }
 
         _logsDirty[index] = true;
     }
@@ -115,15 +175,20 @@ public sealed unsafe partial class NativeConfigWindow
 
         _log.UpdateMainThreadLogs();
 
+        // Process deferred page changes (queued by button click handlers)
+        ProcessLogsPageChange();
+
         if (_logsDirty[_activeLogTab])
         {
             _logsDirty[_activeLogTab] = false;
             RebuildLogPanel(_activeLogTab);
         }
+
+        ContinueLogsPageBuild();
     }
 
     /// <summary>
-    /// Full rebuild of a log panel: options section, column headers, filter row, data rows.
+    /// Full rebuild of a log panel: options section, column headers, filter row, data rows (paginated).
     /// Filter input values persist in fields so they survive rebuilds.
     /// </summary>
     private void RebuildLogPanel(int index)
@@ -218,7 +283,7 @@ public sealed unsafe partial class NativeConfigWindow
 
         panel.AddNode(Separator(w));
 
-        // ── Data rows ────────────────────────────────────────────────────
+        // ── Filter and cache data ────────────────────────────────────────
         IEnumerable<LogMessage> filtered = _log.GetLogsForSource(source);
 
         // Visibility filters
@@ -235,10 +300,56 @@ public sealed unsafe partial class NativeConfigWindow
             filtered = filtered.Where(log => log.EventId != null && log.EventId.Id.ToString().Contains(_logsFilterId));
 
         var list = filtered.OrderBy(log => log.TimeStamp).ToList();
-        var toShow = list.Count > 200 ? list.Skip(list.Count - 200).ToList() : list;
+        _logsFilteredData[index] = list;
 
-        foreach (var log in toShow)
+        // Jump to last page when "jump to bottom" is enabled
+        if (GetJumpToBottom(source) && list.Count > 0)
+            _logsPage[index] = Math.Max(0, (list.Count - 1) / LogsPageSize);
+
+        // ── Data rows (current page, progressively loaded) ────────────
+        BuildLogRows(panel, index, w);
+
+        panel.RecalculateLayout();
+    }
+
+    private void BuildLogRows(ScrollingListNode panel, int index, float w)
+    {
+        var list = _logsFilteredData[index];
+        if (list == null || list.Count == 0)
         {
+            panel.AddNode(Label(Loc.S("No log entries."), w));
+            UpdateLogsPaginationLabel(index, 0);
+            _logsProgressiveTab = -1;
+            return;
+        }
+
+        // Start progressive build — rows added in ContinueLogsPageBuild()
+        _logsProgressiveTab = index;
+        _logsProgressiveIndex = 0;
+        UpdateLogsPaginationLabel(index, list.Count);
+    }
+
+    private void ContinueLogsPageBuild()
+    {
+        if (_logsProgressiveTab < 0) return;
+
+        var index = _logsProgressiveTab;
+        var panel = _logsPanels[index];
+        var list = _logsFilteredData[index];
+        if (panel == null || list == null) { _logsProgressiveTab = -1; return; }
+
+        var page = _logsPage[index];
+        var pageStart = page * LogsPageSize;
+        var pageEnd = Math.Min(pageStart + LogsPageSize, list.Count);
+        var pageCount = pageEnd - pageStart;
+
+        var start = _logsProgressiveIndex;
+        var end = Math.Min(start + LogsRowsPerFrame, pageCount);
+        var w = _contentWidth;
+
+        for (var i = start; i < end; i++)
+        {
+            var log = list[pageStart + i];
             var hasColor = log.Color != Vector4.Zero;
 
             var methodLabel = Label(log.Method, LogColMethod);
@@ -281,13 +392,63 @@ public sealed unsafe partial class NativeConfigWindow
             panel.AddNode(row);
         }
 
-        if (toShow.Count == 0)
-            panel.AddNode(Label(Loc.S("No log entries."), w));
-
+        _logsProgressiveIndex = end;
         panel.RecalculateLayout();
 
-        if (GetJumpToBottom(source))
-            panel.ScrollPosition = int.MaxValue;
+        if (_logsProgressiveIndex >= pageCount)
+        {
+            _logsProgressiveTab = -1;
+
+            var source = LogTabs[index].Source;
+            if (GetJumpToBottom(source))
+                panel.ScrollPosition = int.MaxValue;
+        }
+    }
+
+    // ── Logs pagination ──────────────────────────────────────────────────────
+
+    private void LogsChangePage(int tabIndex, int delta)
+    {
+        // Defer to UpdateLogs — never clear/rebuild nodes inside ATK event handlers.
+        _logsPendingPageTab = tabIndex;
+        _logsPendingPageDelta = delta;
+    }
+
+    private void ProcessLogsPageChange()
+    {
+        if (_logsPendingPageTab < 0) return;
+
+        var tabIndex = _logsPendingPageTab;
+        var delta = _logsPendingPageDelta;
+        _logsPendingPageTab = -1;
+
+        var total = _logsFilteredData[tabIndex]?.Count ?? 0;
+        var maxPage = Math.Max(0, (total - 1) / LogsPageSize);
+        var newPage = Math.Clamp(_logsPage[tabIndex] + delta, 0, maxPage);
+        if (newPage == _logsPage[tabIndex]) return;
+
+        _logsPage[tabIndex] = newPage;
+        _logsDirty[tabIndex] = true;
+    }
+
+    private void UpdateLogsPaginationLabel(int tabIndex, int total)
+    {
+        if (_logsPageLabels[tabIndex] == null) return;
+
+        var maxPage = Math.Max(0, (total - 1) / LogsPageSize);
+        Dim(_logsPrevButtons[tabIndex], _logsPage[tabIndex] > 0);
+        Dim(_logsNextButtons[tabIndex], _logsPage[tabIndex] < maxPage);
+
+        if (total == 0)
+        {
+            _logsPageLabels[tabIndex]!.String = $"0 / 0";
+        }
+        else
+        {
+            var start = _logsPage[tabIndex] * LogsPageSize + 1;
+            var end = Math.Min(start + LogsPageSize - 1, total);
+            _logsPageLabels[tabIndex]!.String = $"{start}-{end} / {total}";
+        }
     }
 
     // ── LogConfig accessor helpers ───────────────────────────────────────────

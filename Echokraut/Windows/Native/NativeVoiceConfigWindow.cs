@@ -1,12 +1,9 @@
 using System;
 using System.Linq;
 using System.Numerics;
-using Dalamud.Game;
-using Dalamud.Game.ClientState.Objects.Enums;
-using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
-using Echotools.Logging.Enums;
+using Echokraut.Helper.Functional;
 using Echokraut.Localization;
 using Echokraut.Services;
 using Echotools.Logging.Services;
@@ -25,11 +22,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
     private readonly EchokrautVoice _voice;
     private readonly Configuration _config;
     private readonly INpcDataService _npcData;
-    private readonly IAudioPlaybackService _audioPlayback;
-    private readonly IVolumeService _volumeService;
-    private readonly IGameObjectService _gameObjects;
-    private readonly IClientState _clientState;
-    private readonly IBackendService _backend;
+    private readonly IVoiceTestService _voiceTest;
     private readonly ILogService _log;
     private readonly Action _onChanged;
 
@@ -37,22 +30,14 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
         EchokrautVoice voice,
         Configuration config,
         INpcDataService npcData,
-        IAudioPlaybackService audioPlayback,
-        IVolumeService volumeService,
-        IGameObjectService gameObjects,
-        IClientState clientState,
-        IBackendService backend,
+        IVoiceTestService voiceTest,
         ILogService log,
         Action onChanged)
     {
         _voice = voice;
         _config = config;
         _npcData = npcData;
-        _audioPlayback = audioPlayback;
-        _volumeService = volumeService;
-        _gameObjects = gameObjects;
-        _clientState = clientState;
-        _backend = backend;
+        _voiceTest = voiceTest;
         _log = log;
         _onChanged = onChanged;
     }
@@ -125,15 +110,14 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
         if (playMaxW > 80) playBtn.Size = new Vector2(playMaxW, 24);
         playBtn.OnClick = () =>
         {
-            if (_audioPlayback.IsPlaying)
+            if (_voiceTest.IsTestingVoice(_voice))
             {
-                if (DialogState.CurrentVoiceMessage != null)
-                    _audioPlayback.StopPlaying(DialogState.CurrentVoiceMessage);
+                _voiceTest.StopVoice();
                 playBtn.String = Loc.S("Play");
             }
             else
             {
-                TestVoice();
+                _voiceTest.TestVoice(_voice);
                 playBtn.String = Loc.S("Stop");
             }
         };
@@ -286,47 +270,8 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
         // Don't rebuild the voices list — data is saved, visual catches up on next filter or tab revisit
     }
 
-    private void TestVoice()
+    protected override void OnUpdate(AtkUnitBase* addon)
     {
-        if (DialogState.CurrentVoiceMessage != null)
-            _audioPlayback.StopPlaying(DialogState.CurrentVoiceMessage);
-
-        var eventId = _log.Start(nameof(TestVoice), TextSource.AddonTalk);
-        var volume = _volumeService.GetVoiceVolume(eventId) * _voice.Volume;
-
-        var speaker = new NpcMapData(ObjectKind.None)
-        {
-            Gender = _voice.AllowedGenders.Count > 0 ? _voice.AllowedGenders[0] : Genders.Male,
-            Race = _voice.AllowedRaces.Count > 0 ? _voice.AllowedRaces[0] : NpcRaces.Hyur,
-            Name = _voice.VoiceName,
-        };
-        speaker.Voices = _config.EchokrautVoices;
-        speaker.Voice = _voice;
-
-        var text = _clientState.ClientLanguage switch
-        {
-            ClientLanguage.German => Constants.TESTMESSAGEDE,
-            ClientLanguage.French => Constants.TESTMESSAGEFR,
-            ClientLanguage.Japanese => Constants.TESTMESSAGEJP,
-            _ => Constants.TESTMESSAGEEN,
-        };
-
-        var msg = new VoiceMessage
-        {
-            SpeakerObj = null,
-            Source = TextSource.VoiceTest,
-            Speaker = speaker,
-            Text = text,
-            OriginalText = text,
-            Language = _clientState.ClientLanguage,
-            EventId = eventId,
-            SpeakerFollowObj = _gameObjects.LocalPlayer,
-            Volume = volume,
-        };
-
-        if (volume > 0)
-            _backend.ProcessVoiceMessage(msg);
-        else
-            _log.End(nameof(TestVoice), eventId);
+        ScreenClampHelper.ClampToScreen(addon, Size);
     }
 }

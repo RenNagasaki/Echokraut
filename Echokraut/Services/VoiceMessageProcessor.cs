@@ -166,6 +166,11 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
 
             _log.Debug(nameof(ProcessSpeechAsync), voiceMessage.GetDebugInfo(), eventId);
 
+            // Update DialogState so UI controls (mute/unmute) have access to the current
+            // speaker even when the NPC is muted and audio won't play.
+            if (isDialogue)
+                DialogState.CurrentVoiceMessage = voiceMessage;
+
             // Step 8: Check if dialogue is muted
             if (speaker != null && _config.MutedNpcDialogues.Contains(speaker.BaseId))
             {

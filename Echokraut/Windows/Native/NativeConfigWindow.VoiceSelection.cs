@@ -2,12 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
-using Dalamud.Game;
-using Dalamud.Game.ClientState.Objects.Enums;
 using Echokraut.DataClasses;
-using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
-using Echotools.Logging.Enums;
 using Echokraut.Localization;
 using Echokraut.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
@@ -38,16 +34,27 @@ public sealed unsafe partial class NativeConfigWindow
     private string _vsFilterRace   = "";
     private string _vsFilterVoice  = "";
 
-    // Progressive loading state
-    private const int RowsPerFrame = 15;
+    // Pagination state
+    private const int VsPageSize = 100;
+    private const int VsRowsPerFrame = 10;
+    private readonly List<NpcMapData>?[] _vsFilteredData = new List<NpcMapData>?[3]; // cached filtered results per tab
+    private List<EchokrautVoice>? _vsFilteredVoices;
+    private readonly int[] _vsPage = new int[4]; // current page per tab (0-indexed)
+    private readonly bool[] _vsIsBubble = { false, false, true, false };
 
-    // Pending build queues — when non-null, rows are being added progressively
-    private List<NpcMapData>? _vsPendingNpcs;
-    private List<NpcMapData>? _vsPendingPlayers;
-    private List<NpcMapData>? _vsPendingBubbles;
-    private List<EchokrautVoice>? _vsPendingVoices;
-    private int _vsPendingIndex;
-    private bool _vsPendingIsBubble;
+    // Progressive loading within current page
+    private int _vsProgressiveIndex; // how many rows of the current page have been added
+    private int _vsProgressiveTab = -1; // which tab is being progressively built (-1 = idle)
+    private bool _vsProgressiveIsVoices; // true when building voices tab
+
+    // Deferred page change (set by button click, processed in UpdateVoiceSelection)
+    private int _vsPendingPageDelta;
+    private int _vsPendingPageTab = -1;
+
+    // Pagination nodes (individually positioned per tab)
+    private TextButtonNode?[] _vsPrevButtons = new TextButtonNode?[4];
+    private TextButtonNode?[] _vsNextButtons = new TextButtonNode?[4];
+    private TextNode?[] _vsPageLabels = new TextNode?[4];
 
     // Rebuild flags — only set by filter changes, NOT by tab switches
     private bool _vsNpcNeedRebuild;
@@ -63,8 +70,14 @@ public sealed unsafe partial class NativeConfigWindow
 
     private int _activeVsTab;
 
-    // Column widths
-    private const float ColPlay   = 40f;
+    // Voice test playback tracking (button node only — state lives in IVoiceTestService)
+    private TextButtonNode? _vsTestingButton;
+
+    // ScrollingListNode reserves 16px for the scrollbar (ScrollingAreaNode.OnSizeChanged)
+    private const float ScrollbarWidth = 16f;
+
+    // Column widths (ColPlay computed at setup from localized Play/Stop text)
+    private float _colPlay = 40f;
     private const float ColLock   = 40f;
     private const float ColUse    = 40f;
     private const float ColGender = 70f;
@@ -72,11 +85,18 @@ public sealed unsafe partial class NativeConfigWindow
     private const float ColName   = 140f;
     private const float ColVoice  = 180f;
 
-    private float VsVolWidth => _contentWidth - ColPlay - ColLock - ColUse - ColGender - ColRace - ColName - ColVoice - 7 * 4;
+    private float VsVolWidth => _contentWidth - _colPlay - ColLock - ColUse - ColGender - ColRace - ColName - ColVoice - 7 * 4;
 
     private void SetupVoiceSelection()
     {
         var w = _contentWidth;
+
+        // Measure Play/Stop button width from localized text (auto-size to longest variant)
+        var measureBtn = new TextButtonNode { Size = new Vector2(40, 24), String = Loc.S("Play") };
+        var playW = measureBtn.LabelNode.GetTextDrawSize(Loc.S("Play")).X + 36;
+        var stopW = measureBtn.LabelNode.GetTextDrawSize(Loc.S("Stop")).X + 36;
+        _colPlay = Math.Max(40f, Math.Max(playW, stopW));
+        measureBtn.Dispose();
 
         // Unified search bar above the tab bar
         _vsUnifiedSearch = Input(Loc.S("Search..."), w, 80, "", v =>
@@ -102,44 +122,72 @@ public sealed unsafe partial class NativeConfigWindow
         var headerY = _innerContentPos.Y + 56;
         // Position for data list (below headers: header 20 + filter 28 + sep 4 + gap)
         var dataYWithFilter = headerY + 20 + 28 + 8;
-        var dataYNoFilter = headerY + 20 + 8;
-        var dataH = _innerContentSize.Y - (dataYWithFilter - _innerContentPos.Y);
+        var paginationH = 28f;
+        var dataH = _innerContentSize.Y - (dataYWithFilter - _innerContentPos.Y) - paginationH - 4;
 
-        // Create header rows, filter rows, separators for NPCs/Players/Bubbles (indices 0-2)
+        // Header/filter rows must match the ScrollingListNode content width (minus scrollbar)
+        var hw = w - ScrollbarWidth;
+        var headerVolWidth = hw - _colPlay - ColLock - ColUse - ColGender - ColRace - ColName - ColVoice - 7 * 4;
+
+        // Create header rows, filter rows, separators, pagination bars for NPCs/Players/Bubbles (indices 0-2)
         for (var i = 0; i < 3; i++)
         {
-            _vsHeaders[i] = new HorizontalListNode { Size = new Vector2(w, 20), ItemSpacing = 4, Position = new Vector2(_innerContentPos.X, headerY) };
-            _vsHeaders[i]!.AddNode(Label(Loc.S("Test"), ColPlay));
-            _vsHeaders[i]!.AddNode(Label(Loc.S("Lock"), ColLock));
-            _vsHeaders[i]!.AddNode(Label(Loc.S("Use"), ColUse));
-            _vsHeaders[i]!.AddNode(Label(Loc.S("Gender"), ColGender));
-            _vsHeaders[i]!.AddNode(Label(Loc.S("Race"), ColRace));
-            _vsHeaders[i]!.AddNode(Label(Loc.S("Name"), ColName));
-            _vsHeaders[i]!.AddNode(Label(Loc.S("Voice"), ColVoice));
-            _vsHeaders[i]!.AddNode(Label(Loc.S("Volume"), VsVolWidth));
+            _vsHeaders[i] = new HorizontalListNode { Size = new Vector2(hw, 20), ItemSpacing = 4, Position = new Vector2(_innerContentPos.X, headerY) };
+            _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Test"), _colPlay));
+            _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Lock"), ColLock));
+            _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Use"), ColUse));
+            _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Gender"), ColGender));
+            _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Race"), ColRace));
+            _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Name"), ColName));
+            _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Voice"), ColVoice));
+            _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Volume"), headerVolWidth));
 
-            _vsFilterRows[i] = new HorizontalListNode { Size = new Vector2(w, 28), ItemSpacing = 4, Position = new Vector2(_innerContentPos.X, headerY + 20) };
-            _vsFilterRows[i]!.AddNode(Spacer(ColPlay, 28));
+            _vsFilterRows[i] = new HorizontalListNode { Size = new Vector2(hw, 28), ItemSpacing = 4, Position = new Vector2(_innerContentPos.X, headerY + 20) };
+            _vsFilterRows[i]!.AddNode(Spacer(_colPlay, 28));
             _vsFilterRows[i]!.AddNode(Spacer(ColLock, 28));
             _vsFilterRows[i]!.AddNode(Spacer(ColUse, 28));
             _vsFilterRows[i]!.AddNode(Input(Loc.S("Filter"), ColGender, 20, "", v => { _vsFilterGender = v; TriggerActiveRebuild(); }));
             _vsFilterRows[i]!.AddNode(Input(Loc.S("Filter"), ColRace, 20, "", v => { _vsFilterRace = v; TriggerActiveRebuild(); }));
             _vsFilterRows[i]!.AddNode(Input(Loc.S("Filter"), ColName, 40, "", v => { _vsFilterName = v; TriggerActiveRebuild(); }));
             _vsFilterRows[i]!.AddNode(Input(Loc.S("Filter"), ColVoice, 40, "", v => { _vsFilterVoice = v; TriggerActiveRebuild(); }));
-            _vsFilterRows[i]!.AddNode(Spacer(VsVolWidth, 28));
+            _vsFilterRows[i]!.AddNode(Spacer(headerVolWidth, 28));
 
             _vsHeaderSeps[i] = new HorizontalLineNode { Size = new Vector2(w, 4), Position = new Vector2(_innerContentPos.X, headerY + 20 + 28 + 2) };
 
             _vsDataLists[i] = Panel(new Vector2(_innerContentPos.X, dataYWithFilter), new Vector2(w, dataH));
+
+            CreateVsPaginationNodes(i, w, dataYWithFilter + dataH + 4);
         }
 
         // Voices tab — uses area below search + toggle + tab bar
-        _vsDataLists[3] = Panel(new Vector2(_innerContentPos.X, headerY), new Vector2(w, _innerContentSize.Y - (headerY - _innerContentPos.Y)));
+        var voicesDataH = _innerContentSize.Y - (headerY - _innerContentPos.Y) - paginationH - 4;
+        _vsDataLists[3] = Panel(new Vector2(_innerContentPos.X, headerY), new Vector2(w, voicesDataH));
+        CreateVsPaginationNodes(3, w, headerY + voicesDataH + 4);
 
         _vsTabBar.AddTab(Loc.S("NPCs"),    () => ShowVsPanel(0));
         _vsTabBar.AddTab(Loc.S("Players"), () => ShowVsPanel(1));
         _vsTabBar.AddTab(Loc.S("Bubbles"), () => ShowVsPanel(2));
         _vsTabBar.AddTab(Loc.S("Voices"),  () => ShowVsPanel(3));
+    }
+
+    private void CreateVsPaginationNodes(int index, float w, float y)
+    {
+        var idx = index;
+        const float btnW = 30f;
+        const float labelW = 150f;
+
+        _vsPrevButtons[index] = Button("<", btnW, () => VsChangePage(idx, -1));
+        _vsNextButtons[index] = Button(">", btnW, () => VsChangePage(idx, 1));
+        _vsPageLabels[index] = Label("", labelW);
+
+        // Buttons centered in the window
+        const float btnGap = 20f;
+        var centerX = _innerContentPos.X + (w - btnW * 2 - btnGap) / 2f;
+        _vsPrevButtons[index]!.Position = new Vector2(centerX, y);
+        _vsNextButtons[index]!.Position = new Vector2(centerX + btnW + btnGap, y);
+
+        // Label right-aligned
+        _vsPageLabels[index]!.Position = new Vector2(_innerContentPos.X + w - labelW, y + 4);
     }
 
     private void AddVoiceSelectionNodes()
@@ -155,6 +203,12 @@ public sealed unsafe partial class NativeConfigWindow
         }
         foreach (var dl in _vsDataLists)
             if (dl != null) AddNode(dl);
+        for (var i = 0; i < 4; i++)
+        {
+            if (_vsPrevButtons[i] != null) AddNode(_vsPrevButtons[i]!);
+            if (_vsNextButtons[i] != null) AddNode(_vsNextButtons[i]!);
+            if (_vsPageLabels[i] != null) AddNode(_vsPageLabels[i]!);
+        }
     }
 
     private void ShowVoiceSelectionSection(bool visible)
@@ -183,6 +237,12 @@ public sealed unsafe partial class NativeConfigWindow
         }
         foreach (var dl in _vsDataLists)
             SetVisible(dl, false);
+        for (var i = 0; i < 4; i++)
+        {
+            SetVisible(_vsPrevButtons[i], false);
+            SetVisible(_vsNextButtons[i], false);
+            SetVisible(_vsPageLabels[i], false);
+        }
     }
 
     private void ShowVsPanel(int index)
@@ -201,6 +261,10 @@ public sealed unsafe partial class NativeConfigWindow
         {
             SetVisible(_vsDataLists[3], true);
         }
+
+        SetVisible(_vsPrevButtons[index], true);
+        SetVisible(_vsNextButtons[index], true);
+        SetVisible(_vsPageLabels[index], true);
 
         // Reset filters on tab switch
         _vsFilterName = "";
@@ -222,6 +286,16 @@ public sealed unsafe partial class NativeConfigWindow
     {
         if (_activeTopTab != 1) return;
 
+        // Reset play button when playback finishes naturally
+        if (_vsTestingButton != null && _voiceTest.TestingVoice == null)
+        {
+            _vsTestingButton.String = Loc.S("Play");
+            _vsTestingButton = null;
+        }
+
+        // Process deferred page changes (queued by button click handlers)
+        ProcessVsPageChange();
+
         // Start new builds
         if (_vsNpcNeedRebuild && _activeVsTab == 0)
         { _vsNpcNeedRebuild = false; _vsNpcBuilt = true; StartMappedBuild(_vsDataLists[0]!, _config.MappedNpcs, false, 0); }
@@ -232,17 +306,14 @@ public sealed unsafe partial class NativeConfigWindow
         if (_vsVoicesNeedRebuild && _activeVsTab == 3)
         { _vsVoicesNeedRebuild = false; _vsVoicesBuilt = true; StartVoicesBuild(); }
 
-        // Continue progressive builds
-        ContinueMappedBuild();
-        ContinueVoicesBuild();
+        // Continue progressive page builds
+        ContinueVsPageBuild();
     }
 
-    // ── Progressive mapped list build ────────────────────────────────────────
+    // ── Paginated mapped list build ──────────────────────────────────────────
 
     private void StartMappedBuild(ScrollingListNode panel, List<NpcMapData> source, bool isBubble, int tabIndex)
     {
-        panel.Clear();
-
         IEnumerable<NpcMapData> data = isBubble
             ? source.Where(n => n.HasBubbles)
             : source.Where(n => !n.Name.StartsWith("BB-"));
@@ -274,77 +345,87 @@ public sealed unsafe partial class NativeConfigWindow
             .ThenBy(n => n.Name)
             .ToList();
 
-        // Store pending queue
-        switch (tabIndex)
-        {
-            case 0: _vsPendingNpcs = entries; break;
-            case 1: _vsPendingPlayers = entries; break;
-            case 2: _vsPendingBubbles = entries; break;
-        }
-        _vsPendingIsBubble = isBubble;
-        _vsPendingIndex = 0;
+        _vsFilteredData[tabIndex] = entries;
+        _vsPage[tabIndex] = 0;
 
-        if (entries.Count == 0)
+        BuildMappedPage(panel, tabIndex);
+    }
+
+    private void BuildMappedPage(ScrollingListNode panel, int tabIndex)
+    {
+        panel.Clear();
+
+        var entries = _vsFilteredData[tabIndex];
+        if (entries == null || entries.Count == 0)
         {
             panel.AddNode(Label(Loc.S("No entries found."), _contentWidth));
             panel.RecalculateLayout();
-            // Clear pending
-            switch (tabIndex) { case 0: _vsPendingNpcs = null; break; case 1: _vsPendingPlayers = null; break; case 2: _vsPendingBubbles = null; break; }
+            UpdateVsPaginationLabel(tabIndex, 0);
+            _vsProgressiveTab = -1;
+            return;
         }
+
+        // Start progressive build — rows added in ContinueVsPageBuild()
+        _vsProgressiveTab = tabIndex;
+        _vsProgressiveIndex = 0;
+        _vsProgressiveIsVoices = false;
+        UpdateVsPaginationLabel(tabIndex, entries.Count);
     }
 
-    private void ContinueMappedBuild()
+    private void ContinueVsPageBuild()
     {
-        var pending = _activeVsTab switch
+        if (_vsProgressiveTab < 0) return;
+
+        if (_vsProgressiveIsVoices)
         {
-            0 => _vsPendingNpcs,
-            1 => _vsPendingPlayers,
-            2 => _vsPendingBubbles,
-            _ => null,
-        };
-        if (pending == null) return;
+            ContinueVoicesPageBuild();
+            return;
+        }
 
-        var panel = _vsDataLists[_activeVsTab];
-        if (panel == null) return;
+        var tabIndex = _vsProgressiveTab;
+        var panel = _vsDataLists[tabIndex];
+        var entries = _vsFilteredData[tabIndex];
+        if (panel == null || entries == null) { _vsProgressiveTab = -1; return; }
 
+        var page = _vsPage[tabIndex];
+        var pageStart = page * VsPageSize;
+        var pageEnd = Math.Min(pageStart + VsPageSize, entries.Count);
+        var pageCount = pageEnd - pageStart;
+
+        var start = _vsProgressiveIndex;
+        var end = Math.Min(start + VsRowsPerFrame, pageCount);
+        var isBubble = _vsIsBubble[tabIndex];
         var w = _contentWidth;
-        var end = Math.Min(_vsPendingIndex + RowsPerFrame, pending.Count);
 
-        for (var i = _vsPendingIndex; i < end; i++)
-            panel.AddNode(BuildMappedRow(pending[i], w, _vsPendingIsBubble));
+        for (var i = start; i < end; i++)
+            panel.AddNode(BuildMappedRow(entries[pageStart + i], w, isBubble));
 
-        _vsPendingIndex = end;
+        _vsProgressiveIndex = end;
         panel.RecalculateLayout();
 
-        // Done?
-        if (_vsPendingIndex >= pending.Count)
-        {
-            switch (_activeVsTab)
-            {
-                case 0: _vsPendingNpcs = null; break;
-                case 1: _vsPendingPlayers = null; break;
-                case 2: _vsPendingBubbles = null; break;
-            }
-        }
+        if (_vsProgressiveIndex >= pageCount)
+            _vsProgressiveTab = -1;
     }
 
     private HorizontalListNode BuildMappedRow(NpcMapData npc, float w, bool isBubble)
     {
         var row = new HorizontalListNode { Size = new Vector2(w, 26), ItemSpacing = 4 };
 
-        // Play/Stop toggle button
+        // Play/Stop toggle button — sized to _colPlay (measured from longest localized variant)
         var capturedNpcForPlay = npc;
         TextButtonNode? playBtn = null;
-        playBtn = Button(Loc.S("Play"), ColPlay, () =>
+        playBtn = Button(Loc.S("Play"), _colPlay, () =>
         {
-            if (_audioPlayback.IsPlaying)
+            if (capturedNpcForPlay.Voice != null && _voiceTest.IsTestingVoice(capturedNpcForPlay.Voice))
             {
-                StopVoice();
-                playBtn!.String = Loc.S("Play");
+                ResetTestingButton();
+                _voiceTest.StopVoice();
             }
             else if (capturedNpcForPlay.Voice != null)
             {
-                TestVoice(capturedNpcForPlay.Voice);
+                ResetTestingButton();
+                _voiceTest.TestVoice(capturedNpcForPlay.Voice);
+                _vsTestingButton = playBtn;
                 playBtn!.String = Loc.S("Stop");
             }
         });
@@ -423,6 +504,22 @@ public sealed unsafe partial class NativeConfigWindow
 
     private void StartVoicesBuild()
     {
+        IEnumerable<EchokrautVoice> voiceData = _config.EchokrautVoices;
+        if (!string.IsNullOrEmpty(_vsUnifiedFilter))
+        {
+            var search = _vsUnifiedFilter;
+            voiceData = voiceData.Where(v =>
+                v.VoiceName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                v.Note.Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+        _vsFilteredVoices = voiceData.OrderBy(v => v.VoiceName).ToList();
+        _vsPage[3] = 0;
+
+        BuildVoicesPage();
+    }
+
+    private void BuildVoicesPage()
+    {
         var panel = _vsDataLists[3];
         if (panel == null) return;
 
@@ -439,38 +536,39 @@ public sealed unsafe partial class NativeConfigWindow
         panel.AddNode(header);
         panel.AddNode(Separator(w));
 
-        IEnumerable<EchokrautVoice> voiceData = _config.EchokrautVoices;
-        if (!string.IsNullOrEmpty(_vsUnifiedFilter))
-        {
-            var search = _vsUnifiedFilter;
-            voiceData = voiceData.Where(v =>
-                v.VoiceName.Contains(search, StringComparison.OrdinalIgnoreCase) ||
-                v.Note.Contains(search, StringComparison.OrdinalIgnoreCase));
-        }
-        _vsPendingVoices = voiceData.OrderBy(v => v.VoiceName).ToList();
-        _vsPendingIndex = 0;
-
-        if (_vsPendingVoices.Count == 0)
+        if (_vsFilteredVoices == null || _vsFilteredVoices.Count == 0)
         {
             panel.AddNode(Label(Loc.S("No voices configured."), w));
             panel.RecalculateLayout();
-            _vsPendingVoices = null;
+            UpdateVsPaginationLabel(3, 0);
+            _vsProgressiveTab = -1;
+            return;
         }
+
+        // Start progressive build — rows added in ContinueVoicesPageBuild()
+        _vsProgressiveTab = 3;
+        _vsProgressiveIndex = 0;
+        _vsProgressiveIsVoices = true;
+        UpdateVsPaginationLabel(3, _vsFilteredVoices.Count);
     }
 
-    private void ContinueVoicesBuild()
+    private void ContinueVoicesPageBuild()
     {
-        if (_vsPendingVoices == null || _activeVsTab != 3) return;
-
         var panel = _vsDataLists[3];
-        if (panel == null) return;
+        if (panel == null || _vsFilteredVoices == null) { _vsProgressiveTab = -1; return; }
 
+        var page = _vsPage[3];
+        var pageStart = page * VsPageSize;
+        var pageEnd = Math.Min(pageStart + VsPageSize, _vsFilteredVoices.Count);
+        var pageCount = pageEnd - pageStart;
+
+        var start = _vsProgressiveIndex;
+        var end = Math.Min(start + VsRowsPerFrame, pageCount);
         var w = _contentWidth;
-        var end = Math.Min(_vsPendingIndex + RowsPerFrame, _vsPendingVoices.Count);
 
-        for (var i = _vsPendingIndex; i < end; i++)
+        for (var i = start; i < end; i++)
         {
-            var voice = _vsPendingVoices[i];
+            var voice = _vsFilteredVoices[pageStart + i];
             var row = new HorizontalListNode { Size = new Vector2(w, 28), ItemSpacing = 4 };
 
             row.AddNode(Check("   ", 30, voice.IsEnabled, v =>
@@ -494,11 +592,11 @@ public sealed unsafe partial class NativeConfigWindow
             panel.AddNode(row);
         }
 
-        _vsPendingIndex = end;
+        _vsProgressiveIndex = end;
         panel.RecalculateLayout();
 
-        if (_vsPendingIndex >= _vsPendingVoices.Count)
-            _vsPendingVoices = null;
+        if (_vsProgressiveIndex >= pageCount)
+            _vsProgressiveTab = -1;
     }
 
     private void OpenVoiceConfig(EchokrautVoice voice)
@@ -507,8 +605,7 @@ public sealed unsafe partial class NativeConfigWindow
         _voiceConfigWindow?.Dispose();
 
         _voiceConfigWindow = new NativeVoiceConfigWindow(
-            voice, _config, _npcData, _audioPlayback, _volumeService,
-            _gameObjects, _clientState, _backend, _log,
+            voice, _config, _npcData, _voiceTest, _log,
             () => _vsVoicesNeedRebuild = true)
         {
             InternalName = "EKVoiceConfig",
@@ -516,6 +613,58 @@ public sealed unsafe partial class NativeConfigWindow
             Size = new System.Numerics.Vector2(500, 700),
         };
         _voiceConfigWindow.Open();
+    }
+
+    // ── Pagination ───────────────────────────────────────────────────────────
+
+    private void VsChangePage(int tabIndex, int delta)
+    {
+        // Defer to UpdateVoiceSelection — never clear/rebuild nodes inside ATK event handlers.
+        _vsPendingPageTab = tabIndex;
+        _vsPendingPageDelta = delta;
+    }
+
+    private void ProcessVsPageChange()
+    {
+        if (_vsPendingPageTab < 0) return;
+
+        var tabIndex = _vsPendingPageTab;
+        var delta = _vsPendingPageDelta;
+        _vsPendingPageTab = -1;
+
+        var total = tabIndex == 3
+            ? (_vsFilteredVoices?.Count ?? 0)
+            : (_vsFilteredData[tabIndex]?.Count ?? 0);
+        var maxPage = Math.Max(0, (total - 1) / VsPageSize);
+        var newPage = Math.Clamp(_vsPage[tabIndex] + delta, 0, maxPage);
+        if (newPage == _vsPage[tabIndex]) return;
+
+        _vsPage[tabIndex] = newPage;
+
+        if (tabIndex == 3)
+            BuildVoicesPage();
+        else if (_vsDataLists[tabIndex] != null)
+            BuildMappedPage(_vsDataLists[tabIndex]!, tabIndex);
+    }
+
+    private void UpdateVsPaginationLabel(int tabIndex, int total)
+    {
+        if (_vsPageLabels[tabIndex] == null) return;
+
+        var maxPage = Math.Max(0, (total - 1) / VsPageSize);
+        Dim(_vsPrevButtons[tabIndex], _vsPage[tabIndex] > 0);
+        Dim(_vsNextButtons[tabIndex], _vsPage[tabIndex] < maxPage);
+
+        if (total == 0)
+        {
+            _vsPageLabels[tabIndex]!.String = $"0 / 0";
+        }
+        else
+        {
+            var start = _vsPage[tabIndex] * VsPageSize + 1;
+            var end = Math.Min(start + VsPageSize - 1, total);
+            _vsPageLabels[tabIndex]!.String = $"{start}-{end} / {total}";
+        }
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -531,53 +680,12 @@ public sealed unsafe partial class NativeConfigWindow
         }
     }
 
-    // ── Voice testing ────────────────────────────────────────────────────────
-
-    private void TestVoice(EchokrautVoice voice)
+    private void ResetTestingButton()
     {
-        StopVoice();
-        var eventId = _log.Start(nameof(TestVoice), TextSource.AddonTalk);
-        var volume = _volumeService.GetVoiceVolume(eventId) * voice.Volume;
-        var speaker = new NpcMapData(ObjectKind.None)
+        if (_vsTestingButton != null)
         {
-            Gender = voice.AllowedGenders.Count > 0 ? voice.AllowedGenders[0] : Genders.Male,
-            Race = voice.AllowedRaces.Count > 0 ? voice.AllowedRaces[0] : NpcRaces.Hyur,
-            Name = voice.VoiceName,
-        };
-        speaker.Voices = _config.EchokrautVoices;
-        speaker.Voice = voice;
-
-        var voiceMessage = new VoiceMessage
-        {
-            SpeakerObj = null,
-            Source = TextSource.VoiceTest,
-            Speaker = speaker,
-            Text = GetTestText(),
-            OriginalText = GetTestText(),
-            Language = _clientState.ClientLanguage,
-            EventId = eventId,
-            SpeakerFollowObj = _gameObjects.LocalPlayer,
-            Volume = volume
-        };
-
-        if (volume > 0)
-            _backend.ProcessVoiceMessage(voiceMessage);
-        else
-            _log.End(nameof(TestVoice), eventId);
+            _vsTestingButton.String = Loc.S("Play");
+            _vsTestingButton = null;
+        }
     }
-
-    private void StopVoice()
-    {
-        if (DialogState.CurrentVoiceMessage != null)
-            _audioPlayback.StopPlaying(DialogState.CurrentVoiceMessage);
-        _log.End(nameof(StopVoice), new EKEventId(0, TextSource.AddonTalk));
-    }
-
-    private string GetTestText() => _clientState.ClientLanguage switch
-    {
-        ClientLanguage.German  => Constants.TESTMESSAGEDE,
-        ClientLanguage.French  => Constants.TESTMESSAGEFR,
-        ClientLanguage.Japanese => Constants.TESTMESSAGEJP,
-        _ => Constants.TESTMESSAGEEN,
-    };
 }

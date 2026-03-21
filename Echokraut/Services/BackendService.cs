@@ -347,6 +347,8 @@ public class BackendService : IBackendService, IDisposable
                 // Try to get next message pending generation
                 if (_queue.TryDequeuePendingGeneration(out var entry) && entry != null)
                 {
+                    if (entry.State == Queue.VoiceMessageState.Cancelled)
+                        continue;
                     await ProcessGenerationAsync(entry, cancellationToken);
                 }
                 

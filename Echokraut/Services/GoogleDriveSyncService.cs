@@ -92,7 +92,7 @@ public partial class GoogleDriveSyncService : IGoogleDriveSyncService
         {
             var listRequest = service.Files.List();
             listRequest.Q =
-                $"name = '{part}' and " +
+                $"name = '{EscapeDriveQueryString(part)}' and " +
                 $"mimeType = 'application/vnd.google-apps.folder' and " +
                 $"'{parentId}' in parents and trashed = false";
             listRequest.Fields = "files(id, name)";

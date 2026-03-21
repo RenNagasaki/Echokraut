@@ -40,6 +40,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private readonly INpcDataService _npcData;
     private readonly IVolumeService _volumeService;
     private readonly IGameObjectService _gameObjects;
+    private readonly IVoiceTestService _voiceTest;
 
     // ── Top-level tab infrastructure ─────────────────────────────────────────
     // Index: 0=Settings, 1=Voice Sel., 2=Phonetics, 3=Logs
@@ -162,7 +163,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         ILogService log,
         INpcDataService npcData,
         IVolumeService volumeService,
-        IGameObjectService gameObjects)
+        IGameObjectService gameObjects,
+        IVoiceTestService voiceTest)
     {
         _config = config;
         _audioPlayback = audioPlayback;
@@ -178,6 +180,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _npcData = npcData;
         _volumeService = volumeService;
         _gameObjects = gameObjects;
+        _voiceTest = voiceTest;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -310,6 +313,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
 
     protected override void OnUpdate(AtkUnitBase* addon)
     {
+        ScreenClampHelper.ClampToScreen(addon, Size);
+
         // Reset delete confirmations after 5 seconds
         if (_lastDeleteClick.AddSeconds(5) <= DateTime.Now && (_deleteNpcsArmed || _deletePlayersArmed || _deleteBubblesArmed))
         {
@@ -951,6 +956,13 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         FontType = FontType.Axis,
         FontSize = 12,
     };
+
+    private static TextNode HeaderLabel(string text, float width)
+    {
+        var node = Label(text, width);
+        node.AddTextFlags(TextFlags.Ellipsis);
+        return node;
+    }
 
     private static TextButtonNode Button(string label, float minWidth, Action onClick)
     {

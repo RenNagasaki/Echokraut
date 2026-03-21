@@ -114,6 +114,15 @@ public static class ServiceBuilder
 
 
 
+        container.RegisterFactory<IVoiceTestService>(c => new VoiceTestService(
+            c.GetService<ILogService>(),
+            c.GetService<IVolumeService>(),
+            c.GetService<IBackendService>(),
+            c.GetService<IAudioPlaybackService>(),
+            clientState,
+            c.GetService<IGameObjectService>(),
+            configuration));
+
         container.RegisterFactory<IVoiceMessageProcessor>(c => new VoiceMessageProcessor(
             c.GetService<ILogService>(),
             c.GetService<ITextProcessingService>(),

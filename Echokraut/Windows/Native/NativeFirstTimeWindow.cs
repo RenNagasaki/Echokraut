@@ -211,6 +211,8 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
 
     protected override void OnUpdate(AtkUnitBase* addon)
     {
+        ScreenClampHelper.ClampToScreen(addon, Size);
+
         var step = _wizardStep;
         var instanceType = _config.Alltalk.InstanceType;
         var isLocal = instanceType == AlltalkInstanceType.Local;

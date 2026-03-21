@@ -39,11 +39,13 @@ public class ImGuiWindowManager : IWindowManager
         var addonTalk     = services.GetService<IAddonTalkHelper>();
         var alttalkInstanceWindow = services.GetService<AlltalkInstanceWindow>();
 
+        var voiceTest = services.GetService<IVoiceTestService>();
+
         _configWindow = new ConfigWindow(
             log, volume, config, framework, commands, commandManager,
             pluginInterface, backend, audioPlayback, clientState,
             jsonData, audioFile, gameObject, googleDrive, npcData,
-            alttalkInstanceWindow);
+            voiceTest, alttalkInstanceWindow);
 
         _firstTimeWindow = new FirstTimeWindow(
             log, config, framework, alttalkInstanceWindow, _configWindow);
