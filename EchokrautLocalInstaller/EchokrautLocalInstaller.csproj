@@ -8,6 +8,7 @@
         <Authors>RenNagasaki</Authors>
         <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
         <ApplicationIcon>Echokraut.ico</ApplicationIcon>
+        <Version>1.0.1</Version>
     </PropertyGroup>
 
     <ItemGroup>

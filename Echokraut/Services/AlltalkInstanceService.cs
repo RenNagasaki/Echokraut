@@ -73,7 +73,6 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
                         _config.Alltalk.CustomModelUrl,
                         _config.Alltalk.CustomVoicesUrl,
                         "true",
-                        _config.Alltalk.AutoStartLocalInstance.ToString(),
                         IsWindows.ToString(),
                         _config.Alltalk.IsWindows11.ToString()
                     }

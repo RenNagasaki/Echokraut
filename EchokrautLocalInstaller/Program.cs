@@ -18,11 +18,90 @@ public class Program
         Dispose();
         return false;
     }
-    
+
     static Process? InstallProcess = null;
     static Process? InstanceProcess = null;
     static bool IsWindows;
     static bool InstanceProcessIsRunning = false;
+    static bool InstallProcessStarted = false;
+
+    static readonly string LogFilePath = Path.Join(
+        Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
+        "EchokrautLocalInstaller.log");
+    static readonly object LogLock = new();
+
+    static void Log(string message)
+    {
+        var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}";
+        Console.WriteLine(message);
+        try
+        {
+            lock (LogLock)
+            {
+                File.AppendAllText(LogFilePath, line + Environment.NewLine);
+            }
+        }
+        catch { /* don't let logging failures break the installer */ }
+    }
+
+    static void Log(string message, ConsoleColor color)
+    {
+        var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}";
+        Console.ForegroundColor = color;
+        Console.WriteLine(message);
+        Console.ResetColor();
+        try
+        {
+            lock (LogLock)
+            {
+                File.AppendAllText(LogFilePath, line + Environment.NewLine);
+            }
+        }
+        catch { }
+    }
+
+    static async Task DownloadFileAsync(HttpClient client, string url, string destPath, string label)
+    {
+        using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+        response.EnsureSuccessStatusCode();
+        var totalBytes = response.Content.Headers.ContentLength;
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        await using var fs = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920);
+
+        var buffer = new byte[81920];
+        long downloaded = 0;
+        const int barWidth = 40;
+        var sw = Stopwatch.StartNew();
+        int bytesRead;
+
+        while ((bytesRead = await stream.ReadAsync(buffer)) > 0)
+        {
+            await fs.WriteAsync(buffer.AsMemory(0, bytesRead));
+            downloaded += bytesRead;
+
+            if (totalBytes.HasValue && totalBytes.Value > 0)
+            {
+                var pct = (double)downloaded / totalBytes.Value;
+                var filled = (int)(pct * barWidth);
+                var empty = barWidth - filled;
+                var bar = new string('=', filled) + (empty > 0 ? ">" + new string(' ', empty - 1) : "");
+                var mbDown = downloaded / 1048576.0;
+                var mbTotal = totalBytes.Value / 1048576.0;
+                Console.Write($"\r  {label}: [{bar}] {pct:P0}  {mbDown:F1}/{mbTotal:F1} MB");
+            }
+            else
+            {
+                var mbDown = downloaded / 1048576.0;
+                Console.Write($"\r  {label}: {mbDown:F1} MB downloaded...");
+            }
+        }
+
+        sw.Stop();
+        var finalMb = downloaded / 1048576.0;
+        var speed = sw.Elapsed.TotalSeconds > 0 ? finalMb / sw.Elapsed.TotalSeconds : 0;
+        Console.WriteLine();
+        Log($"{label}: {finalMb:F1} MB downloaded in {sw.Elapsed.TotalSeconds:F1}s ({speed:F1} MB/s)");
+    }
 
     public static void Main(string[] args)
     {
@@ -54,20 +133,24 @@ public class Program
         SetConsoleCtrlHandler(_handler, true);
         AppDomain.CurrentDomain.ProcessExit += (_, _) =>
         {
-            Console.WriteLine("ProcessExit – Stopping All");
+            Log("ProcessExit – Stopping All");
             Dispose();
         };
+        
+        Log($"EchokrautLocalInstaller started. Args ({args.Length}): [{string.Join(", ", args.Select((a, i) => $"[{i}]={a}"))}]");
 
         if (args.Length > 1)
         {
             switch (args[0])
             {
                 case "start":
+                    Log($"Mode: start | installFolder={args[1]} | isWindows={args[2]}");
                     IsWindows = Convert.ToBoolean(args[2]);
                     var installFolder = Path.Join(args[1], Constants.ALLTALKFOLDERNAME);
                     StartInstance(installFolder);
                     break;
                 case "install":
+                    Log($"Mode: install | installFolder={args[1]} | customModelUrl={args[2]} | customVoicesUrl={args[3]} | reinstall={args[4]} | isWindows={args[5]} | isWindows11={args[6]}");
                     IsWindows = Convert.ToBoolean(args[5]);
                     Install(args[1],
                             args[2],
@@ -83,7 +166,8 @@ public class Program
     {
         try
         {
-            Console.WriteLine($"Installing into {installFolder}");
+            Log($"Installing into {installFolder}");
+            Log($"Args: reinstall={reinstall}, isWindows={IsWindows}, isWindows11={isWindows11}");
             var installFile = Path.Join(installFolder, "alltalk_tts.zip");
             var installMSBTFile = Path.Join(installFolder, "vs_BuildTools.exe");
             var alltalkFolderNameWrong = Path.GetFileNameWithoutExtension(Constants.ALLTALKURL);
@@ -106,7 +190,7 @@ public class Program
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error while installing alltalk locally: {ex}");
+                        Log($"Error while installing alltalk locally: {ex}");
                     }
                 }
 
@@ -114,19 +198,18 @@ public class Program
                     Directory.CreateDirectory(installFolder);
 
                 #region Prerequisites
-                if (IsWindows)
+                if (IsWindows || isWindows11)
                 {
-                    Console.WriteLine($"Downloading vs_BuildTools.exe");
-                    using (var client = new HttpClient())
+                    Log($"Downloading vs_BuildTools.exe");
+                    using (var client = new HttpClient() { Timeout = TimeSpan.FromMinutes(30) })
                     {
-                        var response = client.GetByteArrayAsync(Constants.MSBUILDTOOLSURL);
-                        File.WriteAllBytes(installMSBTFile, response.Result);
+                        DownloadFileAsync(client, Constants.MSBUILDTOOLSURL, installMSBTFile, "vs_BuildTools.exe").Wait();
                     }
 
                     var winSdk = isWindows11
                                      ? Constants.MSBUILDTOOLSWIN11SDK
                                      : Constants.MSBUILDTOOLSWIN10SDK;
-                    Console.WriteLine($"Installing vs_BuildTools.exe");
+                    Log($"Installing vs_BuildTools.exe");
                     var process = new Process();
                     process.StartInfo.UseShellExecute = false;
                     process.StartInfo.CreateNoWindow = true;
@@ -134,24 +217,25 @@ public class Program
                     process.StartInfo.Arguments = $"--quiet --add {Constants.MSBUILDTOOLSMSVC} --add {winSdk}";
                     process.Start();
                     process.WaitForExit();
+                    Log($"vs_BuildTools.exe ExitCode: {process.ExitCode}");
                     File.Delete(installMSBTFile);
                 }
                 #endregion
 
-                Console.WriteLine($"Downloading alltalk_tts.zip");
-                using(var client = new HttpClient())
+                Log($"Downloading alltalk_tts.zip from {Constants.ALLTALKURL}");
+                using(var client = new HttpClient() { Timeout = TimeSpan.FromMinutes(30) })
                 {
-                    var response = client.GetByteArrayAsync(Constants.ALLTALKURL);
-                    File.WriteAllBytes(installFile, response.Result);
+                    DownloadFileAsync(client, Constants.ALLTALKURL, installFile, "alltalk_tts.zip").Wait();
                 }
 
-                Console.WriteLine($"Extracting alltalk_tts.zip");
+                Log($"Extracting alltalk_tts.zip");
                 System.IO.Compression.ZipFile.ExtractToDirectory(installFile, installFolder, true);
+                Log($"Moving {alltalkFolderWrong} -> {alltalkFolder}");
                 Directory.Move(alltalkFolderWrong, alltalkFolder);
                 File.Delete(installFile);
 
-                Console.WriteLine($"Downloading xtts2.0.3 model");
-                using(var client = new HttpClient())
+                Log($"Downloading xtts2.0.3 model");
+                using(var client = new HttpClient() { Timeout = TimeSpan.FromMinutes(30) })
                 {
                     if (!Directory.Exists(modelFolder))
                         Directory.CreateDirectory(modelFolder);
@@ -160,83 +244,103 @@ public class Program
                     {
                         var uri = new Uri(xttsUrl);
                         var fileName = Path.GetFileName(uri.LocalPath);
-                        Console.WriteLine($"Downloading {fileName}");
-                        var response = client.GetByteArrayAsync(uri);
-                        File.WriteAllBytes(Path.Join(modelFolder, fileName), response.Result);
+                        Log($"Downloading {fileName}");
+                        DownloadFileAsync(client, xttsUrl, Path.Join(modelFolder, fileName), fileName).Wait();
                     }
                 }
 
-                Console.WriteLine($"Downloading voices.zip");
-                Console.WriteLine($"{voicesFile}");
-                using(var client = new HttpClient())
+                Log($"Downloading voices.zip to {voicesFile}");
+                using(var client = new HttpClient() { Timeout = TimeSpan.FromMinutes(30) })
                 {
                     try
                     {
-                        var response = client.GetByteArrayAsync(Constants.VOICESURL);
-                        File.WriteAllBytes(voicesFile, response.Result);
+                        DownloadFileAsync(client, Constants.VOICESURL, voicesFile, "voices.zip").Wait();
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error while downloading voices.zip: {ex}");
+                        Log($"Error while downloading voices.zip: {ex}");
                     }
                 }
 
-                Console.WriteLine($"Extracting voices.zip");
+                Log($"Extracting voices.zip");
                 System.IO.Compression.ZipFile.ExtractToDirectory(voicesFile, alltalkFolder, true);
                 File.Delete(voicesFile);
 
-                Console.WriteLine($"Downloading voices2.zip");
-                Console.WriteLine($"{voices2File}");
-                using(var client = new HttpClient())
+                Log($"Downloading voices2.zip to {voices2File}");
+                using(var client = new HttpClient() { Timeout = TimeSpan.FromMinutes(30) })
                 {
                     try
                     {
-                        var response = client.GetByteArrayAsync(Constants.VOICES2URL);
-                        File.WriteAllBytes(voices2File, response.Result);
+                        DownloadFileAsync(client, Constants.VOICES2URL, voices2File, "voices2.zip").Wait();
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error while downloading voices2.zip: {ex}");
+                        Log($"Error while downloading voices2.zip: {ex}");
                     }
                 }
 
-                Console.WriteLine($"Extracting voices2.zip");
+                Log($"Extracting voices2.zip");
                 System.IO.Compression.ZipFile.ExtractToDirectory(voices2File, alltalkFolder, true);
                 File.Delete(voices2File);
 
-                Console.WriteLine($"Starting install process");
+                Log($"Configuring InstallProcess");
                 InstallProcess.StartInfo.UseShellExecute = false;
                 InstallProcess.StartInfo.CreateNoWindow = true;
+                InstallProcess.StartInfo.RedirectStandardOutput = true;
+                InstallProcess.StartInfo.RedirectStandardError = true;
                 if (IsWindows)
                 {
+                    var batPath = Path.Join(alltalkFolder, "atsetup.bat");
                     InstallProcess.StartInfo.FileName = "cmd.exe";
                     InstallProcess.StartInfo.Arguments =
-                        $"/C start \"atsetup\" /wait {Path.Join(alltalkFolder, "atsetup.bat")} -silent";
+                        $"/C start \"atsetup\" /wait {batPath} -silent";
+                    Log($"InstallProcess FileName: cmd.exe");
+                    Log($"InstallProcess Arguments: /C start \"atsetup\" /wait {batPath} -silent");
+                    Log($"atsetup.bat exists: {File.Exists(batPath)}");
+                    if (File.Exists(batPath))
+                        Log($"atsetup.bat size: {new FileInfo(batPath).Length} bytes");
                 }
                 else
                 {
+                    var shPath = Path.Join(alltalkFolder, "atsetup.sh");
                     InstallProcess.StartInfo.FileName = "/bin/bash";
                     InstallProcess.StartInfo.Arguments =
-                        $"-c \"setsid bash -c '{Path.Join(alltalkFolder, "atsetup.sh")} -silent' & wait $!\"";
+                        $"-c \"setsid bash -c '{shPath} -silent' & wait $!\"";
+                    Log($"InstallProcess FileName: /bin/bash");
+                    Log($"InstallProcess Arguments: -c \"setsid bash -c '{shPath} -silent' & wait $!\"");
+                    Log($"atsetup.sh exists: {File.Exists(shPath)}");
                 }
 
-                Console.WriteLine($"Calling atsetup");
+                Log($"Starting InstallProcess (calling atsetup)...");
+                var sw = Stopwatch.StartNew();
                 InstallProcess.Start();
-                InstallProcess.WaitForExit();
+                InstallProcessStarted = true;
+                Log($"InstallProcess started, PID: {InstallProcess.Id}");
 
-                Console.WriteLine($"Install process ExitCode: {InstallProcess.ExitCode}");
+                var stdout = InstallProcess.StandardOutput.ReadToEnd();
+                var stderr = InstallProcess.StandardError.ReadToEnd();
+                InstallProcess.WaitForExit();
+                sw.Stop();
+
+                Log($"InstallProcess finished in {sw.Elapsed.TotalSeconds:F1}s");
+                Log($"InstallProcess ExitCode: {InstallProcess.ExitCode}");
+                if (!string.IsNullOrWhiteSpace(stdout))
+                    Log($"InstallProcess STDOUT:\n{stdout}");
+                if (!string.IsNullOrWhiteSpace(stderr))
+                    Log($"InstallProcess STDERR:\n{stderr}");
+
                 if (InstallProcess.ExitCode == 0)
                 {
                     if (IsWindows)
                     {
-                        Console.WriteLine($"Installing espeak-ng");
-                        CallCMD(IsWindows, 
+                        Log($"Installing espeak-ng");
+                        CallCMD(IsWindows,
                                 "",
                           $"msiexec /i \"{Path.Join(alltalkFolder, "system", "espeak-ng", "espeak-ng-X64.msi")}\" /quiet /norestart",
                           "Espeak-NG");
                     }
 
-                    Console.WriteLine("Modifying configs:");
+                    Log("Modifying configs:");
                     dynamic? config = JsonConvert.DeserializeObject(File.ReadAllText(confignewFile));
                     if (config != null)
                     {
@@ -265,23 +369,27 @@ public class Program
                     }
                     InstallCustomData(alltalkFolder, customModelUrl, customVoicesUrl).Wait();
 
-                    Console.WriteLine($"Done!");
+                    Log($"Done!");
                     }
+                else
+                {
+                    Log($"InstallProcess failed with exit code {InstallProcess.ExitCode} — skipping post-install config");
+                }
             }
             catch (OperationCanceledException)
             {
                 StopInstall();
-                Console.WriteLine($"Stopped alltalk install process");
+                Log($"Stopped alltalk install process");
             }
             catch (Exception ex)
             {
                 StopInstall();
-                Console.WriteLine($"Error while installing alltalk locally: {ex}");
+                Log($"Error while installing alltalk locally: {ex}");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error while installing alltalk locally: {ex}");
+            Log($"Error while installing alltalk locally: {ex}");
             StopInstall();
         }
     }
@@ -290,17 +398,18 @@ public class Program
     {
         try
         {
-                Console.WriteLine($"Stopping alltalk install process");
-                if (InstallProcess is { HasExited: false })
+                Log($"Stopping alltalk install process");
+                if (InstallProcessStarted && InstallProcess is { HasExited: false })
                 {
-                    InstallProcess?.Kill(true);
+                    InstallProcess.Kill(true);
                 }
                 InstallProcess?.Dispose();
                 InstallProcess = null;
+                InstallProcessStarted = false;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error while stopping alltalk install: {ex}");
+            Log($"Error while stopping alltalk install: {ex}");
         }
     }
 
@@ -310,12 +419,12 @@ public class Program
         {
             if (!(!InstanceProcessIsRunning && InstanceProcess == null))
                 StopInstance();
-            
+
             try
             {
                 InstanceProcess = new Process();
                 var alltalkFolder = installFolder;
-                Console.WriteLine($"Starting alltalk instance process");
+                Log($"Starting alltalk instance process");
 
                 var cmdExe = IsWindows
                                  ? "cmd.exe"
@@ -336,17 +445,15 @@ public class Program
                     {
                         var cleanedMessage = CleanAnsi(e.Data);
                         if (Constants.ALLTALKDEBUGLOGCOLOR.Any(item => e.Data.Contains(item)))
-                            Console.ForegroundColor = ConsoleColor.Green;
+                            Log(cleanedMessage, ConsoleColor.Green);
                         else if (Constants.ALLTALKERRORLOGCOLOR.Any(item => e.Data.Contains(item)))
-                            Console.ForegroundColor = ConsoleColor.Red;
+                            Log(cleanedMessage, ConsoleColor.Red);
                         else
-                            Console.ForegroundColor = ConsoleColor.Yellow;
-                        Console.WriteLine(cleanedMessage);
-                        Console.ResetColor();
+                            Log(cleanedMessage, ConsoleColor.Yellow);
 
                         if (e.Data.Contains("Server Ready"))
                         {
-                            Console.WriteLine("Alltalk instance is ready");
+                            Log("Alltalk instance is ready");
                             var readyFile = Path.Join(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Ready.txt");
                             if (!File.Exists(readyFile))
                                 File.WriteAllText(readyFile, " ");
@@ -356,7 +463,7 @@ public class Program
                 InstanceProcess.ErrorDataReceived += (sender, e) =>
                 {
                     if (e.Data != null && !string.IsNullOrEmpty(e.Data))
-                        Console.WriteLine(CleanAnsi(e.Data));
+                        Log(CleanAnsi(e.Data));
                 };
                 InstanceProcess.StartInfo = processInfo;
                 InstanceProcess.Start();
@@ -394,12 +501,12 @@ public class Program
             catch (Exception ex)
             {
                 StopInstance();
-                Console.WriteLine($"Error while running alltalk instance: {ex}");
+                Log($"Error while running alltalk instance: {ex}");
             }
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error while running alltalk instance: {ex}");
+            Log($"Error while running alltalk instance: {ex}");
             StopInstance();
         }
     }
@@ -408,7 +515,7 @@ public class Program
     {
         try
         {
-            Console.WriteLine($"Stopping alltalk instance process");
+            Log($"Stopping alltalk instance process");
             if (InstanceProcess is { HasExited: false })
             {
                 InstanceProcess.CancelOutputRead();
@@ -423,7 +530,7 @@ public class Program
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error while stopping alltalk instance: {ex}");
+            Log($"Error while stopping alltalk instance: {ex}");
         }
     }
 
@@ -441,8 +548,8 @@ public class Program
             var voicesFolder = Path.Join(alltalkFolder, "voices");
             if (!string.IsNullOrWhiteSpace(customModelUrl))
             {
-                Console.WriteLine($"Downloading custom model");
-                Console.WriteLine($"{customVoicesUrl}");
+                Log($"Downloading custom model");
+                Log($"{customVoicesUrl}");
                 using (var client = new HttpClient())
                 {
                     try
@@ -457,7 +564,7 @@ public class Program
                         var downloadUrl =
                             GoogleDriveHelper.CheckForGoogleAndConvertToDirectDownloadLink(
                                 customModelUrl, out bool isGoogle);
-                        Console.WriteLine($"{downloadUrl}");
+                        Log($"{downloadUrl}");
                         var response = await client.GetAsync(downloadUrl);
 
                         if (isGoogle)
@@ -468,7 +575,7 @@ public class Program
                             await response.Content.CopyToAsync(fs);
                         }
 
-                        Console.WriteLine($"Extracting custom model");
+                        Log($"Extracting custom model");
                         System.IO.Compression.ZipFile.ExtractToDirectory(modelFile, modelFolder, true);
                         File.Delete(modelFile);
 
@@ -483,17 +590,17 @@ public class Program
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error while downloading custom model, skipping: {ex}");
+                        Log($"Error while downloading custom model, skipping: {ex}");
                     }
                 }
             }
             else
-                Console.WriteLine($"No custom model found, skipping");
+                Log($"No custom model found, skipping");
 
             if (!string.IsNullOrWhiteSpace(customVoicesUrl))
             {
-                Console.WriteLine($"Downloading custom voices");
-                Console.WriteLine($"{customVoicesUrl}");
+                Log($"Downloading custom voices");
+                Log($"{customVoicesUrl}");
                 using (var client = new HttpClient())
                 {
                     try
@@ -501,7 +608,7 @@ public class Program
                         var downloadUrl =
                             GoogleDriveHelper.CheckForGoogleAndConvertToDirectDownloadLink(
                                 customVoicesUrl, out bool isGoogle);
-                        Console.WriteLine($"{downloadUrl}");
+                        Log($"{downloadUrl}");
                         var response = await client.GetAsync(downloadUrl);
 
                         if (isGoogle)
@@ -512,26 +619,26 @@ public class Program
                             await response.Content.CopyToAsync(fs);
                         }
 
-                        Console.WriteLine($"Deleting existing voices");
+                        Log($"Deleting existing voices");
                         if (Directory.Exists(voicesFolder))
                             Directory.Delete(voicesFolder, true);
 
-                        Console.WriteLine($"Extracting custom voices");
+                        Log($"Extracting custom voices");
                         System.IO.Compression.ZipFile.ExtractToDirectory(voicesFile, alltalkFolder, true);
                         File.Delete(voicesFile);
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Error while downloading custom voices, skipping: {ex}");
+                        Log($"Error while downloading custom voices, skipping: {ex}");
                     }
                 }
             }
             else
-                Console.WriteLine($"No custom voices found, skipping");
+                Log($"No custom voices found, skipping");
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error while installing custom data: {ex}");
+            Log($"Error while installing custom data: {ex}");
         }
     }
 
@@ -561,18 +668,18 @@ public class Program
             process.StartInfo.UseShellExecute = false;
             process.StartInfo.CreateNoWindow = true;
 
-            Console.WriteLine(@$"Calling command: '{exePath} {command}'");
+            Log(@$"Calling command: '{exePath} {command}'");
             process.Start();
 
             while (!process.HasExited)
             {
                 string? output = process.StandardOutput.ReadLine();
-                Console.WriteLine(output);
+                Log(output ?? "");
             }
         }
         catch (Exception e)
         {
-            Console.WriteLine(e);
+            Log($"{e}");
         }
     }
 
