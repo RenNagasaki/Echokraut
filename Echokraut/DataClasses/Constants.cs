@@ -122,7 +122,7 @@ namespace Echokraut.DataClasses
         public const string ALLTALKURL = 
             "https://github.com/RenNagasaki/alltalk_tts/releases/download/alltalk_tts-alltalkbeta/alltalk_tts-alltalkbeta.zip";
         public const string EKLOCALINSTALLERURL =
-            "https://github.com/RenNagasaki/Echokraut/releases/download/ELI-1.0.0.0/EchokrautLocalInstaller.zip";
+            "https://github.com/RenNagasaki/Echokraut/releases/download/ELI-1.0.0.1/EchokrautLocalInstaller.zip";
         public static readonly string[] ALLTALKDEBUGLOGCOLOR = { @"\033[94m", @"\033[93m" };
         public static readonly string[] ALLTALKERRORLOGCOLOR = { @"\033[91m" };
 
