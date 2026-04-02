@@ -17,20 +17,15 @@ namespace Echokraut.Services;
 public class JsonDataService : IJsonDataService, IDisposable
 {
     private readonly ILogService _log;
+    private readonly IRemoteUrlService _remoteUrls;
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(10) };
 
-    private static readonly string RacePath =
-        "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/NpcRaces.json";
-    private static readonly string GendersPath =
-        "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/NpcGenders.json";
-    private static readonly string EmoticonPath =
-        "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/Emoticons.json";
-    private static readonly Dictionary<ClientLanguage, string> VoiceNameUrls = new()
+    private static readonly Dictionary<ClientLanguage, string> LanguageKeys = new()
     {
-        [ClientLanguage.German]  = "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesDE.json",
-        [ClientLanguage.English] = "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesEN.json",
-        [ClientLanguage.French]  = "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesFR.json",
-        [ClientLanguage.Japanese]= "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesJA.json",
+        [ClientLanguage.German]   = "German",
+        [ClientLanguage.English]  = "English",
+        [ClientLanguage.French]   = "French",
+        [ClientLanguage.Japanese] = "Japanese",
     };
 
     public Dictionary<int, NpcRaces> ModelsToRaceMap { get; private set; } = new();
@@ -38,9 +33,10 @@ public class JsonDataService : IJsonDataService, IDisposable
     public List<string> Emoticons { get; private set; } = new();
     private List<VoiceMap> _voiceMaps = new();
 
-    public JsonDataService(ILogService log, ClientLanguage language)
+    public JsonDataService(ILogService log, IRemoteUrlService remoteUrls, ClientLanguage language)
     {
         _log = log ?? throw new ArgumentNullException(nameof(log));
+        _remoteUrls = remoteUrls ?? throw new ArgumentNullException(nameof(remoteUrls));
         Reload(language);
     }
 
@@ -64,7 +60,7 @@ public class JsonDataService : IJsonDataService, IDisposable
     {
         try
         {
-            var json = FetchUrl(RacePath);
+            var json = FetchUrl(_remoteUrls.Urls.NpcRacesUrl);
             if (string.IsNullOrWhiteSpace(json))
             {
                 _log.Error(nameof(LoadModelsToRaceMap), "Failed to load NPC race maps.", eventId);
@@ -83,7 +79,7 @@ public class JsonDataService : IJsonDataService, IDisposable
     {
         try
         {
-            var json = FetchUrl(GendersPath);
+            var json = FetchUrl(_remoteUrls.Urls.NpcGendersUrl);
             if (string.IsNullOrWhiteSpace(json))
             {
                 _log.Error(nameof(LoadModelsToGenderMap), "Failed to load NPC gender maps.", eventId);
@@ -102,7 +98,7 @@ public class JsonDataService : IJsonDataService, IDisposable
     {
         try
         {
-            var json = FetchUrl(EmoticonPath);
+            var json = FetchUrl(_remoteUrls.Urls.EmoticonsUrl);
             if (string.IsNullOrWhiteSpace(json))
             {
                 _log.Error(nameof(LoadEmoticons), "Failed to load emoticons.", eventId);
@@ -119,8 +115,9 @@ public class JsonDataService : IJsonDataService, IDisposable
 
     private void LoadVoiceNames(ClientLanguage language, EKEventId eventId)
     {
-        if (!VoiceNameUrls.TryGetValue(language, out var url))
-            url = VoiceNameUrls[ClientLanguage.English];
+        var langKey = LanguageKeys.GetValueOrDefault(language, "English");
+        if (!_remoteUrls.Urls.VoiceNameUrls.TryGetValue(langKey, out var url))
+            url = _remoteUrls.Urls.VoiceNameUrls["English"];
 
         try
         {

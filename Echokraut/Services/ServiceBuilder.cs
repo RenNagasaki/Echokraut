@@ -34,8 +34,12 @@ public static class ServiceBuilder
         // Register core services
         container.RegisterFactory<ILogService>(c => new LogService(pluginLog));
 
+        container.RegisterFactory<IRemoteUrlService>(c => new RemoteUrlService(
+            c.GetService<ILogService>()));
+
         container.RegisterFactory<IJsonDataService>(c => new JsonDataService(
             c.GetService<ILogService>(),
+            c.GetService<IRemoteUrlService>(),
             clientState.ClientLanguage));
 
         container.RegisterFactory<ILanguageDetectionService>(c => new LanguageDetectionService(
@@ -77,7 +81,8 @@ public static class ServiceBuilder
         container.RegisterFactory<IAlltalkInstanceService>(c => new AlltalkInstanceService(
             c.GetService<ILogService>(),
             configuration,
-            c.GetService<IGoogleDriveSyncService>()));
+            c.GetService<IGoogleDriveSyncService>(),
+            c.GetService<IRemoteUrlService>()));
 
         container.RegisterFactory<IBackendService>(c => new BackendService(
             c.GetService<IVoiceMessageQueue>(),

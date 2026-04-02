@@ -150,19 +150,30 @@ public class Program
                     StartInstance(installFolder);
                     break;
                 case "install":
+                    // Args: install <installFolder> <customModelUrl> <customVoicesUrl> <reinstall>
+                    //        <isWindows> <isWindows11> <alltalkUrl> <voicesUrl> <voices2Url>
+                    //        <msBuildToolsUrl> <xttsModelUrls(;-separated)>
                     Log($"Mode: install | installFolder={args[1]} | customModelUrl={args[2]} | customVoicesUrl={args[3]} | reinstall={args[4]} | isWindows={args[5]} | isWindows11={args[6]}");
+                    Log($"URLs: alltalkUrl={args[7]} | voicesUrl={args[8]} | voices2Url={args[9]} | msBuildToolsUrl={args[10]} | xttsModelUrls={args[11]}");
                     IsWindows = Convert.ToBoolean(args[5]);
                     Install(args[1],
                             args[2],
                             args[3],
                             Convert.ToBoolean(args[4]),
-                            Convert.ToBoolean(args[6]));
+                            Convert.ToBoolean(args[6]),
+                            args[7],
+                            args[8],
+                            args[9],
+                            args[10],
+                            args[11].Split(';'));
                     break;
             }
         }
     }
 
-    static void Install(string installFolder, string customModelUrl, string customVoicesUrl, bool reinstall, bool isWindows11)
+    static void Install(string installFolder, string customModelUrl, string customVoicesUrl,
+        bool reinstall, bool isWindows11,
+        string alltalkUrl, string voicesUrl, string voices2Url, string msBuildToolsUrl, string[] xttsModelUrls)
     {
         try
         {
@@ -170,7 +181,7 @@ public class Program
             Log($"Args: reinstall={reinstall}, isWindows={IsWindows}, isWindows11={isWindows11}");
             var installFile = Path.Join(installFolder, "alltalk_tts.zip");
             var installMSBTFile = Path.Join(installFolder, "vs_BuildTools.exe");
-            var alltalkFolderNameWrong = Path.GetFileNameWithoutExtension(Constants.ALLTALKURL);
+            var alltalkFolderNameWrong = Path.GetFileNameWithoutExtension(alltalkUrl);
             var alltalkFolderWrong = Path.Join(installFolder, alltalkFolderNameWrong);
             var alltalkFolder = Path.Join(installFolder, Constants.ALLTALKFOLDERNAME);
             var modelFolder = Path.Join(alltalkFolder, "models", "xtts", "xtts2.0.3");
@@ -203,7 +214,7 @@ public class Program
                     Log($"Downloading vs_BuildTools.exe");
                     using (var client = new HttpClient() { Timeout = TimeSpan.FromMinutes(30) })
                     {
-                        DownloadFileAsync(client, Constants.MSBUILDTOOLSURL, installMSBTFile, "vs_BuildTools.exe").Wait();
+                        DownloadFileAsync(client, msBuildToolsUrl, installMSBTFile, "vs_BuildTools.exe").Wait();
                     }
 
                     var winSdk = isWindows11
@@ -222,10 +233,10 @@ public class Program
                 }
                 #endregion
 
-                Log($"Downloading alltalk_tts.zip from {Constants.ALLTALKURL}");
+                Log($"Downloading alltalk_tts.zip from {alltalkUrl}");
                 using(var client = new HttpClient() { Timeout = TimeSpan.FromMinutes(30) })
                 {
-                    DownloadFileAsync(client, Constants.ALLTALKURL, installFile, "alltalk_tts.zip").Wait();
+                    DownloadFileAsync(client, alltalkUrl, installFile, "alltalk_tts.zip").Wait();
                 }
 
                 Log($"Extracting alltalk_tts.zip");
@@ -240,7 +251,7 @@ public class Program
                     if (!Directory.Exists(modelFolder))
                         Directory.CreateDirectory(modelFolder);
 
-                    foreach (var xttsUrl in Constants.XTTS203URLS)
+                    foreach (var xttsUrl in xttsModelUrls)
                     {
                         var uri = new Uri(xttsUrl);
                         var fileName = Path.GetFileName(uri.LocalPath);
@@ -254,7 +265,7 @@ public class Program
                 {
                     try
                     {
-                        DownloadFileAsync(client, Constants.VOICESURL, voicesFile, "voices.zip").Wait();
+                        DownloadFileAsync(client, voicesUrl, voicesFile, "voices.zip").Wait();
                     }
                     catch (Exception ex)
                     {
@@ -271,7 +282,7 @@ public class Program
                 {
                     try
                     {
-                        DownloadFileAsync(client, Constants.VOICES2URL, voices2File, "voices2.zip").Wait();
+                        DownloadFileAsync(client, voices2Url, voices2File, "voices2.zip").Wait();
                     }
                     catch (Exception ex)
                     {

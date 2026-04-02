@@ -25,6 +25,7 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
     private readonly ILogService _log;
     private readonly Configuration _config;
     private readonly IGoogleDriveSyncService _googleDrive;
+    private readonly IRemoteUrlService _remoteUrls;
 
     public event Action? OnInstanceReady;
 
@@ -41,11 +42,12 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
     private Process? _instanceProcess;
     private volatile bool _instanceProcessIsRunning;
 
-    public AlltalkInstanceService(ILogService log, Configuration config, IGoogleDriveSyncService googleDrive)
+    public AlltalkInstanceService(ILogService log, Configuration config, IGoogleDriveSyncService googleDrive, IRemoteUrlService remoteUrls)
     {
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _config = config ?? throw new ArgumentNullException(nameof(config));
         _googleDrive = googleDrive ?? throw new ArgumentNullException(nameof(googleDrive));
+        _remoteUrls = remoteUrls ?? throw new ArgumentNullException(nameof(remoteUrls));
 
         IsWindows = Dalamud.Utility.Util.GetHostPlatform() == OSPlatform.Windows;
         IsCudaInstalled = IsCudaInstalledCheck(new EKEventId(0, TextSource.Backend));
@@ -62,6 +64,10 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
                 Installing = true;
                 var localInstallerLocation = CheckAndDownloadLocalInstaller(eventId);
 
+                // Args: install <installFolder> <customModelUrl> <customVoicesUrl> <reinstall>
+                //        <isWindows> <isWindows11> <alltalkUrl> <voicesUrl> <voices2Url>
+                //        <msBuildToolsUrl> <xttsModelUrls(;-separated)>
+                var urls = _remoteUrls.Urls;
                 var processInfo = new ProcessStartInfo(localInstallerLocation)
                 {
                     UseShellExecute = true,
@@ -74,7 +80,12 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
                         _config.Alltalk.CustomVoicesUrl,
                         "true",
                         IsWindows.ToString(),
-                        _config.Alltalk.IsWindows11.ToString()
+                        _config.Alltalk.IsWindows11.ToString(),
+                        urls.AlltalkUrl,
+                        urls.VoicesUrl,
+                        urls.Voices2Url,
+                        urls.MsBuildToolsUrl,
+                        string.Join(";", urls.XttsModelUrls)
                     }
                 };
 
@@ -353,9 +364,10 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
         {
             _log.Info(nameof(CheckAndDownloadLocalInstaller), "Downloading local installer", eventId);
             using var http = new HttpClient();
-            string fileName = Path.GetFileName(new Uri(Constants.EKLOCALINSTALLERURL).LocalPath);
+            var installerUrl = _remoteUrls.Urls.InstallerUrl;
+            string fileName = Path.GetFileName(new Uri(installerUrl).LocalPath);
             string zipPath = Path.Combine(_config.Alltalk.LocalInstallPath, fileName);
-            var bytes = http.GetByteArrayAsync(Constants.EKLOCALINSTALLERURL).Result;
+            var bytes = http.GetByteArrayAsync(installerUrl).Result;
             File.WriteAllBytes(zipPath, bytes);
             Directory.CreateDirectory(localInstallerLocation);
             ZipFile.ExtractToDirectory(zipPath, localInstallerLocation, overwriteFiles: true);

@@ -311,7 +311,7 @@ public class BackendService : IBackendService, IDisposable
             {
                 // Find by race/gender
                 voiceItems = _config.EchokrautVoices.FindAll(p => 
-                    p.FitsNpcData(npcData.Gender, npcData.Race, isChild, false));
+                    p.FitsNpcData(npcData.Gender, npcData.Race, isChild, _npcData.IsGenderedRace(npcData.Race)));
                 
                 if (voiceItems.Count > 0)
                 {

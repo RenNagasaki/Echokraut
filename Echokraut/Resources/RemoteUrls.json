@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "alltalkUrl": "https://github.com/RenNagasaki/alltalk_tts/releases/download/alltalk_tts-alltalkbeta/alltalk_tts-alltalkbeta.zip",
+  "installerUrl": "https://github.com/RenNagasaki/Echokraut/releases/download/ELI-1.0.0.1/EchokrautLocalInstaller.zip",
+  "voicesUrl": "https://drive.google.com/uc?export=download&id=1bYdZdr3L69kmzUN3vSiqZmLRD7-A3M47",
+  "voices2Url": "https://drive.google.com/uc?export=download&id=1CPnx1rpkuKvVj5fGr9OiUJHZ_e8DfTzP",
+  "msBuildToolsUrl": "https://aka.ms/vs/17/release/vs_BuildTools.exe",
+  "xttsModelUrls": [
+    "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/LICENSE.txt?download=true",
+    "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/README.md?download=true",
+    "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/config.json?download=true",
+    "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/model.pth?download=true",
+    "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/dvae.pth?download=true",
+    "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/mel_stats.pth?download=true",
+    "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/speakers_xtts.pth?download=true",
+    "https://huggingface.co/coqui/XTTS-v2/resolve/v2.0.3/vocab.json?download=true"
+  ],
+  "npcRacesUrl": "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/NpcRaces.json",
+  "npcGendersUrl": "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/NpcGenders.json",
+  "emoticonsUrl": "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/Emoticons.json",
+  "voiceNameUrls": {
+    "German": "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesDE.json",
+    "English": "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesEN.json",
+    "French": "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesFR.json",
+    "Japanese": "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesJA.json"
+  }
+}

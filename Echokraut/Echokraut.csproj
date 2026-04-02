@@ -48,6 +48,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <EmbeddedResource Include="Resources\RemoteUrls.json" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="bass.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
