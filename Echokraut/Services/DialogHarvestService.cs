@@ -38,6 +38,15 @@ public class DialogHarvestService : IDialogHarvestService
         { "Hyuran", "Hyur" }
     };
 
+    /// <summary>
+    /// Manual NPC name alias → ENpcResident ID for cutscene NPCs that can't be resolved
+    /// through Lua bytecode analysis (dialog played by native cutscene system, not Lua Talk()).
+    /// </summary>
+    private static readonly Dictionary<string, uint> CutsceneNpcAliases = new(StringComparer.OrdinalIgnoreCase)
+    {
+        { "FLAMEMARSHALROAILLE", 1010038 },
+    };
+
     private static readonly HashSet<string> PlaceholderTexts = new(StringComparer.OrdinalIgnoreCase)
     {
         "0", "leer", "未使用", "inutilisé", "unused", "dummy", "test",
@@ -114,6 +123,221 @@ public class DialogHarvestService : IDialogHarvestService
         ct.ThrowIfCancellationRequested();
 
         // Step 3: Load ENpcBase for race/gender
+        // Build multi-hop DefaultTalk lookup: intermediate sheet row ID → set of DefaultTalk IDs.
+        // ENpcData references GilShop/Warp/FateShop/etc. which then link to DefaultTalk.
+        ReportProgress("Building DefaultTalk chain lookup...");
+        var intermediateToDefaultTalk = new Dictionary<uint, HashSet<uint>>();
+
+        // GilShop: AcceptTalk (col 3) + FailTalk (col 4) → DefaultTalk
+        try
+        {
+            var gilShopRaw = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, "GilShop");
+            if (gilShopRaw != null)
+            {
+                foreach (var row in gilShopRaw)
+                {
+                    var ids = new HashSet<uint>();
+                    try { var v = row.ReadUInt32Column(3); if (v != 0) ids.Add(v); } catch { }
+                    try { var v = row.ReadUInt32Column(4); if (v != 0) ids.Add(v); } catch { }
+                    if (ids.Count > 0) intermediateToDefaultTalk[row.RowId] = ids;
+                }
+            }
+        }
+        catch { }
+
+        // Warp: ConditionSuccessEvent (col 2) + ConditionFailEvent (col 3) + ConfirmEvent (col 4) → DefaultTalk
+        try
+        {
+            var warpRaw = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, "Warp");
+            if (warpRaw != null)
+            {
+                foreach (var row in warpRaw)
+                {
+                    var ids = new HashSet<uint>();
+                    try { var v = row.ReadUInt32Column(2); if (v != 0) ids.Add(v); } catch { }
+                    try { var v = row.ReadUInt32Column(3); if (v != 0) ids.Add(v); } catch { }
+                    try { var v = row.ReadUInt32Column(4); if (v != 0) ids.Add(v); } catch { }
+                    if (ids.Count > 0)
+                    {
+                        if (!intermediateToDefaultTalk.TryGetValue(row.RowId, out var existing))
+                            intermediateToDefaultTalk[row.RowId] = ids;
+                        else
+                            foreach (var id in ids) existing.Add(id);
+                    }
+                }
+            }
+        }
+        catch { }
+
+        // FateShop: DefaultTalk[0..9] (col 3-12) → DefaultTalk
+        try
+        {
+            var fateShopRaw = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, "FateShop");
+            if (fateShopRaw != null)
+            {
+                foreach (var row in fateShopRaw)
+                {
+                    var ids = new HashSet<uint>();
+                    for (var i = 0; i < 10; i++)
+                    {
+                        try { var v = row.ReadUInt32Column(3 + i); if (v != 0) ids.Add(v); } catch { }
+                    }
+                    if (ids.Count > 0)
+                    {
+                        if (!intermediateToDefaultTalk.TryGetValue(row.RowId, out var existing))
+                            intermediateToDefaultTalk[row.RowId] = ids;
+                        else
+                            foreach (var id in ids) existing.Add(id);
+                    }
+                }
+            }
+        }
+        catch { }
+
+        // SpecialShop: CompleteText (col 2043) + NotCompleteText (col 2044) → DefaultTalk
+        try
+        {
+            var ssRaw = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, "SpecialShop");
+            if (ssRaw != null)
+            {
+                foreach (var row in ssRaw)
+                {
+                    var ids = new HashSet<uint>();
+                    try { var v = row.ReadUInt32Column(2043); if (v != 0) ids.Add(v); } catch { }
+                    try { var v = row.ReadUInt32Column(2044); if (v != 0) ids.Add(v); } catch { }
+                    if (ids.Count > 0)
+                    {
+                        if (!intermediateToDefaultTalk.TryGetValue(row.RowId, out var existing))
+                            intermediateToDefaultTalk[row.RowId] = ids;
+                        else
+                            foreach (var id in ids) existing.Add(id);
+                    }
+                }
+            }
+        }
+        catch { }
+
+        // TripleTriad: DefaultTalk{Challenge/Unavailable/NPCWin/Draw/PCWin} (cols 20-24) → DefaultTalk
+        try
+        {
+            var ttRaw = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, "TripleTriad");
+            if (ttRaw != null)
+            {
+                foreach (var row in ttRaw)
+                {
+                    var ids = new HashSet<uint>();
+                    for (var i = 20; i <= 24; i++)
+                    {
+                        try { var v = row.ReadUInt32Column(i); if (v != 0) ids.Add(v); } catch { }
+                    }
+                    if (ids.Count > 0)
+                    {
+                        if (!intermediateToDefaultTalk.TryGetValue(row.RowId, out var existing))
+                            intermediateToDefaultTalk[row.RowId] = ids;
+                        else
+                            foreach (var id in ids) existing.Add(id);
+                    }
+                }
+            }
+        }
+        catch { }
+
+        // PreHandler: AcceptMessage (col 4) + DenyMessage (col 5) → DefaultTalk
+        try
+        {
+            var phRaw = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, "PreHandler");
+            if (phRaw != null)
+            {
+                foreach (var row in phRaw)
+                {
+                    var ids = new HashSet<uint>();
+                    try { var v = row.ReadUInt32Column(4); if (v != 0) ids.Add(v); } catch { }
+                    try { var v = row.ReadUInt32Column(5); if (v != 0) ids.Add(v); } catch { }
+                    if (ids.Count > 0)
+                    {
+                        if (!intermediateToDefaultTalk.TryGetValue(row.RowId, out var existing))
+                            intermediateToDefaultTalk[row.RowId] = ids;
+                        else
+                            foreach (var id in ids) existing.Add(id);
+                    }
+                }
+            }
+        }
+        catch { }
+
+        // SwitchTalk → SwitchTalkVariation (sub-rows) → DefaultTalk
+        // ENpcData references SwitchTalk row IDs. SwitchTalkVariation uses the SAME row IDs
+        // as sub-row keys, with DefaultTalk in each sub-row.
+        // SwitchTalkVariation: col 3 = DefaultTalk (based on xivapi schema)
+        ReportProgress("Loading SwitchTalkVariation...");
+        var stvCount = 0;
+        try
+        {
+            // SwitchTalkVariation is a sub-row sheet — try sub-row API first
+            var stvSheet = _dataManager.GetSubrowExcelSheet<RawSubrow>(Dalamud.Game.ClientLanguage.English, "SwitchTalkVariation");
+            if (stvSheet != null)
+            {
+                foreach (var rowCollection in stvSheet)
+                {
+                    foreach (var subrow in rowCollection)
+                    {
+                        try
+                        {
+                            var dtId = subrow.ReadUInt32Column(3);
+                            if (dtId == 0) continue;
+
+                            if (!intermediateToDefaultTalk.TryGetValue(subrow.RowId, out var ids))
+                            {
+                                ids = new HashSet<uint>();
+                                intermediateToDefaultTalk[subrow.RowId] = ids;
+                            }
+                            ids.Add(dtId);
+                            stvCount++;
+                        }
+                        catch { }
+                    }
+                }
+                _log.Debug(nameof(DoHarvest), $"SwitchTalkVariation: loaded {stvCount} sub-row entries", eventId);
+            }
+            else
+            {
+                // Fallback: try regular sheet access
+                var stvRaw = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, "SwitchTalkVariation");
+                if (stvRaw != null)
+                {
+                    foreach (var row in stvRaw)
+                    {
+                        try
+                        {
+                            var dtId = row.ReadUInt32Column(3);
+                            if (dtId == 0) continue;
+
+                            if (!intermediateToDefaultTalk.TryGetValue(row.RowId, out var ids))
+                            {
+                                ids = new HashSet<uint>();
+                                intermediateToDefaultTalk[row.RowId] = ids;
+                            }
+                            ids.Add(dtId);
+                            stvCount++;
+                        }
+                        catch { }
+                    }
+                    _log.Debug(nameof(DoHarvest), $"SwitchTalkVariation (flat): loaded {stvCount} entries", eventId);
+                }
+                else
+                {
+                    _log.Debug(nameof(DoHarvest), "SwitchTalkVariation: sheet not found", eventId);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Debug(nameof(DoHarvest), $"SwitchTalkVariation error: {ex.Message}", eventId);
+        }
+
+        _log.Debug(nameof(DoHarvest),
+            $"Built multi-hop lookup: {intermediateToDefaultTalk.Count} intermediate entries", eventId);
+
         ReportProgress("Loading NPC data...");
         var npcBaseSheet = _dataManager.GetExcelSheet<ENpcBase>()!;
         var matchedDialogIds = new Dictionary<string, HashSet<uint>>();
@@ -123,42 +347,45 @@ public class DialogHarvestService : IDialogHarvestService
         var linkedDialogs = new List<LinkedDialog>();
         var npcCount = 0;
 
+        // Build appearance → named NPC lookup for pass 2 (unnamed NPC resolution)
+        // Key: "race_gender_face_hair" → (npcId, names, raceStr, gender)
+        var appearanceToNamedNpc = new Dictionary<string, (uint npcId, Dictionary<string, string> names, string raceStr, Genders gender)>();
+
+        // Pass 1: Scan named NPCs
         foreach (var npcBase in npcBaseSheet)
         {
             ct.ThrowIfCancellationRequested();
             npcCount++;
             if (npcCount % 1000 == 0)
-                ReportProgress($"Processing NPCs... {npcCount}");
+                ReportProgress($"Processing named NPCs... {npcCount}");
 
             var npcId = npcBase.RowId;
 
-            // Get NPC name
             if (!npcNames.TryGetValue(npcId, out var names))
                 continue;
 
-            // Skip NPCs with no name in any language
             if (names.Values.All(string.IsNullOrEmpty))
                 continue;
 
-            // Get race
             var raceStr = GetRaceString(npcBase);
             var race = ParseNpcRace(raceStr);
-
-            // Get gender
             var gender = DetermineGender(npcBase, race);
 
-            // Scan ENpcData references
+            // Build appearance key for named NPC lookup
+            var appearanceKey = $"{npcBase.Race.RowId}_{npcBase.Gender}_{npcBase.Face}_{npcBase.HairStyle}";
+            appearanceToNamedNpc.TryAdd(appearanceKey, (npcId, names, raceStr, gender));
+
             var dataRefs = GetENpcDataValues(npcBase);
             foreach (var dataRef in dataRefs)
             {
                 if (dataRef == 0) continue;
 
+                // Direct match: ENpcData value IS a DefaultTalk/Balloon row ID
                 foreach (var (sheetName, dialogEntries) in allDialogSheets)
                 {
                     if (!dialogEntries.TryGetValue(dataRef, out var textsByLang))
                         continue;
 
-                    // Found a match — create linked entries for each text field
                     foreach (var texts in FlattenTexts(textsByLang))
                     {
                         if (texts.Values.All(string.IsNullOrEmpty))
@@ -179,10 +406,253 @@ public class DialogHarvestService : IDialogHarvestService
 
                     matchedDialogIds[sheetName].Add(dataRef);
                 }
+
+                // Multi-hop: ENpcData → GilShop/Warp/FateShop → DefaultTalk
+                if (intermediateToDefaultTalk.TryGetValue(dataRef, out var chainedIds))
+                {
+                    foreach (var chainedId in chainedIds)
+                    {
+                        if (!allDialogSheets["DefaultTalk"].TryGetValue(chainedId, out var chainedTexts))
+                            continue;
+                        if (matchedDialogIds["DefaultTalk"].Contains(chainedId))
+                            continue;
+
+                        foreach (var texts in FlattenTexts(chainedTexts))
+                        {
+                            if (texts.Values.All(string.IsNullOrEmpty))
+                                continue;
+
+                            linkedDialogs.Add(new LinkedDialog
+                            {
+                                NpcId = npcId,
+                                NpcName = names,
+                                Race = raceStr,
+                                Gender = gender.ToString(),
+                                Sheet = "DefaultTalk",
+                                DialogId = chainedId,
+                                MatchSource = DialogMatchSource.Direct.ToString(),
+                                Texts = texts
+                            });
+                        }
+
+                        matchedDialogIds["DefaultTalk"].Add(chainedId);
+                    }
+                }
             }
         }
 
         ct.ThrowIfCancellationRequested();
+
+        // Pass 2: Scan unnamed NPCs for dialog not yet matched.
+        // Resolve names by matching appearance (race+gender+face+hair) to named NPCs.
+        ReportProgress("Processing unnamed NPCs...");
+        npcCount = 0;
+        var pass2UnnamedWithDialog = 0;
+        var pass2AppearanceMatched = 0;
+        var pass2NewDialogIds = 0;
+        foreach (var npcBase in npcBaseSheet)
+        {
+            ct.ThrowIfCancellationRequested();
+            npcCount++;
+            if (npcCount % 1000 == 0)
+                ReportProgress($"Processing unnamed NPCs... {npcCount}");
+
+            var npcId = npcBase.RowId;
+
+            // Only process unnamed NPCs (skip ones already processed in pass 1)
+            if (npcNames.TryGetValue(npcId, out var existingNames)
+                && existingNames.Values.Any(n => !string.IsNullOrEmpty(n)))
+                continue;
+
+            var dataRefs = GetENpcDataValues(npcBase);
+            var hasNewDialog = false;
+
+            foreach (var dataRef in dataRefs)
+            {
+                if (dataRef == 0) continue;
+                foreach (var sheetName in allDialogSheets.Keys)
+                {
+                    if (allDialogSheets[sheetName].ContainsKey(dataRef) && !matchedDialogIds[sheetName].Contains(dataRef))
+                    {
+                        hasNewDialog = true;
+                        break;
+                    }
+                }
+                if (hasNewDialog) break;
+            }
+
+            if (!hasNewDialog) continue;
+            pass2UnnamedWithDialog++;
+
+            // Try to find a named NPC with matching appearance
+            var appearanceKey = $"{npcBase.Race.RowId}_{npcBase.Gender}_{npcBase.Face}_{npcBase.HairStyle}";
+            if (!appearanceToNamedNpc.TryGetValue(appearanceKey, out var namedNpc))
+                continue; // No appearance match — skip (can't resolve name)
+            pass2AppearanceMatched++;
+
+            var raceStr = namedNpc.raceStr;
+            var gender = namedNpc.gender;
+            var names = namedNpc.names;
+
+            foreach (var dataRef in dataRefs)
+            {
+                if (dataRef == 0) continue;
+
+                foreach (var (sheetName, dialogEntries) in allDialogSheets)
+                {
+                    if (matchedDialogIds[sheetName].Contains(dataRef)) continue;
+                    if (!dialogEntries.TryGetValue(dataRef, out var textsByLang)) continue;
+
+                    foreach (var texts in FlattenTexts(textsByLang))
+                    {
+                        if (texts.Values.All(string.IsNullOrEmpty))
+                            continue;
+
+                        linkedDialogs.Add(new LinkedDialog
+                        {
+                            NpcId = namedNpc.npcId,
+                            NpcName = names,
+                            Race = raceStr,
+                            Gender = gender.ToString(),
+                            Sheet = sheetName,
+                            DialogId = dataRef,
+                            MatchSource = DialogMatchSource.Direct.ToString(),
+                            Texts = texts
+                        });
+                    }
+
+                    matchedDialogIds[sheetName].Add(dataRef);
+                }
+            }
+        }
+
+        ct.ThrowIfCancellationRequested();
+
+        _log.Info(nameof(DoHarvest),
+            $"Pass 2: {pass2UnnamedWithDialog} unnamed NPCs with new dialog, " +
+            $"{pass2AppearanceMatched} appearance matched", eventId);
+
+        // Diagnostic: check where unmatched DefaultTalk IDs live
+        ReportProgress("Diagnosing unmatched DefaultTalk...");
+        var unmatchedDtIds = new HashSet<uint>(
+            defaultTalkTexts.Keys.Where(k => !matchedDialogIds["DefaultTalk"].Contains(k)));
+        var foundInENpcData = 0;
+        var foundInEventHandler = 0;
+        var foundViaArrayEventHandler = 0;
+
+        // Build ArrayEventHandler → DefaultTalk lookup
+        var aehToDefaultTalk = new Dictionary<uint, HashSet<uint>>();
+        try
+        {
+            var aehRaw = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, "ArrayEventHandler");
+            if (aehRaw != null)
+            {
+                foreach (var row in aehRaw)
+                {
+                    var ids = new HashSet<uint>();
+                    for (var i = 0; i < 16; i++)
+                    {
+                        try
+                        {
+                            var v = row.ReadUInt32Column(i);
+                            if (v != 0 && unmatchedDtIds.Contains(v)) ids.Add(v);
+                        }
+                        catch { }
+                    }
+                    if (ids.Count > 0) aehToDefaultTalk[row.RowId] = ids;
+                }
+            }
+        }
+        catch { }
+
+        foreach (var npcBase in npcBaseSheet)
+        {
+            ct.ThrowIfCancellationRequested();
+            var dataRefs = GetENpcDataValues(npcBase);
+            foreach (var dataRef in dataRefs)
+            {
+                if (dataRef != 0 && unmatchedDtIds.Contains(dataRef))
+                    foundInENpcData++;
+            }
+            // Check EventHandler (first field, index 0 in raw data)
+            // ENpcBase raw: col 0 = EventHandler, col 1 = Important, col 2-33 = ENpcData[0..31]
+            try
+            {
+                var ehVal = npcBase.ENpcData[0].RowId; // This is ENpcData[0], not EventHandler
+                // We need raw access for EventHandler. Let's check via the data refs approach.
+            }
+            catch { }
+
+            // Check if any ENpcData references an ArrayEventHandler with unmatched DefaultTalk
+            foreach (var dataRef in dataRefs)
+            {
+                if (dataRef != 0 && aehToDefaultTalk.ContainsKey(dataRef))
+                    foundViaArrayEventHandler++;
+            }
+        }
+
+        // Check SwitchTalkVariation: maps base DefaultTalk → replacement DefaultTalk on quest completion
+        // SwitchTalkVariation.RowId = base DefaultTalk ID, SwitchTalkVariation.DefaultTalk (col 3) = replacement
+        var foundViaSwitchTalk = 0;
+        var switchTalkReplacementToBase = new Dictionary<uint, uint>(); // replacement DT → base DT
+        try
+        {
+            var stvRaw = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, "SwitchTalkVariation");
+            if (stvRaw != null)
+            {
+                foreach (var row in stvRaw)
+                {
+                    try
+                    {
+                        var replacementDt = row.ReadUInt32Column(3);
+                        if (replacementDt != 0 && unmatchedDtIds.Contains(replacementDt))
+                        {
+                            switchTalkReplacementToBase[replacementDt] = row.RowId;
+                            foundViaSwitchTalk++;
+                        }
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch { }
+
+        // Check CustomTalk: ScriptArg[0..29] (col 33-62) may contain DefaultTalk IDs
+        var customTalkToDefaultTalk = new Dictionary<uint, HashSet<uint>>();
+        var foundViaCustomTalk = 0;
+        try
+        {
+            var ctRaw = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, "CustomTalk");
+            if (ctRaw != null)
+            {
+                foreach (var row in ctRaw)
+                {
+                    var ids = new HashSet<uint>();
+                    for (var i = 0; i < 30; i++)
+                    {
+                        try
+                        {
+                            var v = row.ReadUInt32Column(33 + i);
+                            if (v != 0 && unmatchedDtIds.Contains(v)) ids.Add(v);
+                        }
+                        catch { }
+                    }
+                    if (ids.Count > 0) customTalkToDefaultTalk[row.RowId] = ids;
+                }
+                foundViaCustomTalk = customTalkToDefaultTalk.Values.SelectMany(s => s).Distinct().Count();
+            }
+        }
+        catch { }
+
+        _log.Info(nameof(DoHarvest),
+            $"Diagnostic: {unmatchedDtIds.Count} unmatched DefaultTalk, " +
+            $"{foundViaCustomTalk} via CustomTalk, " +
+            $"{foundInENpcData} in ENpcData, " +
+            $"{foundViaArrayEventHandler} via AEH, " +
+            $"{foundViaSwitchTalk} via STV", eventId);
+        ReportProgress($"Diag: {unmatchedDtIds.Count} unmatched, {foundViaCustomTalk} CustomTalk, {foundViaSwitchTalk} STV, {foundInENpcData} ENpcData");
+
+        ReportProgress($"Pass 2: {pass2UnnamedWithDialog} unnamed with dialog, {pass2AppearanceMatched} matched");
 
         // Step 4: Collect unmatched dialog entries
         ReportProgress("Collecting unmatched dialogs...");
@@ -852,6 +1322,13 @@ public class DialogHarvestService : IDialogHarvestService
                 {
                     matchedIds = new List<uint> { luaNpcId };
                     matchSource = DialogMatchSource.LuaScript;
+                }
+
+                // Check cutscene NPC alias map (for dialog played by native cutscene system)
+                if (matchedIds == null && CutsceneNpcAliases.TryGetValue(npcNameKey, out var aliasNpcId))
+                {
+                    matchedIds = new List<uint> { aliasNpcId };
+                    matchSource = DialogMatchSource.Direct;
                 }
 
                 // Fall back to name-based multi-stage matching
