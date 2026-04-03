@@ -377,6 +377,34 @@ public class DialogHarvestService : IDialogHarvestService
             }
         }
         catch { }
+        // Check for territory/zone Lua scripts that might assign Balloon text
+        var territoryScriptPaths = new[] {
+            "game_script/territory", "game_script/content", "game_script/zone",
+            "game_script/field", "game_script/town", "game_script/opening"
+        };
+        foreach (var basePath in territoryScriptPaths)
+        {
+            // Try a few known territory IDs (128=Limsa Upper, 132=New Gridania, 130=Ul'dah)
+            foreach (var tId in new[] { 128, 129, 130, 131, 132, 133 })
+            {
+                var paths = new[]
+                {
+                    $"{basePath}/{tId}.luab",
+                    $"{basePath}/{tId:D3}.luab",
+                    $"{basePath}/Territory{tId}.luab",
+                    $"{basePath}/{tId}/script.luab",
+                };
+                foreach (var path in paths)
+                {
+                    var file = _dataManager.GetFile(path);
+                    if (file != null)
+                    {
+                        _log.Info(nameof(DoHarvest), $"Found territory script: {path} ({file.Data.Length} bytes)", eventId);
+                    }
+                }
+            }
+        }
+
         var behaviorBalloonUniqueIds = behaviorToBalloon.Values.SelectMany(s => s).Distinct().ToHashSet();
         var behaviorBalloonInSheet = behaviorBalloonUniqueIds.Count(id => allDialogSheets["Balloon"].ContainsKey(id));
         var totalBalloonRows = _dataManager.GetExcelSheet<Balloon>()?.Count() ?? 0;
