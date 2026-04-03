@@ -595,29 +595,36 @@ public class DialogHarvestService : IDialogHarvestService
                     var bgDir = lastSlash >= 0 ? bgPath[..lastSlash] : bgPath;
                     var lgbPath = $"bg/{bgDir}/planevent.lgb";
 
-                    var lgbFile = _dataManager.GetFile(lgbPath);
-                    if (lgbFile == null) continue;
-
-                    lgbTerritoriesScanned++;
-                    var data = lgbFile.Data;
-
-                    // Scan for ENpcBase IDs (uint32 in valid range) at 4-byte aligned positions
-                    for (var off = 0; off < data.Length - 51; off += 4)
+                    // Scan planevent.lgb and planmap.lgb
+                    var lgbFiles = new[] { lgbPath, $"bg/{bgDir}/planmap.lgb" };
+                    foreach (var lgbFilePath in lgbFiles)
                     {
-                        var npcId = BitConverter.ToUInt32(data, off);
-                        if (npcId < 1000000 || npcId > 1200000) continue;
+                        var lgbFile = _dataManager.GetFile(lgbFilePath);
+                        if (lgbFile == null) continue;
 
-                        // Check if this is a valid ENpcBase ID
-                        var npcBase = npcBaseSheet.GetRowOrDefault(npcId);
-                        if (npcBase == null) continue;
+                        var data = lgbFile.Data;
 
-                        // Read Balloon ID at offset +48
-                        var balloonId = BitConverter.ToUInt32(data, off + 48);
-                        if (balloonId == 0 || balloonId > 10000) continue;
-                        if (!allDialogSheets["Balloon"].ContainsKey(balloonId)) continue;
+                        // Scan for ENpcBase IDs at 4-byte aligned positions
+                        // Try multiple Balloon offsets: +48 (primary), +52, +64 (variant structures)
+                        for (var off = 0; off < data.Length - 67; off += 4)
+                        {
+                            var npcId = BitConverter.ToUInt32(data, off);
+                            if (npcId < 1000000 || npcId > 2000000) continue;
 
-                        lgbBalloonTotal++;
-                        lgbBalloonToNpc.TryAdd(balloonId, npcId);
+                            var npcBase = npcBaseSheet.GetRowOrDefault(npcId);
+                            if (npcBase == null) continue;
+
+                            foreach (var bOff in new[] { 48, 52, 64 })
+                            {
+                                if (off + bOff + 3 >= data.Length) continue;
+                                var balloonId = BitConverter.ToUInt32(data, off + bOff);
+                                if (balloonId == 0 || balloonId > 10000) continue;
+                                if (!allDialogSheets["Balloon"].ContainsKey(balloonId)) continue;
+
+                                lgbBalloonTotal++;
+                                lgbBalloonToNpc.TryAdd(balloonId, npcId);
+                            }
+                        }
                     }
 
                     if (lgbTerritoriesScanned % 100 == 0)
