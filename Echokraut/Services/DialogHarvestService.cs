@@ -574,6 +574,65 @@ public class DialogHarvestService : IDialogHarvestService
         foreach (var sheetName in allDialogSheets.Keys)
             matchedDialogIds[sheetName] = new HashSet<uint>();
 
+        // Extract Balloon → ENpcBase mappings from LGB planevent files across all territories.
+        // In LGB data, NPC entries contain ENpcBase ID with Balloon ID at offset +48.
+        ReportProgress("Scanning LGB planevent files for Balloon data...");
+        var lgbBalloonToNpc = new Dictionary<uint, uint>(); // Balloon ID → ENpcBase ID (first NPC found)
+        var lgbTerritoriesScanned = 0;
+        var lgbBalloonTotal = 0;
+        try
+        {
+            var ttSheet = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>();
+            if (ttSheet != null)
+            {
+                foreach (var territory in ttSheet)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var bgPath = territory.Bg.ExtractText();
+                    if (string.IsNullOrEmpty(bgPath)) continue;
+
+                    var lastSlash = bgPath.LastIndexOf('/');
+                    var bgDir = lastSlash >= 0 ? bgPath[..lastSlash] : bgPath;
+                    var lgbPath = $"bg/{bgDir}/planevent.lgb";
+
+                    var lgbFile = _dataManager.GetFile(lgbPath);
+                    if (lgbFile == null) continue;
+
+                    lgbTerritoriesScanned++;
+                    var data = lgbFile.Data;
+
+                    // Scan for ENpcBase IDs (uint32 in valid range) at 4-byte aligned positions
+                    for (var off = 0; off < data.Length - 51; off += 4)
+                    {
+                        var npcId = BitConverter.ToUInt32(data, off);
+                        if (npcId < 1000000 || npcId > 1200000) continue;
+
+                        // Check if this is a valid ENpcBase ID
+                        var npcBase = npcBaseSheet.GetRowOrDefault(npcId);
+                        if (npcBase == null) continue;
+
+                        // Read Balloon ID at offset +48
+                        var balloonId = BitConverter.ToUInt32(data, off + 48);
+                        if (balloonId == 0 || balloonId > 10000) continue;
+                        if (!allDialogSheets["Balloon"].ContainsKey(balloonId)) continue;
+
+                        lgbBalloonTotal++;
+                        lgbBalloonToNpc.TryAdd(balloonId, npcId);
+                    }
+
+                    if (lgbTerritoriesScanned % 100 == 0)
+                        ReportProgress($"Scanning LGB... {lgbTerritoriesScanned} territories");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Debug(nameof(DoHarvest), $"LGB scan error: {ex.Message}", eventId);
+        }
+        _log.Info(nameof(DoHarvest),
+            $"LGB Balloon scan: {lgbTerritoriesScanned} territories, {lgbBalloonTotal} NPC-Balloon pairs, " +
+            $"{lgbBalloonToNpc.Count} unique Balloon IDs mapped", eventId);
+
         var linkedDialogs = new List<LinkedDialog>();
         var npcCount = 0;
 
@@ -1010,6 +1069,51 @@ public class DialogHarvestService : IDialogHarvestService
         ReportProgress($"Diag: {unmatchedDtIds.Count} unmatched, {foundViaCustomTalk} CustomTalk, {foundViaSwitchTalk} STV, {foundInENpcData} ENpcData");
 
         ReportProgress($"Pass 2: {pass2UnnamedWithDialog} unnamed with dialog, {pass2AppearanceMatched} matched");
+
+        // Pass 3: Link Balloon entries via LGB planevent data
+        var lgbLinked = 0;
+        foreach (var (balloonId, npcId) in lgbBalloonToNpc)
+        {
+            if (matchedDialogIds["Balloon"].Contains(balloonId)) continue;
+            if (!allDialogSheets["Balloon"].TryGetValue(balloonId, out var bTextsByLang)) continue;
+
+            var npcBase = npcBaseSheet.GetRowOrDefault(npcId);
+            if (npcBase == null) continue;
+
+            var raceStr = GetRaceString(npcBase.Value);
+            var race = ParseNpcRace(raceStr);
+            var gender = DetermineGender(npcBase.Value, race);
+
+            // Try to get NPC name (might be unnamed)
+            var lgbNames = npcNames.TryGetValue(npcId, out var nn) && nn.Values.Any(v => !string.IsNullOrEmpty(v))
+                ? nn
+                : new Dictionary<string, string> { { "en", "" } };
+
+            var balloonEntry = new Dictionary<string, string>();
+            foreach (var (lang, textList) in bTextsByLang)
+            {
+                if (textList.Count > 0 && !string.IsNullOrEmpty(textList[0]))
+                    balloonEntry[lang] = textList[0];
+            }
+
+            if (balloonEntry.Count > 0)
+            {
+                linkedDialogs.Add(new LinkedDialog
+                {
+                    NpcId = npcId,
+                    NpcName = lgbNames,
+                    Race = raceStr,
+                    Gender = gender.ToString(),
+                    Sheet = "Balloon",
+                    DialogId = balloonId,
+                    MatchSource = DialogMatchSource.Direct.ToString(),
+                    Texts = balloonEntry
+                });
+                matchedDialogIds["Balloon"].Add(balloonId);
+                lgbLinked++;
+            }
+        }
+        _log.Info(nameof(DoHarvest), $"Pass 3 (LGB Balloon): {lgbLinked} new Balloon entries linked", eventId);
 
         // Step 4: Collect unmatched dialog entries
         ReportProgress("Collecting unmatched dialogs...");
