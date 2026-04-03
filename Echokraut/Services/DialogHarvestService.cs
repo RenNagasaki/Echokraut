@@ -377,32 +377,163 @@ public class DialogHarvestService : IDialogHarvestService
             }
         }
         catch { }
-        // Check for territory/zone Lua scripts that might assign Balloon text
-        var territoryScriptPaths = new[] {
-            "game_script/territory", "game_script/content", "game_script/zone",
-            "game_script/field", "game_script/town", "game_script/opening"
-        };
-        foreach (var basePath in territoryScriptPaths)
+        // Try loading LGB (Level Group Binary) files for territory data
+        ReportProgress("Checking LGB territory files...");
+        try
         {
-            // Try a few known territory IDs (128=Limsa Upper, 132=New Gridania, 130=Ul'dah)
-            foreach (var tId in new[] { 128, 129, 130, 131, 132, 133 })
+            var ttSheet = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>();
+            if (ttSheet != null)
             {
-                var paths = new[]
+                // Check a few city territories
+                foreach (var tId in new uint[] { 128, 129, 130, 131, 132, 133 })
                 {
-                    $"{basePath}/{tId}.luab",
-                    $"{basePath}/{tId:D3}.luab",
-                    $"{basePath}/Territory{tId}.luab",
-                    $"{basePath}/{tId}/script.luab",
-                };
-                foreach (var path in paths)
-                {
-                    var file = _dataManager.GetFile(path);
-                    if (file != null)
+                    var tt = ttSheet.GetRowOrDefault(tId);
+                    if (tt is not { } territory) continue;
+                    var bgPath = territory.Bg.ExtractText();
+                    if (string.IsNullOrEmpty(bgPath)) continue;
+
+                    // Strip last path component to get the level directory
+                    var lastSlash = bgPath.LastIndexOf('/');
+                    var bgDir = lastSlash >= 0 ? bgPath[..lastSlash] : bgPath;
+
+                    // Try various LGB path patterns
+                    var lgbPaths = new[]
                     {
-                        _log.Info(nameof(DoHarvest), $"Found territory script: {path} ({file.Data.Length} bytes)", eventId);
+                        $"bg/{bgDir}/bg.lgb",
+                        $"bg/{bgDir}/planmap.lgb",
+                        $"bg/{bgDir}/planevent.lgb",
+                        $"bg/{bgDir}/planner.lgb",
+                        $"bg/{bgDir}/vfx.lgb",
+                        $"bg/{bgPath}.lgb",
+                    };
+
+                    foreach (var path in lgbPaths)
+                    {
+                        var lgbFile = _dataManager.GetFile(path);
+                        if (lgbFile != null)
+                        {
+                            _log.Info(nameof(DoHarvest),
+                                $"Found LGB: {path} ({lgbFile.Data.Length} bytes) for territory {tId}", eventId);
+
+                            // Search planevent.lgb for ENpcBase IDs (uint32) near Balloon IDs
+                            if (path.Contains("planevent") && tId == 128) // Just Limsa Upper for now
+                            {
+                                var data = lgbFile.Data;
+                                // Find uint32 values that are valid ENpcBase IDs (1000000-1100000 range)
+                                var npcOffsets = new List<(int offset, uint npcId)>();
+                                for (var off = 0; off < data.Length - 3; off += 4)
+                                {
+                                    var val32 = BitConverter.ToUInt32(data, off);
+                                    if (val32 >= 1000000 && val32 <= 1100000
+                                        && npcNames.ContainsKey(val32))
+                                    {
+                                        npcOffsets.Add((off, val32));
+                                    }
+                                }
+                                _log.Info(nameof(DoHarvest),
+                                    $"  planevent NPC IDs found: {npcOffsets.Count} (e.g., {string.Join(", ", npcOffsets.Take(5).Select(x => $"{x.npcId}@{x.offset}"))})",
+                                    eventId);
+
+                                // Read uint32 at NPC_offset+56 for each NPC — expected Balloon ID
+                                var balloonOffset = 56;
+                                var foundBalloons = 0;
+                                var matchedBalloons = 0;
+                                foreach (var (npcOff, npcId) in npcOffsets)
+                                {
+                                    var bOff = npcOff + balloonOffset;
+                                    if (bOff + 3 >= data.Length) continue;
+                                    var bVal = BitConverter.ToUInt32(data, bOff);
+                                    if (bVal != 0) foundBalloons++;
+                                    if (bVal != 0 && allDialogSheets["Balloon"].ContainsKey(bVal))
+                                        matchedBalloons++;
+                                }
+                                _log.Info(nameof(DoHarvest),
+                                    $"  NPC+{balloonOffset} Balloon check: {foundBalloons}/{npcOffsets.Count} non-zero, {matchedBalloons} match Balloon sheet", eventId);
+
+                                // Also try +52, +60, +64 to find the best offset
+                                foreach (var tryOff in new[] { 48, 52, 56, 60, 64 })
+                                {
+                                    var cnt = 0;
+                                    foreach (var (npcOff, _) in npcOffsets)
+                                    {
+                                        var bOff = npcOff + tryOff;
+                                        if (bOff + 3 >= data.Length) continue;
+                                        var bVal = BitConverter.ToUInt32(data, bOff);
+                                        if (bVal != 0 && allDialogSheets["Balloon"].ContainsKey(bVal))
+                                            cnt++;
+                                    }
+                                    if (cnt > 0)
+                                        _log.Info(nameof(DoHarvest), $"  offset +{tryOff}: {cnt} Balloon matches", eventId);
+                                }
+                            }
+                        }
+                    }
+
+                    // Also try planlive and other variants
+                    var planPaths = new[]
+                    {
+                        $"bg/{bgDir}/planlive.lgb",
+                        $"bg/{bgDir}/planmap_0.lgb",
+                        $"bg/{bgDir}/bg_0.lgb",
+                    };
+                    foreach (var path in planPaths)
+                    {
+                        var f = _dataManager.GetFile(path);
+                        if (f != null)
+                            _log.Info(nameof(DoHarvest), $"Found LGB plan: {path} ({f.Data.Length} bytes)", eventId);
                     }
                 }
             }
+        }
+        catch (Exception ex)
+        {
+            _log.Debug(nameof(DoHarvest), $"LGB check error: {ex.Message}", eventId);
+        }
+
+        // Dump raw bytes of Behavior 30085 subrow 0 to reverse-engineer field byte layout.
+        // xivapi shows: Balloon=0, Cond0Target=2, Cond0Type=9, Cond1Target=18, Cond1Type=1,
+        // ContentArg0=5, ContentArg1=0, Unk0=0, Unk1=802, Unk2-9=0, Unk6=1
+        try
+        {
+            var behaviorSheet3 = _dataManager.GetSubrowExcelSheet<RawSubrow>(
+                Dalamud.Game.ClientLanguage.English, "Behavior");
+            if (behaviorSheet3 != null)
+            {
+                foreach (var rowCol in behaviorSheet3)
+                {
+                    foreach (var sr in rowCol)
+                    {
+                        if (sr.RowId == 30085 && sr.SubrowId == 0)
+                        {
+                            // Read as uint8 at each offset
+                            var bytes = new List<string>();
+                            for (var i = 0; i < 32; i++)
+                            {
+                                try { bytes.Add($"{sr.ReadUInt8Column(i):X2}"); }
+                                catch { bytes.Add("??"); }
+                            }
+                            _log.Info(nameof(DoHarvest),
+                                $"Behavior 30085/0 raw bytes: [{string.Join(" ", bytes)}]", eventId);
+
+                            // Also read as uint16 at each position
+                            var words = new List<string>();
+                            for (var i = 0; i < 16; i++)
+                            {
+                                try { words.Add($"w{i}={sr.ReadUInt16Column(i)}"); }
+                                catch { words.Add($"w{i}=ERR"); }
+                            }
+                            _log.Info(nameof(DoHarvest),
+                                $"Behavior 30085/0 uint16: [{string.Join(", ", words)}]", eventId);
+                            break;
+                        }
+                    }
+                    if (true) continue; // keep iterating to find the row
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Debug(nameof(DoHarvest), $"Behavior byte dump error: {ex.Message}", eventId);
         }
 
         var behaviorBalloonUniqueIds = behaviorToBalloon.Values.SelectMany(s => s).Distinct().ToHashSet();
