@@ -595,8 +595,13 @@ public class DialogHarvestService : IDialogHarvestService
                     var bgDir = lastSlash >= 0 ? bgPath[..lastSlash] : bgPath;
                     var lgbPath = $"bg/{bgDir}/planevent.lgb";
 
-                    // Scan planevent.lgb and planmap.lgb
-                    var lgbFiles = new[] { lgbPath, $"bg/{bgDir}/planmap.lgb" };
+                    // Scan all plan LGB files for NPC entries
+                    var lgbFiles = new[] {
+                        lgbPath,
+                        $"bg/{bgDir}/planmap.lgb",
+                        $"bg/{bgDir}/planlive.lgb",
+                        $"bg/{bgDir}/planner.lgb"
+                    };
                     foreach (var lgbFilePath in lgbFiles)
                     {
                         var lgbFile = _dataManager.GetFile(lgbFilePath);
@@ -614,7 +619,7 @@ public class DialogHarvestService : IDialogHarvestService
                             var npcBase = npcBaseSheet.GetRowOrDefault(npcId);
                             if (npcBase == null) continue;
 
-                            foreach (var bOff in new[] { 48, 52, 64 })
+                            foreach (var bOff in new[] { 40, 44, 48, 52, 56, 60, 64, 68, 72 })
                             {
                                 if (off + bOff + 3 >= data.Length) continue;
                                 var balloonId = BitConverter.ToUInt32(data, off + bOff);
