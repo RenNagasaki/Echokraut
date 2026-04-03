@@ -340,6 +340,7 @@ public class DialogHarvestService : IDialogHarvestService
 
         ReportProgress("Loading NPC data...");
         var npcBaseSheet = _dataManager.GetExcelSheet<ENpcBase>()!;
+        var npcBaseRaw = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, "ENpcBase");
         var matchedDialogIds = new Dictionary<string, HashSet<uint>>();
         foreach (var sheetName in allDialogSheets.Keys)
             matchedDialogIds[sheetName] = new HashSet<uint>();
@@ -436,6 +437,45 @@ public class DialogHarvestService : IDialogHarvestService
                         }
 
                         matchedDialogIds["DefaultTalk"].Add(chainedId);
+                    }
+                }
+            }
+
+            // Read dedicated Balloon field (col 105) and DefaultBalloon (col 107) from ENpcBase
+            if (npcBaseRaw != null)
+            {
+                var rawRow = npcBaseRaw.GetRowOrDefault(npcId);
+                if (rawRow is { } rr)
+                {
+                    int[] balloonCols = [105, 107];
+                    foreach (var col in balloonCols)
+                    {
+                        try
+                        {
+                            var balloonId = rr.ReadUInt32Column(col);
+                            if (balloonId == 0) continue;
+                            if (matchedDialogIds["Balloon"].Contains(balloonId)) continue;
+                            if (!allDialogSheets["Balloon"].TryGetValue(balloonId, out var bTexts)) continue;
+
+                            foreach (var texts in FlattenTexts(bTexts))
+                            {
+                                if (texts.Values.All(string.IsNullOrEmpty)) continue;
+
+                                linkedDialogs.Add(new LinkedDialog
+                                {
+                                    NpcId = npcId,
+                                    NpcName = names,
+                                    Race = raceStr,
+                                    Gender = gender.ToString(),
+                                    Sheet = "Balloon",
+                                    DialogId = balloonId,
+                                    MatchSource = DialogMatchSource.Direct.ToString(),
+                                    Texts = texts
+                                });
+                            }
+                            matchedDialogIds["Balloon"].Add(balloonId);
+                        }
+                        catch { }
                     }
                 }
             }
