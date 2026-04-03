@@ -658,7 +658,7 @@ public class DialogHarvestService : IDialogHarvestService
                     var lastSlash2 = bgPath2.LastIndexOf('/');
                     var bgDir2 = lastSlash2 >= 0 ? bgPath2[..lastSlash2] : bgPath2;
 
-                    foreach (var lgbName in new[] { "planevent.lgb", "planmap.lgb" })
+                    foreach (var lgbName in new[] { "planevent.lgb", "planmap.lgb", "bg.lgb" })
                     {
                         var f = _dataManager.GetFile($"bg/{bgDir2}/{lgbName}");
                         if (f == null) continue;
@@ -671,8 +671,8 @@ public class DialogHarvestService : IDialogHarvestService
 
                             // Found unmatched Balloon ID — search both directions for nearest ENpcBase ID
                             var found = false;
-                            // Search backward up to 200 bytes
-                            for (var searchOff = off - 4; !found && searchOff >= Math.Max(0, off - 200); searchOff -= 4)
+                            // Search backward up to 400 bytes
+                            for (var searchOff = off - 4; !found && searchOff >= Math.Max(0, off - 400); searchOff -= 4)
                             {
                                 var npcId = BitConverter.ToUInt32(d, searchOff);
                                 if (npcId < 1000000 || npcId > 2000000) continue;
@@ -682,8 +682,8 @@ public class DialogHarvestService : IDialogHarvestService
                                 reverseMapped++;
                                 found = true;
                             }
-                            // Search forward up to 100 bytes
-                            for (var searchOff = off + 4; !found && searchOff < Math.Min(d.Length - 3, off + 100); searchOff += 4)
+                            // Search forward up to 200 bytes
+                            for (var searchOff = off + 4; !found && searchOff < Math.Min(d.Length - 3, off + 200); searchOff += 4)
                             {
                                 var npcId = BitConverter.ToUInt32(d, searchOff);
                                 if (npcId < 1000000 || npcId > 2000000) continue;
