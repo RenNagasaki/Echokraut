@@ -671,8 +671,8 @@ public class DialogHarvestService : IDialogHarvestService
 
                             // Found unmatched Balloon ID — search both directions for nearest ENpcBase ID
                             var found = false;
-                            // Search backward up to 400 bytes
-                            for (var searchOff = off - 4; !found && searchOff >= Math.Max(0, off - 400); searchOff -= 4)
+                            // Search backward up to 800 bytes
+                            for (var searchOff = off - 4; !found && searchOff >= Math.Max(0, off - 800); searchOff -= 4)
                             {
                                 var npcId = BitConverter.ToUInt32(d, searchOff);
                                 if (npcId < 1000000 || npcId > 2000000) continue;
@@ -682,8 +682,8 @@ public class DialogHarvestService : IDialogHarvestService
                                 reverseMapped++;
                                 found = true;
                             }
-                            // Search forward up to 200 bytes
-                            for (var searchOff = off + 4; !found && searchOff < Math.Min(d.Length - 3, off + 200); searchOff += 4)
+                            // Search forward up to 400 bytes
+                            for (var searchOff = off + 4; !found && searchOff < Math.Min(d.Length - 3, off + 400); searchOff += 4)
                             {
                                 var npcId = BitConverter.ToUInt32(d, searchOff);
                                 if (npcId < 1000000 || npcId > 2000000) continue;
