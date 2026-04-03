@@ -341,6 +341,76 @@ public class DialogHarvestService : IDialogHarvestService
         ReportProgress("Loading NPC data...");
         var npcBaseSheet = _dataManager.GetExcelSheet<ENpcBase>()!;
         var npcBaseRaw = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, "ENpcBase");
+
+        // Pre-build NPC → Balloon ID lookup from:
+        // 1. ENpcBase col 105 (direct Balloon link)
+        // 2. ENpcBase col 64 (Behavior) → Behavior col 8 (Balloon link)
+        ReportProgress("Building Balloon lookup...");
+        var behaviorToBalloon = new Dictionary<uint, HashSet<uint>>();
+        var behaviorBalloonCount = 0;
+        try
+        {
+            // Behavior is a sub-row sheet. Balloon is at column 8 (SaintCoinach index 8).
+            var behaviorSheet = _dataManager.GetSubrowExcelSheet<RawSubrow>(
+                Dalamud.Game.ClientLanguage.English, "Behavior");
+            if (behaviorSheet != null)
+            {
+                foreach (var rowCollection in behaviorSheet)
+                {
+                    foreach (var subrow in rowCollection)
+                    {
+                        try
+                        {
+                            var bId = subrow.ReadUInt32Column(8);
+                            if (bId == 0) continue;
+                            if (!behaviorToBalloon.TryGetValue(subrow.RowId, out var ids))
+                            {
+                                ids = new HashSet<uint>();
+                                behaviorToBalloon[subrow.RowId] = ids;
+                            }
+                            ids.Add(bId);
+                            behaviorBalloonCount++;
+                        }
+                        catch { }
+                    }
+                }
+            }
+        }
+        catch { }
+        var behaviorBalloonUniqueIds = behaviorToBalloon.Values.SelectMany(s => s).Distinct().ToHashSet();
+        var behaviorBalloonInSheet = behaviorBalloonUniqueIds.Count(id => allDialogSheets["Balloon"].ContainsKey(id));
+        var totalBalloonRows = _dataManager.GetExcelSheet<Balloon>()?.Count() ?? 0;
+        _log.Debug(nameof(DoHarvest),
+            $"Behavior→Balloon: {behaviorToBalloon.Count} Behavior rows, {behaviorBalloonCount} sub-rows, " +
+            $"{behaviorBalloonUniqueIds.Count} unique Balloon IDs ({behaviorBalloonInSheet} in loaded data). " +
+            $"Total Balloon sheet rows: {totalBalloonRows}, loaded: {allDialogSheets["Balloon"].Count}", eventId);
+
+        var npcBalloonIds = new Dictionary<uint, HashSet<uint>>();
+        if (npcBaseRaw != null)
+        {
+            foreach (var rawRow in npcBaseRaw)
+            {
+                var ids = new HashSet<uint>();
+                // Direct Balloon field (col 105)
+                try { var v = rawRow.ReadUInt32Column(105); if (v != 0) ids.Add(v); } catch { }
+                // Behavior → Balloon chain (col 64 → Behavior sub-rows → col 8)
+                try
+                {
+                    var behaviorId = rawRow.ReadUInt32Column(64);
+                    if (behaviorId != 0 && behaviorToBalloon.TryGetValue(behaviorId, out var bIds))
+                        foreach (var bid in bIds) ids.Add(bid);
+                }
+                catch { }
+                if (ids.Count > 0) npcBalloonIds[rawRow.RowId] = ids;
+            }
+        }
+
+        var uniqueBalloonFromBehavior = npcBalloonIds.Values.SelectMany(s => s).Distinct()
+            .Count(id => allDialogSheets["Balloon"].ContainsKey(id));
+        _log.Debug(nameof(DoHarvest),
+            $"Balloon lookup: {behaviorToBalloon.Count} Behaviors with Balloon, " +
+            $"{npcBalloonIds.Count} NPCs with Balloon IDs, " +
+            $"{uniqueBalloonFromBehavior} unique IDs match Balloon sheet", eventId);
         var matchedDialogIds = new Dictionary<string, HashSet<uint>>();
         foreach (var sheetName in allDialogSheets.Keys)
             matchedDialogIds[sheetName] = new HashSet<uint>();
@@ -441,42 +511,34 @@ public class DialogHarvestService : IDialogHarvestService
                 }
             }
 
-            // Read dedicated Balloon field (col 105) and DefaultBalloon (col 107) from ENpcBase
-            if (npcBaseRaw != null)
+            // Read dedicated Balloon fields from pre-built lookup (col 105 + 107).
+            if (npcBalloonIds.TryGetValue(npcId, out var balloonIds))
+            foreach (var balloonId in balloonIds)
+            if (!matchedDialogIds["Balloon"].Contains(balloonId)
+                && allDialogSheets["Balloon"].TryGetValue(balloonId, out var bTextsByLang))
             {
-                var rawRow = npcBaseRaw.GetRowOrDefault(npcId);
-                if (rawRow is { } rr)
+                // Build a simple lang → text entry from the first (only) text field
+                var balloonEntry = new Dictionary<string, string>();
+                foreach (var (lang, textList) in bTextsByLang)
                 {
-                    int[] balloonCols = [105, 107];
-                    foreach (var col in balloonCols)
+                    if (textList.Count > 0 && !string.IsNullOrEmpty(textList[0]))
+                        balloonEntry[lang] = textList[0];
+                }
+
+                if (balloonEntry.Count > 0)
+                {
+                    linkedDialogs.Add(new LinkedDialog
                     {
-                        try
-                        {
-                            var balloonId = rr.ReadUInt32Column(col);
-                            if (balloonId == 0) continue;
-                            if (matchedDialogIds["Balloon"].Contains(balloonId)) continue;
-                            if (!allDialogSheets["Balloon"].TryGetValue(balloonId, out var bTexts)) continue;
-
-                            foreach (var texts in FlattenTexts(bTexts))
-                            {
-                                if (texts.Values.All(string.IsNullOrEmpty)) continue;
-
-                                linkedDialogs.Add(new LinkedDialog
-                                {
-                                    NpcId = npcId,
-                                    NpcName = names,
-                                    Race = raceStr,
-                                    Gender = gender.ToString(),
-                                    Sheet = "Balloon",
-                                    DialogId = balloonId,
-                                    MatchSource = DialogMatchSource.Direct.ToString(),
-                                    Texts = texts
-                                });
-                            }
-                            matchedDialogIds["Balloon"].Add(balloonId);
-                        }
-                        catch { }
-                    }
+                        NpcId = npcId,
+                        NpcName = names,
+                        Race = raceStr,
+                        Gender = gender.ToString(),
+                        Sheet = "Balloon",
+                        DialogId = balloonId,
+                        MatchSource = DialogMatchSource.Direct.ToString(),
+                        Texts = balloonEntry
+                    });
+                    matchedDialogIds["Balloon"].Add(balloonId);
                 }
             }
         }
@@ -568,9 +630,105 @@ public class DialogHarvestService : IDialogHarvestService
 
         ct.ThrowIfCancellationRequested();
 
+        // Diagnostic: count non-zero Balloon field values across ALL named NPCs
+        var balloonFieldNonZero = 0;
+        var balloonFieldMatched = 0;
+        if (npcBaseRaw != null)
+        {
+            foreach (var nb in npcBaseSheet)
+            {
+                if (!npcNames.TryGetValue(nb.RowId, out var nn) || nn.Values.All(string.IsNullOrEmpty))
+                    continue;
+                var rr3 = npcBaseRaw.GetRowOrDefault(nb.RowId);
+                if (rr3 is not { } raw3) continue;
+                try
+                {
+                    var bVal = raw3.ReadUInt32Column(105);
+                    if (bVal != 0)
+                    {
+                        balloonFieldNonZero++;
+                        if (allDialogSheets["Balloon"].ContainsKey(bVal))
+                            balloonFieldMatched++;
+                    }
+                }
+                catch { }
+            }
+        }
+        // Count unique Balloon IDs that are in allDialogSheets
+        var uniqueBalloonIdsInSheet = npcBalloonIds
+            .Where(kvp => npcNames.TryGetValue(kvp.Key, out var n) && n.Values.Any(v => !string.IsNullOrEmpty(v)))
+            .SelectMany(kvp => kvp.Value)
+            .Where(bId => allDialogSheets["Balloon"].ContainsKey(bId))
+            .Distinct()
+            .Count();
+        var uniqueBalloonIdsNotMatched = npcBalloonIds
+            .Where(kvp => npcNames.TryGetValue(kvp.Key, out var n) && n.Values.Any(v => !string.IsNullOrEmpty(v)))
+            .SelectMany(kvp => kvp.Value)
+            .Where(bId => allDialogSheets["Balloon"].ContainsKey(bId) && !matchedDialogIds["Balloon"].Contains(bId))
+            .Distinct()
+            .Count();
+
+        _log.Info(nameof(DoHarvest),
+            $"Balloon: {balloonFieldNonZero} NPCs non-zero, {balloonFieldMatched} NPCs match sheet, " +
+            $"{uniqueBalloonIdsInSheet} unique IDs in sheet, {uniqueBalloonIdsNotMatched} unique not yet matched. " +
+            $"matchedDialogIds Balloon={matchedDialogIds["Balloon"].Count}, DT={matchedDialogIds["DefaultTalk"].Count}", eventId);
+
+        // Count unnamed NPCs with unmatched Balloon fields
+        var unnamedWithBalloon = 0;
+        var unnamedBalloonMatched = 0;
+        if (npcBaseRaw != null)
+        {
+            foreach (var npcBase2 in npcBaseSheet)
+            {
+                var nid = npcBase2.RowId;
+                if (npcNames.TryGetValue(nid, out var n2) && n2.Values.Any(v => !string.IsNullOrEmpty(v)))
+                    continue; // skip named
+
+                var rr2 = npcBaseRaw.GetRowOrDefault(nid);
+                if (rr2 is not { } raw2) continue;
+
+                try
+                {
+                    var bId = raw2.ReadUInt32Column(105);
+                    if (bId != 0 && !matchedDialogIds["Balloon"].Contains(bId)
+                        && allDialogSheets["Balloon"].ContainsKey(bId))
+                    {
+                        unnamedWithBalloon++;
+
+                        // Try appearance match for Balloon too
+                        var ak = $"{npcBase2.Race.RowId}_{npcBase2.Gender}_{npcBase2.Face}_{npcBase2.HairStyle}";
+                        if (appearanceToNamedNpc.TryGetValue(ak, out var namedNpc2))
+                        {
+                            unnamedBalloonMatched++;
+
+                            foreach (var texts in FlattenTexts(allDialogSheets["Balloon"][bId]))
+                            {
+                                if (texts.Values.All(string.IsNullOrEmpty)) continue;
+                                linkedDialogs.Add(new LinkedDialog
+                                {
+                                    NpcId = namedNpc2.npcId,
+                                    NpcName = namedNpc2.names,
+                                    Race = namedNpc2.raceStr,
+                                    Gender = namedNpc2.gender.ToString(),
+                                    Sheet = "Balloon",
+                                    DialogId = bId,
+                                    MatchSource = DialogMatchSource.Direct.ToString(),
+                                    Texts = texts
+                                });
+                            }
+                            matchedDialogIds["Balloon"].Add(bId);
+                        }
+                    }
+                }
+                catch { }
+            }
+        }
+
         _log.Info(nameof(DoHarvest),
             $"Pass 2: {pass2UnnamedWithDialog} unnamed NPCs with new dialog, " +
-            $"{pass2AppearanceMatched} appearance matched", eventId);
+            $"{pass2AppearanceMatched} appearance matched, " +
+            $"{unnamedWithBalloon} unnamed with unmatched Balloon, " +
+            $"{unnamedBalloonMatched} Balloon appearance matched", eventId);
 
         // Diagnostic: check where unmatched DefaultTalk IDs live
         ReportProgress("Diagnosing unmatched DefaultTalk...");
@@ -747,7 +905,12 @@ public class DialogHarvestService : IDialogHarvestService
         var unmatchedQuestPath = Path.Combine(outputDir, "unmatched_quest_dialogs.json");
         File.WriteAllText(unmatchedQuestPath, JsonSerializer.Serialize(unmatchedQuests, jsonOptions));
 
-        var msg = $"Done: {linkedDialogs.Count} linked, {unmatchedDialogs.Count} unmatched, " +
+        var linkedDtCount = linkedDialogs.Count(d => d.Sheet == "DefaultTalk");
+        var linkedBalloonCount = linkedDialogs.Count(d => d.Sheet == "Balloon");
+        var unmatchedDtCount = unmatchedDialogs.Count(d => d.Sheet == "DefaultTalk");
+        var unmatchedBalloonCount = unmatchedDialogs.Count(d => d.Sheet == "Balloon");
+        var msg = $"Done: {linkedDialogs.Count} linked ({linkedDtCount} DT, {linkedBalloonCount} Balloon), " +
+                  $"{unmatchedDialogs.Count} unmatched ({unmatchedDtCount} DT, {unmatchedBalloonCount} Balloon), " +
                   $"{linkedQuests.Count} quest linked, {unmatchedQuests.Count} quest unmatched";
         _log.Info(nameof(DoHarvest), msg, eventId);
         ReportProgress(msg);
