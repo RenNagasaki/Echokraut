@@ -641,9 +641,57 @@ public class DialogHarvestService : IDialogHarvestService
         {
             _log.Debug(nameof(DoHarvest), $"LGB scan error: {ex.Message}", eventId);
         }
+        // Reverse search: for unmatched Balloon IDs, find them in LGB and search nearby for ENpcBase IDs
+        var remainingBalloonIds = new HashSet<uint>(
+            allDialogSheets["Balloon"].Keys.Where(id => !lgbBalloonToNpc.ContainsKey(id)));
+        var reverseMapped = 0;
+        try
+        {
+            var ttSheet2 = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>();
+            if (ttSheet2 != null)
+            {
+                foreach (var territory in ttSheet2)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    var bgPath2 = territory.Bg.ExtractText();
+                    if (string.IsNullOrEmpty(bgPath2)) continue;
+                    var lastSlash2 = bgPath2.LastIndexOf('/');
+                    var bgDir2 = lastSlash2 >= 0 ? bgPath2[..lastSlash2] : bgPath2;
+
+                    foreach (var lgbName in new[] { "planevent.lgb", "planmap.lgb" })
+                    {
+                        var f = _dataManager.GetFile($"bg/{bgDir2}/{lgbName}");
+                        if (f == null) continue;
+                        var d = f.Data;
+
+                        for (var off = 0; off < d.Length - 3; off += 4)
+                        {
+                            var balloonId = BitConverter.ToUInt32(d, off);
+                            if (!remainingBalloonIds.Contains(balloonId)) continue;
+
+                            // Found unmatched Balloon ID — search backward for nearest ENpcBase ID
+                            for (var searchOff = off - 4; searchOff >= Math.Max(0, off - 96); searchOff -= 4)
+                            {
+                                var npcId = BitConverter.ToUInt32(d, searchOff);
+                                if (npcId < 1000000 || npcId > 2000000) continue;
+                                var npcBase = npcBaseSheet.GetRowOrDefault(npcId);
+                                if (npcBase == null) continue;
+
+                                lgbBalloonToNpc.TryAdd(balloonId, npcId);
+                                remainingBalloonIds.Remove(balloonId);
+                                reverseMapped++;
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        catch { }
+
         _log.Info(nameof(DoHarvest),
-            $"LGB Balloon scan: {lgbTerritoriesScanned} territories, {lgbBalloonTotal} NPC-Balloon pairs, " +
-            $"{lgbBalloonToNpc.Count} unique Balloon IDs mapped", eventId);
+            $"LGB Balloon scan: {lgbBalloonToNpc.Count} unique Balloon IDs mapped ({reverseMapped} via reverse search). " +
+            $"{remainingBalloonIds.Count} still unmatched", eventId);
 
         var linkedDialogs = new List<LinkedDialog>();
         var npcCount = 0;
