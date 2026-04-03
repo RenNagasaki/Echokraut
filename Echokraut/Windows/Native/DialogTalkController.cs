@@ -370,7 +370,6 @@ public sealed unsafe class DialogTalkController : IDisposable
 
     private void OnPreReceiveEvent(AddonEvent type, AddonArgs args)
     {
-        if (_layout is null || !_layout.IsVisible) return;
         if (args is not AddonReceiveEventArgs eventArgs) return;
 
         var eventData = (AtkEventData*)eventArgs.AtkEventData;
@@ -383,18 +382,26 @@ public sealed unsafe class DialogTalkController : IDisposable
 
         if (!isDialogueAdvancing) return;
 
+        // Check if the click landed inside any owned Echokraut native window (always, even without layout)
+        var clickedOwnedWindow = _isInsideOwnedWindow != null
+            && _isInsideOwnedWindow(new Vector2(eventData->MouseData.PosX, eventData->MouseData.PosY));
+
+        if (clickedOwnedWindow)
+        {
+            eventArgs.AtkEventType = 0;
+            return;
+        }
+
+        if (_layout is null || !_layout.IsVisible) return;
+
         // If the dropdown is open and this click lands outside our toolbar, close it.
         // DropDownFocusCollisionNode handles clicks inside Talk's bounds; this handles the rest.
         if (_dropDownIsOpen && !_suppressNextAdvance && !_layout.CheckCollision(eventData))
             _voiceDropDown?.Collapse(false); // fires OnCollapsed: _dropDownIsOpen=false, _suppressNextAdvance=true
 
-        // Check if the click landed inside any owned Echokraut native window
-        var clickedOwnedWindow = _isInsideOwnedWindow != null
-            && _isInsideOwnedWindow(new Vector2(eventData->MouseData.PosX, eventData->MouseData.PosY));
-
         var clickedBackground = _background != null && _background.IsVisible && _background.CheckCollision(eventData);
 
-        if (_layout.CheckCollision(eventData) || clickedBackground || _suppressNextAdvance || _dropDownIsOpen || clickedOwnedWindow)
+        if (_layout.CheckCollision(eventData) || clickedBackground || _suppressNextAdvance || _dropDownIsOpen)
         {
             _suppressNextAdvance = false;
             eventArgs.AtkEventType = 0;

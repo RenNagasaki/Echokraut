@@ -50,11 +50,14 @@ public sealed unsafe partial class NativeConfigWindow
     // Deferred page change (set by button click, processed in UpdateVoiceSelection)
     private int _vsPendingPageDelta;
     private int _vsPendingPageTab = -1;
+    private int _vsPendingPageJump = -1; // direct page jump (0-indexed), -1 = none
 
     // Pagination nodes (individually positioned per tab)
+    private const int MaxPageButtons = 20;
     private TextButtonNode?[] _vsPrevButtons = new TextButtonNode?[4];
     private TextButtonNode?[] _vsNextButtons = new TextButtonNode?[4];
     private TextNode?[] _vsPageLabels = new TextNode?[4];
+    private TextButtonNode?[,] _vsPageButtons = new TextButtonNode?[4, MaxPageButtons];
 
     // Rebuild flags — only set by filter changes, NOT by tab switches
     private bool _vsNpcNeedRebuild;
@@ -73,6 +76,16 @@ public sealed unsafe partial class NativeConfigWindow
     // Voice test playback tracking (button node only — state lives in IVoiceTestService)
     private TextButtonNode? _vsTestingButton;
 
+    // Per-row delete state (single-delete confirmation, like ImGui's double-click pattern)
+    private float _colDel = 60f; // measured at setup from localized text
+    private bool _vsDelAudioArmed;
+    private bool _vsDelMappingArmed;
+    private NpcMapData? _vsDelTarget;
+    private TextButtonNode? _vsDelAudioButton;
+    private TextButtonNode? _vsDelMappingButton;
+    private DateTime _vsLastDelClick = DateTime.MinValue;
+    private NpcMapData? _vsNpcToRemove; // deferred mapping removal (processed in UpdateVoiceSelection)
+
     // ScrollingListNode reserves 16px for the scrollbar (ScrollingAreaNode.OnSizeChanged)
     private const float ScrollbarWidth = 16f;
 
@@ -85,7 +98,7 @@ public sealed unsafe partial class NativeConfigWindow
     private const float ColName   = 140f;
     private const float ColVoice  = 180f;
 
-    private float VsVolWidth => _contentWidth - _colPlay - ColLock - ColUse - ColGender - ColRace - ColName - ColVoice - 7 * 4;
+    private float VsVolWidth => _contentWidth - ScrollbarWidth - _colPlay - ColLock - ColUse - ColGender - ColRace - ColName - ColVoice - 2 * _colDel - 9 * 4;
 
     private void SetupVoiceSelection()
     {
@@ -97,6 +110,14 @@ public sealed unsafe partial class NativeConfigWindow
         var stopW = measureBtn.LabelNode.GetTextDrawSize(Loc.S("Stop")).X + 36;
         _colPlay = Math.Max(40f, Math.Max(playW, stopW));
         measureBtn.Dispose();
+
+        // Measure delete button width from localized text (audio/mapping labels + "OK?" confirmation)
+        var delMeasure = new TextButtonNode { Size = new Vector2(60, 24), String = Loc.S("Delete audio") };
+        var delAudioW = delMeasure.LabelNode.GetTextDrawSize(Loc.S("Delete audio")).X + 36;
+        var delMapW = delMeasure.LabelNode.GetTextDrawSize(Loc.S("Delete mapping")).X + 36;
+        var okW = delMeasure.LabelNode.GetTextDrawSize(Loc.S("OK?")).X + 36;
+        _colDel = Math.Max(60f, Math.Max(okW, Math.Max(delAudioW, delMapW)));
+        delMeasure.Dispose();
 
         // Unified search bar above the tab bar
         _vsUnifiedSearch = Input(Loc.S("Search..."), w, 80, "", v =>
@@ -127,7 +148,7 @@ public sealed unsafe partial class NativeConfigWindow
 
         // Header/filter rows must match the ScrollingListNode content width (minus scrollbar)
         var hw = w - ScrollbarWidth;
-        var headerVolWidth = hw - _colPlay - ColLock - ColUse - ColGender - ColRace - ColName - ColVoice - 7 * 4;
+        var headerVolWidth = hw - _colPlay - ColLock - ColUse - ColGender - ColRace - ColName - ColVoice - 2 * _colDel - 9 * 4;
 
         // Create header rows, filter rows, separators, pagination bars for NPCs/Players/Bubbles (indices 0-2)
         for (var i = 0; i < 3; i++)
@@ -141,6 +162,8 @@ public sealed unsafe partial class NativeConfigWindow
             _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Name"), ColName));
             _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Voice"), ColVoice));
             _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Volume"), headerVolWidth));
+            _vsHeaders[i]!.AddNode(HeaderLabel("", _colDel));
+            _vsHeaders[i]!.AddNode(HeaderLabel("", _colDel));
 
             _vsFilterRows[i] = new HorizontalListNode { Size = new Vector2(hw, 28), ItemSpacing = 4, Position = new Vector2(_innerContentPos.X, headerY + 20) };
             _vsFilterRows[i]!.AddNode(Spacer(_colPlay, 28));
@@ -151,6 +174,8 @@ public sealed unsafe partial class NativeConfigWindow
             _vsFilterRows[i]!.AddNode(Input(Loc.S("Filter"), ColName, 40, "", v => { _vsFilterName = v; TriggerActiveRebuild(); }));
             _vsFilterRows[i]!.AddNode(Input(Loc.S("Filter"), ColVoice, 40, "", v => { _vsFilterVoice = v; TriggerActiveRebuild(); }));
             _vsFilterRows[i]!.AddNode(Spacer(headerVolWidth, 28));
+            _vsFilterRows[i]!.AddNode(Spacer(_colDel, 28));
+            _vsFilterRows[i]!.AddNode(Spacer(_colDel, 28));
 
             _vsHeaderSeps[i] = new HorizontalLineNode { Size = new Vector2(w, 4), Position = new Vector2(_innerContentPos.X, headerY + 20 + 28 + 2) };
 
@@ -180,11 +205,18 @@ public sealed unsafe partial class NativeConfigWindow
         _vsNextButtons[index] = Button(">", btnW, () => VsChangePage(idx, 1));
         _vsPageLabels[index] = Label("", labelW);
 
-        // Buttons centered in the window
-        const float btnGap = 20f;
-        var centerX = _innerContentPos.X + (w - btnW * 2 - btnGap) / 2f;
-        _vsPrevButtons[index]!.Position = new Vector2(centerX, y);
-        _vsNextButtons[index]!.Position = new Vector2(centerX + btnW + btnGap, y);
+        // Pre-create page number buttons (hidden by default, positioned dynamically)
+        for (var p = 0; p < MaxPageButtons; p++)
+        {
+            var page = p;
+            var tabIdx = idx;
+            _vsPageButtons[index, p] = Button((p + 1).ToString(), btnW, () => VsJumpToPage(tabIdx, page));
+            _vsPageButtons[index, p]!.IsVisible = false;
+        }
+
+        // Initial positions — will be recalculated in UpdateVsPaginationLayout
+        _vsPrevButtons[index]!.Position = new Vector2(_innerContentPos.X, y);
+        _vsNextButtons[index]!.Position = new Vector2(_innerContentPos.X + btnW + 4, y);
 
         // Label right-aligned
         _vsPageLabels[index]!.Position = new Vector2(_innerContentPos.X + w - labelW, y + 4);
@@ -206,6 +238,8 @@ public sealed unsafe partial class NativeConfigWindow
         for (var i = 0; i < 4; i++)
         {
             if (_vsPrevButtons[i] != null) AddNode(_vsPrevButtons[i]!);
+            for (var p = 0; p < MaxPageButtons; p++)
+                if (_vsPageButtons[i, p] != null) AddNode(_vsPageButtons[i, p]!);
             if (_vsNextButtons[i] != null) AddNode(_vsNextButtons[i]!);
             if (_vsPageLabels[i] != null) AddNode(_vsPageLabels[i]!);
         }
@@ -242,6 +276,8 @@ public sealed unsafe partial class NativeConfigWindow
             SetVisible(_vsPrevButtons[i], false);
             SetVisible(_vsNextButtons[i], false);
             SetVisible(_vsPageLabels[i], false);
+            for (var p = 0; p < MaxPageButtons; p++)
+                SetVisible(_vsPageButtons[i, p], false);
         }
     }
 
@@ -275,11 +311,36 @@ public sealed unsafe partial class NativeConfigWindow
         // Only build on first view — subsequent switches reuse existing nodes
         switch (index)
         {
-            case 0: if (!_vsNpcBuilt) _vsNpcNeedRebuild = true; break;
-            case 1: if (!_vsPlayerBuilt) _vsPlayerNeedRebuild = true; break;
-            case 2: if (!_vsBubbleBuilt) _vsBubbleNeedRebuild = true; break;
-            case 3: if (!_vsVoicesBuilt) _vsVoicesNeedRebuild = true; break;
+            case 0:
+                if (!_vsNpcBuilt) _vsNpcNeedRebuild = true;
+                else UpdateVsPaginationLabel(0, _vsFilteredData[0]?.Count ?? 0);
+                break;
+            case 1:
+                if (!_vsPlayerBuilt) _vsPlayerNeedRebuild = true;
+                else UpdateVsPaginationLabel(1, _vsFilteredData[1]?.Count ?? 0);
+                break;
+            case 2:
+                if (!_vsBubbleBuilt) _vsBubbleNeedRebuild = true;
+                else UpdateVsPaginationLabel(2, _vsFilteredData[2]?.Count ?? 0);
+                break;
+            case 3:
+                if (!_vsVoicesBuilt) _vsVoicesNeedRebuild = true;
+                else UpdateVsPaginationLabel(3, _vsFilteredVoices?.Count ?? 0);
+                break;
         }
+    }
+
+    private void ResetVsDeleteState()
+    {
+        if (_vsDelAudioArmed && _vsDelAudioButton != null)
+            _vsDelAudioButton.String = Loc.S("Delete audio");
+        if (_vsDelMappingArmed && _vsDelMappingButton != null)
+            _vsDelMappingButton.String = Loc.S("Delete mapping");
+        _vsDelAudioArmed = false;
+        _vsDelMappingArmed = false;
+        _vsDelTarget = null;
+        _vsDelAudioButton = null;
+        _vsDelMappingButton = null;
     }
 
     private void UpdateVoiceSelection()
@@ -291,6 +352,26 @@ public sealed unsafe partial class NativeConfigWindow
         {
             _vsTestingButton.String = Loc.S("Play");
             _vsTestingButton = null;
+        }
+
+        // Reset delete confirmations after 5 seconds
+        if ((_vsDelAudioArmed || _vsDelMappingArmed) && _vsLastDelClick.AddSeconds(5) <= DateTime.Now)
+            ResetVsDeleteState();
+
+        // Process deferred mapping removal
+        if (_vsNpcToRemove != null)
+        {
+            var npc = _vsNpcToRemove;
+            _vsNpcToRemove = null;
+            _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation, npc.Name);
+            if (npc.Name.StartsWith("BB"))
+                _config.MappedNpcs.Remove(npc);
+            else if (npc.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
+                _config.MappedPlayers.Remove(npc);
+            else
+                _config.MappedNpcs.Remove(npc);
+            _config.Save();
+            TriggerActiveRebuild();
         }
 
         // Process deferred page changes (queued by button click handlers)
@@ -395,7 +476,7 @@ public sealed unsafe partial class NativeConfigWindow
         var start = _vsProgressiveIndex;
         var end = Math.Min(start + VsRowsPerFrame, pageCount);
         var isBubble = _vsIsBubble[tabIndex];
-        var w = _contentWidth;
+        var w = _contentWidth - ScrollbarWidth;
 
         for (var i = start; i < end; i++)
             panel.AddNode(BuildMappedRow(entries[pageStart + i], w, isBubble));
@@ -430,8 +511,9 @@ public sealed unsafe partial class NativeConfigWindow
             }
         });
 
+        TextButtonNode? delMapBtnRef = null;
         var lockCheck = Check("   ", ColLock, npc.DoNotDelete, v =>
-        { npc.DoNotDelete = v; _config.Save(); });
+        { npc.DoNotDelete = v; _config.Save(); Dim(delMapBtnRef, !v); });
 
         var isEnabled = isBubble ? npc.IsEnabledBubble : npc.IsEnabled;
         var useCheck = Check("   ", ColUse, isEnabled, v =>
@@ -487,6 +569,56 @@ public sealed unsafe partial class NativeConfigWindow
             _config.Save();
         };
 
+        // Delete audio files button (always visible)
+        var capturedNpcForDelAudio = npc;
+        TextButtonNode? delAudioBtn = null;
+        delAudioBtn = Button(Loc.S("Delete audio"), _colDel, () =>
+        {
+            if (_vsDelAudioArmed && _vsDelTarget == capturedNpcForDelAudio)
+            {
+                _vsDelAudioArmed = false;
+                _vsDelTarget = null;
+                _vsDelAudioButton = null;
+                _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation, capturedNpcForDelAudio.Name);
+                delAudioBtn!.String = Loc.S("Delete audio");
+            }
+            else
+            {
+                ResetVsDeleteState();
+                _vsLastDelClick = DateTime.Now;
+                _vsDelAudioArmed = true;
+                _vsDelTarget = capturedNpcForDelAudio;
+                _vsDelAudioButton = delAudioBtn;
+                delAudioBtn!.String = Loc.S("OK?");
+            }
+        });
+
+        // Delete mapping button (only functional when not locked)
+        var capturedNpcForDelMap = npc;
+        TextButtonNode? delMapBtn = null;
+        delMapBtn = Button(Loc.S("Delete mapping"), _colDel, () =>
+        {
+            if (capturedNpcForDelMap.DoNotDelete) return;
+            if (_vsDelMappingArmed && _vsDelTarget == capturedNpcForDelMap)
+            {
+                _vsDelMappingArmed = false;
+                _vsDelTarget = null;
+                _vsDelMappingButton = null;
+                _vsNpcToRemove = capturedNpcForDelMap;
+            }
+            else
+            {
+                ResetVsDeleteState();
+                _vsLastDelClick = DateTime.Now;
+                _vsDelMappingArmed = true;
+                _vsDelTarget = capturedNpcForDelMap;
+                _vsDelMappingButton = delMapBtn;
+                delMapBtn!.String = Loc.S("OK?");
+            }
+        });
+        Dim(delMapBtn, !npc.DoNotDelete);
+        delMapBtnRef = delMapBtn;
+
         row.AddNode(playBtn);
         row.AddNode(lockCheck);
         row.AddNode(useCheck);
@@ -495,6 +627,8 @@ public sealed unsafe partial class NativeConfigWindow
         row.AddNode(nameLabel);
         row.AddNode(voiceDropDown);
         row.AddNode(volSlider);
+        row.AddNode(delAudioBtn);
+        row.AddNode(delMapBtn);
         return row;
     }
 
@@ -622,6 +756,14 @@ public sealed unsafe partial class NativeConfigWindow
         // Defer to UpdateVoiceSelection — never clear/rebuild nodes inside ATK event handlers.
         _vsPendingPageTab = tabIndex;
         _vsPendingPageDelta = delta;
+        _vsPendingPageJump = -1;
+    }
+
+    private void VsJumpToPage(int tabIndex, int page)
+    {
+        _vsPendingPageTab = tabIndex;
+        _vsPendingPageDelta = 0;
+        _vsPendingPageJump = page;
     }
 
     private void ProcessVsPageChange()
@@ -630,13 +772,17 @@ public sealed unsafe partial class NativeConfigWindow
 
         var tabIndex = _vsPendingPageTab;
         var delta = _vsPendingPageDelta;
+        var jump = _vsPendingPageJump;
         _vsPendingPageTab = -1;
+        _vsPendingPageJump = -1;
 
         var total = tabIndex == 3
             ? (_vsFilteredVoices?.Count ?? 0)
             : (_vsFilteredData[tabIndex]?.Count ?? 0);
         var maxPage = Math.Max(0, (total - 1) / VsPageSize);
-        var newPage = Math.Clamp(_vsPage[tabIndex] + delta, 0, maxPage);
+        var newPage = jump >= 0
+            ? Math.Clamp(jump, 0, maxPage)
+            : Math.Clamp(_vsPage[tabIndex] + delta, 0, maxPage);
         if (newPage == _vsPage[tabIndex]) return;
 
         _vsPage[tabIndex] = newPage;
@@ -652,12 +798,13 @@ public sealed unsafe partial class NativeConfigWindow
         if (_vsPageLabels[tabIndex] == null) return;
 
         var maxPage = Math.Max(0, (total - 1) / VsPageSize);
+        var pageCount = total > 0 ? maxPage + 1 : 0;
         Dim(_vsPrevButtons[tabIndex], _vsPage[tabIndex] > 0);
         Dim(_vsNextButtons[tabIndex], _vsPage[tabIndex] < maxPage);
 
         if (total == 0)
         {
-            _vsPageLabels[tabIndex]!.String = $"0 / 0";
+            _vsPageLabels[tabIndex]!.String = "0 / 0";
         }
         else
         {
@@ -665,6 +812,41 @@ public sealed unsafe partial class NativeConfigWindow
             var end = Math.Min(start + VsPageSize - 1, total);
             _vsPageLabels[tabIndex]!.String = $"{start}-{end} / {total}";
         }
+
+        // Position page buttons between < and > arrows
+        const float btnW = 30f;
+        const float gap = 4f;
+        var prevBtn = _vsPrevButtons[tabIndex]!;
+        var nextBtn = _vsNextButtons[tabIndex]!;
+        var y = prevBtn.Position.Y;
+
+        // Show/hide/position page number buttons
+        var visiblePages = Math.Min(pageCount, MaxPageButtons);
+        var totalW = btnW + gap + visiblePages * (btnW + gap) + btnW; // < + pages + >
+        var startX = _innerContentPos.X + (_contentWidth - totalW) / 2f;
+
+        prevBtn.Position = new Vector2(startX, y);
+        var x = startX + btnW + gap;
+
+        for (var p = 0; p < MaxPageButtons; p++)
+        {
+            var btn = _vsPageButtons[tabIndex, p];
+            if (btn == null) continue;
+
+            if (p < visiblePages)
+            {
+                btn.IsVisible = true;
+                btn.Position = new Vector2(x, y);
+                btn.Alpha = p == _vsPage[tabIndex] ? 1.0f : 0.4f;
+                x += btnW + gap;
+            }
+            else
+            {
+                btn.IsVisible = false;
+            }
+        }
+
+        nextBtn.Position = new Vector2(x, y);
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────

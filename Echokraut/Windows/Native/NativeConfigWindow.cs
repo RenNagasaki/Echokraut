@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Numerics;
+using System.Threading;
 using Dalamud.Game.Command;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
@@ -76,6 +77,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private TextButtonNode? _clearBubblesButton;
 
     // General
+    private SliderNode? _globalVolumeSlider;
     private CheckboxNode? _generateBySentenceCheck;
     private CheckboxNode? _hideUiCheck;
     private CheckboxNode? _showExtraOptionsCheck;
@@ -149,6 +151,14 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private bool _prevShowRemote;
     private bool _prevShowService;
 
+    // Data Harvest
+    private readonly IDialogHarvestService _dialogHarvest;
+    private TextButtonNode? _harvestButton;
+    private TextNode? _harvestProgressLabel;
+    private CancellationTokenSource? _harvestCts;
+    private TextInputNode? _debugQuestIdInput;
+    private TextButtonNode? _debugExportButton;
+
     public NativeConfigWindow(
         EKConfig config,
         IAudioPlaybackService audioPlayback,
@@ -164,7 +174,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         INpcDataService npcData,
         IVolumeService volumeService,
         IGameObjectService gameObjects,
-        IVoiceTestService voiceTest)
+        IVoiceTestService voiceTest,
+        IDialogHarvestService dialogHarvest)
     {
         _config = config;
         _audioPlayback = audioPlayback;
@@ -181,6 +192,33 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _volumeService = volumeService;
         _gameObjects = gameObjects;
         _voiceTest = voiceTest;
+        _dialogHarvest = dialogHarvest;
+
+        _dialogHarvest.ProgressChanged += OnHarvestProgress;
+        _backend.CharacterMapped += OnCharacterMapped;
+        _backend.VoicesMapped += OnVoicesMapped;
+    }
+
+    public override void Dispose()
+    {
+        _dialogHarvest.ProgressChanged -= OnHarvestProgress;
+        _harvestCts?.Cancel();
+        _harvestCts?.Dispose();
+        _backend.CharacterMapped -= OnCharacterMapped;
+        _backend.VoicesMapped -= OnVoicesMapped;
+        base.Dispose();
+    }
+
+    private void OnCharacterMapped()
+    {
+        _vsNpcNeedRebuild = true;
+        _vsPlayerNeedRebuild = true;
+        _vsBubbleNeedRebuild = true;
+    }
+
+    private void OnVoicesMapped()
+    {
+        _vsVoicesNeedRebuild = true;
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -335,6 +373,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         }
 
         var enabled = _config.Enabled;
+        Dim(_globalVolumeSlider, enabled);
         Dim(_generateBySentenceCheck, enabled);
         Dim(_hideUiCheck,             enabled);
         Dim(_showExtraOptionsCheck,   enabled);
@@ -446,8 +485,23 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var w    = size.X;
         var list = Panel(pos, size);
 
-        var enabledCheck = Check(Loc.S("Enabled"), w, _config.Enabled,
+        var enabledCheck = Check(Loc.S("Enabled"), 120, _config.Enabled,
             v => { _config.Enabled = v; _config.Save(); });
+        _globalVolumeSlider = new SliderNode
+        {
+            Size = new Vector2(180, 20),
+            Range = 0..200,
+            DecimalPlaces = 2,
+            Value = (int)(_config.GlobalVolume * 100),
+        };
+        _globalVolumeSlider.OnValueChanged = v =>
+        {
+            _config.GlobalVolume = v / 100.0f;
+            _config.Save();
+        };
+        var enabledRow = new HorizontalListNode { Size = new Vector2(w, 26), ItemSpacing = 4 };
+        enabledRow.AddNode(enabledCheck);
+        enabledRow.AddNode(_globalVolumeSlider);
 
         var useNativeUiCheck = Check(Loc.S("Use native FFXIV UI"), w, _config.UseNativeUI,
             v => { _config.UseNativeUI = v; _config.Save(); _commands.RequestUiModeSwitch(); });
@@ -565,7 +619,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         row2.AddNode(_clearBubblesButton);
         row2.AddNode(reloadRemoteButton);
 
-        list.AddNode(enabledCheck);
+        list.AddNode(enabledRow);
         list.AddNode(useNativeUiCheck);
         list.AddNode(_generateBySentenceCheck);
         list.AddNode(removeStuttersCheck);
@@ -579,7 +633,55 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
 
         CreateCollapsibleSection(list, Loc.S("Available commands"), w, true,
             commandNodes.Where(n => n != null).Cast<NodeBase>().ToArray());
+
+        // Data Harvest section
+        _harvestButton = Button(Loc.S("Start Harvest"), 160, OnHarvestClick);
+        _harvestProgressLabel = Label("", w);
+        _debugQuestIdInput = Input("Quest ID", 120, 10, "65614", _ => { });
+        _debugExportButton = Button(Loc.S("Export Quest Lua Debug"), 200, OnDebugExportClick);
+        CreateCollapsibleSection(list, Loc.S("Data Harvest"), w, true,
+            [_harvestButton, _harvestProgressLabel, _debugQuestIdInput, _debugExportButton]);
+
         return list;
+    }
+
+    private void OnHarvestClick()
+    {
+        if (_dialogHarvest.IsRunning)
+        {
+            _harvestCts?.Cancel();
+            if (_harvestButton != null)
+                _harvestButton.String = Loc.S("Start Harvest");
+        }
+        else
+        {
+            _harvestCts?.Dispose();
+            _harvestCts = new CancellationTokenSource();
+            if (_harvestButton != null)
+                _harvestButton.String = Loc.S("Stop Harvest");
+            _ = _dialogHarvest.RunAsync(_harvestCts.Token).ContinueWith(_ =>
+            {
+                if (_harvestButton != null)
+                    _harvestButton.String = Loc.S("Start Harvest");
+            });
+        }
+    }
+
+    private void OnDebugExportClick()
+    {
+        var questIdStr = _debugQuestIdInput?.String ?? "";
+        if (uint.TryParse(questIdStr, out var qid))
+        {
+            var path = _dialogHarvest.ExportQuestLuaDebug(qid);
+            if (_harvestProgressLabel != null)
+                _harvestProgressLabel.String = path != null ? $"Debug exported to: {path}" : "Quest not found.";
+        }
+    }
+
+    private void OnHarvestProgress(string message)
+    {
+        if (_harvestProgressLabel != null)
+            _harvestProgressLabel.String = message;
     }
 
     // ─────────────────────────────────────────────────────────────────────────

@@ -408,6 +408,10 @@ public static class Loc
         ["Mute"] = new() { { DE, "Stumm" }, { FR, "Muet" }, { JP, "ミュート" } },
         ["Add"] = new() { { DE, "Hinzufügen" }, { FR, "Ajouter" }, { JP, "追加" } },
         ["Delete"] = new() { { DE, "Löschen" }, { FR, "Supprimer" }, { JP, "削除" } },
+        ["Global Volume"] = new() { { DE, "Gesamtlautstärke" }, { FR, "Volume global" }, { JP, "全体音量" } },
+        ["OK?"] = new() { { DE, "OK?" }, { FR, "OK ?" }, { JP, "OK?" } },
+        ["Delete audio"] = new() { { DE, "Audio lösch." }, { FR, "Suppr. audio" }, { JP, "音声削除" } },
+        ["Delete mapping"] = new() { { DE, "Zuord. lösch." }, { FR, "Suppr. assoc." }, { JP, "割当削除" } },
         ["Clear logs"] = new() { { DE, "Protokoll leeren" }, { FR, "Effacer les journaux" }, { JP, "ログをクリア" } },
         ["Clear mapped NPCs"] = new() { { DE, "Zugeordnete NPCs löschen" }, { FR, "Effacer les PNJ associés" }, { JP, "マッピング済みNPCをクリア" } },
         ["Clear mapped players"] = new() { { DE, "Zugeordnete Spieler löschen" }, { FR, "Effacer les joueurs associés" }, { JP, "マッピング済みプレイヤーをクリア" } },
@@ -419,6 +423,10 @@ public static class Loc
         ["Join discord server"] = new() { { DE, "Discord-Server beitreten" }, { FR, "Rejoindre le serveur Discord" }, { JP, "Discordサーバーに参加" } },
         ["Alltalk Github"] = new() { { DE, "Alltalk GitHub" }, { FR, "Alltalk GitHub" }, { JP, "Alltalk GitHub" } },
         ["Configure"] = new() { { DE, "Konfigurieren" }, { FR, "Configurer" }, { JP, "設定" } },
+        ["Data Harvest"] = new() { { DE, "Daten-Export" }, { FR, "Récolte de données" }, { JP, "データ収集" } },
+        ["Start Harvest"] = new() { { DE, "Export starten" }, { FR, "Démarrer la récolte" }, { JP, "収集開始" } },
+        ["Stop Harvest"] = new() { { DE, "Export stoppen" }, { FR, "Arrêter la récolte" }, { JP, "収集停止" } },
+        ["Export Quest Lua Debug"] = new() { { DE, "Quest-Lua-Debug exportieren" }, { FR, "Exporter debug Lua quête" }, { JP, "クエストLuaデバッグ出力" } },
 
         // ── Dialog controls ───────────────────────────────────────────────
         ["Resume dialogue"] = new() { { DE, "Dialog fortsetzen" }, { FR, "Reprendre le dialogue" }, { JP, "ダイアログを再開" } },

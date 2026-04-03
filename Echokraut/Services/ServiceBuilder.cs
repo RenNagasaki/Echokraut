@@ -31,7 +31,7 @@ public static class ServiceBuilder
     {
         var container = new ServiceContainer();
 
-        // Register core services
+        // Regiwhster core services
         container.RegisterFactory<ILogService>(c => new LogService(pluginLog));
 
         container.RegisterFactory<IRemoteUrlService>(c => new RemoteUrlService(
@@ -49,7 +49,8 @@ public static class ServiceBuilder
 
         container.RegisterFactory<IVolumeService>(c => new VolumeService(
             gameConfig,
-            c.GetService<ILogService>()));
+            c.GetService<ILogService>(),
+            configuration));
 
         container.RegisterFactory<ILuminaService>(c => new LuminaService(
             c.GetService<ILogService>(),
@@ -60,6 +61,12 @@ public static class ServiceBuilder
             c.GetService<ILogService>(),
             c.GetService<IJsonDataService>(),
             c.GetService<ILuminaService>()));
+
+        container.RegisterFactory<IDialogHarvestService>(c => new DialogHarvestService(
+            dataManager,
+            c.GetService<IJsonDataService>(),
+            c.GetService<ILogService>(),
+            configuration));
 
         container.RegisterFactory<ILipSyncHelper>(c => new LipSyncHelper(
             c.GetService<ILogService>(),

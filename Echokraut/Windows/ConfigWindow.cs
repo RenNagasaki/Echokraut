@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Numerics;
+using System.Threading;
 using Dalamud.Interface.Windowing;
 using Echokraut.DataClasses;
 using Echotools.Logging.DataClasses;
@@ -44,6 +45,10 @@ public class ConfigWindow : Window, IDisposable
     private readonly INpcDataService _npcData;
     private readonly IVoiceTestService _voiceTest;
     private readonly AlltalkInstanceWindow _alttalkInstanceWindow;
+    private readonly IDialogHarvestService _dialogHarvest;
+    private CancellationTokenSource? _harvestCts;
+    private string _harvestProgress = "";
+    private string _debugQuestId = "65614";
     private readonly FileDialogManager? fileDialogManager;
     private unsafe Camera* camera;
     #region Voice Selection
@@ -169,7 +174,8 @@ public class ConfigWindow : Window, IDisposable
         IGoogleDriveSyncService googleDrive,
         INpcDataService npcData,
         IVoiceTestService voiceTest,
-        AlltalkInstanceWindow alttalkInstanceWindow) : base($"Echokraut {Plugin.PluginVersion} Configuration###EKSettings")
+        AlltalkInstanceWindow alttalkInstanceWindow,
+        IDialogHarvestService dialogHarvest) : base($"Echokraut {Plugin.PluginVersion} Configuration###EKSettings")
     {
         _log = log;
         _volumeService = volumeService;
@@ -188,6 +194,7 @@ public class ConfigWindow : Window, IDisposable
         _npcData = npcData;
         _voiceTest = voiceTest;
         _alttalkInstanceWindow = alttalkInstanceWindow;
+        _dialogHarvest = dialogHarvest;
         fileDialogManager = new FileDialogManager();
 
         Flags = ImGuiWindowFlags.AlwaysVerticalScrollbar & ImGuiWindowFlags.HorizontalScrollbar & ImGuiWindowFlags.AlwaysHorizontalScrollbar;
@@ -197,10 +204,13 @@ public class ConfigWindow : Window, IDisposable
         _log.LogUpdated += OnLogUpdated;
         _backend.VoicesMapped += OnVoicesMapped;
         _backend.CharacterMapped += OnCharacterMapped;
+        _dialogHarvest.ProgressChanged += msg => _harvestProgress = msg;
     }
 
     public void Dispose()
     {
+        _harvestCts?.Cancel();
+        _harvestCts?.Dispose();
         _log.LogUpdated -= OnLogUpdated;
         _backend.VoicesMapped -= OnVoicesMapped;
         _backend.CharacterMapped -= OnCharacterMapped;
@@ -505,6 +515,17 @@ public class ConfigWindow : Window, IDisposable
             _config.Enabled = enabled;
             _config.Save();
         }
+        ImGui.SameLine();
+        using (ImRaii.Disabled(!enabled))
+        {
+            ImGui.SetNextItemWidth(180);
+            var globalVolume = _config.GlobalVolume;
+            if (ImGui.SliderFloat($"##EKGlobalVolume", ref globalVolume, 0f, 2f, $"{Loc.S("Global Volume")}: %.2f"))
+            {
+                _config.GlobalVolume = globalVolume;
+                _config.Save();
+            }
+        }
 
         var useNativeUi = _config.UseNativeUI;
         if (ImGui.Checkbox(Loc.S("Use native FFXIV UI"), ref useNativeUi))
@@ -564,6 +585,41 @@ public class ConfigWindow : Window, IDisposable
                         _config.ShowExtraExtraOptionsInDialogue = showExtraExtraOptionsInDialogue;
                         _config.Save();
                     }
+                }
+            }
+        }
+
+        // Data Harvest
+        ImGui.Separator();
+        if (ImGui.CollapsingHeader(Loc.S("Data Harvest")))
+        {
+            var isRunning = _dialogHarvest.IsRunning;
+            var btnLabel = isRunning ? Loc.S("Stop Harvest") : Loc.S("Start Harvest");
+            if (ImGui.Button($"{btnLabel}##EKHarvest"))
+            {
+                if (isRunning)
+                {
+                    _harvestCts?.Cancel();
+                }
+                else
+                {
+                    _harvestCts?.Dispose();
+                    _harvestCts = new CancellationTokenSource();
+                    _ = _dialogHarvest.RunAsync(_harvestCts.Token);
+                }
+            }
+            if (!string.IsNullOrEmpty(_harvestProgress))
+                ImGui.TextUnformatted(_harvestProgress);
+
+            ImGui.Spacing();
+            ImGui.InputText("##EKDebugQuestId", ref _debugQuestId, 20);
+            ImGui.SameLine();
+            if (ImGui.Button($"{Loc.S("Export Quest Lua Debug")}##EKQuestDebug"))
+            {
+                if (uint.TryParse(_debugQuestId, out var qid))
+                {
+                    var path = _dialogHarvest.ExportQuestLuaDebug(qid);
+                    _harvestProgress = path != null ? $"Debug exported to: {path}" : "Quest not found.";
                 }
             }
         }

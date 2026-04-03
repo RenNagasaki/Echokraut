@@ -50,11 +50,12 @@ public class NativeWindowManager : IWindowManager
             services.GetService<INpcDataService>(),
             services.GetService<IVolumeService>(),
             services.GetService<IGameObjectService>(),
-            services.GetService<IVoiceTestService>())
+            services.GetService<IVoiceTestService>(),
+            services.GetService<IDialogHarvestService>())
         {
             InternalName = "EchokrautSettings",
             Title = Loc.S("Configuration"),
-            Size = new Vector2(900, 650),
+            Size = new Vector2(1120, 650),
             RespectCloseAll = false,
         };
 

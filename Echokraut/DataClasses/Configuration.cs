@@ -21,6 +21,7 @@ public class Configuration : IPluginConfiguration
     public List<EchokrautVoice> EchokrautVoices { get; set; } = new List<EchokrautVoice>();
     public bool FirstTime { get; set; } = true;
     public bool Enabled { get; set; } = true;
+    public float GlobalVolume { get; set; } = 1.0f;
     public bool VoiceDialogue { get; set; } = true;
     public bool VoiceBattleDialogue { get; set; } = true;
     public bool VoiceBattleDialogQueued { get; set; } = true;

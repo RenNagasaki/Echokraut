@@ -11,11 +11,13 @@ public class VolumeService : IVolumeService
 {
     private readonly IGameConfig _gameConfig;
     private readonly ILogService _logService;
+    private readonly Configuration _config;
 
-    public VolumeService(IGameConfig gameConfig, ILogService logService)
+    public VolumeService(IGameConfig gameConfig, ILogService logService, Configuration config)
     {
         _gameConfig = gameConfig ?? throw new System.ArgumentNullException(nameof(gameConfig));
         _logService = logService ?? throw new System.ArgumentNullException(nameof(logService));
+        _config = config ?? throw new System.ArgumentNullException(nameof(config));
     }
 
     public unsafe float GetVoiceVolume(EKEventId eventId)
@@ -40,8 +42,8 @@ public class VolumeService : IVolumeService
                 return 0f;
         }
 
-        var volumeFloat = masterVolume * voiceVolume;
-        _logService.Info(nameof(GetVoiceVolume), $"Real voice volume: {volumeFloat}", eventId);
+        var volumeFloat = masterVolume * voiceVolume * _config.GlobalVolume;
+        _logService.Info(nameof(GetVoiceVolume), $"Real voice volume: {volumeFloat} (global: {_config.GlobalVolume})", eventId);
         return volumeFloat;
     }
 }

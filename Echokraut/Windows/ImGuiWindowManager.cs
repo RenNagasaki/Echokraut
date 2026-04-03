@@ -45,7 +45,8 @@ public class ImGuiWindowManager : IWindowManager
             log, volume, config, framework, commands, commandManager,
             pluginInterface, backend, audioPlayback, clientState,
             jsonData, audioFile, gameObject, googleDrive, npcData,
-            voiceTest, alttalkInstanceWindow);
+            voiceTest, alttalkInstanceWindow,
+            services.GetService<IDialogHarvestService>());
 
         _firstTimeWindow = new FirstTimeWindow(
             log, config, framework, alttalkInstanceWindow, _configWindow);
