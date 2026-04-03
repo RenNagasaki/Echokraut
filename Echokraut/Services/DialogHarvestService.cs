@@ -669,18 +669,29 @@ public class DialogHarvestService : IDialogHarvestService
                             var balloonId = BitConverter.ToUInt32(d, off);
                             if (!remainingBalloonIds.Contains(balloonId)) continue;
 
-                            // Found unmatched Balloon ID — search backward for nearest ENpcBase ID
-                            for (var searchOff = off - 4; searchOff >= Math.Max(0, off - 96); searchOff -= 4)
+                            // Found unmatched Balloon ID — search both directions for nearest ENpcBase ID
+                            var found = false;
+                            // Search backward up to 200 bytes
+                            for (var searchOff = off - 4; !found && searchOff >= Math.Max(0, off - 200); searchOff -= 4)
                             {
                                 var npcId = BitConverter.ToUInt32(d, searchOff);
                                 if (npcId < 1000000 || npcId > 2000000) continue;
-                                var npcBase = npcBaseSheet.GetRowOrDefault(npcId);
-                                if (npcBase == null) continue;
-
+                                if (npcBaseSheet.GetRowOrDefault(npcId) == null) continue;
                                 lgbBalloonToNpc.TryAdd(balloonId, npcId);
                                 remainingBalloonIds.Remove(balloonId);
                                 reverseMapped++;
-                                break;
+                                found = true;
+                            }
+                            // Search forward up to 100 bytes
+                            for (var searchOff = off + 4; !found && searchOff < Math.Min(d.Length - 3, off + 100); searchOff += 4)
+                            {
+                                var npcId = BitConverter.ToUInt32(d, searchOff);
+                                if (npcId < 1000000 || npcId > 2000000) continue;
+                                if (npcBaseSheet.GetRowOrDefault(npcId) == null) continue;
+                                lgbBalloonToNpc.TryAdd(balloonId, npcId);
+                                remainingBalloonIds.Remove(balloonId);
+                                reverseMapped++;
+                                found = true;
                             }
                         }
                     }
