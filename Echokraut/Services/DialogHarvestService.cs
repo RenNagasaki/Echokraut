@@ -614,7 +614,7 @@ public class DialogHarvestService : IDialogHarvestService
                         for (var off = 0; off < data.Length - 67; off += 4)
                         {
                             var npcId = BitConverter.ToUInt32(data, off);
-                            if (npcId < 1000000 || npcId > 2000000) continue;
+                            if (npcId < 1000000 || npcId > 3000000) continue;
 
                             var npcBase = npcBaseSheet.GetRowOrDefault(npcId);
                             if (npcBase == null) continue;
@@ -671,22 +671,22 @@ public class DialogHarvestService : IDialogHarvestService
 
                             // Found unmatched Balloon ID — search both directions for nearest ENpcBase ID
                             var found = false;
-                            // Search backward up to 800 bytes
-                            for (var searchOff = off - 4; !found && searchOff >= Math.Max(0, off - 800); searchOff -= 4)
+                            // Search backward up to 1600 bytes
+                            for (var searchOff = off - 4; !found && searchOff >= Math.Max(0, off - 1600); searchOff -= 4)
                             {
                                 var npcId = BitConverter.ToUInt32(d, searchOff);
-                                if (npcId < 1000000 || npcId > 2000000) continue;
+                                if (npcId < 1000000 || npcId > 3000000) continue;
                                 if (npcBaseSheet.GetRowOrDefault(npcId) == null) continue;
                                 lgbBalloonToNpc.TryAdd(balloonId, npcId);
                                 remainingBalloonIds.Remove(balloonId);
                                 reverseMapped++;
                                 found = true;
                             }
-                            // Search forward up to 400 bytes
-                            for (var searchOff = off + 4; !found && searchOff < Math.Min(d.Length - 3, off + 400); searchOff += 4)
+                            // Search forward up to 800 bytes
+                            for (var searchOff = off + 4; !found && searchOff < Math.Min(d.Length - 3, off + 800); searchOff += 4)
                             {
                                 var npcId = BitConverter.ToUInt32(d, searchOff);
-                                if (npcId < 1000000 || npcId > 2000000) continue;
+                                if (npcId < 1000000 || npcId > 3000000) continue;
                                 if (npcBaseSheet.GetRowOrDefault(npcId) == null) continue;
                                 lgbBalloonToNpc.TryAdd(balloonId, npcId);
                                 remainingBalloonIds.Remove(balloonId);
