@@ -23,10 +23,8 @@ public class DialogExtraOptionsWindow : Window, IDisposable
     private readonly IAudioPlaybackService _audioPlayback;
     private readonly ILipSyncHelper _lipSync;
     private readonly Action _recreateInference;
-    // We give this window a constant ID using ###
-    // This allows for labels being dynamic, like "{FPS Counter}fps###XYZ counter window",
-    // and the window ID will always be "###XYZ counter window" for ImGui
-    public DialogExtraOptionsWindow(ILogService log, Echokraut.DataClasses.Configuration config, IAudioPlaybackService audioPlayback, ILipSyncHelper lipSync, Action recreateInference)
+    private readonly INpcDataService _npcData;
+    public DialogExtraOptionsWindow(ILogService log, Echokraut.DataClasses.Configuration config, IAudioPlaybackService audioPlayback, ILipSyncHelper lipSync, Action recreateInference, INpcDataService npcData)
         : base("EK-DialogExtraOptionsWindow")
     {
         _log = log;
@@ -34,6 +32,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
         _audioPlayback = audioPlayback;
         _lipSync = lipSync;
         _recreateInference = recreateInference;
+        _npcData = npcData;
         Flags = ImGuiWindowFlags.NoTitleBar | ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoScrollbar | ImGuiWindowFlags.NoCollapse |
                 ImGuiWindowFlags.NoSavedSettings | ImGuiWindowFlags.NoMove | ImGuiWindowFlags.NoFocusOnAppearing |
                 ImGuiWindowFlags.NoNav;
@@ -79,7 +78,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
 
         ImGui.SetCursorPosY(ImGui.GetCursorPosY() - 5);
 
-        var disabled = DialogState.CurrentVoiceMessage != null && DialogState.CurrentVoiceMessage.SpeakerObj != null && _config.MutedNpcDialogues.Contains(DialogState.CurrentVoiceMessage.SpeakerObj.BaseId);
+        var disabled = DialogState.CurrentVoiceMessage != null && DialogState.CurrentVoiceMessage.SpeakerObj != null && _npcData.IsDialogueMuted(DialogState.CurrentVoiceMessage.SpeakerObj.BaseId);
             using (ImRaii.Disabled(disabled))
             {
                 if (_audioPlayback.IsPlaying && DialogState.CurrentVoiceMessage != null)
@@ -124,7 +123,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                     _log.Info(nameof(DrawReadyStates),
                               $"Muting NPC Dialogue: {DialogState.CurrentVoiceMessage!.SpeakerObj!.Name.TextValue}",
                               new EKEventId(0, TextSource.AddonTalk));
-                    _config.MutedNpcDialogues.Add(DialogState.CurrentVoiceMessage.SpeakerObj!.BaseId);
+                    _npcData.MuteDialogue(DialogState.CurrentVoiceMessage.SpeakerObj!.BaseId);
                     if (_audioPlayback.IsPlaying)
                     {
                         if (DialogState.CurrentVoiceMessage != null) _lipSync.TryStopLipSync(DialogState.CurrentVoiceMessage);
@@ -140,7 +139,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                 _log.Info(nameof(DrawReadyStates),
                           $"Unmuting NPC Dialogue: {DialogState.CurrentVoiceMessage!.SpeakerObj!.Name.TextValue}",
                           new EKEventId(0, TextSource.AddonTalk));
-                _config.MutedNpcDialogues.Remove(DialogState.CurrentVoiceMessage.SpeakerObj!.BaseId);
+                _npcData.UnmuteDialogue(DialogState.CurrentVoiceMessage.SpeakerObj!.BaseId);
                 _recreateInference();
             }
 
@@ -174,7 +173,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                         DialogState.CurrentVoiceMessage.Speaker.Voice?.VoiceName ?? "", out var selectedIndexVoice))
                 {
                     var newVoiceItem =
-                        _config.EchokrautVoices.FindAll(f => f.IsSelectable(
+                        _npcData.GetEchokrautVoices().FindAll(f => f.IsSelectable(
                                                                           DialogState.CurrentVoiceMessage.Speaker.Name,
                                                                           DialogState.CurrentVoiceMessage.Speaker.Gender,
                                                                           DialogState.CurrentVoiceMessage.Speaker.Race,

@@ -53,7 +53,7 @@ public class ImGuiWindowManager : IWindowManager
 
         _dialogExtraOptionsWindow = new DialogExtraOptionsWindow(
             log, config, audioPlayback, lipSync,
-            () => addonTalk.RecreateInference());
+            () => addonTalk.RecreateInference(), npcData);
 
         _windowSystem.AddWindow(_configWindow);
         _windowSystem.AddWindow(alttalkInstanceWindow);

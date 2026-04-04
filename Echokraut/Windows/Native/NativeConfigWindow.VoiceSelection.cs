@@ -364,13 +364,13 @@ public sealed unsafe partial class NativeConfigWindow
             var npc = _vsNpcToRemove;
             _vsNpcToRemove = null;
             _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation, npc.Name);
+            _npcData.RemoveCharacter(npc);
             if (npc.Name.StartsWith("BB"))
-                _config.MappedNpcs.Remove(npc);
+                _npcData.MappedNpcs.Remove(npc);
             else if (npc.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
-                _config.MappedPlayers.Remove(npc);
+                _npcData.MappedPlayers.Remove(npc);
             else
-                _config.MappedNpcs.Remove(npc);
-            _config.Save();
+                _npcData.MappedNpcs.Remove(npc);
             TriggerActiveRebuild();
         }
 
@@ -379,11 +379,11 @@ public sealed unsafe partial class NativeConfigWindow
 
         // Start new builds
         if (_vsNpcNeedRebuild && _activeVsTab == 0)
-        { _vsNpcNeedRebuild = false; _vsNpcBuilt = true; StartMappedBuild(_vsDataLists[0]!, _config.MappedNpcs, false, 0); }
+        { _vsNpcNeedRebuild = false; _vsNpcBuilt = true; StartMappedBuild(_vsDataLists[0]!, _npcData.MappedNpcs, false, 0); }
         if (_vsPlayerNeedRebuild && _activeVsTab == 1)
-        { _vsPlayerNeedRebuild = false; _vsPlayerBuilt = true; StartMappedBuild(_vsDataLists[1]!, _config.MappedPlayers, false, 1); }
+        { _vsPlayerNeedRebuild = false; _vsPlayerBuilt = true; StartMappedBuild(_vsDataLists[1]!, _npcData.MappedPlayers, false, 1); }
         if (_vsBubbleNeedRebuild && _activeVsTab == 2)
-        { _vsBubbleNeedRebuild = false; _vsBubbleBuilt = true; StartMappedBuild(_vsDataLists[2]!, _config.MappedNpcs, true, 2); }
+        { _vsBubbleNeedRebuild = false; _vsBubbleBuilt = true; StartMappedBuild(_vsDataLists[2]!, _npcData.MappedNpcs, true, 2); }
         if (_vsVoicesNeedRebuild && _activeVsTab == 3)
         { _vsVoicesNeedRebuild = false; _vsVoicesBuilt = true; StartVoicesBuild(); }
 
@@ -528,7 +528,7 @@ public sealed unsafe partial class NativeConfigWindow
         var nameLabel   = Label(npc.Name, ColName);
 
         // Voice dropdown
-        var voices = _config.EchokrautVoices
+        var voices = _npcData.GetEchokrautVoices()
             .FindAll(f => f.IsSelectable(npc.Name, npc.Gender, npc.Race, npc.IsChild));
         var voiceNames = voices.ConvertAll(v => v.VoiceName);
         var currentVoice = npc.Voice?.VoiceName ?? "";
@@ -638,7 +638,7 @@ public sealed unsafe partial class NativeConfigWindow
 
     private void StartVoicesBuild()
     {
-        IEnumerable<EchokrautVoice> voiceData = _config.EchokrautVoices;
+        IEnumerable<EchokrautVoice> voiceData = _npcData.GetEchokrautVoices();
         if (!string.IsNullOrEmpty(_vsUnifiedFilter))
         {
             var search = _vsUnifiedFilter;

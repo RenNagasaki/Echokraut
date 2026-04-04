@@ -388,16 +388,16 @@ public class ConfigWindow : Window, IDisposable
                                 {
                                     deleteMappedNpcs = false;
                                     foreach (NpcMapData npcMapData in
-                                             _config.MappedNpcs.FindAll(p => !p.Name.StartsWith("BB") &&
+                                             _npcData.MappedNpcs.FindAll(p => !p.Name.StartsWith("BB") &&
                                                  !p.DoNotDelete))
                                     {
                                         _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation,
                                                                             npcMapData.Name);
-                                        _config.MappedNpcs.Remove(npcMapData);
+                                        _npcData.RemoveCharacter(npcMapData);
+                                        _npcData.MappedNpcs.Remove(npcMapData);
                                     }
 
                                     _updateDataNpcs = true;
-                                    _config.Save();
                                 }
                             }
                             else if (ImGui.Button($"{Loc.S("Clear mapped NPCs")}##clearnpc") && !deleteMappedNpcs)
@@ -413,15 +413,15 @@ public class ConfigWindow : Window, IDisposable
                                 {
                                     deleteMappedPlayers = false;
                                     foreach (NpcMapData playerMapData in
-                                             _config.MappedPlayers.FindAll(p => !p.DoNotDelete))
+                                             _npcData.MappedPlayers.FindAll(p => !p.DoNotDelete))
                                     {
                                         _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation,
                                                                             playerMapData.Name);
-                                        _config.MappedPlayers.Remove(playerMapData);
+                                        _npcData.RemoveCharacter(playerMapData);
+                                        _npcData.MappedPlayers.Remove(playerMapData);
                                     }
 
                                     _updateDataPlayers = true;
-                                    _config.Save();
                                 }
                             }
                             else if (ImGui.Button($"{Loc.S("Clear mapped players")}##clearplayers") && !deleteMappedPlayers)
@@ -437,16 +437,16 @@ public class ConfigWindow : Window, IDisposable
                                 {
                                     deleteMappedBubbles = false;
                                     foreach (NpcMapData npcMapData in
-                                             _config.MappedNpcs.FindAll(p => p.Name.StartsWith("BB") &&
+                                             _npcData.MappedNpcs.FindAll(p => p.Name.StartsWith("BB") &&
                                                  !p.DoNotDelete))
                                     {
                                         _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation,
                                                                             npcMapData.Name);
-                                        _config.MappedNpcs.Remove(npcMapData);
+                                        _npcData.RemoveCharacter(npcMapData);
+                                        _npcData.MappedNpcs.Remove(npcMapData);
                                     }
 
                                     _updateDataBubbles = true;
-                                    _config.Save();
                                 }
                             }
                             else if (ImGui.Button($"{Loc.S("Clear mapped bubbles")}##clearbubblenpc"))
@@ -1063,7 +1063,7 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (tabItemNPCs)
                     {
-                        DrawVoiceSelectionTable("NPCs", _config.MappedNpcs, ref filteredNpcs,
+                        DrawVoiceSelectionTable("NPCs", _npcData.MappedNpcs, ref filteredNpcs,
                                                 ref _updateDataNpcs, ref resetDataNpcs, ref filterGenderNpcs,
                                                 ref filterRaceNpcs, ref filterNameNpcs, ref filterVoiceNpcs);
                     }
@@ -1073,7 +1073,7 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (tabItemPlayers)
                     {
-                        DrawVoiceSelectionTable("Players", _config.MappedPlayers, ref filteredPlayers,
+                        DrawVoiceSelectionTable("Players", _npcData.MappedPlayers, ref filteredPlayers,
                                                 ref _updateDataPlayers, ref resetDataPlayers, ref filterGenderPlayers,
                                                 ref filterRacePlayers, ref filterNamePlayers, ref filterVoicePlayers);
                     }
@@ -1083,7 +1083,7 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (tabItemBubbles)
                     {
-                        DrawVoiceSelectionTable("Bubbles", _config.MappedNpcs, ref filteredBubbles,
+                        DrawVoiceSelectionTable("Bubbles", _npcData.MappedNpcs, ref filteredBubbles,
                                                 ref _updateDataBubbles, ref resetDataBubbles, ref filterGenderBubbles,
                                                 ref filterRaceBubbles, ref filterNameBubbles, ref filterVoiceBubbles,
                                                 true);
@@ -1107,23 +1107,27 @@ public class ConfigWindow : Window, IDisposable
 
     private void DrawVoices()
     {
-        var voiceArr = _config.EchokrautVoices.ConvertAll(p => p.ToString()).ToArray();
-        var defaultVoiceIndex = _config.EchokrautVoices.FindIndex(p => p.IsDefault);
+        var allVoices = _npcData.GetEchokrautVoices();
+        var voiceArr = allVoices.ConvertAll(p => p.ToString()).ToArray();
+        var defaultVoiceIndex = allVoices.FindIndex(p => p.IsDefault);
         if (ImGui.Combo($"{Loc.S("Default Voice:")}##EKDefaultVoice", ref defaultVoiceIndex, voiceArr, voiceArr.Length))
         {
-            // Clear all defaults
-            foreach (var voice in _config.EchokrautVoices)
+            // Clear all defaults and set new one
+            foreach (var voice in allVoices)
                 voice.IsDefault = false;
 
-            _config.EchokrautVoices[defaultVoiceIndex].IsDefault = true;
-            _config.Save();
+            allVoices[defaultVoiceIndex].IsDefault = true;
+
+            // Persist all voice changes to DB
+            foreach (var voice in allVoices)
+                _npcData.SaveVoice(voice);
         }
 
         _updateDataVoices = filteredVoices.Count == 0;
 
         if (_updateDataVoices || (resetDataVoices && (filterGenderVoices.Length == 0 || filterRaceVoices.Length == 0 || filterNameVoices.Length == 0)))
         {
-            filteredVoices = _config.EchokrautVoices;
+            filteredVoices = allVoices;
             _updateDataVoices = true;
             resetDataVoices = false;
         }
@@ -1269,7 +1273,7 @@ public class ConfigWindow : Window, IDisposable
                     if (ImGui.Checkbox($"##EKVoiceIsEnabled{voice}", ref isEnabled))
                     {
                         voice.IsEnabled = isEnabled;
-                        _config.Save();
+                        _npcData.SaveVoice(voice);
                     }
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1278,7 +1282,7 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##EKVoiceNote{voice}", ref voice.Note, 80))
                     {
-                        _config.Save();
+                        _npcData.SaveVoice(voice);
                     }
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1298,7 +1302,7 @@ public class ConfigWindow : Window, IDisposable
                                 if (ImGui.Checkbox($"{Loc.S("Random NPC")}##EKVoiceUseAsRandom{voice}", ref useAsRandom))
                                 {
                                     voice.UseAsRandom = useAsRandom;
-                                    _config.Save();
+                                    _npcData.SaveVoice(voice);
                                 }
 
                                 ImGui.TableNextRow();
@@ -1307,7 +1311,7 @@ public class ConfigWindow : Window, IDisposable
                                 if (ImGui.Checkbox($"{Loc.S("Child Voice")}##EKVoiceIsChildVoice{voice}", ref isChildVoice))
                                 {
                                     voice.IsChildVoice = isChildVoice;
-                                    _config.Save();
+                                    _npcData.SaveVoice(voice);
                                 }
                             }
                         }
@@ -1345,8 +1349,8 @@ public class ConfigWindow : Window, IDisposable
                                         else if (!isAllowed && voice.AllowedGenders.Contains(gender))
                                             voice.AllowedGenders.Remove(gender);
 
-                                        _npcData.RefreshSelectables(_config.EchokrautVoices);
-                                        _config.Save();
+                                        _npcData.RefreshSelectables(_npcData.GetEchokrautVoices());
+                                        _npcData.SaveVoice(voice);
                                     }
 
                                     ImGui.TableNextRow();
@@ -1389,8 +1393,8 @@ public class ConfigWindow : Window, IDisposable
                                             if (voice.AllowedRaces.Contains(race))
                                                 voice.AllowedRaces.Remove(race);
 
-                                    _npcData.RefreshSelectables(_config.EchokrautVoices);
-                                    _config.Save();
+                                    _npcData.RefreshSelectables(_npcData.GetEchokrautVoices());
+                                    _npcData.SaveVoice(voice);
                                 }
 
                                 ImGui.TableNextColumn();
@@ -1417,8 +1421,8 @@ public class ConfigWindow : Window, IDisposable
                                         else if (!isAllowed && voice.AllowedRaces.Contains(race))
                                             voice.AllowedRaces.Remove(race);
 
-                                        _npcData.RefreshSelectables(_config.EchokrautVoices);
-                                        _config.Save();
+                                        _npcData.RefreshSelectables(_npcData.GetEchokrautVoices());
+                                        _npcData.SaveVoice(voice);
                                     }
 
                                     i++;
@@ -1438,7 +1442,7 @@ public class ConfigWindow : Window, IDisposable
                     if (ImGui.SliderFloat($"##EKVoiceVolumeSlider{voice}", ref voiceVolume, 0f, 2f))
                     {
                         voice.Volume = voiceVolume;
-                        _config.Save();
+                        _npcData.SaveVoice(voice);
                     }
                 }
             }
@@ -1673,13 +1677,13 @@ public class ConfigWindow : Window, IDisposable
 
                 if (mapData.VoicesSelectable.Draw(mapData.Voice?.VoiceName ?? "", out var selectedIndexVoice))
                 {
-                    var newVoiceItem = _config.EchokrautVoices.FindAll(f => f.IsSelectable(mapData.Name, mapData.Gender, mapData.Race, mapData.IsChild))[selectedIndexVoice];
+                    var newVoiceItem = _npcData.GetEchokrautVoices().FindAll(f => f.IsSelectable(mapData.Name, mapData.Gender, mapData.Race, mapData.IsChild))[selectedIndexVoice];
 
                     mapData.Voice = newVoiceItem;
                     mapData.DoNotDelete = true;
                     mapData.RefreshSelectable();
                     updateData = true;
-                    _config.Save();
+                    _npcData.SaveCharacter(mapData);
                     _log.Info(nameof(DrawVoiceSelectionTable), $"Updated Voice for {dataType}: {mapData.ToString()} from: {mapData.Voice} to: {newVoiceItem}", new EKEventId(0, TextSource.None));
                 }
                 ImGui.TableNextColumn();
@@ -1696,7 +1700,7 @@ public class ConfigWindow : Window, IDisposable
                     else
                         mapData.Volume = voiceVolume;
                     mapData.DoNotDelete = true;
-                    _config.Save();
+                    _npcData.SaveCharacter(mapData);
                 }
                 ImGui.TableNextColumn();
                 ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
@@ -1763,9 +1767,9 @@ public class ConfigWindow : Window, IDisposable
             if (toBeRemoved != null)
             {
                 _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation, toBeRemoved.Name);
+                _npcData.RemoveCharacter(toBeRemoved);
                 realData.Remove(toBeRemoved);
                 updateData = true;
-                _config.Save();
             }
         }
     }
@@ -1776,10 +1780,9 @@ public class ConfigWindow : Window, IDisposable
     {
         try
         {
-            if (_config.PhoneticCorrections.Count == 0)
+            if (_npcData.GetPhoneticCorrections().Count == 0)
             {
-                _config.PhoneticCorrections.Add(new PhoneticCorrection("C'ami", "Kami"));
-                _config.Save();
+                _npcData.UpsertPhoneticCorrection("C'ami", "Kami");
                 updatePhonData = true;
             }
 
@@ -1790,7 +1793,7 @@ public class ConfigWindow : Window, IDisposable
 
             if (updatePhonData || (resetPhonFilter && (filterPhonOriginal.Length == 0 || filterPhonCorrected.Length == 0)))
             {
-                filteredPhon = _config.PhoneticCorrections ?? [];
+                filteredPhon = _npcData.GetPhoneticCorrections() ?? [];
                 updatePhonData = true;
                 resetPhonFilter = false;
             }
@@ -1849,12 +1852,9 @@ public class ConfigWindow : Window, IDisposable
                 {
                     if (!string.IsNullOrWhiteSpace(originalText) && !string.IsNullOrWhiteSpace(correctedText))
                     {
-                        PhoneticCorrection newCorrection = new PhoneticCorrection(originalText, correctedText);
-                        if (!_config.PhoneticCorrections!.Contains(newCorrection))
+                        if (!string.IsNullOrWhiteSpace(originalText))
                         {
-                            _config.PhoneticCorrections.Add(newCorrection);
-                            _config.PhoneticCorrections.Sort();
-                            _config.Save();
+                            _npcData.UpsertPhoneticCorrection(originalText, correctedText);
                             originalText = "";
                             correctedText = "";
                             updatePhonData = true;
@@ -1881,21 +1881,20 @@ public class ConfigWindow : Window, IDisposable
                     }
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
+                    var origText = phoneticCorrection.OriginalText;
                     if (ImGui.InputText($"##origText{i}", ref phoneticCorrection.OriginalText, 25))
-                        _config.Save();
+                        _npcData.UpsertPhoneticCorrection(phoneticCorrection.OriginalText, phoneticCorrection.CorrectedText);
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     if (ImGui.InputText($"##correctText{i}", ref phoneticCorrection.CorrectedText, 25))
-                        _config.Save();
+                        _npcData.UpsertPhoneticCorrection(phoneticCorrection.OriginalText, phoneticCorrection.CorrectedText);
 
                     i++;
                 }
 
                 if (toBeRemoved != null)
                 {
-                    _config.PhoneticCorrections!.Remove(toBeRemoved);
-                    _config.PhoneticCorrections.Sort();
-                    _config.Save();
+                    _npcData.DeletePhoneticCorrection(toBeRemoved.OriginalText);
                     updatePhonData = true;
                 }
             }

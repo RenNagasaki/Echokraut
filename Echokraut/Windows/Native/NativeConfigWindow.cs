@@ -539,12 +539,12 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             {
                 _deleteNpcsArmed = false;
                 _clearNpcsButton!.String = Loc.S("Clear mapped NPCs");
-                foreach (var npc in _config.MappedNpcs.FindAll(p => !p.Name.StartsWith("BB") && !p.DoNotDelete))
+                foreach (var npc in _npcData.MappedNpcs.FindAll(p => !p.Name.StartsWith("BB") && !p.DoNotDelete))
                 {
                     _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation, npc.Name);
-                    _config.MappedNpcs.Remove(npc);
+                    _npcData.RemoveCharacter(npc);
+                    _npcData.MappedNpcs.Remove(npc);
                 }
-                _config.Save();
             }
             else
             {
@@ -559,12 +559,12 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             {
                 _deletePlayersArmed = false;
                 _clearPlayersButton!.String = Loc.S("Clear mapped players");
-                foreach (var p in _config.MappedPlayers.FindAll(p => !p.DoNotDelete))
+                foreach (var p in _npcData.MappedPlayers.FindAll(p => !p.DoNotDelete))
                 {
                     _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation, p.Name);
-                    _config.MappedPlayers.Remove(p);
+                    _npcData.RemoveCharacter(p);
+                    _npcData.MappedPlayers.Remove(p);
                 }
-                _config.Save();
             }
             else
             {
@@ -579,12 +579,12 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             {
                 _deleteBubblesArmed = false;
                 _clearBubblesButton!.String = Loc.S("Clear mapped bubbles");
-                foreach (var npc in _config.MappedNpcs.FindAll(p => p.Name.StartsWith("BB") && !p.DoNotDelete))
+                foreach (var npc in _npcData.MappedNpcs.FindAll(p => p.Name.StartsWith("BB") && !p.DoNotDelete))
                 {
                     _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation, npc.Name);
-                    _config.MappedNpcs.Remove(npc);
+                    _npcData.RemoveCharacter(npc);
+                    _npcData.MappedNpcs.Remove(npc);
                 }
-                _config.Save();
             }
             else
             {

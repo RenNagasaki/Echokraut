@@ -83,13 +83,8 @@ public sealed unsafe partial class NativeConfigWindow
         _phonHeaderSep2.AddNode(Button(Loc.S("Add"), PhonColDel, () =>
         {
             if (string.IsNullOrWhiteSpace(_phonNewOrigText)) return;
-            var correction = new PhoneticCorrection(_phonNewOrigText.Trim(), _phonNewCorrText.Trim());
-            if (!_config.PhoneticCorrections.Contains(correction))
-            {
-                _config.PhoneticCorrections.Add(correction);
-                _config.Save();
-                _phonNeedRebuild = true;
-            }
+            _npcData.UpsertPhoneticCorrection(_phonNewOrigText.Trim(), _phonNewCorrText.Trim());
+            _phonNeedRebuild = true;
         }));
 
         // Data list below
@@ -143,7 +138,7 @@ public sealed unsafe partial class NativeConfigWindow
         var filterOrig = _phonFilterOrigText.Trim();
         var filterCorr = _phonFilterCorrText.Trim();
 
-        var corrections = _config.PhoneticCorrections
+        var corrections = _npcData.GetPhoneticCorrections()
             .Where(c => string.IsNullOrEmpty(filterOrig) ||
                         c.OriginalText.Contains(filterOrig, StringComparison.OrdinalIgnoreCase))
             .Where(c => string.IsNullOrEmpty(filterCorr) ||
@@ -159,8 +154,7 @@ public sealed unsafe partial class NativeConfigWindow
             row.AddNode(Label(corr.CorrectedText, PhonColCorr));
             row.AddNode(Button(Loc.S("Delete"), PhonColDel, () =>
             {
-                _config.PhoneticCorrections.Remove(corr);
-                _config.Save();
+                _npcData.DeletePhoneticCorrection(corr.OriginalText);
                 _phonNeedRebuild = true;
             }));
             panel.AddNode(row);

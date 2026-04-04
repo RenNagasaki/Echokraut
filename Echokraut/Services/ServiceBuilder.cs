@@ -31,8 +31,13 @@ public static class ServiceBuilder
     {
         var container = new ServiceContainer();
 
-        // Regiwhster core services
+        // Register core services
         container.RegisterFactory<ILogService>(c => new LogService(pluginLog));
+
+        container.RegisterFactory<IDatabaseService>(c => new DatabaseService(
+            c.GetService<ILogService>(),
+            pluginInterface.GetPluginConfigDirectory(),
+            configuration));
 
         container.RegisterFactory<IRemoteUrlService>(c => new RemoteUrlService(
             c.GetService<ILogService>()));
@@ -97,7 +102,8 @@ public static class ServiceBuilder
             configuration,
             c.GetService<IAlltalkInstanceService>(),
             c.GetService<INpcDataService>(),
-            c.GetService<IAudioFileService>()));
+            c.GetService<IAudioFileService>(),
+            c.GetService<IDatabaseService>()));
 
         // Register business logic services
         container.RegisterFactory<ITextProcessingService>(c => new TextProcessingService(
@@ -112,7 +118,7 @@ public static class ServiceBuilder
 
         container.RegisterFactory<INpcDataService>(c => new NpcDataService(
             c.GetService<ILogService>(),
-            configuration,
+            c.GetService<IDatabaseService>(),
             c.GetService<IJsonDataService>()));
 
         container.RegisterFactory<IGoogleDriveSyncService>(c => new GoogleDriveSyncService(
@@ -133,7 +139,8 @@ public static class ServiceBuilder
             c.GetService<IAudioPlaybackService>(),
             clientState,
             c.GetService<IGameObjectService>(),
-            configuration));
+            configuration,
+            c.GetService<INpcDataService>()));
 
         container.RegisterFactory<IVoiceMessageProcessor>(c => new VoiceMessageProcessor(
             c.GetService<ILogService>(),
@@ -147,7 +154,8 @@ public static class ServiceBuilder
             c.GetService<ILanguageDetectionService>(),
             c.GetService<IJsonDataService>(),
             c.GetService<INpcDataService>(),
-            c.GetService<IGameObjectService>()));
+            c.GetService<IGameObjectService>(),
+            c.GetService<IDatabaseService>()));
 
         container.RegisterFactory<IAddonCancelService>(c => new AddonCancelService(
             c.GetService<IAudioPlaybackService>(),

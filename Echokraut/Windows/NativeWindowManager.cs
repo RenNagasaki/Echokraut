@@ -33,7 +33,8 @@ public class NativeWindowManager : IWindowManager
             services.GetService<ILipSyncHelper>(),
             () => addonTalk.RecreateInference(),
             addonLifecycle,
-            services.GetService<ILogService>());
+            services.GetService<ILogService>(),
+            services.GetService<INpcDataService>());
 
         _configWindow = new NativeConfigWindow(
             config,

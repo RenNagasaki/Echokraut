@@ -36,6 +36,7 @@ public sealed unsafe class DialogTalkController : IDisposable
     private readonly Action _recreateInference;
     private readonly ILogService _log;
     private readonly IAddonLifecycle _addonLifecycle;
+    private readonly INpcDataService _npcData;
     private Func<Vector2, bool>? _isInsideOwnedWindow;
 
     private readonly AddonController _talkController;
@@ -69,13 +70,15 @@ public sealed unsafe class DialogTalkController : IDisposable
         ILipSyncHelper lipSync,
         Action recreateInference,
         IAddonLifecycle addonLifecycle,
-        ILogService log)
+        ILogService log,
+        INpcDataService npcData)
     {
         _log = log;
         _config = config;
         _audioPlayback = audioPlayback;
         _lipSync = lipSync;
         _recreateInference = recreateInference;
+        _npcData = npcData;
         _addonLifecycle = addonLifecycle;
 
         _talkController = new AddonController("Talk");
@@ -294,7 +297,7 @@ public sealed unsafe class DialogTalkController : IDisposable
             if (speakerKey != _lastSpeakerKey)
             {
                 _lastSpeakerKey = speakerKey;
-                var voices = _config.EchokrautVoices
+                var voices = _npcData.GetEchokrautVoices()
                     .FindAll(f => f.IsSelectable(speaker.Name, speaker.Gender, speaker.Race, speaker.IsChild));
                 var voiceNames    = voices.ConvertAll(v => v.VoiceName);
                 var selectedVoice = speaker.Voice?.VoiceName ?? string.Empty;
@@ -322,7 +325,7 @@ public sealed unsafe class DialogTalkController : IDisposable
         var msg = DialogState.CurrentVoiceMessage;
         if (msg?.Speaker != null)
         {
-            var voices = _config.EchokrautVoices
+            var voices = _npcData.GetEchokrautVoices()
                 .FindAll(f => f.IsSelectable(msg.Speaker.Name, msg.Speaker.Gender, msg.Speaker.Race, msg.Speaker.IsChild));
             var newVoice = voices.Find(v => v.VoiceName == voiceName);
 
@@ -413,7 +416,7 @@ public sealed unsafe class DialogTalkController : IDisposable
 
     private bool IsMuted()
         => DialogState.CurrentVoiceMessage?.SpeakerObj != null
-           && _config.MutedNpcDialogues.Contains(DialogState.CurrentVoiceMessage.SpeakerObj.BaseId);
+           && _npcData.IsDialogueMuted(DialogState.CurrentVoiceMessage.SpeakerObj.BaseId);
 
     private void OnDropDownOpened()
     {
@@ -455,7 +458,7 @@ public sealed unsafe class DialogTalkController : IDisposable
 
         if (isChecked)
         {
-            _config.MutedNpcDialogues.Add(DialogState.CurrentVoiceMessage.SpeakerObj.BaseId);
+            _npcData.MuteDialogue(DialogState.CurrentVoiceMessage.SpeakerObj.BaseId);
             if (_audioPlayback.IsPlaying)
             {
                 _lipSync.TryStopLipSync(DialogState.CurrentVoiceMessage);
@@ -464,7 +467,7 @@ public sealed unsafe class DialogTalkController : IDisposable
         }
         else
         {
-            _config.MutedNpcDialogues.Remove(DialogState.CurrentVoiceMessage.SpeakerObj.BaseId);
+            _npcData.UnmuteDialogue(DialogState.CurrentVoiceMessage.SpeakerObj.BaseId);
             _recreateInference();
         }
     }

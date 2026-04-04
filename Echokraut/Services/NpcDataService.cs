@@ -1,8 +1,10 @@
 using Echotools.Logging.Services;
 using Echokraut.DataClasses;
+using Echokraut.DataClasses.Database;
 using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
 using Echotools.Logging.Enums;
+using Dalamud.Game.ClientState.Objects.Enums;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,14 +14,40 @@ namespace Echokraut.Services;
 public class NpcDataService : INpcDataService
 {
     private readonly ILogService _log;
-    private readonly Configuration _config;
+    private readonly IDatabaseService _db;
     private readonly IJsonDataService _jsonData;
 
-    public NpcDataService(ILogService log, Configuration config, IJsonDataService jsonData)
+    // In-memory lists maintained in sync with the database.
+    // These are the same mutable lists that UI code iterates/modifies.
+    private readonly List<NpcMapData> _mappedNpcs = new();
+    private readonly List<NpcMapData> _mappedPlayers = new();
+
+    public List<NpcMapData> MappedNpcs => _mappedNpcs;
+    public List<NpcMapData> MappedPlayers => _mappedPlayers;
+
+    public NpcDataService(ILogService log, IDatabaseService db, IJsonDataService jsonData)
     {
         _log = log ?? throw new ArgumentNullException(nameof(log));
-        _config = config ?? throw new ArgumentNullException(nameof(config));
+        _db = db ?? throw new ArgumentNullException(nameof(db));
         _jsonData = jsonData ?? throw new ArgumentNullException(nameof(jsonData));
+
+        LoadFromDatabase();
+    }
+
+    private void LoadFromDatabase()
+    {
+        _mappedNpcs.Clear();
+        _mappedPlayers.Clear();
+
+        foreach (var entity in _db.GetNpcs())
+            _mappedNpcs.Add(EntityToNpcMapData(entity, "npc"));
+
+        foreach (var entity in _db.GetPlayers())
+            _mappedPlayers.Add(EntityToNpcMapData(entity, "player"));
+
+        _log.Debug(nameof(LoadFromDatabase),
+            $"Loaded {_mappedNpcs.Count} NPCs, {_mappedPlayers.Count} players from database",
+            new EKEventId(0, TextSource.None));
     }
 
     public bool IsGenderedRace(NpcRaces race)
@@ -89,8 +117,9 @@ public class NpcDataService : INpcDataService
     {
         if (oldVoice == null)
         {
-            var oldPlayerMapData = _config.MappedPlayers.FindAll(p => p.voiceItem != null);
-            var oldNpcMapData = _config.MappedNpcs.FindAll(p => p.voiceItem != null);
+            var voices = _db.GetVoices();
+            var oldPlayerMapData = _mappedPlayers.FindAll(p => p.voiceItem != null);
+            var oldNpcMapData = _mappedNpcs.FindAll(p => p.voiceItem != null);
 
             if (oldPlayerMapData.Count > 0 || oldNpcMapData.Count > 0)
             {
@@ -98,58 +127,52 @@ public class NpcDataService : INpcDataService
 
                 foreach (var player in oldPlayerMapData)
                 {
-                    player.Voice = _config.EchokrautVoices.Find(p => p.BackendVoice == player.voiceItem?.Voice);
-                    _log.Debug(nameof(MigrateOldData), $"Migrated player {player.Name} from -> {player.voiceItem} to -> {player.Voice}", new EKEventId(0, TextSource.None));
-                    if (player.Voice != null) player.voiceItem = null;
+                    var matchedVoice = voices.FirstOrDefault(v => v.BackendVoice == player.voiceItem?.Voice);
+                    if (matchedVoice != null)
+                    {
+                        player.voice = matchedVoice.BackendVoice;
+                        player.voiceItem = null;
+                        SaveCharacter(player);
+                    }
+                    _log.Debug(nameof(MigrateOldData), $"Migrated player {player.Name}", new EKEventId(0, TextSource.None));
                 }
 
                 foreach (var npc in oldNpcMapData)
                 {
-                    npc.Voice = _config.EchokrautVoices.Find(p => p.BackendVoice == npc.voiceItem?.Voice);
-                    _log.Debug(nameof(MigrateOldData), $"Migrated npc {npc.Name} from -> {npc.voiceItem} to -> {npc.Voice}", new EKEventId(0, TextSource.None));
-                    if (npc.Voice != null) npc.voiceItem = null;
+                    var matchedVoice = voices.FirstOrDefault(v => v.BackendVoice == npc.voiceItem?.Voice);
+                    if (matchedVoice != null)
+                    {
+                        npc.voice = matchedVoice.BackendVoice;
+                        npc.voiceItem = null;
+                        SaveCharacter(npc);
+                    }
+                    _log.Debug(nameof(MigrateOldData), $"Migrated npc {npc.Name}", new EKEventId(0, TextSource.None));
                 }
-
-                _config.Save();
             }
         }
         else
         {
-            var oldPlayerMapData = _config.MappedPlayers.FindAll(p => p.Voice == oldVoice);
-            var oldNpcMapData = _config.MappedNpcs.FindAll(p => p.Voice == oldVoice);
+            var oldPlayerMapData = _mappedPlayers.FindAll(p => p.Voice == oldVoice);
+            var oldNpcMapData = _mappedNpcs.FindAll(p => p.Voice == oldVoice);
 
             if (oldPlayerMapData.Count > 0 || oldNpcMapData.Count > 0)
             {
-                if (newEkVoice != null)
-                {
-                    _log.Info(nameof(MigrateOldData), $"Migrating old npcdata from {oldVoice} to {newEkVoice}", new EKEventId(0, TextSource.None));
-                    foreach (var player in oldPlayerMapData)
-                    {
-                        player.Voice = newEkVoice;
-                        _log.Debug(nameof(MigrateOldData), $"Migrated player {player.Name} from -> {oldVoice} to -> {newEkVoice}", new EKEventId(0, TextSource.None));
-                    }
-                    foreach (var npc in oldNpcMapData)
-                    {
-                        npc.Voice = newEkVoice;
-                        _log.Debug(nameof(MigrateOldData), $"Migrated npc {npc.Name} from -> {oldVoice} to -> {newEkVoice}", new EKEventId(0, TextSource.None));
-                    }
-                }
-                else
-                {
-                    _log.Info(nameof(MigrateOldData), $"Migrating old npcdata from {oldVoice} to NO VOICE", new EKEventId(0, TextSource.None));
-                    foreach (var player in oldPlayerMapData)
-                    {
-                        player.Voice = null;
-                        _log.Debug(nameof(MigrateOldData), $"Migrated player {player.Name} from -> {oldVoice} to -> NO VOICE", new EKEventId(0, TextSource.None));
-                    }
-                    foreach (var npc in oldNpcMapData)
-                    {
-                        npc.Voice = null;
-                        _log.Debug(nameof(MigrateOldData), $"Migrated npc {npc.Name} from -> {oldVoice} to -> NO VOICE", new EKEventId(0, TextSource.None));
-                    }
-                }
+                var newVoiceKey = newEkVoice?.BackendVoice ?? "";
+                var label = newEkVoice != null ? newEkVoice.ToString() : "NO VOICE";
+                _log.Info(nameof(MigrateOldData), $"Migrating old npcdata from {oldVoice} to {label}", new EKEventId(0, TextSource.None));
 
-                _config.Save();
+                foreach (var player in oldPlayerMapData)
+                {
+                    player.voice = newVoiceKey;
+                    SaveCharacter(player);
+                    _log.Debug(nameof(MigrateOldData), $"Migrated player {player.Name}", new EKEventId(0, TextSource.None));
+                }
+                foreach (var npc in oldNpcMapData)
+                {
+                    npc.voice = newVoiceKey;
+                    SaveCharacter(npc);
+                    _log.Debug(nameof(MigrateOldData), $"Migrated npc {npc.Name}", new EKEventId(0, TextSource.None));
+                }
             }
         }
     }
@@ -158,9 +181,9 @@ public class NpcDataService : INpcDataService
     {
         try
         {
-            _config.MappedNpcs.ForEach(p => { p.Voices = voices; p.RefreshSelectable(); });
-            _config.MappedPlayers.ForEach(p => { p.Voices = voices; p.RefreshSelectable(); });
-            _log.Debug(nameof(RefreshSelectables), $"Refreshed selectables: {_config.MappedNpcs.Count} NPCs, {_config.MappedPlayers.Count} players", new EKEventId(0, TextSource.None));
+            _mappedNpcs.ForEach(p => { p.Voices = voices; p.RefreshSelectable(); });
+            _mappedPlayers.ForEach(p => { p.Voices = voices; p.RefreshSelectable(); });
+            _log.Debug(nameof(RefreshSelectables), $"Refreshed selectables: {_mappedNpcs.Count} NPCs, {_mappedPlayers.Count} players", new EKEventId(0, TextSource.None));
         }
         catch (Exception ex)
         {
@@ -179,7 +202,10 @@ public class NpcDataService : INpcDataService
             result = datas.Find(p => p.Name == data.Name && p.Race != NpcRaces.Unknown);
 
             if (result != null && oldResult != null)
+            {
                 datas.Remove(oldResult);
+                RemoveCharacter(oldResult);
+            }
         }
         else if (data.Race != NpcRaces.Unknown)
         {
@@ -189,6 +215,7 @@ public class NpcDataService : INpcDataService
             {
                 data.Voice = result.Voice;
                 datas.Remove(result);
+                RemoveCharacter(result);
                 result = null;
             }
         }
@@ -200,11 +227,13 @@ public class NpcDataService : INpcDataService
             if (result == null)
             {
                 datas.Add(data);
-                data.Voices = _config.EchokrautVoices;
+                var voices = _db.GetVoices();
+                data.Voices = voices.Select(VoiceEntityToEchokrautVoice).ToList();
                 data.RefreshSelectable();
                 backend.GetVoiceOrRandom(eventId, data);
                 backend.NotifyCharacterMapped();
-                var mapping = data.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? "player" : "npc";
+                SaveCharacter(data);
+                var mapping = data.ObjectKind == ObjectKind.Player ? "player" : "npc";
                 _log.Debug(nameof(GetAddCharacterMapData), $"Added new {mapping} to mapping: {data.ToString()}", eventId);
                 result = data;
             }
@@ -217,6 +246,26 @@ public class NpcDataService : INpcDataService
         return result;
     }
 
+    public void SaveCharacter(NpcMapData data)
+    {
+        var entity = NpcMapDataToEntity(data);
+        var saved = _db.UpsertCharacter(entity);
+
+        // Upsert contexts
+        var contextType = data.ObjectKind == ObjectKind.Player ? "player" : "npc";
+        _db.UpsertContext(saved.Id, contextType, data.IsEnabled, data.Volume);
+
+        if (data.HasBubbles && contextType == "npc")
+            _db.UpsertContext(saved.Id, "bubble", data.IsEnabledBubble, data.VolumeBubble);
+    }
+
+    public void RemoveCharacter(NpcMapData data)
+    {
+        var existing = _db.FindCharacter(data.Name, data.Gender, data.Race);
+        if (existing != null)
+            _db.DeleteCharacter(existing.Id);
+    }
+
     private List<NpcMapData> GetCharacterMapDatas(EKEventId eventId)
     {
         switch (eventId.TextSource)
@@ -224,16 +273,129 @@ public class NpcDataService : INpcDataService
             case TextSource.AddonTalk:
             case TextSource.AddonBattleTalk:
             case TextSource.AddonBubble:
-                _log.Debug(nameof(GetCharacterMapDatas), $"Found mapping: {_config.MappedNpcs} count: {_config.MappedNpcs.Count}", eventId);
-                return _config.MappedNpcs;
+                _log.Debug(nameof(GetCharacterMapDatas), $"Found mapping: NPCs count: {_mappedNpcs.Count}", eventId);
+                return _mappedNpcs;
             case TextSource.AddonSelectString:
             case TextSource.AddonCutsceneSelectString:
             case TextSource.Chat:
-                _log.Debug(nameof(GetCharacterMapDatas), $"Found mapping: {_config.MappedPlayers} count: {_config.MappedPlayers.Count}", eventId);
-                return _config.MappedPlayers;
+                _log.Debug(nameof(GetCharacterMapDatas), $"Found mapping: Players count: {_mappedPlayers.Count}", eventId);
+                return _mappedPlayers;
         }
 
         _log.Debug(nameof(GetCharacterMapDatas), $"Didn't find a mapping.", eventId);
         return new List<NpcMapData>();
+    }
+
+    // ── Entity ↔ NpcMapData mapping ─────────────────────────
+
+    private NpcMapData EntityToNpcMapData(CharacterEntity entity, string contextType)
+    {
+        var data = new NpcMapData((ObjectKind)entity.ObjectKind)
+        {
+            Name = entity.Name,
+            Race = (NpcRaces)entity.Race,
+            RaceStr = entity.RaceStr,
+            Gender = (Genders)entity.Gender,
+            IsChild = entity.BodyType == (int)BodyType.Child,
+            voice = entity.VoiceKey,
+            DoNotDelete = entity.DoNotDelete,
+        };
+
+        // Load context-specific settings
+        var ctx = entity.Contexts?.FirstOrDefault(c => c.ContextType == contextType);
+        if (ctx != null)
+        {
+            data.IsEnabled = ctx.IsEnabled;
+            data.Volume = ctx.Volume;
+        }
+
+        var bubbleCtx = entity.Contexts?.FirstOrDefault(c => c.ContextType == "bubble");
+        if (bubbleCtx != null)
+        {
+            data.HasBubbles = true;
+            data.IsEnabledBubble = bubbleCtx.IsEnabled;
+            data.VolumeBubble = bubbleCtx.Volume;
+        }
+
+        return data;
+    }
+
+    private CharacterEntity NpcMapDataToEntity(NpcMapData data)
+    {
+        return new CharacterEntity
+        {
+            Name = data.Name ?? "",
+            Race = (int)data.Race,
+            RaceStr = data.RaceStr ?? "",
+            Gender = (int)data.Gender,
+            BodyType = data.IsChild ? (int)BodyType.Child : (int)BodyType.Adult,
+            VoiceKey = data.voice ?? "",
+            DoNotDelete = data.DoNotDelete,
+            ObjectKind = (int)data.ObjectKind
+        };
+    }
+
+    public void SaveVoice(EchokrautVoice voice)
+    {
+        var entity = new VoiceEntity
+        {
+            BackendVoice = voice.BackendVoice ?? "",
+            VoiceName = voice.voiceName ?? "",
+            IsDefault = voice.IsDefault,
+            IsEnabled = voice.IsEnabled,
+            UseAsRandom = voice.UseAsRandom,
+            IsChildVoice = voice.IsChildVoice,
+            Volume = voice.Volume,
+            Note = voice.Note ?? ""
+        };
+        entity.AllowedGenders = voice.AllowedGenders
+            .Select(g => new VoiceAllowedGenderEntity { Gender = (int)g }).ToList();
+        entity.AllowedRaces = voice.AllowedRaces
+            .Select(r => new VoiceAllowedRaceEntity { Race = (int)r }).ToList();
+        _db.UpsertVoice(entity);
+    }
+
+    public List<EchokrautVoice> GetEchokrautVoices()
+    {
+        return _db.GetVoices().Select(VoiceEntityToEchokrautVoice).ToList();
+    }
+
+    public List<PhoneticCorrection> GetPhoneticCorrections()
+    {
+        return _db.GetPhoneticCorrections()
+            .Select(p => new PhoneticCorrection(p.OriginalText, p.CorrectedText)).ToList();
+    }
+
+    public void UpsertPhoneticCorrection(string originalText, string correctedText)
+    {
+        _db.UpsertPhoneticCorrection(originalText, correctedText);
+    }
+
+    public void DeletePhoneticCorrection(string originalText)
+    {
+        _db.DeletePhoneticCorrection(originalText);
+    }
+
+    public bool IsDialogueMuted(uint baseId) => _db.GetMutedBaseIds().Contains(baseId);
+
+    public void MuteDialogue(uint baseId) => _db.MuteInstance(baseId);
+
+    public void UnmuteDialogue(uint baseId) => _db.UnmuteInstance(baseId);
+
+    private static EchokrautVoice VoiceEntityToEchokrautVoice(VoiceEntity entity)
+    {
+        return new EchokrautVoice
+        {
+            BackendVoice = entity.BackendVoice,
+            voiceName = entity.VoiceName,
+            IsDefault = entity.IsDefault,
+            IsEnabled = entity.IsEnabled,
+            UseAsRandom = entity.UseAsRandom,
+            IsChildVoice = entity.IsChildVoice,
+            Volume = entity.Volume,
+            Note = entity.Note,
+            AllowedGenders = entity.AllowedGenders?.Select(g => (Genders)g.Gender).ToList() ?? new(),
+            AllowedRaces = entity.AllowedRaces?.Select(r => (NpcRaces)r.Race).ToList() ?? new()
+        };
     }
 }

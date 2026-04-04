@@ -79,6 +79,6 @@ public class Configuration : IPluginConfiguration
 
     public void Save()
     {
-        PluginInterface!.SavePluginConfig(this);
+        PluginInterface?.SavePluginConfig(this);
     }
 }
