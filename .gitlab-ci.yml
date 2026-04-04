@@ -10,6 +10,11 @@ sonarqube:
   image: mcr.microsoft.com/dotnet/sdk:10.0
   rules:
     - if: $CI_COMMIT_BRANCH
+  before_script:
+    - apt-get update && apt-get install -y unzip
+    - curl -L https://goatcorp.github.io/dalamud-distrib/latest.zip -o /tmp/dalamud.zip
+    - mkdir -p /tmp/dalamud && unzip -o /tmp/dalamud.zip -d /tmp/dalamud
+    - export DALAMUD_HOME=/tmp/dalamud
   script:
     - dotnet tool install --global dotnet-sonarscanner
     - export PATH="$PATH:$HOME/.dotnet/tools"
