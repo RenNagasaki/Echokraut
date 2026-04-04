@@ -377,172 +377,9 @@ public class DialogHarvestService : IDialogHarvestService
             }
         }
         catch { }
-        // Try loading LGB (Level Group Binary) files for territory data
-        ReportProgress("Checking LGB territory files...");
-        try
-        {
-            var ttSheet = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>();
-            if (ttSheet != null)
-            {
-                // Check a few city territories
-                foreach (var tId in new uint[] { 128, 129, 130, 131, 132, 133 })
-                {
-                    var tt = ttSheet.GetRowOrDefault(tId);
-                    if (tt is not { } territory) continue;
-                    var bgPath = territory.Bg.ExtractText();
-                    if (string.IsNullOrEmpty(bgPath)) continue;
-
-                    // Strip last path component to get the level directory
-                    var lastSlash = bgPath.LastIndexOf('/');
-                    var bgDir = lastSlash >= 0 ? bgPath[..lastSlash] : bgPath;
-
-                    // Try various LGB path patterns
-                    var lgbPaths = new[]
-                    {
-                        $"bg/{bgDir}/bg.lgb",
-                        $"bg/{bgDir}/planmap.lgb",
-                        $"bg/{bgDir}/planevent.lgb",
-                        $"bg/{bgDir}/planner.lgb",
-                        $"bg/{bgDir}/vfx.lgb",
-                        $"bg/{bgPath}.lgb",
-                    };
-
-                    foreach (var path in lgbPaths)
-                    {
-                        var lgbFile = _dataManager.GetFile(path);
-                        if (lgbFile != null)
-                        {
-                            _log.Info(nameof(DoHarvest),
-                                $"Found LGB: {path} ({lgbFile.Data.Length} bytes) for territory {tId}", eventId);
-
-                            // Search planevent.lgb for ENpcBase IDs (uint32) near Balloon IDs
-                            if (path.Contains("planevent") && tId == 128) // Just Limsa Upper for now
-                            {
-                                var data = lgbFile.Data;
-                                // Find uint32 values that are valid ENpcBase IDs (1000000-1100000 range)
-                                var npcOffsets = new List<(int offset, uint npcId)>();
-                                for (var off = 0; off < data.Length - 3; off += 4)
-                                {
-                                    var val32 = BitConverter.ToUInt32(data, off);
-                                    if (val32 >= 1000000 && val32 <= 1100000
-                                        && npcNames.ContainsKey(val32))
-                                    {
-                                        npcOffsets.Add((off, val32));
-                                    }
-                                }
-                                _log.Info(nameof(DoHarvest),
-                                    $"  planevent NPC IDs found: {npcOffsets.Count} (e.g., {string.Join(", ", npcOffsets.Take(5).Select(x => $"{x.npcId}@{x.offset}"))})",
-                                    eventId);
-
-                                // Read uint32 at NPC_offset+56 for each NPC — expected Balloon ID
-                                var balloonOffset = 56;
-                                var foundBalloons = 0;
-                                var matchedBalloons = 0;
-                                foreach (var (npcOff, npcId) in npcOffsets)
-                                {
-                                    var bOff = npcOff + balloonOffset;
-                                    if (bOff + 3 >= data.Length) continue;
-                                    var bVal = BitConverter.ToUInt32(data, bOff);
-                                    if (bVal != 0) foundBalloons++;
-                                    if (bVal != 0 && allDialogSheets["Balloon"].ContainsKey(bVal))
-                                        matchedBalloons++;
-                                }
-                                _log.Info(nameof(DoHarvest),
-                                    $"  NPC+{balloonOffset} Balloon check: {foundBalloons}/{npcOffsets.Count} non-zero, {matchedBalloons} match Balloon sheet", eventId);
-
-                                // Also try +52, +60, +64 to find the best offset
-                                foreach (var tryOff in new[] { 48, 52, 56, 60, 64 })
-                                {
-                                    var cnt = 0;
-                                    foreach (var (npcOff, _) in npcOffsets)
-                                    {
-                                        var bOff = npcOff + tryOff;
-                                        if (bOff + 3 >= data.Length) continue;
-                                        var bVal = BitConverter.ToUInt32(data, bOff);
-                                        if (bVal != 0 && allDialogSheets["Balloon"].ContainsKey(bVal))
-                                            cnt++;
-                                    }
-                                    if (cnt > 0)
-                                        _log.Info(nameof(DoHarvest), $"  offset +{tryOff}: {cnt} Balloon matches", eventId);
-                                }
-                            }
-                        }
-                    }
-
-                    // Also try planlive and other variants
-                    var planPaths = new[]
-                    {
-                        $"bg/{bgDir}/planlive.lgb",
-                        $"bg/{bgDir}/planmap_0.lgb",
-                        $"bg/{bgDir}/bg_0.lgb",
-                    };
-                    foreach (var path in planPaths)
-                    {
-                        var f = _dataManager.GetFile(path);
-                        if (f != null)
-                            _log.Info(nameof(DoHarvest), $"Found LGB plan: {path} ({f.Data.Length} bytes)", eventId);
-                    }
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _log.Debug(nameof(DoHarvest), $"LGB check error: {ex.Message}", eventId);
-        }
-
-        // Dump raw bytes of Behavior 30085 subrow 0 to reverse-engineer field byte layout.
-        // xivapi shows: Balloon=0, Cond0Target=2, Cond0Type=9, Cond1Target=18, Cond1Type=1,
-        // ContentArg0=5, ContentArg1=0, Unk0=0, Unk1=802, Unk2-9=0, Unk6=1
-        try
-        {
-            var behaviorSheet3 = _dataManager.GetSubrowExcelSheet<RawSubrow>(
-                Dalamud.Game.ClientLanguage.English, "Behavior");
-            if (behaviorSheet3 != null)
-            {
-                foreach (var rowCol in behaviorSheet3)
-                {
-                    foreach (var sr in rowCol)
-                    {
-                        if (sr.RowId == 30085 && sr.SubrowId == 0)
-                        {
-                            // Read as uint8 at each offset
-                            var bytes = new List<string>();
-                            for (var i = 0; i < 32; i++)
-                            {
-                                try { bytes.Add($"{sr.ReadUInt8Column(i):X2}"); }
-                                catch { bytes.Add("??"); }
-                            }
-                            _log.Info(nameof(DoHarvest),
-                                $"Behavior 30085/0 raw bytes: [{string.Join(" ", bytes)}]", eventId);
-
-                            // Also read as uint16 at each position
-                            var words = new List<string>();
-                            for (var i = 0; i < 16; i++)
-                            {
-                                try { words.Add($"w{i}={sr.ReadUInt16Column(i)}"); }
-                                catch { words.Add($"w{i}=ERR"); }
-                            }
-                            _log.Info(nameof(DoHarvest),
-                                $"Behavior 30085/0 uint16: [{string.Join(", ", words)}]", eventId);
-                            break;
-                        }
-                    }
-                    if (true) continue; // keep iterating to find the row
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _log.Debug(nameof(DoHarvest), $"Behavior byte dump error: {ex.Message}", eventId);
-        }
-
-        var behaviorBalloonUniqueIds = behaviorToBalloon.Values.SelectMany(s => s).Distinct().ToHashSet();
-        var behaviorBalloonInSheet = behaviorBalloonUniqueIds.Count(id => allDialogSheets["Balloon"].ContainsKey(id));
-        var totalBalloonRows = _dataManager.GetExcelSheet<Balloon>()?.Count() ?? 0;
         _log.Debug(nameof(DoHarvest),
-            $"Behavior→Balloon: {behaviorToBalloon.Count} Behavior rows, {behaviorBalloonCount} sub-rows, " +
-            $"{behaviorBalloonUniqueIds.Count} unique Balloon IDs ({behaviorBalloonInSheet} in loaded data). " +
-            $"Total Balloon sheet rows: {totalBalloonRows}, loaded: {allDialogSheets["Balloon"].Count}", eventId);
+            $"Behavior→Balloon: {behaviorToBalloon.Count} Behavior rows, {behaviorBalloonCount} sub-rows",
+            eventId);
 
         var npcBalloonIds = new Dictionary<uint, HashSet<uint>>();
         if (npcBaseRaw != null)
@@ -574,17 +411,20 @@ public class DialogHarvestService : IDialogHarvestService
         foreach (var sheetName in allDialogSheets.Keys)
             matchedDialogIds[sheetName] = new HashSet<uint>();
 
-        // Build a HashSet of ALL valid ENpcBase RowIds for fast lookup in LGB scanning
-        var allNpcBaseIds = new HashSet<uint>();
-        foreach (var nb in npcBaseSheet)
-            allNpcBaseIds.Add(nb.RowId);
-
-        // Extract Balloon → ENpcBase mappings from LGB planevent files across all territories.
-        // In LGB data, NPC entries contain ENpcBase ID with Balloon ID at offset +48.
-        ReportProgress("Scanning LGB planevent files for Balloon data...");
-        var lgbBalloonToNpc = new Dictionary<uint, uint>(); // Balloon ID → ENpcBase ID (first NPC found)
+        // Extract Balloon → ENpcBase mappings from LGB territory files.
+        // Two-pass hybrid: (1) scan within each entry's own bounds for accurate matches,
+        // (2) for remaining unmatched Balloon IDs, find them anywhere in LGB and attribute
+        // to the nearest ENpc entry.
+        ReportProgress("Scanning LGB territory files for Balloon data...");
+        var lgbBalloonToNpc = new Dictionary<uint, uint>(); // Balloon ID → ENpcBase ID
         var lgbTerritoriesScanned = 0;
-        var lgbBalloonTotal = 0;
+        var lgbEntriesTotal = 0;
+        var lgbBoundsMapped = 0;
+        var lgbNearestMapped = 0;
+        var balloonSheetIds = new HashSet<uint>(allDialogSheets["Balloon"].Keys);
+
+        // Store per-file data for the second pass
+        var lgbFileCache = new List<(byte[] data, List<LgbParser.ENpcEntry> entries)>();
         try
         {
             var ttSheet = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>();
@@ -598,45 +438,52 @@ public class DialogHarvestService : IDialogHarvestService
 
                     var lastSlash = bgPath.LastIndexOf('/');
                     var bgDir = lastSlash >= 0 ? bgPath[..lastSlash] : bgPath;
-                    var lgbPath = $"bg/{bgDir}/planevent.lgb";
 
-                    // Scan all plan LGB files for NPC entries
-                    var lgbFiles = new[] {
-                        lgbPath,
-                        $"bg/{bgDir}/planmap.lgb",
-                        $"bg/{bgDir}/planlive.lgb",
-                        $"bg/{bgDir}/planner.lgb"
-                    };
-                    foreach (var lgbFilePath in lgbFiles)
+                    foreach (var lgbName in new[] { "planevent.lgb", "planmap.lgb", "planlive.lgb", "planner.lgb" })
                     {
-                        var lgbFile = _dataManager.GetFile(lgbFilePath);
+                        var lgbFile = _dataManager.GetFile($"bg/{bgDir}/{lgbName}");
                         if (lgbFile == null) continue;
 
                         var data = lgbFile.Data;
+                        var entries = LgbParser.ParseENpcEntries(data);
+                        lgbEntriesTotal += entries.Count;
 
-                        // Scan for ENpcBase IDs at 4-byte aligned positions
-                        // Try multiple Balloon offsets: +48 (primary), +52, +64 (variant structures)
-                        for (var off = 0; off < data.Length - 67; off += 4)
+                        if (entries.Count > 0)
+                            lgbFileCache.Add((data, entries));
+
+                        // Resolve Balloon IDs from EXD chains (ENpcBase direct + Behavior)
+                        foreach (var entry in entries)
                         {
-                            var npcId = BitConverter.ToUInt32(data, off);
-                            if (!allNpcBaseIds.Contains(npcId)) continue;
-
-                            var npcBase = npcBaseSheet.GetRowOrDefault(npcId);
-                            if (npcBase == null) continue;
-
-                            foreach (var bOff in new[] { 40, 44, 48, 52, 56, 60, 64, 68, 72 })
+                            if (npcBalloonIds.TryGetValue(entry.BaseId, out var balloonIds))
                             {
-                                if (off + bOff + 3 >= data.Length) continue;
-                                var balloonId = BitConverter.ToUInt32(data, off + bOff);
-                                if (balloonId == 0 || balloonId > 10000) continue;
-                                if (!allDialogSheets["Balloon"].ContainsKey(balloonId)) continue;
-
-                                lgbBalloonTotal++;
-                                lgbBalloonToNpc.TryAdd(balloonId, npcId);
+                                foreach (var bId in balloonIds)
+                                {
+                                    if (balloonSheetIds.Contains(bId))
+                                        lgbBalloonToNpc.TryAdd(bId, entry.BaseId);
+                                }
                             }
+
+                            if (entry.BehaviorId != 0 && behaviorToBalloon.TryGetValue(entry.BehaviorId, out var behaviorBalloons))
+                            {
+                                foreach (var bId in behaviorBalloons)
+                                {
+                                    if (balloonSheetIds.Contains(bId))
+                                        lgbBalloonToNpc.TryAdd(bId, entry.BaseId);
+                                }
+                            }
+                        }
+
+                        // Pass 1: scan within each entry's own bounds (accurate attribution)
+                        var byteScanResults = LgbParser.ScanEntriesForNearbyIds(
+                            data, entries, balloonSheetIds);
+                        foreach (var (balloonId, npcId) in byteScanResults)
+                        {
+                            if (lgbBalloonToNpc.TryAdd(balloonId, npcId))
+                                lgbBoundsMapped++;
                         }
                     }
 
+                    lgbTerritoriesScanned++;
                     if (lgbTerritoriesScanned % 100 == 0)
                         ReportProgress($"Scanning LGB... {lgbTerritoriesScanned} territories");
                 }
@@ -646,66 +493,35 @@ public class DialogHarvestService : IDialogHarvestService
         {
             _log.Debug(nameof(DoHarvest), $"LGB scan error: {ex.Message}", eventId);
         }
-        // Reverse search: for unmatched Balloon IDs, find them in LGB and search nearby for ENpcBase IDs
-        var remainingBalloonIds = new HashSet<uint>(
-            allDialogSheets["Balloon"].Keys.Where(id => !lgbBalloonToNpc.ContainsKey(id)));
-        var reverseMapped = 0;
-        try
+
+        // Pass 2: for remaining unmatched Balloon IDs, search all LGB files and attribute
+        // to the nearest ENpc entry
+        var unmatchedBalloonIds = new HashSet<uint>(
+            balloonSheetIds.Where(id => !lgbBalloonToNpc.ContainsKey(id)));
+        if (unmatchedBalloonIds.Count > 0)
         {
-            var ttSheet2 = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>();
-            if (ttSheet2 != null)
+            ReportProgress($"LGB pass 2: searching for {unmatchedBalloonIds.Count} unmatched Balloon IDs...");
+            foreach (var (data, entries) in lgbFileCache)
             {
-                foreach (var territory in ttSheet2)
+                ct.ThrowIfCancellationRequested();
+                if (unmatchedBalloonIds.Count == 0) break;
+
+                var nearestResults = LgbParser.FindNearestEntryForIds(
+                    data, entries, unmatchedBalloonIds);
+                foreach (var (balloonId, npcId) in nearestResults)
                 {
-                    ct.ThrowIfCancellationRequested();
-                    var bgPath2 = territory.Bg.ExtractText();
-                    if (string.IsNullOrEmpty(bgPath2)) continue;
-                    var lastSlash2 = bgPath2.LastIndexOf('/');
-                    var bgDir2 = lastSlash2 >= 0 ? bgPath2[..lastSlash2] : bgPath2;
-
-                    foreach (var lgbName in new[] { "planevent.lgb", "planmap.lgb", "bg.lgb" })
-                    {
-                        var f = _dataManager.GetFile($"bg/{bgDir2}/{lgbName}");
-                        if (f == null) continue;
-                        var d = f.Data;
-
-                        for (var off = 0; off < d.Length - 3; off += 4)
-                        {
-                            var balloonId = BitConverter.ToUInt32(d, off);
-                            if (!remainingBalloonIds.Contains(balloonId)) continue;
-
-                            // Found unmatched Balloon ID — search both directions for nearest ENpcBase ID
-                            var found = false;
-                            // Search backward up to 1600 bytes
-                            for (var searchOff = off - 4; !found && searchOff >= Math.Max(0, off - 1600); searchOff -= 4)
-                            {
-                                var npcId = BitConverter.ToUInt32(d, searchOff);
-                                if (!allNpcBaseIds.Contains(npcId)) continue;
-                                lgbBalloonToNpc.TryAdd(balloonId, npcId);
-                                remainingBalloonIds.Remove(balloonId);
-                                reverseMapped++;
-                                found = true;
-                            }
-                            // Search forward up to 800 bytes
-                            for (var searchOff = off + 4; !found && searchOff < Math.Min(d.Length - 3, off + 800); searchOff += 4)
-                            {
-                                var npcId = BitConverter.ToUInt32(d, searchOff);
-                                if (!allNpcBaseIds.Contains(npcId)) continue;
-                                lgbBalloonToNpc.TryAdd(balloonId, npcId);
-                                remainingBalloonIds.Remove(balloonId);
-                                reverseMapped++;
-                                found = true;
-                            }
-                        }
-                    }
+                    if (lgbBalloonToNpc.TryAdd(balloonId, npcId))
+                        lgbNearestMapped++;
                 }
             }
         }
-        catch { }
+
+        lgbFileCache.Clear(); // free memory
 
         _log.Info(nameof(DoHarvest),
-            $"LGB Balloon scan: {lgbBalloonToNpc.Count} unique Balloon IDs mapped ({reverseMapped} via reverse search). " +
-            $"{remainingBalloonIds.Count} still unmatched", eventId);
+            $"LGB Balloon scan: {lgbBalloonToNpc.Count} unique Balloon IDs mapped " +
+            $"({lgbBoundsMapped} within bounds, {lgbNearestMapped} nearest-entry). " +
+            $"{lgbEntriesTotal} ENpc entries across {lgbTerritoriesScanned} territories", eventId);
 
         var linkedDialogs = new List<LinkedDialog>();
         var npcCount = 0;
