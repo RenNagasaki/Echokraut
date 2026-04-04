@@ -16,6 +16,7 @@ sonarqube:
     - mkdir -p /tmp/dalamud && unzip -o /tmp/dalamud.zip -d /tmp/dalamud
     - export DALAMUD_HOME=/tmp/dalamud
   script:
+    - cp Echokraut/Services/GoogleDriveSyncService.Secrets.cs.example Echokraut/Services/GoogleDriveSyncService.Secrets.cs
     - dotnet tool install --global dotnet-sonarscanner
     - export PATH="$PATH:$HOME/.dotnet/tools"
     - dotnet sonarscanner begin /key:"$SONAR_PROJECT_KEY" /d:sonar.host.url="$SONAR_HOST_URL" /d:sonar.token="$SONAR_TOKEN"
