@@ -19,7 +19,7 @@ sonarqube:
     - cp Echokraut/Services/GoogleDriveSyncService.Secrets.cs.example Echokraut/Services/GoogleDriveSyncService.Secrets.cs
     - dotnet tool install --global dotnet-sonarscanner
     - export PATH="$PATH:$HOME/.dotnet/tools"
-    - dotnet sonarscanner begin /key:"$SONAR_PROJECT_KEY" /d:sonar.host.url="$SONAR_HOST_URL" /d:sonar.token="$SONAR_TOKEN"
+    - dotnet sonarscanner begin /key:"$SONAR_PROJECT_KEY" /d:sonar.host.url="$SONAR_HOST_URL" /d:sonar.token="$SONAR_TOKEN" /d:sonar.exclusions="OtterGui/**,KamiToolKit/**,Echotools/**,EchokrautLocalInstaller/**"
     - dotnet build
     - dotnet test --no-build || true
     - dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
