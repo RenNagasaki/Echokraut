@@ -1,5 +1,19 @@
 stages:
+  - analysis
   - mirror
+
+sonarqube:
+  stage: analysis
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  rules:
+    - if: $CI_COMMIT_BRANCH
+  script:
+    - dotnet tool install --global dotnet-sonarscanner
+    - export PATH="$PATH:$HOME/.dotnet/tools"
+    - dotnet sonarscanner begin /key:"$SONAR_PROJECT_KEY" /d:sonar.host.url="$SONAR_HOST_URL" /d:sonar.token="$SONAR_TOKEN"
+    - dotnet build
+    - dotnet test --no-build || true
+    - dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
 
 mirror-to-github:
   stage: mirror
@@ -9,5 +23,5 @@ mirror-to-github:
   script:
     - git clone --mirror "$CI_REPOSITORY_URL" repo.git
     - cd repo.git
-    - git remote add github "https://RenNagasaki:${GITHUB_PAT}@github.com/RenNagasaki/Echokraut.git"
+    - git remote add github "https://${GITHUB_USER}:${GITHUB_PAT}@github.com/${GITHUB_USER}/${CI_PROJECT_NAME}.git"
     - git push github --mirror --force
