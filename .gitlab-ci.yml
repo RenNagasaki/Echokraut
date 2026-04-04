@@ -2,6 +2,9 @@ stages:
   - analysis
   - mirror
 
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
 sonarqube:
   stage: analysis
   image: mcr.microsoft.com/dotnet/sdk:10.0
