@@ -574,6 +574,11 @@ public class DialogHarvestService : IDialogHarvestService
         foreach (var sheetName in allDialogSheets.Keys)
             matchedDialogIds[sheetName] = new HashSet<uint>();
 
+        // Build a HashSet of ALL valid ENpcBase RowIds for fast lookup in LGB scanning
+        var allNpcBaseIds = new HashSet<uint>();
+        foreach (var nb in npcBaseSheet)
+            allNpcBaseIds.Add(nb.RowId);
+
         // Extract Balloon → ENpcBase mappings from LGB planevent files across all territories.
         // In LGB data, NPC entries contain ENpcBase ID with Balloon ID at offset +48.
         ReportProgress("Scanning LGB planevent files for Balloon data...");
@@ -614,7 +619,7 @@ public class DialogHarvestService : IDialogHarvestService
                         for (var off = 0; off < data.Length - 67; off += 4)
                         {
                             var npcId = BitConverter.ToUInt32(data, off);
-                            if (npcId < 1000000 || npcId > 3000000) continue;
+                            if (!allNpcBaseIds.Contains(npcId)) continue;
 
                             var npcBase = npcBaseSheet.GetRowOrDefault(npcId);
                             if (npcBase == null) continue;
@@ -675,8 +680,7 @@ public class DialogHarvestService : IDialogHarvestService
                             for (var searchOff = off - 4; !found && searchOff >= Math.Max(0, off - 1600); searchOff -= 4)
                             {
                                 var npcId = BitConverter.ToUInt32(d, searchOff);
-                                if (npcId < 1000000 || npcId > 3000000) continue;
-                                if (npcBaseSheet.GetRowOrDefault(npcId) == null) continue;
+                                if (!allNpcBaseIds.Contains(npcId)) continue;
                                 lgbBalloonToNpc.TryAdd(balloonId, npcId);
                                 remainingBalloonIds.Remove(balloonId);
                                 reverseMapped++;
@@ -686,8 +690,7 @@ public class DialogHarvestService : IDialogHarvestService
                             for (var searchOff = off + 4; !found && searchOff < Math.Min(d.Length - 3, off + 800); searchOff += 4)
                             {
                                 var npcId = BitConverter.ToUInt32(d, searchOff);
-                                if (npcId < 1000000 || npcId > 3000000) continue;
-                                if (npcBaseSheet.GetRowOrDefault(npcId) == null) continue;
+                                if (!allNpcBaseIds.Contains(npcId)) continue;
                                 lgbBalloonToNpc.TryAdd(balloonId, npcId);
                                 remainingBalloonIds.Remove(balloonId);
                                 reverseMapped++;
