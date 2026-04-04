@@ -1,0 +1,13 @@
+stages:
+  - mirror
+
+mirror-to-github:
+  stage: mirror
+  image: alpine/git:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == "master"
+  script:
+    - git clone --mirror "$CI_REPOSITORY_URL" repo.git
+    - cd repo.git
+    - git remote add github "https://RenNagasaki:${GITHUB_PAT}@github.com/RenNagasaki/Echokraut.git"
+    - git push github --mirror --force
