@@ -5,3 +5,4 @@ bin/
 ApiKeys.json
 *.Secrets.cs
 CLAUDE.md
+.sonarqube/
