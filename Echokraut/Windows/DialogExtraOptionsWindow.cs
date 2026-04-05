@@ -177,7 +177,7 @@ public class DialogExtraOptionsWindow : Window, IDisposable
                                                                           DialogState.CurrentVoiceMessage.Speaker.Name,
                                                                           DialogState.CurrentVoiceMessage.Speaker.Gender,
                                                                           DialogState.CurrentVoiceMessage.Speaker.Race,
-                                                                          DialogState.CurrentVoiceMessage.Speaker.IsChild))[
+                                                                          DialogState.CurrentVoiceMessage.Speaker.BodyType))[
                             selectedIndexVoice];
 
                     if (DialogState.CurrentVoiceMessage.Speaker.Voice != newVoiceItem)

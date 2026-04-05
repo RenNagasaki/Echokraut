@@ -60,7 +60,9 @@ public class ImGuiWindowManager : IWindowManager
             services.GetService<IDatabaseService>(),
             services.GetService<IVoiceClipManagerService>(),
             audioPlayback,
-            npcData);
+            npcData,
+            services.GetService<IDialogHarvestService>(),
+            clientState);
 
         _configWindow.OnToggleVoiceClipManager = () => _voiceClipManagerWindow.Toggle();
 

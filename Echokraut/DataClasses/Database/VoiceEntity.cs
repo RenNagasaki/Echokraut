@@ -30,8 +30,14 @@ public class VoiceEntity
     [Column("use_as_random")]
     public bool UseAsRandom { get; set; }
 
+    [Column("is_adult_voice")]
+    public bool IsAdultVoice { get; set; } = true;
+
     [Column("is_child_voice")]
     public bool IsChildVoice { get; set; }
+
+    [Column("is_elder_voice")]
+    public bool IsElderVoice { get; set; }
 
     [Column("volume")]
     public float Volume { get; set; } = 1.0f;

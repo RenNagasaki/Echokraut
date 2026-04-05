@@ -4,6 +4,7 @@ using Echokraut.DataClasses.Database;
 using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
 using Echotools.Logging.Enums;
+using Dalamud.Game;
 using Dalamud.Game.ClientState.Objects.Enums;
 using System;
 using System.Collections.Generic;
@@ -64,6 +65,7 @@ public class NpcDataService : INpcDataService
             eventId = new EKEventId(0, TextSource.None);
 
         voice.AllowedRaces.Clear();
+        var foundBodyType = false;
         string[] splitVoice = voice.voiceName.Split('_');
 
         foreach (var split in splitVoice)
@@ -78,8 +80,21 @@ public class NpcDataService : INpcDataService
                 }
                 else if (raceStr.Equals("Child", StringComparison.InvariantCultureIgnoreCase))
                 {
+                    if (!foundBodyType) { voice.IsAdultVoice = false; foundBodyType = true; }
                     voice.IsChildVoice = true;
                     _log.Debug(nameof(ReSetVoiceRaces), $"Found Child option", eventId);
+                }
+                else if (raceStr.Equals("Elder", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    if (!foundBodyType) { voice.IsAdultVoice = false; foundBodyType = true; }
+                    voice.IsElderVoice = true;
+                    _log.Debug(nameof(ReSetVoiceRaces), $"Found Elder option", eventId);
+                }
+                else if (raceStr.Equals("Adult", StringComparison.InvariantCultureIgnoreCase))
+                {
+                    if (!foundBodyType) { voice.IsAdultVoice = false; foundBodyType = true; }
+                    voice.IsAdultVoice = true;
+                    _log.Debug(nameof(ReSetVoiceRaces), $"Found Adult option", eventId);
                 }
                 else if (raceStr.Equals("All", StringComparison.InvariantCultureIgnoreCase))
                 {
@@ -90,7 +105,7 @@ public class NpcDataService : INpcDataService
                     }
                 }
                 else
-                    _log.Debug(nameof(ReSetVoiceRaces), $"Did not Find race", eventId);
+                    _log.Debug(nameof(ReSetVoiceRaces), $"Skipped segment '{raceStr}' (not a race, body type, or 'All')", eventId);
             }
         }
     }
@@ -198,8 +213,8 @@ public class NpcDataService : INpcDataService
 
         if (data.Race == NpcRaces.Unknown)
         {
-            var oldResult = datas.Find(p => p.ToString() == data.ToString());
-            result = datas.Find(p => p.Name == data.Name && p.Race != NpcRaces.Unknown);
+            var oldResult = datas.Find(p => MatchesIdentity(p, data));
+            result = datas.Find(p => p.Name == data.Name && p.Language == data.Language && p.Race != NpcRaces.Unknown);
 
             if (result != null && oldResult != null)
             {
@@ -209,7 +224,7 @@ public class NpcDataService : INpcDataService
         }
         else if (data.Race != NpcRaces.Unknown)
         {
-            result = datas.Find(p => p.Name == data.Name && p.Race == NpcRaces.Unknown);
+            result = datas.Find(p => p.Name == data.Name && p.Language == data.Language && p.Race == NpcRaces.Unknown);
 
             if (result != null)
             {
@@ -222,7 +237,7 @@ public class NpcDataService : INpcDataService
 
         if (result == null)
         {
-            result = datas.Find(p => p.ToString() == data.ToString());
+            result = datas.Find(p => MatchesIdentity(p, data));
 
             if (result == null)
             {
@@ -297,6 +312,11 @@ public class NpcDataService : INpcDataService
         return new List<NpcMapData>();
     }
 
+    private static bool MatchesIdentity(NpcMapData a, NpcMapData b)
+    {
+        return a.Name == b.Name && a.Gender == b.Gender && a.Race == b.Race && a.Language == b.Language;
+    }
+
     // ── Entity ↔ NpcMapData mapping ─────────────────────────
 
     private NpcMapData EntityToNpcMapData(CharacterEntity entity, string contextType)
@@ -307,7 +327,8 @@ public class NpcDataService : INpcDataService
             Race = (NpcRaces)entity.Race,
             RaceStr = entity.RaceStr,
             Gender = (Genders)entity.Gender,
-            IsChild = entity.BodyType == (int)BodyType.Child,
+            BodyType = (BodyType)entity.BodyType,
+            Language = (ClientLanguage)entity.Language,
             voice = entity.VoiceKey,
             DoNotDelete = entity.DoNotDelete,
         };
@@ -339,7 +360,8 @@ public class NpcDataService : INpcDataService
             Race = (int)data.Race,
             RaceStr = data.RaceStr ?? "",
             Gender = (int)data.Gender,
-            BodyType = data.IsChild ? (int)BodyType.Child : (int)BodyType.Adult,
+            BodyType = (int)data.BodyType,
+            Language = (int)data.Language,
             VoiceKey = data.voice ?? "",
             DoNotDelete = data.DoNotDelete,
             ObjectKind = (int)data.ObjectKind
@@ -355,7 +377,9 @@ public class NpcDataService : INpcDataService
             IsDefault = voice.IsDefault,
             IsEnabled = voice.IsEnabled,
             UseAsRandom = voice.UseAsRandom,
+            IsAdultVoice = voice.IsAdultVoice,
             IsChildVoice = voice.IsChildVoice,
+            IsElderVoice = voice.IsElderVoice,
             Volume = voice.Volume,
             Note = voice.Note ?? ""
         };
@@ -402,7 +426,9 @@ public class NpcDataService : INpcDataService
             IsDefault = entity.IsDefault,
             IsEnabled = entity.IsEnabled,
             UseAsRandom = entity.UseAsRandom,
+            IsAdultVoice = entity.IsAdultVoice,
             IsChildVoice = entity.IsChildVoice,
+            IsElderVoice = entity.IsElderVoice,
             Volume = entity.Volume,
             Note = entity.Note,
             AllowedGenders = entity.AllowedGenders?.Select(g => (Genders)g.Gender).ToList() ?? new(),

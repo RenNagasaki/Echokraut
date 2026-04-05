@@ -15,7 +15,7 @@ public interface IDatabaseService : IDisposable
     // Characters
     List<CharacterEntity> GetNpcs();
     List<CharacterEntity> GetPlayers();
-    CharacterEntity? FindCharacter(string name, Genders gender, NpcRaces race);
+    CharacterEntity? FindCharacter(string name, Genders gender, NpcRaces race, int language = 1);
     CharacterEntity UpsertCharacter(CharacterEntity character);
     void DeleteCharacter(int characterId);
 
@@ -44,6 +44,9 @@ public interface IDatabaseService : IDisposable
     void DeletePhoneticCorrection(string originalText);
 
     // Dialog encounters
+    bool SuppressEvents { get; set; }
+    void NotifyVoiceClipLogged();
+    void ClearChangeTracker();
     event Action? VoiceClipLogged;
     void LogVoiceClip(VoiceClipEntity encounter);
     void LogOrUpdateVoiceClip(VoiceClipEntity encounter);

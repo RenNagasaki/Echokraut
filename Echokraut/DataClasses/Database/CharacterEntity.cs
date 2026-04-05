@@ -38,6 +38,9 @@ public class CharacterEntity
     [Column("do_not_delete")]
     public bool DoNotDelete { get; set; }
 
+    [Column("language")]
+    public int Language { get; set; } = 1; // ClientLanguage enum (0=JP, 1=EN, 2=DE, 3=FR)
+
     [Column("object_kind")]
     public int ObjectKind { get; set; } // Dalamud ObjectKind enum
 

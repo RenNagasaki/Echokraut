@@ -6,8 +6,10 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
+using Echokraut.DataClasses.Database;
 using Echokraut.Enums;
 using Echotools.Logging.DataClasses;
 using Echotools.Logging.Enums;
@@ -23,6 +25,9 @@ public class DialogHarvestService : IDialogHarvestService
     private readonly IJsonDataService _jsonData;
     private readonly ILogService _log;
     private readonly Configuration _config;
+    private readonly IDatabaseService _db;
+    private readonly IBackendService _backend;
+    private readonly INpcDataService _npcData;
 
     private static readonly string[] LangCodes = { "en", "de", "ja", "fr" };
     private static readonly Dalamud.Game.ClientLanguage[] LangValues =
@@ -33,9 +38,11 @@ public class DialogHarvestService : IDialogHarvestService
         Dalamud.Game.ClientLanguage.French
     };
 
-    private static readonly Dictionary<string, string> RaceNameMap = new()
+    private static readonly Dictionary<string, string> RaceNameMap = new(StringComparer.OrdinalIgnoreCase)
     {
-        { "Hyuran", "Hyur" }
+        { "Hyuran", "Hyur" },
+        { "Miqo'te", "Miqote" },
+        { "Au Ra", "AuRa" },
     };
 
     /// <summary>
@@ -60,15 +67,21 @@ public class DialogHarvestService : IDialogHarvestService
         IDataManager dataManager,
         IJsonDataService jsonData,
         ILogService log,
-        Configuration config)
+        Configuration config,
+        IDatabaseService db,
+        IBackendService backend,
+        INpcDataService npcData)
     {
         _dataManager = dataManager ?? throw new ArgumentNullException(nameof(dataManager));
         _jsonData = jsonData ?? throw new ArgumentNullException(nameof(jsonData));
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _config = config ?? throw new ArgumentNullException(nameof(config));
+        _db = db ?? throw new ArgumentNullException(nameof(db));
+        _backend = backend ?? throw new ArgumentNullException(nameof(backend));
+        _npcData = npcData ?? throw new ArgumentNullException(nameof(npcData));
     }
 
-    public async Task RunAsync(CancellationToken ct)
+    public async Task RunAsync(Dalamud.Game.ClientLanguage language, CancellationToken ct)
     {
         if (IsRunning) return;
         IsRunning = true;
@@ -78,7 +91,7 @@ public class DialogHarvestService : IDialogHarvestService
 
         try
         {
-            await Task.Run(() => DoHarvest(ct, eventId), ct);
+            await Task.Run(() => DoHarvest(language, ct, eventId), ct);
         }
         catch (OperationCanceledException)
         {
@@ -97,7 +110,7 @@ public class DialogHarvestService : IDialogHarvestService
         }
     }
 
-    private void DoHarvest(CancellationToken ct, EKEventId eventId)
+    private void DoHarvest(Dalamud.Game.ClientLanguage language, CancellationToken ct, EKEventId eventId)
     {
         // Step 1: Load dialog sheets in all languages
         ReportProgress("Loading DefaultTalk...");
@@ -1037,37 +1050,199 @@ public class DialogHarvestService : IDialogHarvestService
         ReportProgress("Harvesting quest dialogs...");
         var (linkedQuests, unmatchedQuests) = HarvestQuestDialogs(npcNames, bnpcNames, npcBaseSheet, ct, eventId);
 
-        // Step 6: Write output files
+        // Step 6: Persist linked dialogs to database
         ct.ThrowIfCancellationRequested();
-        ReportProgress("Writing results...");
+        ReportProgress("Persisting linked dialogs to database...");
+        var persisted = PersistLinkedDialogs(linkedDialogs, npcBaseSheet, language, ct, eventId);
 
-        var baseDir = _config.SaveToLocal ? _config.LocalSaveLocation : @"C:\alltalk_tts";
-        var outputDir = Path.Combine(baseDir, "harvest");
-        Directory.CreateDirectory(outputDir);
+        ct.ThrowIfCancellationRequested();
+        ReportProgress("Persisting linked quest dialogs to database...");
+        var persistedQuest = PersistLinkedQuestDialogs(linkedQuests, npcBaseSheet, language, ct, eventId);
 
-        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+        // Write unmatched dialogs to JSON (no NPC link — can't go in DB)
+        ct.ThrowIfCancellationRequested();
+        if (unmatchedDialogs.Count > 0 || unmatchedQuests.Count > 0)
+        {
+            var baseDir = _config.SaveToLocal ? _config.LocalSaveLocation : @"C:\alltalk_tts";
+            var outputDir = Path.Combine(baseDir, "harvest");
+            Directory.CreateDirectory(outputDir);
+            var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
 
-        var linkedPath = Path.Combine(outputDir, "linked_dialogs.json");
-        File.WriteAllText(linkedPath, JsonSerializer.Serialize(linkedDialogs, jsonOptions));
+            if (unmatchedDialogs.Count > 0)
+                File.WriteAllText(Path.Combine(outputDir, "unmatched_dialogs.json"),
+                    JsonSerializer.Serialize(unmatchedDialogs, jsonOptions));
 
-        var unmatchedPath = Path.Combine(outputDir, "unmatched_dialogs.json");
-        File.WriteAllText(unmatchedPath, JsonSerializer.Serialize(unmatchedDialogs, jsonOptions));
-
-        var linkedQuestPath = Path.Combine(outputDir, "linked_quest_dialogs.json");
-        File.WriteAllText(linkedQuestPath, JsonSerializer.Serialize(linkedQuests, jsonOptions));
-
-        var unmatchedQuestPath = Path.Combine(outputDir, "unmatched_quest_dialogs.json");
-        File.WriteAllText(unmatchedQuestPath, JsonSerializer.Serialize(unmatchedQuests, jsonOptions));
+            if (unmatchedQuests.Count > 0)
+                File.WriteAllText(Path.Combine(outputDir, "unmatched_quest_dialogs.json"),
+                    JsonSerializer.Serialize(unmatchedQuests, jsonOptions));
+        }
 
         var linkedDtCount = linkedDialogs.Count(d => d.Sheet == "DefaultTalk");
         var linkedBalloonCount = linkedDialogs.Count(d => d.Sheet == "Balloon");
         var unmatchedDtCount = unmatchedDialogs.Count(d => d.Sheet == "DefaultTalk");
         var unmatchedBalloonCount = unmatchedDialogs.Count(d => d.Sheet == "Balloon");
-        var msg = $"Done: {linkedDialogs.Count} linked ({linkedDtCount} DT, {linkedBalloonCount} Balloon), " +
+        var msg = $"Done: {persisted + persistedQuest} persisted to DB " +
+                  $"({linkedDialogs.Count} linked: {linkedDtCount} DT, {linkedBalloonCount} Balloon, " +
+                  $"{linkedQuests.Count} quest), " +
                   $"{unmatchedDialogs.Count} unmatched ({unmatchedDtCount} DT, {unmatchedBalloonCount} Balloon), " +
-                  $"{linkedQuests.Count} quest linked, {unmatchedQuests.Count} quest unmatched";
+                  $"{unmatchedQuests.Count} quest unmatched";
         _log.Info(nameof(DoHarvest), msg, eventId);
         ReportProgress(msg);
+    }
+
+    private static readonly Dictionary<Dalamud.Game.ClientLanguage, string> LangToCode = new()
+    {
+        { Dalamud.Game.ClientLanguage.English, "en" },
+        { Dalamud.Game.ClientLanguage.German, "de" },
+        { Dalamud.Game.ClientLanguage.Japanese, "ja" },
+        { Dalamud.Game.ClientLanguage.French, "fr" },
+    };
+
+    private int PersistLinkedDialogs(
+        List<LinkedDialog> dialogs,
+        ExcelSheet<ENpcBase> npcBaseSheet,
+        Dalamud.Game.ClientLanguage language,
+        CancellationToken ct,
+        EKEventId eventId)
+    {
+        var langCode = LangToCode.GetValueOrDefault(language, "en");
+        var persisted = 0;
+        // Cache by character identity (name+gender+race+language) to avoid re-assigning voices
+        // for the same NPC appearing under different ENpcBase IDs
+        var characterCache = new Dictionary<string, (CharacterEntity character, CharacterContextEntity context)>();
+
+        // Suppress per-item events to prevent UI threads from querying the DB concurrently
+        _db.SuppressEvents = true;
+
+        try
+        {
+        foreach (var dialog in dialogs)
+        {
+            ct.ThrowIfCancellationRequested();
+
+            // Get text in the selected language
+            if (!dialog.Texts.TryGetValue(langCode, out var text) || string.IsNullOrWhiteSpace(text))
+                continue;
+
+            var gender = Enum.TryParse<Genders>(dialog.Gender, true, out var g) ? g : Genders.None;
+
+            // Get NPC name in the selected language, resolving gender tags (e.g. German [a]/[p])
+            var resolvedNames = ResolveGenderTags(dialog.NpcName, gender);
+            if (!resolvedNames.TryGetValue(langCode, out var npcName) || string.IsNullOrWhiteSpace(npcName))
+                continue;
+
+            npcName = _jsonData.GetNpcName(npcName);
+
+            var race = Enum.TryParse<NpcRaces>(dialog.Race, true, out var r) ? r : NpcRaces.Unknown;
+            var charKey = $"{npcName}|{(int)gender}|{(int)race}|{(int)language}";
+
+            if (!characterCache.TryGetValue(charKey, out var cached))
+            {
+                // Read body type from ENpcBase
+                var bodyType = BodyType.Adult;
+                try
+                {
+                    var npcBase = npcBaseSheet.GetRow(dialog.NpcId);
+                    bodyType = npcBase.BodyType switch { 4 => BodyType.Child, 3 => BodyType.Elder, _ => BodyType.Adult };
+                }
+                catch { /* ENpcBase not found — default to adult */ }
+
+                var character = _db.UpsertCharacter(new CharacterEntity
+                {
+                    Name = npcName,
+                    Race = (int)race,
+                    RaceStr = dialog.Race,
+                    Gender = (int)gender,
+                    BodyType = (int)bodyType,
+                    Language = (int)language,
+                    ObjectKind = (int)ObjectKind.BattleNpc
+                });
+
+                var context = _db.UpsertContext(character.Id, dialog.Sheet == "Balloon" ? "bubble" : "npc");
+
+                // Assign voice
+                var npcData = new NpcMapData(ObjectKind.BattleNpc)
+                {
+                    Name = npcName,
+                    Race = race,
+                    RaceStr = dialog.Race,
+                    Gender = gender,
+                    BodyType = bodyType,
+                    Language = language,
+                    voice = character.VoiceKey
+                };
+                npcData.Voices = _npcData.GetEchokrautVoices();
+                _backend.GetVoiceOrRandom(eventId, npcData);
+
+                // Update voice key if changed
+                if (npcData.voice != character.VoiceKey)
+                {
+                    character.VoiceKey = npcData.voice;
+                    _db.UpsertCharacter(character);
+                }
+
+                cached = (character, context);
+                characterCache[charKey] = cached;
+            }
+
+            // Always create instance per NpcId (same character can appear at multiple ENpcBase locations)
+            _db.GetOrCreateInstance(cached.character.Id, dialog.NpcId);
+
+            var textSource = dialog.Sheet == "Balloon" ? TextSource.AddonBubble : TextSource.AddonTalk;
+            _db.LogOrUpdateVoiceClip(new VoiceClipEntity
+            {
+                CharacterId = cached.character.Id,
+                NpcBaseId = (long)dialog.NpcId,
+                Timestamp = DateTime.UtcNow,
+                TextSource = (int)textSource,
+                Language = (int)language,
+                VoiceKey = cached.character.VoiceKey,
+                OriginalText = text,
+                CleanedText = text,
+                SavedToDisk = false,
+                BodyType = cached.character.BodyType,
+            });
+
+            persisted++;
+            if (persisted % 500 == 0)
+            {
+                // Clear EF Core change tracker to prevent slowdown from accumulated tracked entities
+                _db.ClearChangeTracker();
+                characterCache.Clear(); // cached entities are now detached
+                ReportProgress($"Persisted {persisted} / {dialogs.Count} linked dialogs...");
+            }
+        }
+        }
+        finally
+        {
+            _db.SuppressEvents = false;
+            _db.NotifyVoiceClipLogged();
+        }
+
+        return persisted;
+    }
+
+    private int PersistLinkedQuestDialogs(
+        List<LinkedQuestDialog> dialogs,
+        ExcelSheet<ENpcBase> npcBaseSheet,
+        Dalamud.Game.ClientLanguage language,
+        CancellationToken ct,
+        EKEventId eventId)
+    {
+        // Reuse the same logic as regular dialogs — LinkedQuestDialog has the same NPC fields
+        var converted = dialogs.Select(q => new LinkedDialog
+        {
+            NpcId = q.NpcId,
+            NpcName = q.NpcName,
+            Race = q.Race,
+            Gender = q.Gender,
+            Sheet = "DefaultTalk",
+            DialogId = 0,
+            MatchSource = q.MatchSource,
+            Texts = q.Texts
+        }).ToList();
+
+        return PersistLinkedDialogs(converted, npcBaseSheet, language, ct, eventId);
     }
 
     /// <summary>
@@ -1235,14 +1410,29 @@ public class DialogHarvestService : IDialogHarvestService
         return result;
     }
 
-    private static string GetRaceString(ENpcBase npcBase)
+    private string GetRaceString(ENpcBase npcBase)
     {
         try
         {
-            var race = npcBase.Race.ValueNullable;
-            if (race == null) return "Unknown";
-            var raceName = race.Value.Masculine.ExtractText();
-            return RaceNameMap.TryGetValue(raceName, out var mapped) ? mapped : raceName;
+            var raceRowId = npcBase.Race.RowId;
+            if (raceRowId != 0)
+            {
+                // Playable race — read from English Race sheet
+                var enRaceSheet = _dataManager.GetExcelSheet<Race>(Dalamud.Game.ClientLanguage.English);
+                var enRace = enRaceSheet?.GetRowOrDefault(raceRowId);
+                if (enRace != null)
+                {
+                    var raceName = enRace.Value.Masculine.ExtractText();
+                    return RaceNameMap.TryGetValue(raceName, out var mapped) ? mapped : raceName;
+                }
+            }
+
+            // Beast tribe fallback — use ModelChara → ModelsToRaceMap
+            var modelChara = (int)npcBase.ModelChara.RowId;
+            if (modelChara != 0 && _jsonData.ModelsToRaceMap.TryGetValue(modelChara, out var beastRace))
+                return beastRace.ToString();
+
+            return "Unknown";
         }
         catch
         {
@@ -1253,6 +1443,42 @@ public class DialogHarvestService : IDialogHarvestService
     private static NpcRaces ParseNpcRace(string raceStr)
     {
         return Enum.TryParse<NpcRaces>(raceStr, true, out var race) ? race : NpcRaces.Unknown;
+    }
+
+    /// <summary>
+    /// Resolves FFXIV grammatical gender tags in NPC names.
+    /// German: [a] = adjective ending (er/e), [p] = profession suffix (""/in)
+    /// French: [a] = adjective ending (""/"e"), [p] = profession suffix (""/e)
+    /// Applied per-language; languages without known tags pass through unchanged.
+    /// Any remaining [x] tags are stripped as fallback.
+    /// </summary>
+    private static Dictionary<string, string> ResolveGenderTags(Dictionary<string, string> names, Genders gender)
+    {
+        var resolved = new Dictionary<string, string>(names.Count);
+        foreach (var (lang, name) in names)
+        {
+            var n = name;
+            if (n.Contains('['))
+            {
+                switch (lang)
+                {
+                    case "de":
+                        n = gender == Genders.Female
+                            ? n.Replace("[a]", "e").Replace("[p]", "in")
+                            : n.Replace("[a]", "er").Replace("[p]", "");
+                        break;
+                    case "fr":
+                        n = gender == Genders.Female
+                            ? n.Replace("[a]", "e").Replace("[p]", "e")
+                            : n.Replace("[a]", "").Replace("[p]", "");
+                        break;
+                }
+                // Strip any remaining unknown bracket tags
+                n = System.Text.RegularExpressions.Regex.Replace(n, @"\[[a-z]\]", "");
+            }
+            resolved[lang] = n;
+        }
+        return resolved;
     }
 
     private Genders DetermineGender(ENpcBase npcBase, NpcRaces race)

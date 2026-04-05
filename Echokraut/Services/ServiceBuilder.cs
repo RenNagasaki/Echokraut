@@ -71,7 +71,10 @@ public static class ServiceBuilder
             dataManager,
             c.GetService<IJsonDataService>(),
             c.GetService<ILogService>(),
-            configuration));
+            configuration,
+            c.GetService<IDatabaseService>(),
+            c.GetService<IBackendService>(),
+            c.GetService<INpcDataService>()));
 
         container.RegisterFactory<ILipSyncHelper>(c => new LipSyncHelper(
             c.GetService<ILogService>(),

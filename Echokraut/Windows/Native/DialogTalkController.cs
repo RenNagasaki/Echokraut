@@ -302,7 +302,7 @@ public sealed unsafe class DialogTalkController : IDisposable
             {
                 _lastSpeakerKey = speakerKey;
                 var voices = _npcData.GetEchokrautVoices()
-                    .FindAll(f => f.IsSelectable(speaker.Name, speaker.Gender, speaker.Race, speaker.IsChild));
+                    .FindAll(f => f.IsSelectable(speaker.Name, speaker.Gender, speaker.Race, speaker.BodyType));
                 var voiceNames    = voices.ConvertAll(v => v.VoiceName);
                 var selectedVoice = speaker.Voice?.VoiceName ?? string.Empty;
                 // Bypass TextDropDownNode.Options and DropDownNode.SelectedOption setters —
@@ -330,7 +330,7 @@ public sealed unsafe class DialogTalkController : IDisposable
         if (msg?.Speaker != null)
         {
             var voices = _npcData.GetEchokrautVoices()
-                .FindAll(f => f.IsSelectable(msg.Speaker.Name, msg.Speaker.Gender, msg.Speaker.Race, msg.Speaker.IsChild));
+                .FindAll(f => f.IsSelectable(msg.Speaker.Name, msg.Speaker.Gender, msg.Speaker.Race, msg.Speaker.BodyType));
             var newVoice = voices.Find(v => v.VoiceName == voiceName);
 
             if (newVoice != null && newVoice != msg.Speaker.Voice)

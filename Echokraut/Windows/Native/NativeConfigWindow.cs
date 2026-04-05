@@ -665,7 +665,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             _harvestCts = new CancellationTokenSource();
             if (_harvestButton != null)
                 _harvestButton.String = Loc.S("Stop Harvest");
-            _ = _dialogHarvest.RunAsync(_harvestCts.Token).ContinueWith(_ =>
+            _ = _dialogHarvest.RunAsync(_clientState.ClientLanguage, _harvestCts.Token).ContinueWith(_ =>
             {
                 if (_harvestButton != null)
                     _harvestButton.String = Loc.S("Start Harvest");

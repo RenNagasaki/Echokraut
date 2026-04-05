@@ -62,7 +62,7 @@ public class VoiceClipManagerService : IVoiceClipManagerService
             Race = race,
             RaceStr = character?.RaceStr ?? "",
             Gender = gender,
-            IsChild = bodyType == BodyType.Child,
+            BodyType = bodyType,
             voice = encounter.VoiceKey
         };
 
@@ -129,6 +129,10 @@ public class VoiceClipManagerService : IVoiceClipManagerService
 
     public bool HasLocalAudio(VoiceClipEntity encounter)
     {
+        // Skip expensive BuildVoiceMessage for clips that were never generated
+        if (!encounter.SavedToDisk && string.IsNullOrEmpty(encounter.SavePath))
+            return false;
+
         try
         {
             var path = GetAudioPath(encounter);

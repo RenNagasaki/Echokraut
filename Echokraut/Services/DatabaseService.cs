@@ -206,9 +206,30 @@ public class DatabaseService : IDatabaseService
             _log.Info(nameof(RunSchemaMigrations), "Applying schema v6: add save_path to voice_clips",
                 new EKEventId(0, TextSource.None));
 
-            _context.Database.ExecuteSqlRaw("ALTER TABLE voice_clips ADD COLUMN save_path TEXT NOT NULL DEFAULT ''");
+            try { _context.Database.ExecuteSqlRaw("ALTER TABLE voice_clips ADD COLUMN save_path TEXT NOT NULL DEFAULT ''"); }
+            catch { /* already exists on fresh install */ }
 
             SetSchemaVersion(6);
+        }
+
+        if (version < 7)
+        {
+            _log.Info(nameof(RunSchemaMigrations), "Applying schema v7: add is_adult_voice, is_elder_voice to voices; add language to characters",
+                new EKEventId(0, TextSource.None));
+
+            // On fresh installs, EnsureCreated already creates these columns — use ALTER only on upgrades
+            try { _context.Database.ExecuteSqlRaw("ALTER TABLE voices ADD COLUMN is_adult_voice INTEGER NOT NULL DEFAULT 1"); } catch { /* already exists */ }
+            try { _context.Database.ExecuteSqlRaw("ALTER TABLE voices ADD COLUMN is_elder_voice INTEGER NOT NULL DEFAULT 0"); } catch { /* already exists */ }
+            try { _context.Database.ExecuteSqlRaw("ALTER TABLE characters ADD COLUMN language INTEGER NOT NULL DEFAULT 1"); } catch { /* already exists */ }
+
+            // Update unique index to include language (only needed on upgrade — fresh installs have the 4-column index)
+            _context.Database.ExecuteSqlRaw("DROP INDEX IF EXISTS IX_characters_Name_Gender_Race");
+            try { _context.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IX_characters_Name_Gender_Race_Language ON characters (name, gender, race, language)"); } catch { /* already exists */ }
+
+            // Composite index for voice clip upsert lookup performance
+            try { _context.Database.ExecuteSqlRaw("CREATE INDEX IX_voice_clips_CharacterId_NpcBaseId_OriginalText ON voice_clips (character_id, npc_base_id, original_text)"); } catch { /* already exists */ }
+
+            SetSchemaVersion(7);
         }
     }
 
@@ -249,7 +270,9 @@ public class DatabaseService : IDatabaseService
                         IsDefault = voice.IsDefault,
                         IsEnabled = voice.IsEnabled,
                         UseAsRandom = voice.UseAsRandom,
+                        IsAdultVoice = voice.IsAdultVoice,
                         IsChildVoice = voice.IsChildVoice,
+                        IsElderVoice = voice.IsElderVoice,
                         Volume = voice.Volume,
                         Note = voice.Note ?? ""
                     };
@@ -340,7 +363,7 @@ public class DatabaseService : IDatabaseService
                 Race = (int)npc.Race,
                 RaceStr = npc.RaceStr ?? "",
                 Gender = (int)npc.Gender,
-                BodyType = npc.IsChild ? (int)Enums.BodyType.Child : (int)Enums.BodyType.Adult,
+                BodyType = (int)npc.BodyType,
                 VoiceKey = npc.voice ?? "",
                 DoNotDelete = npc.DoNotDelete,
                 ObjectKind = (int)npc.ObjectKind
@@ -378,11 +401,14 @@ public class DatabaseService : IDatabaseService
     public List<CharacterEntity> GetNpcs() => _cachedNpcs;
     public List<CharacterEntity> GetPlayers() => _cachedPlayers;
 
-    public CharacterEntity? FindCharacter(string name, Genders gender, NpcRaces race)
+    public CharacterEntity? FindCharacter(string name, Genders gender, NpcRaces race, int language = 1)
     {
-        return _context.Characters
-            .Include(c => c.Contexts)
-            .FirstOrDefault(c => c.Name == name && c.Gender == (int)gender && c.Race == (int)race);
+        lock (_writeLock)
+        {
+            return _context.Characters
+                .Include(c => c.Contexts)
+                .FirstOrDefault(c => c.Name == name && c.Gender == (int)gender && c.Race == (int)race && c.Language == language);
+        }
     }
 
     public CharacterEntity UpsertCharacter(CharacterEntity character)
@@ -392,7 +418,8 @@ public class DatabaseService : IDatabaseService
             var existing = _context.Characters
                 .FirstOrDefault(c => c.Name == character.Name
                                      && c.Gender == character.Gender
-                                     && c.Race == character.Race);
+                                     && c.Race == character.Race
+                                     && c.Language == character.Language);
 
             if (existing != null)
             {
@@ -587,7 +614,9 @@ public class DatabaseService : IDatabaseService
                 existing.IsDefault = voice.IsDefault;
                 existing.IsEnabled = voice.IsEnabled;
                 existing.UseAsRandom = voice.UseAsRandom;
+                existing.IsAdultVoice = voice.IsAdultVoice;
                 existing.IsChildVoice = voice.IsChildVoice;
+                existing.IsElderVoice = voice.IsElderVoice;
                 existing.Volume = voice.Volume;
                 existing.Note = voice.Note;
 
@@ -671,6 +700,23 @@ public class DatabaseService : IDatabaseService
 
     // ── Dialog Encounters ───────────────────────────────────
 
+    /// <summary>
+    /// When true, VoiceClipLogged events are suppressed. Use during batch operations
+    /// (e.g. harvest) to prevent UI threads from querying the DB concurrently.
+    /// Call NotifyVoiceClipLogged() once after the batch completes.
+    /// </summary>
+    public bool SuppressEvents { get; set; }
+
+    public void NotifyVoiceClipLogged() => VoiceClipLogged?.Invoke();
+
+    public void ClearChangeTracker()
+    {
+        lock (_writeLock)
+        {
+            _context.ChangeTracker.Clear();
+        }
+    }
+
     public event Action? VoiceClipLogged;
 
     public void LogVoiceClip(VoiceClipEntity encounter)
@@ -679,7 +725,7 @@ public class DatabaseService : IDatabaseService
         {
             _context.VoiceClips.Add(encounter);
             _context.SaveChanges();
-            VoiceClipLogged?.Invoke();
+            if (!SuppressEvents) VoiceClipLogged?.Invoke();
         }
     }
 
@@ -713,7 +759,7 @@ public class DatabaseService : IDatabaseService
             }
 
             _context.SaveChanges();
-            VoiceClipLogged?.Invoke();
+            if (!SuppressEvents) VoiceClipLogged?.Invoke();
         }
     }
 

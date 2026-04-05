@@ -611,7 +611,7 @@ public class ConfigWindow : Window, IDisposable
                 {
                     _harvestCts?.Dispose();
                     _harvestCts = new CancellationTokenSource();
-                    _ = _dialogHarvest.RunAsync(_harvestCts.Token);
+                    _ = _dialogHarvest.RunAsync(_clientState.ClientLanguage, _harvestCts.Token);
                 }
             }
             if (!string.IsNullOrEmpty(_harvestProgress))
@@ -1247,7 +1247,9 @@ public class ConfigWindow : Window, IDisposable
                     ImGui.TableNextColumn();
                     ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
                     var headerText = voice.UseAsRandom ? "Random - " : "";
+                    headerText += voice.IsAdultVoice ? "Adult - " : "";
                     headerText += voice.IsChildVoice ? "Child - " : "";
+                    headerText += voice.IsElderVoice ? "Elder - " : "";
                     headerText = headerText.Length >= 3 ? headerText.Substring(0, headerText.Length - 3) : Loc.S("None");
                     if (ImGui.CollapsingHeader($"{headerText}##EKVoiceOptions{voice}"))
                     {
@@ -1267,10 +1269,28 @@ public class ConfigWindow : Window, IDisposable
 
                                 ImGui.TableNextRow();
                                 ImGui.TableNextColumn();
+                                var isAdultVoice = voice.IsAdultVoice;
+                                if (ImGui.Checkbox($"{Loc.S("Adult Voice")}##EKVoiceIsAdultVoice{voice}", ref isAdultVoice))
+                                {
+                                    voice.IsAdultVoice = isAdultVoice;
+                                    _npcData.SaveVoice(voice);
+                                }
+
+                                ImGui.TableNextRow();
+                                ImGui.TableNextColumn();
                                 var isChildVoice = voice.IsChildVoice;
                                 if (ImGui.Checkbox($"{Loc.S("Child Voice")}##EKVoiceIsChildVoice{voice}", ref isChildVoice))
                                 {
                                     voice.IsChildVoice = isChildVoice;
+                                    _npcData.SaveVoice(voice);
+                                }
+
+                                ImGui.TableNextRow();
+                                ImGui.TableNextColumn();
+                                var isElderVoice = voice.IsElderVoice;
+                                if (ImGui.Checkbox($"{Loc.S("Elder Voice")}##EKVoiceIsElderVoice{voice}", ref isElderVoice))
+                                {
+                                    voice.IsElderVoice = isElderVoice;
                                     _npcData.SaveVoice(voice);
                                 }
                             }
@@ -1637,7 +1657,7 @@ public class ConfigWindow : Window, IDisposable
 
                 if (mapData.VoicesSelectable.Draw(mapData.Voice?.VoiceName ?? "", out var selectedIndexVoice))
                 {
-                    var newVoiceItem = _npcData.GetEchokrautVoices().FindAll(f => f.IsSelectable(mapData.Name, mapData.Gender, mapData.Race, mapData.IsChild))[selectedIndexVoice];
+                    var newVoiceItem = _npcData.GetEchokrautVoices().FindAll(f => f.IsSelectable(mapData.Name, mapData.Gender, mapData.Race, mapData.BodyType))[selectedIndexVoice];
 
                     mapData.Voice = newVoiceItem;
                     mapData.DoNotDelete = true;

@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Threading;
+using Dalamud.Game;
+using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.DataClasses.Database;
 using Echokraut.Enums;
@@ -22,6 +25,18 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     private readonly IVoiceClipManagerService _voiceClipManager;
     private readonly IAudioPlaybackService _audioPlayback;
     private readonly INpcDataService _npcData;
+    private readonly IDialogHarvestService _dialogHarvest;
+    private readonly IClientState _clientState;
+
+    // Harvest
+    private CancellationTokenSource? _harvestCts;
+    private TextButtonNode? _harvestButton;
+    private TextDropDownNode? _langDropDown;
+    private TextNode? _harvestProgressNode;
+    private ClientLanguage _selectedLanguage;
+    private string _harvestProgress = "";
+    private bool _pendingHarvestClick;
+    private int _pendingLangSelection = -1;
 
     // Layout
     private float _contentWidth;
@@ -55,6 +70,9 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     private readonly Dictionary<long, (string zone, float x, float y)> _instanceLocationCache = new();
     private readonly Dictionary<string, List<(long npcBaseId, List<VoiceClipEntity> encounters)>> _npcInstanceCache = new();
 
+    // Expanded state — survives rebuilds
+    private readonly HashSet<string> _expandedNpcs = new();
+
     // Detail window reference
     private NativeVoiceClipDetailWindow? _detailWindow;
 
@@ -62,12 +80,17 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         IDatabaseService db,
         IVoiceClipManagerService voiceClipManager,
         IAudioPlaybackService audioPlayback,
-        INpcDataService npcData)
+        INpcDataService npcData,
+        IDialogHarvestService dialogHarvest,
+        IClientState clientState)
     {
         _db = db;
         _voiceClipManager = voiceClipManager;
         _audioPlayback = audioPlayback;
         _npcData = npcData;
+        _dialogHarvest = dialogHarvest;
+        _clientState = clientState;
+        _selectedLanguage = clientState.ClientLanguage;
 
         _voiceClipManager.VoiceClipUpdated += () =>
         {
@@ -75,6 +98,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
             _npcInstanceCache.Clear();
         };
         _db.VoiceClipLogged += () => _needsRebuild = true;
+        _dialogHarvest.ProgressChanged += msg => _harvestProgress = msg;
     }
 
     public void SetDetailWindow(NativeVoiceClipDetailWindow detailWindow)
@@ -82,21 +106,57 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _detailWindow = detailWindow;
     }
 
+    private static readonly string[] LangLabels = { "Japanese", "English", "German", "French" };
+
     protected override void OnSetup(AtkUnitBase* addon)
     {
         var pos = ContentStartPosition;
         var size = ContentSize;
         _contentWidth = size.X;
+        const float harvestRowH = 28f;
+
+        // Harvest button + language dropdown row
+        _harvestButton = new TextButtonNode
+        {
+            Size = new Vector2(120, harvestRowH),
+            Position = pos,
+            String = Loc.S("Start Harvest"),
+            OnClick = () => _pendingHarvestClick = true,
+        };
+        AddNode(_harvestButton);
+
+        _langDropDown = new TextDropDownNode
+        {
+            Size = new Vector2(130, harvestRowH),
+            Position = pos + new Vector2(124, 0),
+            Options = [],
+        };
+        _langDropDown.OptionListNode.Options = new List<string>(LangLabels);
+        _langDropDown.OptionListNode.SelectedOption = LangLabels[(int)_selectedLanguage];
+        if (_langDropDown.LabelNode.Node != null)
+            _langDropDown.LabelNode.String = LangLabels[(int)_selectedLanguage];
+        _langDropDown.OnOptionSelected = selected => _pendingLangSelection = Array.IndexOf(LangLabels, selected);
+        AddNode(_langDropDown);
+
+        _harvestProgressNode = new TextNode
+        {
+            Size = new Vector2(size.X - 260, harvestRowH),
+            Position = pos + new Vector2(260, 0),
+        };
+        AddNode(_harvestProgressNode);
+
+        var tabY = pos.Y + harvestRowH + 4;
         const float tabH = 32f;
 
-        _tabBar = new TabBarNode { Size = new Vector2(size.X, tabH), Position = pos };
+        _tabBar = new TabBarNode { Size = new Vector2(size.X, tabH), Position = new Vector2(pos.X, tabY) };
         _tabBar.AddTab(Loc.S("NPCs"), () => ShowPanel(0));
         _tabBar.AddTab(Loc.S("Players"), () => ShowPanel(1));
         AddNode(_tabBar);
 
         const float paginationH = 28f;
-        _treePos = pos + new Vector2(0, tabH + 2);
-        _treeSize = size - new Vector2(0, tabH + 2 + paginationH + 4);
+        var treeTop = tabY + tabH + 2;
+        _treePos = new Vector2(pos.X, treeTop);
+        _treeSize = new Vector2(size.X, pos.Y + size.Y - treeTop - paginationH - 4);
         var pagY = pos.Y + size.Y - paginationH;
 
         for (var i = 0; i < 2; i++)
@@ -124,6 +184,38 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     {
         ScreenClampHelper.ClampToScreen(addon, Size);
 
+        // Process deferred harvest click
+        if (_pendingHarvestClick)
+        {
+            _pendingHarvestClick = false;
+            if (_dialogHarvest.IsRunning)
+            {
+                _harvestCts?.Cancel();
+                if (_harvestButton != null) _harvestButton.String = Loc.S("Start Harvest");
+            }
+            else
+            {
+                _harvestCts?.Dispose();
+                _harvestCts = new CancellationTokenSource();
+                if (_harvestButton != null) _harvestButton.String = Loc.S("Stop Harvest");
+                _ = _dialogHarvest.RunAsync(_selectedLanguage, _harvestCts.Token).ContinueWith(_ =>
+                {
+                    if (_harvestButton != null) _harvestButton.String = Loc.S("Start Harvest");
+                });
+            }
+        }
+
+        // Process deferred language selection
+        if (_pendingLangSelection >= 0)
+        {
+            _selectedLanguage = (ClientLanguage)_pendingLangSelection;
+            _pendingLangSelection = -1;
+            _needsRebuild = true;
+        }
+
+        // Update harvest progress text
+        if (_harvestProgressNode != null)
+            _harvestProgressNode.String = _harvestProgress;
 
         if (_npcData.MappedNpcs.Count != _lastNpcCount || _npcData.MappedPlayers.Count != _lastPlayerCount)
             _needsRebuild = true;
@@ -159,8 +251,8 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     private void LoadData()
     {
         _needsRebuild = false;
-        _npcList = new List<NpcMapData>(_npcData.MappedNpcs);
-        _playerList = new List<NpcMapData>(_npcData.MappedPlayers);
+        _npcList = _npcData.MappedNpcs.FindAll(n => n.Language == _selectedLanguage);
+        _playerList = _npcData.MappedPlayers.FindAll(n => n.Language == _selectedLanguage);
         _lastNpcCount = _npcData.MappedNpcs.Count;
         _lastPlayerCount = _npcData.MappedPlayers.Count;
 
@@ -173,7 +265,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         {
             var key = mapData.ToString();
             if (_encCountCache.ContainsKey(key)) continue;
-            var character = _db.FindCharacter(mapData.Name, mapData.Gender, mapData.Race);
+            var character = _db.FindCharacter(mapData.Name, mapData.Gender, mapData.Race, (int)mapData.Language);
             if (character != null)
             {
                 _charIdCache[key] = character.Id;
@@ -239,12 +331,13 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
             var npcKey = mapData.ToString();
             _encCountCache.TryGetValue(npcKey, out var encCount);
 
-            // NPC category node
+            // NPC category node — restore expanded state from previous rebuild
+            var wasExpanded = _expandedNpcs.Contains(npcKey);
             var npcCategory = new TreeListCategoryNode
             {
                 Size = new Vector2(w, 28),
                 String = $"{mapData.Name}  |  {mapData.Gender}  |  {mapData.Race}  |  {encCount} {Loc.S("Voice Clips")} | {(_savedCountCache.TryGetValue(npcKey, out var sc) ? sc : 0)} {Loc.S("Generated")}",
-                IsCollapsed = true,
+                IsCollapsed = !wasExpanded,
             };
 
             // Lazy-load instance groups on expand
@@ -256,8 +349,17 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
             npcCategory.OnToggle = expanded =>
             {
                 if (expanded)
+                {
+                    _expandedNpcs.Add(capturedKey);
                     PopulateNpcCategory(npcCategory, capturedKey, capturedIsPlayer, capturedW, capturedTree);
+                }
+                else
+                    _expandedNpcs.Remove(capturedKey);
             };
+
+            // If restoring expanded state, populate immediately
+            if (wasExpanded)
+                PopulateNpcCategory(npcCategory, npcKey, isPlayer, w, tree);
 
             tree.AddCategoryNode(npcCategory);
         }

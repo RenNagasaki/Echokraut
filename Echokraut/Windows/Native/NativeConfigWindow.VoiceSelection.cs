@@ -451,7 +451,7 @@ public sealed unsafe partial class NativeConfigWindow
 
         // Voice dropdown
         var voices = _npcData.GetEchokrautVoices()
-            .FindAll(f => f.IsSelectable(npc.Name, npc.Gender, npc.Race, npc.IsChild));
+            .FindAll(f => f.IsSelectable(npc.Name, npc.Gender, npc.Race, npc.BodyType));
         var voiceNames = voices.ConvertAll(v => v.VoiceName);
         var currentVoice = npc.Voice?.VoiceName ?? "";
 

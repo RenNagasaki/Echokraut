@@ -521,6 +521,7 @@ public static class Loc
         ["All"] = new() { { DE, "Alle" }, { FR, "Tous" }, { JP, "全て" } },
         ["Always jump to bottom"] = new() { { DE, "Immer nach unten springen" }, { FR, "Toujours aller en bas" }, { JP, "常に最下部に移動" } },
         ["Base Url"] = new() { { DE, "Basis-URL" }, { FR, "URL de base" }, { JP, "ベースURL" } },
+        ["Adult Voice"] = new() { { DE, "Erwachsenenstimme" }, { FR, "Voix adulte" }, { JP, "大人の声" } },
         ["Child Voice"] = new() { { DE, "Kinderstimme" }, { FR, "Voix d'enfant" }, { JP, "子供の声" } },
         ["Click again to confirm deletion!"] = new() { { DE, "Zum Bestätigen erneut klicken!" }, { FR, "Cliquez à nouveau pour confirmer !" }, { JP, "もう一度クリックして確認！" } },
         ["Custom model URL"] = new() { { DE, "Benutzerdefinierte Modell-URL" }, { FR, "URL du modèle personnalisé" }, { JP, "カスタムモデルURL" } },
@@ -554,7 +555,7 @@ public static class Loc
 
         // ── Voice Config Window ──────────────────────────────────────────
         ["Use as random NPC voice"] = new() { { DE, "Als zufällige NPC-Stimme verwenden" }, { FR, "Utiliser comme voix PNJ aléatoire" }, { JP, "ランダムNPCボイスとして使用" } },
-        ["Child voice"] = new() { { DE, "Kinderstimme" }, { FR, "Voix d'enfant" }, { JP, "子供の声" } },
+        ["Elder Voice"] = new() { { DE, "Ältere Stimme" }, { FR, "Voix de personne âgée" }, { JP, "高齢者の声" } },
         ["Allowed genders"] = new() { { DE, "Erlaubte Geschlechter" }, { FR, "Genres autorisés" }, { JP, "許可する性別" } },
         ["Allowed races"] = new() { { DE, "Erlaubte Völker" }, { FR, "Races autorisées" }, { JP, "許可する種族" } },
 

@@ -1,3 +1,4 @@
+using Dalamud.Game;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Echokraut.Enums;
 using Echotools.Logging.Enums;
@@ -15,7 +16,7 @@ namespace Echokraut.DataClasses
         public string RaceStr { get; set; } = null!;
         public Genders Gender { get; set; }
 
-        public bool IsChild { get; set; }
+        public BodyType BodyType { get; set; } = BodyType.Adult;
 
         public string voice = "";
         internal EchokrautVoice? Voice
@@ -33,6 +34,8 @@ namespace Echokraut.DataClasses
         public float Volume { get; set; } = 1f;
         public float VolumeBubble { get; set; } = 1f;
         public bool HasBubbles { get; set; }
+
+        public ClientLanguage Language { get; set; } = ClientLanguage.English;
 
         public ObjectKind ObjectKind { get; set; }
 
@@ -71,8 +74,8 @@ namespace Echokraut.DataClasses
 
         public void RefreshSelectable()
         {
-            VoicesSelectable = new($"##AllVoices{ToString()}", string.Empty, 200, Voices.FindAll(f => f.IsSelectable(Name, Gender, Race, IsChild)), g => g.VoiceNameNote);
-            VoicesSelectableDialogue = new($"##AllVoices{ToString()}", string.Empty, 200, Voices.FindAll(f => f.IsSelectable(Name, Gender, Race, IsChild)), g => g.VoiceNameNote);
+            VoicesSelectable = new($"##AllVoices{ToString()}", string.Empty, 200, Voices.FindAll(f => f.IsSelectable(Name, Gender, Race, BodyType)), g => g.VoiceNameNote);
+            VoicesSelectableDialogue = new($"##AllVoices{ToString()}", string.Empty, 200, Voices.FindAll(f => f.IsSelectable(Name, Gender, Race, BodyType)), g => g.VoiceNameNote);
         }
     }
 }

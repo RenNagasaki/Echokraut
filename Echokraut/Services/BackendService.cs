@@ -150,7 +150,9 @@ public class BackendService : IBackendService, IDisposable
                 {
                     var candidates = ekVoices.FindAll(
                         f => !oldVoices.Contains(f) && f.VoiceName.Contains("NPC") &&
+                             f.IsAdultVoice == oldVoice.IsAdultVoice &&
                              f.IsChildVoice == oldVoice.IsChildVoice &&
+                             f.IsElderVoice == oldVoice.IsElderVoice &&
                              !oldVoice.AllowedRaces.Except(f.AllowedRaces).Any());
                     replacement = candidates.Count > 0 ? candidates[_random.Next(0, candidates.Count)] : null;
                 }
@@ -302,7 +304,7 @@ public class BackendService : IBackendService, IDisposable
 
         var ekVoices = _db.GetVoices().Select(VoiceEntityToEchokrautVoice).ToList();
         var voiceItem = npcData.Voice;
-        var isChild = npcData.IsChild;
+        var bodyType = npcData.BodyType;
 
         if (voiceItem == null || voiceItem == ekVoices.Find(p => p.IsDefault))
         {
@@ -320,7 +322,7 @@ public class BackendService : IBackendService, IDisposable
             {
                 // Find by race/gender
                 voiceItems = ekVoices.FindAll(p =>
-                    p.FitsNpcData(npcData.Gender, npcData.Race, isChild, _npcData.IsGenderedRace(npcData.Race)));
+                    p.FitsNpcData(npcData.Gender, npcData.Race, bodyType, _npcData.IsGenderedRace(npcData.Race)));
 
                 if (voiceItems.Count > 0)
                 {
@@ -333,16 +335,13 @@ public class BackendService : IBackendService, IDisposable
 
             if (voiceItem != npcData.Voice)
             {
-                _log.Debug(nameof(GetVoiceOrRandom),
-                    $"Chose voice: {voiceItem} for {(npcData.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? "Player" : "NPC")}: {npcName}",
-                    eventId);
                 npcData.Voice = voiceItem;
                 _npcData.SaveCharacter(npcData);
             }
         }
 
         if (voiceItem != null)
-            _log.Debug(nameof(GetVoiceOrRandom), $"Found voice: {voiceItem} for NPC: {npcData.Name}", eventId);
+            _log.Debug(nameof(GetVoiceOrRandom), $"Voice: {voiceItem} for NPC: {npcData.Name}", eventId);
         else
             _log.Error(nameof(GetVoiceOrRandom), $"Couldn't find voice for NPC: {npcData.Name}", eventId);
     }
@@ -425,7 +424,9 @@ public class BackendService : IBackendService, IDisposable
             IsDefault = entity.IsDefault,
             IsEnabled = entity.IsEnabled,
             UseAsRandom = entity.UseAsRandom,
+            IsAdultVoice = entity.IsAdultVoice,
             IsChildVoice = entity.IsChildVoice,
+            IsElderVoice = entity.IsElderVoice,
             Volume = entity.Volume,
             Note = entity.Note,
             AllowedGenders = entity.AllowedGenders?.Select(g => (Genders)g.Gender).ToList() ?? new(),
@@ -442,7 +443,9 @@ public class BackendService : IBackendService, IDisposable
             IsDefault = voice.IsDefault,
             IsEnabled = voice.IsEnabled,
             UseAsRandom = voice.UseAsRandom,
+            IsAdultVoice = voice.IsAdultVoice,
             IsChildVoice = voice.IsChildVoice,
+            IsElderVoice = voice.IsElderVoice,
             Volume = voice.Volume,
             Note = voice.Note ?? ""
         };

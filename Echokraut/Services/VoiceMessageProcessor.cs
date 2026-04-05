@@ -255,6 +255,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         npcData.RaceStr = raceStr;
         npcData.Gender = _characterData.GetCharacterGender(eventId, speaker, npcData.Race, out var modelBody);
         npcData.Name = _textProcessing.CleanUpName(cleanSpeakerName);
+        npcData.Language = _clientState.ClientLanguage;
 
         // Handle NPC name mapping
         if (npcData.ObjectKind != ObjectKind.Player)
@@ -269,14 +270,20 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         var resNpcData = _npcData.GetAddCharacterMapData(npcData, eventId, _backend);
         npcData = resNpcData;
 
-        // Check if child character
+        // Check body type (child/elder/adult)
         var changed = false;
         if (speaker != null && (source == TextSource.AddonBubble || source == TextSource.AddonTalk))
         {
-            var isChild = _lumina.GetENpcBase(speaker.BaseId, eventId)?.BodyType == 4;
-            if (npcData.IsChild != isChild)
+            var npcBase = _lumina.GetENpcBase(speaker.BaseId, eventId);
+            var bodyType = npcBase?.BodyType switch
             {
-                npcData.IsChild = isChild;
+                4 => BodyType.Child,
+                3 => BodyType.Elder,
+                _ => BodyType.Adult
+            };
+            if (npcData.BodyType != bodyType)
+            {
+                npcData.BodyType = bodyType;
                 changed = true;
             }
         }
@@ -300,7 +307,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         {
             var speaker = message.Speaker;
             var character = speaker != null
-                ? _db.FindCharacter(speaker.Name, speaker.Gender, speaker.Race)
+                ? _db.FindCharacter(speaker.Name, speaker.Gender, speaker.Race, (int)speaker.Language)
                 : null;
             if (character == null) return;
 
@@ -344,7 +351,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
                 OriginalText = originalText,
                 CleanedText = message.Text ?? "",
                 SavedToDisk = false,
-                BodyType = speaker?.IsChild == true ? (int)BodyType.Child : (int)BodyType.Adult,
+                BodyType = (int)(speaker?.BodyType ?? BodyType.Adult),
                 ZoneName = zoneName,
                 MapX = mapX,
                 MapY = mapY

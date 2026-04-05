@@ -77,7 +77,9 @@ public class NativeWindowManager : IWindowManager
             services.GetService<IDatabaseService>(),
             services.GetService<IVoiceClipManagerService>(),
             services.GetService<IAudioPlaybackService>(),
-            services.GetService<INpcDataService>())
+            services.GetService<INpcDataService>(),
+            services.GetService<IDialogHarvestService>(),
+            clientState)
         {
             InternalName = "EchokrautEncounters",
             Title = Loc.S("Voice Clip Manager"),

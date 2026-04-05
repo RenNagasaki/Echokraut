@@ -19,7 +19,7 @@ public class EchokrautVoiceTests
             AllowedGenders = [Genders.Male],
             AllowedRaces = [NpcRaces.Hyur],
         };
-        Assert.True(voice.FitsNpcData(Genders.Male, NpcRaces.Hyur, false, true));
+        Assert.True(voice.FitsNpcData(Genders.Male, NpcRaces.Hyur, BodyType.Adult, true));
     }
 
     [Fact]
@@ -31,7 +31,7 @@ public class EchokrautVoiceTests
             UseAsRandom = false,
             AllowedRaces = [NpcRaces.Hyur],
         };
-        Assert.False(voice.FitsNpcData(Genders.Male, NpcRaces.Hyur, false, true));
+        Assert.False(voice.FitsNpcData(Genders.Male, NpcRaces.Hyur, BodyType.Adult, true));
     }
 
     [Fact]
@@ -44,7 +44,58 @@ public class EchokrautVoiceTests
             AllowedGenders = [Genders.Male],
             AllowedRaces = [NpcRaces.Elezen],
         };
-        Assert.False(voice.FitsNpcData(Genders.Male, NpcRaces.Hyur, false, true));
+        Assert.False(voice.FitsNpcData(Genders.Male, NpcRaces.Hyur, BodyType.Adult, true));
+    }
+
+    [Fact]
+    public void FitsNpcData_ChildVoice_MatchesChildOnly()
+    {
+        var voice = new EchokrautVoice
+        {
+            IsEnabled = true,
+            UseAsRandom = true,
+            IsAdultVoice = false,
+            IsChildVoice = true,
+            AllowedGenders = [Genders.Female],
+            AllowedRaces = [NpcRaces.Lalafell],
+        };
+        Assert.True(voice.FitsNpcData(Genders.Female, NpcRaces.Lalafell, BodyType.Child, true));
+        Assert.False(voice.FitsNpcData(Genders.Female, NpcRaces.Lalafell, BodyType.Adult, true));
+        Assert.False(voice.FitsNpcData(Genders.Female, NpcRaces.Lalafell, BodyType.Elder, true));
+    }
+
+    [Fact]
+    public void FitsNpcData_ElderVoice_MatchesElderOnly()
+    {
+        var voice = new EchokrautVoice
+        {
+            IsEnabled = true,
+            UseAsRandom = true,
+            IsAdultVoice = false,
+            IsElderVoice = true,
+            AllowedGenders = [Genders.Male],
+            AllowedRaces = [NpcRaces.Hyur],
+        };
+        Assert.True(voice.FitsNpcData(Genders.Male, NpcRaces.Hyur, BodyType.Elder, true));
+        Assert.False(voice.FitsNpcData(Genders.Male, NpcRaces.Hyur, BodyType.Adult, true));
+        Assert.False(voice.FitsNpcData(Genders.Male, NpcRaces.Hyur, BodyType.Child, true));
+    }
+
+    [Fact]
+    public void FitsNpcData_AdultElderVoice_MatchesBoth()
+    {
+        var voice = new EchokrautVoice
+        {
+            IsEnabled = true,
+            UseAsRandom = true,
+            IsAdultVoice = true,
+            IsElderVoice = true,
+            AllowedGenders = [Genders.Male],
+            AllowedRaces = [NpcRaces.Hyur],
+        };
+        Assert.True(voice.FitsNpcData(Genders.Male, NpcRaces.Hyur, BodyType.Adult, true));
+        Assert.True(voice.FitsNpcData(Genders.Male, NpcRaces.Hyur, BodyType.Elder, true));
+        Assert.False(voice.FitsNpcData(Genders.Male, NpcRaces.Hyur, BodyType.Child, true));
     }
 
     // ── Equality ─────────────────────────────────────────────────────────────

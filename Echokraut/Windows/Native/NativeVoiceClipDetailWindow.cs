@@ -64,6 +64,8 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
 
         _voiceClipManager.VoiceClipUpdated += () =>
         {
+            if (_characterId > 0)
+                _encounters = _db.GetVoiceClipsForCharacter(_characterId, 10000);
             _needsRebuild = true;
             _audioExistsCache.Clear();
         };

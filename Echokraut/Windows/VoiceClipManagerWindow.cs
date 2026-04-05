@@ -5,8 +5,10 @@ using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 using Dalamud.Bindings.ImGui;
+using Dalamud.Game;
 using Dalamud.Interface;
 using Dalamud.Interface.Windowing;
+using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.DataClasses.Database;
 using Echokraut.Enums;
@@ -26,6 +28,8 @@ public class VoiceClipManagerWindow : Window, IDisposable
     private readonly IVoiceClipManagerService _voiceClipManager;
     private readonly IAudioPlaybackService _audioPlayback;
     private readonly INpcDataService _npcData;
+    private readonly IDialogHarvestService _dialogHarvest;
+    private readonly IClientState _clientState;
 
     private int? _playingVoiceClipId;
 
@@ -70,17 +74,31 @@ public class VoiceClipManagerWindow : Window, IDisposable
     // Instance location cache: npcBaseId → (zoneName, mapX, mapY)
     private readonly Dictionary<long, (string zone, float x, float y)> _instanceLocationCache = new();
 
+    // Harvest state
+    private CancellationTokenSource? _harvestCts;
+    private string _harvestProgress = "";
+    private ClientLanguage _selectedLanguage;
+
+    private static readonly string[] LanguageLabels = { "Japanese", "English", "German", "French" };
+
     public VoiceClipManagerWindow(
         IDatabaseService db,
         IVoiceClipManagerService voiceClipManager,
         IAudioPlaybackService audioPlayback,
-        INpcDataService npcData)
+        INpcDataService npcData,
+        IDialogHarvestService dialogHarvest,
+        IClientState clientState)
         : base($"Echokraut {Plugin.PluginVersion} {Loc.S("Voice Clip Manager")}###EKEncounterHistory")
     {
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _voiceClipManager = voiceClipManager ?? throw new ArgumentNullException(nameof(voiceClipManager));
         _audioPlayback = audioPlayback ?? throw new ArgumentNullException(nameof(audioPlayback));
         _npcData = npcData ?? throw new ArgumentNullException(nameof(npcData));
+        _dialogHarvest = dialogHarvest ?? throw new ArgumentNullException(nameof(dialogHarvest));
+        _clientState = clientState ?? throw new ArgumentNullException(nameof(clientState));
+        _selectedLanguage = clientState.ClientLanguage;
+
+        _dialogHarvest.ProgressChanged += msg => _harvestProgress = msg;
 
         _voiceClipManager.VoiceClipUpdated += () =>
         {
@@ -144,6 +162,38 @@ public class VoiceClipManagerWindow : Window, IDisposable
 
     private void DrawBulkActions()
     {
+        // Harvest button + language dropdown
+        var isHarvesting = _dialogHarvest.IsRunning;
+        var harvestLabel = isHarvesting ? Loc.S("Stop Harvest") : Loc.S("Start Harvest");
+        if (ImGui.Button($"{harvestLabel}##ekHarvest"))
+        {
+            if (isHarvesting)
+            {
+                _harvestCts?.Cancel();
+            }
+            else
+            {
+                _harvestCts?.Dispose();
+                _harvestCts = new CancellationTokenSource();
+                _ = _dialogHarvest.RunAsync(_selectedLanguage, _harvestCts.Token);
+            }
+        }
+
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(120);
+        var langIdx = (int)_selectedLanguage;
+        if (ImGui.Combo("##ekLangSelect", ref langIdx, LanguageLabels, LanguageLabels.Length))
+        {
+            _selectedLanguage = (ClientLanguage)langIdx;
+            _updateNpcData = true;
+        }
+
+        if (!string.IsNullOrEmpty(_harvestProgress))
+        {
+            ImGui.SameLine();
+            ImGui.TextUnformatted(_harvestProgress);
+        }
+
         using (ImRaii.Disabled(_bulkRunning))
         {
             if (ImGui.Button($"{Loc.S("Generate All Unsaved")}##ekEncGenAll"))
@@ -225,8 +275,8 @@ public class VoiceClipManagerWindow : Window, IDisposable
     {
         _updateNpcData = false;
 
-        _npcList = new List<NpcMapData>(_npcData.MappedNpcs);
-        _playerList = new List<NpcMapData>(_npcData.MappedPlayers);
+        _npcList = _npcData.MappedNpcs.FindAll(n => n.Language == _selectedLanguage);
+        _playerList = _npcData.MappedPlayers.FindAll(n => n.Language == _selectedLanguage);
         _lastNpcCount = _npcData.MappedNpcs.Count;
         _lastPlayerCount = _npcData.MappedPlayers.Count;
 
@@ -238,7 +288,7 @@ public class VoiceClipManagerWindow : Window, IDisposable
         {
             var key = mapData.ToString();
             if (_encCountCache.ContainsKey(key)) continue;
-            var character = _db.FindCharacter(mapData.Name, mapData.Gender, mapData.Race);
+            var character = _db.FindCharacter(mapData.Name, mapData.Gender, mapData.Race, (int)mapData.Language);
             if (character != null)
             {
                 _charIdCache[key] = character.Id;
@@ -396,7 +446,7 @@ public class VoiceClipManagerWindow : Window, IDisposable
                 if (mapData.VoicesSelectable.Draw(mapData.Voice?.VoiceName ?? "", out var selectedIdx))
                 {
                     var voices = _npcData.GetEchokrautVoices()
-                        .FindAll(f => f.IsSelectable(mapData.Name, mapData.Gender, mapData.Race, mapData.IsChild));
+                        .FindAll(f => f.IsSelectable(mapData.Name, mapData.Gender, mapData.Race, mapData.BodyType));
                     if (selectedIdx >= 0 && selectedIdx < voices.Count)
                     {
                         mapData.Voice = voices[selectedIdx];

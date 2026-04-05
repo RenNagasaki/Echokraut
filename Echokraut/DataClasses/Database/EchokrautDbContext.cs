@@ -35,9 +35,9 @@ public class EchokrautDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
-        // Character: unique on (name, gender, race)
+        // Character: unique on (name, gender, race, language)
         modelBuilder.Entity<CharacterEntity>()
-            .HasIndex(c => new { c.Name, c.Gender, c.Race })
+            .HasIndex(c => new { c.Name, c.Gender, c.Race, c.Language })
             .IsUnique();
 
         // CharacterContext: unique on (character_id, context_type)
@@ -49,13 +49,16 @@ public class EchokrautDbContext : DbContext
         modelBuilder.Entity<CharacterInstanceEntity>()
             .HasIndex(ci => ci.NpcBaseId);
 
-        // DialogEncounter: indexes
+        // VoiceClip: indexes
         modelBuilder.Entity<VoiceClipEntity>()
             .HasIndex(e => e.CharacterId);
         modelBuilder.Entity<VoiceClipEntity>()
             .HasIndex(e => e.Timestamp);
         modelBuilder.Entity<VoiceClipEntity>()
             .HasIndex(e => e.TextSource);
+        // Composite index for upsert lookup in LogOrUpdateVoiceClip
+        modelBuilder.Entity<VoiceClipEntity>()
+            .HasIndex(e => new { e.CharacterId, e.NpcBaseId, e.OriginalText });
 
         // Voice: unique on backend_voice
         modelBuilder.Entity<VoiceEntity>()
