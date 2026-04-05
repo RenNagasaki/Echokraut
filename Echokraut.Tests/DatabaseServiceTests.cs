@@ -41,7 +41,7 @@ public class DatabaseServiceTests : IDisposable
         Assert.NotNull(_context.Characters);
         Assert.NotNull(_context.CharacterContexts);
         Assert.NotNull(_context.CharacterInstances);
-        Assert.NotNull(_context.DialogEncounters);
+        Assert.NotNull(_context.VoiceClips);
         Assert.NotNull(_context.Voices);
         Assert.NotNull(_context.VoiceAllowedGenders);
         Assert.NotNull(_context.VoiceAllowedRaces);
@@ -247,7 +247,7 @@ public class DatabaseServiceTests : IDisposable
     // ── Dialog Encounters ───────────────────────────────────
 
     [Fact]
-    public void LogEncounter_InsertsAndQueries()
+    public void LogVoiceClip_InsertsAndQueries()
     {
         var character = _db.UpsertCharacter(new CharacterEntity
         {
@@ -256,7 +256,7 @@ public class DatabaseServiceTests : IDisposable
             Gender = (int)Genders.Male
         });
 
-        _db.LogEncounter(new DialogEncounterEntity
+        _db.LogVoiceClip(new VoiceClipEntity
         {
             CharacterId = character.Id,
             NpcBaseId = 1001000,
@@ -269,17 +269,17 @@ public class DatabaseServiceTests : IDisposable
             BodyType = (int)BodyType.Adult
         });
 
-        Assert.Equal(1, _db.GetEncounterCount());
-        var encounters = _db.GetEncounters();
+        Assert.Equal(1, _db.GetVoiceClipCount());
+        var encounters = _db.GetVoiceClips();
         Assert.Single(encounters);
         Assert.Equal("Hello, adventurer!", encounters[0].OriginalText);
         Assert.Equal("Alphinaud", encounters[0].Character?.Name);
     }
 
     [Fact]
-    public void ClearEncounters_RemovesAll()
+    public void ClearVoiceClips_RemovesAll()
     {
-        _db.LogEncounter(new DialogEncounterEntity
+        _db.LogVoiceClip(new VoiceClipEntity
         {
             Timestamp = DateTime.UtcNow,
             TextSource = 2,
@@ -287,8 +287,8 @@ public class DatabaseServiceTests : IDisposable
             OriginalText = "Test"
         });
 
-        _db.ClearEncounters();
-        Assert.Equal(0, _db.GetEncounterCount());
+        _db.ClearVoiceClips();
+        Assert.Equal(0, _db.GetVoiceClipCount());
     }
 
     // ── Migration ───────────────────────────────────────────

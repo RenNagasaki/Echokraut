@@ -17,6 +17,7 @@ public interface INpcDataService
     void RefreshSelectables(List<EchokrautVoice> voices);
     NpcMapData GetAddCharacterMapData(NpcMapData data, EKEventId eventId, IBackendService backend);
     void SaveCharacter(NpcMapData data);
+    void SaveCharacterWithOldIdentity(NpcMapData data, string oldName, Genders oldGender, NpcRaces oldRace);
     void RemoveCharacter(NpcMapData data);
     List<EchokrautVoice> GetEchokrautVoices();
     void SaveVoice(EchokrautVoice voice);

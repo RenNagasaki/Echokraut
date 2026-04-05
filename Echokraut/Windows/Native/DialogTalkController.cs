@@ -94,7 +94,11 @@ public sealed unsafe class DialogTalkController : IDisposable
     /// Registers a hit-test callback so clicks inside owned native windows
     /// (e.g., config window) suppress Talk addon advance.
     /// </summary>
-    public void SetWindowHitTest(Func<Vector2, bool> hitTest) => _isInsideOwnedWindow = hitTest;
+    public void SetWindowHitTest(Func<Vector2, bool> hitTest)
+    {
+        _isInsideOwnedWindow = hitTest;
+        DialogState.IsInsideOwnedWindow = hitTest;
+    }
 
     public void Dispose()
     {

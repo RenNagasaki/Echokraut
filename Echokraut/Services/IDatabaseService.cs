@@ -24,7 +24,9 @@ public interface IDatabaseService : IDisposable
     CharacterContextEntity UpsertContext(int characterId, string contextType, bool isEnabled = true, float volume = 1.0f);
 
     // Character instances
-    CharacterInstanceEntity GetOrCreateInstance(int characterId, uint npcBaseId);
+    CharacterInstanceEntity GetOrCreateInstance(int characterId, uint npcBaseId,
+        string zoneName = "", float mapX = 0, float mapY = 0);
+    List<CharacterInstanceEntity> GetInstancesForCharacter(int characterId);
     void MuteInstance(uint npcBaseId);
     void UnmuteInstance(uint npcBaseId);
     void ClearInstanceMutes();
@@ -42,8 +44,19 @@ public interface IDatabaseService : IDisposable
     void DeletePhoneticCorrection(string originalText);
 
     // Dialog encounters
-    void LogEncounter(DialogEncounterEntity encounter);
-    List<DialogEncounterEntity> GetEncounters(int limit = 1000, int offset = 0);
-    int GetEncounterCount();
-    void ClearEncounters();
+    event Action? VoiceClipLogged;
+    void LogVoiceClip(VoiceClipEntity encounter);
+    void LogOrUpdateVoiceClip(VoiceClipEntity encounter);
+    List<VoiceClipEntity> GetVoiceClips(int limit = 1000, int offset = 0,
+        string? npcNameFilter = null, string? textFilter = null,
+        int? textSourceFilter = null, bool? savedFilter = null);
+    int GetVoiceClipCount(string? npcNameFilter = null, string? textFilter = null,
+        int? textSourceFilter = null, bool? savedFilter = null);
+    List<CharacterEntity> GetCharactersWithVoiceClips();
+    List<VoiceClipEntity> GetVoiceClipsForCharacter(int characterId, int limit = 1000, int offset = 0);
+    int GetVoiceClipCountForCharacter(int characterId);
+    int GetSavedVoiceClipCountForCharacter(int characterId);
+    void UpdateVoiceClipSaved(int voiceClipId, bool savedToDisk, string savePath);
+    void DeleteVoiceClip(int encounterId);
+    void ClearVoiceClips();
 }

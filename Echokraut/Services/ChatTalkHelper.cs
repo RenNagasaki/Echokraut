@@ -155,7 +155,8 @@ namespace Echokraut.Services
                         return;
                 }
 
-                var eventId = _log.Start(nameof(ProcessChatMessage), TextSource.Chat);
+                var _baseId = _log.Start(nameof(ProcessChatMessage), TextSource.Chat);
+        var eventId = new EKEventId(_baseId.Id, _baseId.TextSource);
                 _log.Debug(nameof(ProcessChatMessage), $"{type.ToString()}: \"{text}\"", eventId);
 
                 // Find the game object this speaker represents

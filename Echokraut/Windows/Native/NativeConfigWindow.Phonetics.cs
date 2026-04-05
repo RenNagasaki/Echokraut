@@ -3,6 +3,7 @@ using System.Linq;
 using System.Numerics;
 using Echokraut.DataClasses;
 using Echokraut.Localization;
+using Echotools.UI.Nodes;
 using KamiToolKit.Nodes;
 
 namespace Echokraut.Windows.Native;
@@ -19,6 +20,8 @@ public sealed unsafe partial class NativeConfigWindow
 
     // Data list — cleared and rebuilt on filter/data change
     private ScrollingListNode? _phonDataList;
+    private PaginationBar? _phonPaginationBar;
+    private const int PhonPageSize = 100;
 
     private string _phonFilterOrigText = "";
     private string _phonFilterCorrText = "";
@@ -28,16 +31,28 @@ public sealed unsafe partial class NativeConfigWindow
     private bool _phonNeedRebuild;
     private bool _phonBuilt;
 
-    // Column widths
-    private const float PhonColOrig = 250f;
-    private const float PhonColCorr = 250f;
-    private const float PhonColDel  = 60f;
+    // Column widths (computed at setup)
+    private float _phonColField;
+    private float _phonColBtn;
+    private float _phonColBtnPadL;
 
     private void SetupPhonetics()
     {
         var w = _contentWidth;
         var y = _topContentPos.Y;
         var x = _topContentPos.X;
+
+        // 40% each field, button auto-sized and centered in remaining space
+        _phonColField = (w - 2 * 4) * 0.42f; // 42% of width minus gaps
+        var addBtn = Button(Loc.S("Add"), 60, () =>
+        {
+            if (string.IsNullOrWhiteSpace(_phonNewOrigText)) return;
+            _npcData.UpsertPhoneticCorrection(_phonNewOrigText.Trim(), _phonNewCorrText.Trim());
+            _phonNeedRebuild = true;
+        });
+        _phonColBtn = addBtn.Size.X;
+        var remaining = w - _phonColField * 2 - _phonColBtn - 3 * 4;
+        _phonColBtnPadL = remaining / 2;
 
         // Row 1: Column headers
         _phonFilterRow = new HorizontalListNode
@@ -46,9 +61,9 @@ public sealed unsafe partial class NativeConfigWindow
             ItemSpacing = 4,
             Position = new Vector2(x, y),
         };
-        _phonFilterRow.AddNode(Label(Loc.S("Original"), PhonColOrig));
-        _phonFilterRow.AddNode(Label(Loc.S("Corrected"), PhonColCorr));
-        _phonFilterRow.AddNode(Label("", PhonColDel));
+        _phonFilterRow.AddNode(Label(Loc.S("Original"), _phonColField));
+        _phonFilterRow.AddNode(Label(Loc.S("Corrected"), _phonColField));
+        _phonFilterRow.AddNode(Label("", _phonColBtn + remaining));
 
         // Row 2: Filter inputs below headers
         _phonAddRow = new HorizontalListNode
@@ -57,11 +72,11 @@ public sealed unsafe partial class NativeConfigWindow
             ItemSpacing = 4,
             Position = new Vector2(x, y + 20),
         };
-        _phonAddRow.AddNode(Input(Loc.S("Filter"), PhonColOrig, 40, "",
+        _phonAddRow.AddNode(Input(Loc.S("Filter"), _phonColField, 40, "",
             v => { _phonFilterOrigText = v; _phonNeedRebuild = true; }));
-        _phonAddRow.AddNode(Input(Loc.S("Filter"), PhonColCorr, 40, "",
+        _phonAddRow.AddNode(Input(Loc.S("Filter"), _phonColField, 40, "",
             v => { _phonFilterCorrText = v; _phonNeedRebuild = true; }));
-        _phonAddRow.AddNode(Spacer(PhonColDel, 28));
+        _phonAddRow.AddNode(Spacer(_phonColBtn + remaining, 28));
 
         _phonHeaderSep1 = new HorizontalLineNode
         {
@@ -69,27 +84,30 @@ public sealed unsafe partial class NativeConfigWindow
             Position = new Vector2(x, y + 50),
         };
 
-        // Row 3: Add new correction inputs
+        // Row 3: Add new correction inputs (button centered in remaining space)
         _phonHeaderSep2 = new HorizontalListNode
         {
             Size = new Vector2(w, 28),
             ItemSpacing = 4,
             Position = new Vector2(x, y + 56),
         };
-        _phonHeaderSep2.AddNode(Input(Loc.S("New original"), PhonColOrig, 40, "",
+        _phonHeaderSep2.AddNode(Input(Loc.S("New original"), _phonColField, 40, "",
             v => { _phonNewOrigText = v; }));
-        _phonHeaderSep2.AddNode(Input(Loc.S("New corrected"), PhonColCorr, 40, "",
+        _phonHeaderSep2.AddNode(Input(Loc.S("New corrected"), _phonColField, 40, "",
             v => { _phonNewCorrText = v; }));
-        _phonHeaderSep2.AddNode(Button(Loc.S("Add"), PhonColDel, () =>
-        {
-            if (string.IsNullOrWhiteSpace(_phonNewOrigText)) return;
-            _npcData.UpsertPhoneticCorrection(_phonNewOrigText.Trim(), _phonNewCorrText.Trim());
-            _phonNeedRebuild = true;
-        }));
+        _phonHeaderSep2.AddNode(Spacer(_phonColBtnPadL, 28));
+        _phonHeaderSep2.AddNode(addBtn);
 
-        // Data list below
+        // Pagination bar
+        const float paginationH = 28f;
+        var pagY = _topContentPos.Y + _topContentSize.Y - paginationH;
+        _phonPaginationBar = new PaginationBar(
+            new Vector2(x, pagY), w,
+            page => _phonNeedRebuild = true);
+
+        // Data list below (above pagination)
         var dataY = y + 88;
-        var dataH = _topContentSize.Y - 88;
+        var dataH = pagY - dataY - 4;
         _phonDataList = Panel(new Vector2(x, dataY), new Vector2(w, dataH));
     }
 
@@ -100,6 +118,9 @@ public sealed unsafe partial class NativeConfigWindow
         AddNode(_phonAddRow!);
         AddNode(_phonHeaderSep2!);
         AddNode(_phonDataList!);
+        if (_phonPaginationBar != null)
+            foreach (var node in _phonPaginationBar.Nodes)
+                AddNode(node);
     }
 
     private void ShowPhoneticsSection(bool visible)
@@ -109,6 +130,9 @@ public sealed unsafe partial class NativeConfigWindow
         SetVisible(_phonAddRow, visible);
         SetVisible(_phonHeaderSep2, visible);
         SetVisible(_phonDataList, visible);
+        if (_phonPaginationBar != null)
+            foreach (var node in _phonPaginationBar.Nodes)
+                SetVisible(node, visible);
 
         if (visible && !_phonBuilt)
             _phonNeedRebuild = true;
@@ -117,6 +141,8 @@ public sealed unsafe partial class NativeConfigWindow
     private void UpdatePhonetics()
     {
         if (_activeTopTab != 2) return;
+
+        _phonPaginationBar?.Update();
 
         if (_phonNeedRebuild)
         {
@@ -146,13 +172,19 @@ public sealed unsafe partial class NativeConfigWindow
             .OrderBy(c => c.OriginalText)
             .ToList();
 
-        foreach (var correction in corrections)
+        _phonPaginationBar?.SetTotalItems(corrections.Count, PhonPageSize);
+        var page = _phonPaginationBar?.CurrentPage ?? 0;
+        var pageStart = page * PhonPageSize;
+        var pageEnd = Math.Min(pageStart + PhonPageSize, corrections.Count);
+
+        for (var idx = pageStart; idx < pageEnd; idx++)
         {
-            var corr = correction;
+            var corr = corrections[idx];
             var row = new HorizontalListNode { Size = new Vector2(w, 24), ItemSpacing = 4 };
-            row.AddNode(Label(corr.OriginalText, PhonColOrig));
-            row.AddNode(Label(corr.CorrectedText, PhonColCorr));
-            row.AddNode(Button(Loc.S("Delete"), PhonColDel, () =>
+            row.AddNode(Label(corr.OriginalText, _phonColField));
+            row.AddNode(Label(corr.CorrectedText, _phonColField));
+            row.AddNode(Spacer(_phonColBtnPadL, 24));
+            row.AddNode(Button(Loc.S("Delete"), 60, () =>
             {
                 _npcData.DeletePhoneticCorrection(corr.OriginalText);
                 _phonNeedRebuild = true;

@@ -105,6 +105,15 @@ public static class ServiceBuilder
             c.GetService<IAudioFileService>(),
             c.GetService<IDatabaseService>()));
 
+        container.RegisterFactory<IVoiceClipManagerService>(c => new VoiceClipManagerService(
+            c.GetService<IDatabaseService>(),
+            c.GetService<IBackendService>(),
+            c.GetService<IAudioFileService>(),
+            c.GetService<IAudioPlaybackService>(),
+            c.GetService<INpcDataService>(),
+            c.GetService<ILogService>(),
+            configuration));
+
         // Register business logic services
         container.RegisterFactory<ITextProcessingService>(c => new TextProcessingService(
             c.GetService<ILogService>(),

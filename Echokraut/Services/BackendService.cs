@@ -389,7 +389,6 @@ public class BackendService : IBackendService, IDisposable
             if (message.LoadedLocally && message.Stream != null)
             {
                 _queue.MarkAsReadyToPlay(entry.Id);
-                LogEncounter(message);
                 return;
             }
 
@@ -403,7 +402,6 @@ public class BackendService : IBackendService, IDisposable
             {
                 _queue.MarkAsReadyToPlay(entry.Id);
                 _log.Info(nameof(ProcessGenerationAsync), "Audio generated successfully", eventId);
-                LogEncounter(message);
             }
             else
             {
@@ -415,38 +413,6 @@ public class BackendService : IBackendService, IDisposable
         {
             _queue.MarkAsFailed(entry.Id, ex);
             _log.Error(nameof(ProcessGenerationAsync), $"Error generating audio: {ex}", eventId);
-        }
-    }
-
-    private void LogEncounter(VoiceMessage message)
-    {
-        try
-        {
-            var speaker = message.Speaker;
-            var characterId = (int?)null;
-            if (speaker != null)
-            {
-                var character = _db.FindCharacter(speaker.Name, speaker.Gender, speaker.Race);
-                characterId = character?.Id;
-            }
-
-            _db.LogEncounter(new DialogEncounterEntity
-            {
-                CharacterId = characterId,
-                Timestamp = DateTime.UtcNow,
-                TextSource = (int)message.Source,
-                Language = (int)message.Language,
-                VoiceKey = speaker?.voice ?? "",
-                OriginalText = message.OriginalText ?? "",
-                CleanedText = message.Text ?? "",
-                SavedToDisk = message.LoadedLocally || _config.SaveToLocal,
-                BodyType = speaker?.IsChild == true ? (int)Enums.BodyType.Child : (int)Enums.BodyType.Adult
-            });
-        }
-        catch (Exception ex)
-        {
-            _log.Debug(nameof(LogEncounter), $"Failed to log encounter: {ex.Message}",
-                new EKEventId(0, TextSource.None));
         }
     }
 

@@ -151,6 +151,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private bool _prevShowRemote;
     private bool _prevShowService;
 
+    internal Action? OnToggleVoiceClipManager;
+
     // Data Harvest
     private readonly IDialogHarvestService _dialogHarvest;
     private TextButtonNode? _harvestButton;
@@ -283,7 +285,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
 
         // ── Top-level tabs ───────────────────────────────────────────────────
         topTabBar.AddTab(Loc.S("Settings"),   () => ShowTopPanel(0));
-        topTabBar.AddTab(Loc.S("Voice Sel."), () => ShowTopPanel(1));
+        topTabBar.AddTab(Loc.S("Voices"),     () => ShowTopPanel(1));
         topTabBar.AddTab(Loc.S("Phonetics"),  () => ShowTopPanel(2));
         topTabBar.AddTab(Loc.S("Logs"),       () => ShowTopPanel(3));
 
@@ -633,6 +635,10 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
 
         CreateCollapsibleSection(list, Loc.S("Available commands"), w, true,
             commandNodes.Where(n => n != null).Cast<NodeBase>().ToArray());
+
+        // Encounter History button
+        list.AddNode(Separator(w));
+        list.AddNode(Button(Loc.S("Voice Clip Manager"), 200, () => OnToggleVoiceClipManager?.Invoke()));
 
         // Data Harvest section
         _harvestButton = Button(Loc.S("Start Harvest"), 160, OnHarvestClick);

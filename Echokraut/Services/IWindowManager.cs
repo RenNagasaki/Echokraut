@@ -7,5 +7,6 @@ public interface IWindowManager : IDisposable
     bool IsFirstTimeOpen { get; }
     void ToggleConfig();
     void ToggleFirstTime();
+    void ToggleVoiceClipManager();
     void Draw();
 }

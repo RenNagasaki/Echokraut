@@ -6,6 +6,7 @@ using Echokraut.DataClasses;
 using Echokraut.Enums;
 using Echokraut.Localization;
 using Echokraut.Services;
+using Echotools.UI.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit.Nodes;
 
@@ -47,17 +48,8 @@ public sealed unsafe partial class NativeConfigWindow
     private int _vsProgressiveTab = -1; // which tab is being progressively built (-1 = idle)
     private bool _vsProgressiveIsVoices; // true when building voices tab
 
-    // Deferred page change (set by button click, processed in UpdateVoiceSelection)
-    private int _vsPendingPageDelta;
-    private int _vsPendingPageTab = -1;
-    private int _vsPendingPageJump = -1; // direct page jump (0-indexed), -1 = none
-
-    // Pagination nodes (individually positioned per tab)
-    private const int MaxPageButtons = 20;
-    private TextButtonNode?[] _vsPrevButtons = new TextButtonNode?[4];
-    private TextButtonNode?[] _vsNextButtons = new TextButtonNode?[4];
-    private TextNode?[] _vsPageLabels = new TextNode?[4];
-    private TextButtonNode?[,] _vsPageButtons = new TextButtonNode?[4, MaxPageButtons];
+    // Pagination bar for Voices tab
+    private PaginationBar? _vsPaginationBar;
 
     // Rebuild flags — only set by filter changes, NOT by tab switches
     private bool _vsNpcNeedRebuild;
@@ -78,6 +70,7 @@ public sealed unsafe partial class NativeConfigWindow
 
     // Per-row delete state (single-delete confirmation, like ImGui's double-click pattern)
     private float _colDel = 60f; // measured at setup from localized text
+    private float _colConfigure = 80f;
     private bool _vsDelAudioArmed;
     private bool _vsDelMappingArmed;
     private NpcMapData? _vsDelTarget;
@@ -117,6 +110,8 @@ public sealed unsafe partial class NativeConfigWindow
         var delMapW = delMeasure.LabelNode.GetTextDrawSize(Loc.S("Delete mapping")).X + 36;
         var okW = delMeasure.LabelNode.GetTextDrawSize(Loc.S("OK?")).X + 36;
         _colDel = Math.Max(60f, Math.Max(okW, Math.Max(delAudioW, delMapW)));
+        var configW = delMeasure.LabelNode.GetTextDrawSize(Loc.S("Configure")).X + 36;
+        _colConfigure = Math.Max(80f, configW);
         delMeasure.Dispose();
 
         // Unified search bar above the tab bar
@@ -135,12 +130,8 @@ public sealed unsafe partial class NativeConfigWindow
             for (var j = 0; j < 3; j++)
                 SetVisible(_vsFilterRows[j], _vsAdvancedFiltersVisible && j == _activeVsTab);
         });
-        _vsAdvancedToggle.Position = _topContentPos + new Vector2(0, 30);
-
-        _vsTabBar = new TabBarNode { Size = new Vector2(w, 32), Position = _topContentPos + new Vector2(0, 56) };
-
-        // Position for headers (below tab bar + search bar + toggle)
-        var headerY = _innerContentPos.Y + 56;
+        // Position for headers (below search bar, no inner tab bar)
+        var headerY = _topContentPos.Y + 30;
         // Position for data list (below headers: header 20 + filter 28 + sep 4 + gap)
         var dataYWithFilter = headerY + 20 + 28 + 8;
         var paginationH = 28f;
@@ -180,53 +171,24 @@ public sealed unsafe partial class NativeConfigWindow
             _vsHeaderSeps[i] = new HorizontalLineNode { Size = new Vector2(w, 4), Position = new Vector2(_innerContentPos.X, headerY + 20 + 28 + 2) };
 
             _vsDataLists[i] = Panel(new Vector2(_innerContentPos.X, dataYWithFilter), new Vector2(w, dataH));
-
-            CreateVsPaginationNodes(i, w, dataYWithFilter + dataH + 4);
         }
 
-        // Voices tab — uses area below search + toggle + tab bar
-        var voicesDataH = _innerContentSize.Y - (headerY - _innerContentPos.Y) - paginationH - 4;
-        _vsDataLists[3] = Panel(new Vector2(_innerContentPos.X, headerY), new Vector2(w, voicesDataH));
-        CreateVsPaginationNodes(3, w, headerY + voicesDataH + 4);
+        // Voices data list — directly below search (no inner tab bar)
+        var voicesDataH = _topContentSize.Y - (headerY - _topContentPos.Y) - paginationH - 4;
+        _vsDataLists[3] = Panel(new Vector2(_topContentPos.X, headerY), new Vector2(w, voicesDataH));
 
-        _vsTabBar.AddTab(Loc.S("NPCs"),    () => ShowVsPanel(0));
-        _vsTabBar.AddTab(Loc.S("Players"), () => ShowVsPanel(1));
-        _vsTabBar.AddTab(Loc.S("Bubbles"), () => ShowVsPanel(2));
-        _vsTabBar.AddTab(Loc.S("Voices"),  () => ShowVsPanel(3));
-    }
-
-    private void CreateVsPaginationNodes(int index, float w, float y)
-    {
-        var idx = index;
-        const float btnW = 30f;
-        const float labelW = 150f;
-
-        _vsPrevButtons[index] = Button("<", btnW, () => VsChangePage(idx, -1));
-        _vsNextButtons[index] = Button(">", btnW, () => VsChangePage(idx, 1));
-        _vsPageLabels[index] = Label("", labelW);
-
-        // Pre-create page number buttons (hidden by default, positioned dynamically)
-        for (var p = 0; p < MaxPageButtons; p++)
-        {
-            var page = p;
-            var tabIdx = idx;
-            _vsPageButtons[index, p] = Button((p + 1).ToString(), btnW, () => VsJumpToPage(tabIdx, page));
-            _vsPageButtons[index, p]!.IsVisible = false;
-        }
-
-        // Initial positions — will be recalculated in UpdateVsPaginationLayout
-        _vsPrevButtons[index]!.Position = new Vector2(_innerContentPos.X, y);
-        _vsNextButtons[index]!.Position = new Vector2(_innerContentPos.X + btnW + 4, y);
-
-        // Label right-aligned
-        _vsPageLabels[index]!.Position = new Vector2(_innerContentPos.X + w - labelW, y + 4);
+        _vsPaginationBar = new PaginationBar(
+            new Vector2(_topContentPos.X, headerY + voicesDataH + 4), w,
+            page =>
+            {
+                _vsPage[3] = page;
+                BuildVoicesPage();
+            });
     }
 
     private void AddVoiceSelectionNodes()
     {
         AddNode(_vsUnifiedSearch!);
-        AddNode(_vsAdvancedToggle!);
-        AddNode(_vsTabBar!);
         for (var i = 0; i < 3; i++)
         {
             AddNode(_vsHeaders[i]!);
@@ -235,25 +197,17 @@ public sealed unsafe partial class NativeConfigWindow
         }
         foreach (var dl in _vsDataLists)
             if (dl != null) AddNode(dl);
-        for (var i = 0; i < 4; i++)
-        {
-            if (_vsPrevButtons[i] != null) AddNode(_vsPrevButtons[i]!);
-            for (var p = 0; p < MaxPageButtons; p++)
-                if (_vsPageButtons[i, p] != null) AddNode(_vsPageButtons[i, p]!);
-            if (_vsNextButtons[i] != null) AddNode(_vsNextButtons[i]!);
-            if (_vsPageLabels[i] != null) AddNode(_vsPageLabels[i]!);
-        }
+        if (_vsPaginationBar != null)
+            foreach (var node in _vsPaginationBar.Nodes)
+                AddNode(node);
     }
 
     private void ShowVoiceSelectionSection(bool visible)
     {
         SetVisible(_vsUnifiedSearch, visible);
-        SetVisible(_vsAdvancedToggle, visible);
-        SetVisible(_vsTabBar, visible);
         if (visible)
         {
-            // Always restore the active sub-tab (SelectTab only highlights, doesn't fire callback)
-            ShowVsPanel(_activeVsTab);
+            ShowVsPanel(3); // Always show Voices panel directly
         }
         else
         {
@@ -271,14 +225,9 @@ public sealed unsafe partial class NativeConfigWindow
         }
         foreach (var dl in _vsDataLists)
             SetVisible(dl, false);
-        for (var i = 0; i < 4; i++)
-        {
-            SetVisible(_vsPrevButtons[i], false);
-            SetVisible(_vsNextButtons[i], false);
-            SetVisible(_vsPageLabels[i], false);
-            for (var p = 0; p < MaxPageButtons; p++)
-                SetVisible(_vsPageButtons[i, p], false);
-        }
+        if (_vsPaginationBar != null)
+            foreach (var node in _vsPaginationBar.Nodes)
+                SetVisible(node, false);
     }
 
     private void ShowVsPanel(int index)
@@ -286,21 +235,13 @@ public sealed unsafe partial class NativeConfigWindow
         _activeVsTab = index;
         HideAllVsPanels();
 
-        if (index < 3)
-        {
-            SetVisible(_vsHeaders[index], true);
-            SetVisible(_vsFilterRows[index], _vsAdvancedFiltersVisible);
-            SetVisible(_vsHeaderSeps[index], true);
-            SetVisible(_vsDataLists[index], true);
-        }
-        else
+        if (index == 3)
         {
             SetVisible(_vsDataLists[3], true);
+            if (_vsPaginationBar != null)
+                foreach (var node in _vsPaginationBar.Nodes)
+                    SetVisible(node, true);
         }
-
-        SetVisible(_vsPrevButtons[index], true);
-        SetVisible(_vsNextButtons[index], true);
-        SetVisible(_vsPageLabels[index], true);
 
         // Reset filters on tab switch
         _vsFilterName = "";
@@ -309,25 +250,8 @@ public sealed unsafe partial class NativeConfigWindow
         _vsFilterVoice = "";
 
         // Only build on first view — subsequent switches reuse existing nodes
-        switch (index)
-        {
-            case 0:
-                if (!_vsNpcBuilt) _vsNpcNeedRebuild = true;
-                else UpdateVsPaginationLabel(0, _vsFilteredData[0]?.Count ?? 0);
-                break;
-            case 1:
-                if (!_vsPlayerBuilt) _vsPlayerNeedRebuild = true;
-                else UpdateVsPaginationLabel(1, _vsFilteredData[1]?.Count ?? 0);
-                break;
-            case 2:
-                if (!_vsBubbleBuilt) _vsBubbleNeedRebuild = true;
-                else UpdateVsPaginationLabel(2, _vsFilteredData[2]?.Count ?? 0);
-                break;
-            case 3:
-                if (!_vsVoicesBuilt) _vsVoicesNeedRebuild = true;
-                else UpdateVsPaginationLabel(3, _vsFilteredVoices?.Count ?? 0);
-                break;
-        }
+        if (index == 3 && !_vsVoicesBuilt)
+            _vsVoicesNeedRebuild = true;
     }
 
     private void ResetVsDeleteState()
@@ -374,8 +298,8 @@ public sealed unsafe partial class NativeConfigWindow
             TriggerActiveRebuild();
         }
 
-        // Process deferred page changes (queued by button click handlers)
-        ProcessVsPageChange();
+        // Update pagination bar
+        _vsPaginationBar?.Update();
 
         // Start new builds
         if (_vsNpcNeedRebuild && _activeVsTab == 0)
@@ -441,7 +365,6 @@ public sealed unsafe partial class NativeConfigWindow
         {
             panel.AddNode(Label(Loc.S("No entries found."), _contentWidth));
             panel.RecalculateLayout();
-            UpdateVsPaginationLabel(tabIndex, 0);
             _vsProgressiveTab = -1;
             return;
         }
@@ -450,7 +373,6 @@ public sealed unsafe partial class NativeConfigWindow
         _vsProgressiveTab = tabIndex;
         _vsProgressiveIndex = 0;
         _vsProgressiveIsVoices = false;
-        UpdateVsPaginationLabel(tabIndex, entries.Count);
     }
 
     private void ContinueVsPageBuild()
@@ -661,12 +583,15 @@ public sealed unsafe partial class NativeConfigWindow
         panel.Clear();
 
         // Header
-        var header = new HorizontalListNode { Size = new Vector2(w, 20), ItemSpacing = 4 };
+        var hw = w - ScrollbarWidth;
+        const float noteFixedW = 300f;
+        var volW = hw - 30 - 200 - noteFixedW - _colConfigure - 4 * 4 - 16;
+        var header = new HorizontalListNode { Size = new Vector2(hw, 20), ItemSpacing = 4 };
         header.AddNode(Label(Loc.S("En"), 30));
         header.AddNode(Label(Loc.S("Voice Name"), 200));
-        header.AddNode(Label(Loc.S("Note"), 200));
-        header.AddNode(Label(Loc.S("Volume"), 150));
-        header.AddNode(Label("", 80));
+        header.AddNode(Label(Loc.S("Note"), noteFixedW));
+        header.AddNode(Label(Loc.S("Volume"), volW));
+        header.AddNode(Label("", _colConfigure));
         panel.AddNode(header);
         panel.AddNode(Separator(w));
 
@@ -674,16 +599,17 @@ public sealed unsafe partial class NativeConfigWindow
         {
             panel.AddNode(Label(Loc.S("No voices configured."), w));
             panel.RecalculateLayout();
-            UpdateVsPaginationLabel(3, 0);
+            _vsPaginationBar?.SetTotalItems(0, VsPageSize);
             _vsProgressiveTab = -1;
             return;
         }
+
+        _vsPaginationBar?.SetTotalItems(_vsFilteredVoices.Count, VsPageSize);
 
         // Start progressive build — rows added in ContinueVoicesPageBuild()
         _vsProgressiveTab = 3;
         _vsProgressiveIndex = 0;
         _vsProgressiveIsVoices = true;
-        UpdateVsPaginationLabel(3, _vsFilteredVoices.Count);
     }
 
     private void ContinueVoicesPageBuild()
@@ -691,7 +617,7 @@ public sealed unsafe partial class NativeConfigWindow
         var panel = _vsDataLists[3];
         if (panel == null || _vsFilteredVoices == null) { _vsProgressiveTab = -1; return; }
 
-        var page = _vsPage[3];
+        var page = _vsPaginationBar?.CurrentPage ?? 0;
         var pageStart = page * VsPageSize;
         var pageEnd = Math.Min(pageStart + VsPageSize, _vsFilteredVoices.Count);
         var pageCount = pageEnd - pageStart;
@@ -700,20 +626,24 @@ public sealed unsafe partial class NativeConfigWindow
         var end = Math.Min(start + VsRowsPerFrame, pageCount);
         var w = _contentWidth;
 
+        var rw = w - ScrollbarWidth;
+        const float noteFixedW2 = 300f;
+        var volWidth = rw - 30 - 200 - noteFixedW2 - _colConfigure - 4 * 4 - 16;
+
         for (var i = start; i < end; i++)
         {
             var voice = _vsFilteredVoices[pageStart + i];
-            var row = new HorizontalListNode { Size = new Vector2(w, 28), ItemSpacing = 4 };
+            var row = new HorizontalListNode { Size = new Vector2(rw, 28), ItemSpacing = 4 };
 
             row.AddNode(Check("   ", 30, voice.IsEnabled, v =>
             { voice.IsEnabled = v; _config.Save(); }));
             row.AddNode(Label(voice.VoiceName, 200));
-            row.AddNode(Input(Loc.S("Note"), 200, 80, voice.Note, v =>
+            row.AddNode(Input(Loc.S("Note"), noteFixedW2, 80, voice.Note, v =>
             { voice.Note = v; _config.Save(); }));
 
             var volSlider = new SliderNode
             {
-                Size = new Vector2(150, 20),
+                Size = new Vector2(volWidth, 20),
                 Range = 0..200,
                 DecimalPlaces = 2,
                 Value = (int)(voice.Volume * 100),
@@ -722,7 +652,7 @@ public sealed unsafe partial class NativeConfigWindow
             row.AddNode(volSlider);
 
             var capturedVoice = voice;
-            row.AddNode(Button(Loc.S("Configure"), 80, () => OpenVoiceConfig(capturedVoice)));
+            row.AddNode(Button(Loc.S("Configure"), _colConfigure, () => OpenVoiceConfig(capturedVoice)));
             panel.AddNode(row);
         }
 
@@ -751,103 +681,6 @@ public sealed unsafe partial class NativeConfigWindow
 
     // ── Pagination ───────────────────────────────────────────────────────────
 
-    private void VsChangePage(int tabIndex, int delta)
-    {
-        // Defer to UpdateVoiceSelection — never clear/rebuild nodes inside ATK event handlers.
-        _vsPendingPageTab = tabIndex;
-        _vsPendingPageDelta = delta;
-        _vsPendingPageJump = -1;
-    }
-
-    private void VsJumpToPage(int tabIndex, int page)
-    {
-        _vsPendingPageTab = tabIndex;
-        _vsPendingPageDelta = 0;
-        _vsPendingPageJump = page;
-    }
-
-    private void ProcessVsPageChange()
-    {
-        if (_vsPendingPageTab < 0) return;
-
-        var tabIndex = _vsPendingPageTab;
-        var delta = _vsPendingPageDelta;
-        var jump = _vsPendingPageJump;
-        _vsPendingPageTab = -1;
-        _vsPendingPageJump = -1;
-
-        var total = tabIndex == 3
-            ? (_vsFilteredVoices?.Count ?? 0)
-            : (_vsFilteredData[tabIndex]?.Count ?? 0);
-        var maxPage = Math.Max(0, (total - 1) / VsPageSize);
-        var newPage = jump >= 0
-            ? Math.Clamp(jump, 0, maxPage)
-            : Math.Clamp(_vsPage[tabIndex] + delta, 0, maxPage);
-        if (newPage == _vsPage[tabIndex]) return;
-
-        _vsPage[tabIndex] = newPage;
-
-        if (tabIndex == 3)
-            BuildVoicesPage();
-        else if (_vsDataLists[tabIndex] != null)
-            BuildMappedPage(_vsDataLists[tabIndex]!, tabIndex);
-    }
-
-    private void UpdateVsPaginationLabel(int tabIndex, int total)
-    {
-        if (_vsPageLabels[tabIndex] == null) return;
-
-        var maxPage = Math.Max(0, (total - 1) / VsPageSize);
-        var pageCount = total > 0 ? maxPage + 1 : 0;
-        Dim(_vsPrevButtons[tabIndex], _vsPage[tabIndex] > 0);
-        Dim(_vsNextButtons[tabIndex], _vsPage[tabIndex] < maxPage);
-
-        if (total == 0)
-        {
-            _vsPageLabels[tabIndex]!.String = "0 / 0";
-        }
-        else
-        {
-            var start = _vsPage[tabIndex] * VsPageSize + 1;
-            var end = Math.Min(start + VsPageSize - 1, total);
-            _vsPageLabels[tabIndex]!.String = $"{start}-{end} / {total}";
-        }
-
-        // Position page buttons between < and > arrows
-        const float btnW = 30f;
-        const float gap = 4f;
-        var prevBtn = _vsPrevButtons[tabIndex]!;
-        var nextBtn = _vsNextButtons[tabIndex]!;
-        var y = prevBtn.Position.Y;
-
-        // Show/hide/position page number buttons
-        var visiblePages = Math.Min(pageCount, MaxPageButtons);
-        var totalW = btnW + gap + visiblePages * (btnW + gap) + btnW; // < + pages + >
-        var startX = _innerContentPos.X + (_contentWidth - totalW) / 2f;
-
-        prevBtn.Position = new Vector2(startX, y);
-        var x = startX + btnW + gap;
-
-        for (var p = 0; p < MaxPageButtons; p++)
-        {
-            var btn = _vsPageButtons[tabIndex, p];
-            if (btn == null) continue;
-
-            if (p < visiblePages)
-            {
-                btn.IsVisible = true;
-                btn.Position = new Vector2(x, y);
-                btn.Alpha = p == _vsPage[tabIndex] ? 1.0f : 0.4f;
-                x += btnW + gap;
-            }
-            else
-            {
-                btn.IsVisible = false;
-            }
-        }
-
-        nextBtn.Position = new Vector2(x, y);
-    }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 

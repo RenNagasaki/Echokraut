@@ -55,7 +55,8 @@ internal class VoiceTestService : IVoiceTestService
         StopVoice();
         TestingVoice = voice;
 
-        var eventId = _log.Start(nameof(TestVoice), TextSource.AddonTalk);
+        var _baseId = _log.Start(nameof(TestVoice), TextSource.AddonTalk);
+        var eventId = new EKEventId(_baseId.Id, _baseId.TextSource);
         _log.Debug(nameof(TestVoice), $"Testing voice: {voice}", eventId);
 
         var volume = _volumeService.GetVoiceVolume(eventId) * voice.Volume;

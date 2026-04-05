@@ -550,17 +550,25 @@ namespace Echokraut.Helper.Functional
 
         public static unsafe string GetBubbleName(Lumina.Excel.Sheets.TerritoryType? territory, GameObject? speaker, string text)
         {
-            var charaStruct = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)speaker!.Address;
-            var modelData = charaStruct->ModelContainer.ModelSkeletonId;
-            var modelData2 = charaStruct->ModelContainer.ModelSkeletonId_2;
+            var zoneName = territory?.PlaceName.Value.Name.ToString() ?? "Unknown";
 
-            var activeData = modelData;
-            if (activeData == -1)
-                activeData = modelData2;
+            // Get map coordinates from speaker position
+            var coordStr = "";
+            if (speaker != null && territory != null)
+            {
+                try
+                {
+                    var pos = speaker.Position;
+                    var map = territory.Value.Map.Value;
+                    var sf = map.SizeFactor / 100.0f;
+                    var mapX = 41.0f / sf * ((pos.X + map.OffsetX) * sf + 1024.0f) / 2048.0f + 1.0f;
+                    var mapY = 41.0f / sf * ((pos.Z + map.OffsetY) * sf + 1024.0f) / 2048.0f + 1.0f;
+                    coordStr = $" ({mapX:F1}, {mapY:F1})";
+                }
+                catch { /* Map data unavailable for some territories */ }
+            }
 
-            text = VoiceMessageToFileName(text);
-            var textSubstring = text.Length > 20 ? text.Substring(0, 20) : text;
-            return $"BB-{territory?.PlaceName.Value.Name.ToString() ?? "Unknown"}-{activeData}-{textSubstring}";
+            return $"BB-{zoneName}{coordStr}";
         }
 
         public static string VoiceMessageToFileName(string voiceMessage)

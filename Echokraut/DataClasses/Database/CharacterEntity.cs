@@ -44,5 +44,5 @@ public class CharacterEntity
     // Navigation properties
     public List<CharacterContextEntity> Contexts { get; set; } = new();
     public List<CharacterInstanceEntity> Instances { get; set; } = new();
-    public List<DialogEncounterEntity> Encounters { get; set; } = new();
+    public List<VoiceClipEntity> Encounters { get; set; } = new();
 }

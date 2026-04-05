@@ -123,7 +123,7 @@ public class AudioPlaybackService : IAudioPlaybackService, IDisposable
 
     private void OnSourceEnded(Guid guid)
     {
-        var eventId = new EKEventId(-1, TextSource.None);
+        EKEventId eventId = new EKEventId(-1, TextSource.None);
         if (!_currentlyPlayingDictionary.TryGetValue(guid, out var message))
         {
             _log.End(nameof(OnSourceEnded), eventId);

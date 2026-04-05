@@ -428,6 +428,36 @@ public static class Loc
         ["Stop Harvest"] = new() { { DE, "Export stoppen" }, { FR, "Arrêter la récolte" }, { JP, "収集停止" } },
         ["Export Quest Lua Debug"] = new() { { DE, "Quest-Lua-Debug exportieren" }, { FR, "Exporter debug Lua quête" }, { JP, "クエストLuaデバッグ出力" } },
 
+        // ── Encounter History ────────────────────────────────────────────
+        ["Voice Clip Manager"] = new() { { DE, "Sprachaufnahmen-Verwaltung" }, { FR, "Gestionnaire de clips vocaux" }, { JP, "音声クリップ管理" } },
+        ["Voice Clip Detail"] = new() { { DE, "Sprachaufnahmen-Details" }, { FR, "Détails du clip vocal" }, { JP, "音声クリップ詳細" } },
+        ["Generate All Unsaved"] = new() { { DE, "Alle nicht gespeicherten generieren" }, { FR, "Générer tous les non sauvegardés" }, { JP, "未保存をすべて生成" } },
+        ["Delete All Saved"] = new() { { DE, "Alle gespeicherten löschen" }, { FR, "Supprimer tous les sauvegardés" }, { JP, "保存済みをすべて削除" } },
+        ["Clear History"] = new() { { DE, "Verlauf löschen" }, { FR, "Effacer l'historique" }, { JP, "履歴をクリア" } },
+        ["Click again to confirm!"] = new() { { DE, "Erneut klicken zum Bestätigen!" }, { FR, "Cliquez à nouveau pour confirmer !" }, { JP, "もう一度クリックして確認！" } },
+        ["NPC Name"] = new() { { DE, "NPC-Name" }, { FR, "Nom du PNJ" }, { JP, "NPC名" } },
+        ["Text Content"] = new() { { DE, "Textinhalt" }, { FR, "Contenu du texte" }, { JP, "テキスト内容" } },
+        ["Group by NPC"] = new() { { DE, "Nach NPC gruppieren" }, { FR, "Grouper par PNJ" }, { JP, "NPCごとにグループ化" } },
+        ["Race/Gender"] = new() { { DE, "Rasse/Geschlecht" }, { FR, "Race/Genre" }, { JP, "種族/性別" } },
+        ["Voice Clips"] = new() { { DE, "Sprachaufnahmen" }, { FR, "Clips vocaux" }, { JP, "音声クリップ" } },
+        ["Generated"] = new() { { DE, "Generiert" }, { FR, "Générés" }, { JP, "生成済み" } },
+        ["Timestamp"] = new() { { DE, "Zeitstempel" }, { FR, "Horodatage" }, { JP, "タイムスタンプ" } },
+        ["NPC"] = new() { { DE, "NPC" }, { FR, "PNJ" }, { JP, "NPC" } },
+        ["Text"] = new() { { DE, "Text" }, { FR, "Texte" }, { JP, "テキスト" } },
+        ["Actions"] = new() { { DE, "Aktionen" }, { FR, "Actions" }, { JP, "アクション" } },
+        ["Generate"] = new() { { DE, "Generieren" }, { FR, "Générer" }, { JP, "生成" } },
+        ["Regenerate"] = new() { { DE, "Neu generieren" }, { FR, "Régénérer" }, { JP, "再生成" } },
+        ["Delete audio"] = new() { { DE, "Audio löschen" }, { FR, "Supprimer l'audio" }, { JP, "音声を削除" } },
+        ["No voice clips found."] = new() { { DE, "Keine Sprachaufnahmen gefunden." }, { FR, "Aucun clip vocal trouvé." }, { JP, "音声クリップが見つかりません。" } },
+        ["Gen All"] = new() { { DE, "Alle gen." }, { FR, "Tout gén." }, { JP, "全生成" } },
+        ["Del All"] = new() { { DE, "Alle lösch." }, { FR, "Tout suppr." }, { JP, "全削除" } },
+        ["Cancel"] = new() { { DE, "Abbrechen" }, { FR, "Annuler" }, { JP, "キャンセル" } },
+        ["Saved"] = new() { { DE, "Gespeichert" }, { FR, "Sauvegardé" }, { JP, "保存済み" } },
+        ["Muted"] = new() { { DE, "Stumm" }, { FR, "Muet" }, { JP, "ミュート" } },
+        ["Chat"] = new() { { DE, "Chat" }, { FR, "Chat" }, { JP, "チャット" } },
+        ["Unknown"] = new() { { DE, "Unbekannt" }, { FR, "Inconnu" }, { JP, "不明" } },
+        ["Generate and play"] = new() { { DE, "Generieren und abspielen" }, { FR, "Générer et lire" }, { JP, "生成して再生" } },
+
         // ── Dialog controls ───────────────────────────────────────────────
         ["Resume dialogue"] = new() { { DE, "Dialog fortsetzen" }, { FR, "Reprendre le dialogue" }, { JP, "ダイアログを再開" } },
         ["Pause dialogue"] = new() { { DE, "Dialog pausieren" }, { FR, "Mettre en pause le dialogue" }, { JP, "ダイアログを一時停止" } },
@@ -512,7 +542,6 @@ public static class Loc
         ["Select Backend"] = new() { { DE, "Backend auswählen" }, { FR, "Sélectionner le backend" }, { JP, "バックエンドを選択" } },
         ["Stop Voice"] = new() { { DE, "Stimme stoppen" }, { FR, "Arrêter la voix" }, { JP, "ボイスを停止" } },
         ["Test Voice"] = new() { { DE, "Stimme testen" }, { FR, "Tester la voix" }, { JP, "ボイスをテスト" } },
-        ["Timestamp"] = new() { { DE, "Zeitstempel" }, { FR, "Horodatage" }, { JP, "タイムスタンプ" } },
         ["Voice NPC bubbles in cities"] = new() { { DE, "NPC-Sprechblasen in Städten vertonen" }, { FR, "Bulles PNJ vocales en ville" }, { JP, "街中のNPC吹き出しをボイス化" } },
         ["Will remove all local saved audio files for this character"] = new()
         {
@@ -536,7 +565,6 @@ public static class Loc
 
         // ── FFXIV Races (official localized names) ───────────────────────
         // Playable races
-        ["Unknown"] = new() { { DE, "Unbekannt" }, { FR, "Inconnu" }, { JP, "不明" } },
         ["Hyur"] = new() { { DE, "Hyuran" }, { FR, "Hyuran" }, { JP, "ヒューラン" } },
         ["Elezen"] = new() { { DE, "Elezen" }, { FR, "Élézen" }, { JP, "エレゼン" } },
         ["Miqote"] = new() { { DE, "Miqo'te" }, { FR, "Miqo'te" }, { JP, "ミコッテ" } },

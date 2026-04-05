@@ -5,18 +5,17 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace Echokraut.DataClasses.Database;
 
 /// <summary>
-/// Log of every dialog encountered during gameplay.
-/// References character for NPC identity, stores per-encounter specifics.
+/// Voice clip record — one per unique NPC dialog line encountered during gameplay.
 /// </summary>
-[Table("dialog_encounters")]
-public class DialogEncounterEntity
+[Table("voice_clips")]
+public class VoiceClipEntity
 {
     [Key]
     [Column("id")]
     public int Id { get; set; }
 
     [Column("character_id")]
-    public int? CharacterId { get; set; }
+    public int CharacterId { get; set; }
 
     [Column("npc_base_id")]
     public long NpcBaseId { get; set; } // ENpcBase row ID
@@ -44,6 +43,18 @@ public class DialogEncounterEntity
 
     [Column("body_type")]
     public int BodyType { get; set; } // BodyType enum
+
+    [Column("save_path")]
+    public string SavePath { get; set; } = "";
+
+    [Column("zone_name")]
+    public string ZoneName { get; set; } = "";
+
+    [Column("map_x")]
+    public float MapX { get; set; }
+
+    [Column("map_y")]
+    public float MapY { get; set; }
 
     // Navigation
     [ForeignKey(nameof(CharacterId))]

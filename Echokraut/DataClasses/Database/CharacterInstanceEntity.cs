@@ -22,8 +22,20 @@ public class CharacterInstanceEntity
     [Column("first_seen")]
     public DateTime FirstSeen { get; set; } = DateTime.UtcNow;
 
+    [Column("last_seen")]
+    public DateTime LastSeen { get; set; } = DateTime.UtcNow;
+
     [Column("is_muted")]
     public bool IsMuted { get; set; }
+
+    [Column("zone_name")]
+    public string ZoneName { get; set; } = "";
+
+    [Column("map_x")]
+    public float MapX { get; set; }
+
+    [Column("map_y")]
+    public float MapY { get; set; }
 
     // Navigation
     [ForeignKey(nameof(CharacterId))]

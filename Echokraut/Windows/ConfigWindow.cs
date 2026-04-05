@@ -46,6 +46,7 @@ public class ConfigWindow : Window, IDisposable
     private readonly IVoiceTestService _voiceTest;
     private readonly AlltalkInstanceWindow _alttalkInstanceWindow;
     private readonly IDialogHarvestService _dialogHarvest;
+    internal Action? OnToggleVoiceClipManager;
     private CancellationTokenSource? _harvestCts;
     private string _harvestProgress = "";
     private string _debugQuestId = "65614";
@@ -340,10 +341,10 @@ public class ConfigWindow : Window, IDisposable
                         DrawSettings();
                 }
 
-                using (var tabItemVoiceSel = ImRaii.TabItem(Loc.S("Voice selection")))
+                using (var tabItemVoices = ImRaii.TabItem(Loc.S("Voices")))
                 {
-                    if (tabItemVoiceSel)
-                        DrawVoiceSelection();
+                    if (tabItemVoices)
+                        DrawVoicesTab();
                 }
 
                 using (var tabItemPhonCor = ImRaii.TabItem(Loc.S("Phonetic corrections")))
@@ -588,6 +589,11 @@ public class ConfigWindow : Window, IDisposable
                 }
             }
         }
+
+        // Encounter History
+        ImGui.Separator();
+        if (ImGui.Button($"{Loc.S("Voice Clip Manager")}##EKEncounterHistory"))
+            OnToggleVoiceClipManager?.Invoke();
 
         // Data Harvest
         ImGui.Separator();
@@ -1040,68 +1046,22 @@ public class ConfigWindow : Window, IDisposable
     }
     #endregion
 
-    #region Voice selection
-    private void DrawVoiceSelection()
+    #region Voices
+    private void DrawVoicesTab()
     {
         try
         {
             ImGui.SetNextItemWidth(ImGui.GetContentRegionAvail().X);
             if (ImGui.InputTextWithHint("##EKUnifiedVoiceSearch", Loc.S("Search..."), ref _unifiedVoiceSearch, 80))
             {
-                _updateDataNpcs = true;
-                _updateDataPlayers = true;
-                _updateDataBubbles = true;
                 _updateDataVoices = true;
             }
 
-            _showAdvancedFilters = ImGui.CollapsingHeader(Loc.S("Advanced Filters"));
-
-            using var tabBar = ImRaii.TabBar("Voices##EKVoicesTab");
-            if (tabBar)
-            {
-                using (var tabItemNPCs = ImRaii.TabItem(Loc.S("NPCs")))
-                {
-                    if (tabItemNPCs)
-                    {
-                        DrawVoiceSelectionTable("NPCs", _npcData.MappedNpcs, ref filteredNpcs,
-                                                ref _updateDataNpcs, ref resetDataNpcs, ref filterGenderNpcs,
-                                                ref filterRaceNpcs, ref filterNameNpcs, ref filterVoiceNpcs);
-                    }
-                }
-
-                using (var tabItemPlayers = ImRaii.TabItem(Loc.S("Players")))
-                {
-                    if (tabItemPlayers)
-                    {
-                        DrawVoiceSelectionTable("Players", _npcData.MappedPlayers, ref filteredPlayers,
-                                                ref _updateDataPlayers, ref resetDataPlayers, ref filterGenderPlayers,
-                                                ref filterRacePlayers, ref filterNamePlayers, ref filterVoicePlayers);
-                    }
-                }
-
-                using (var tabItemBubbles = ImRaii.TabItem(Loc.S("Bubbles")))
-                {
-                    if (tabItemBubbles)
-                    {
-                        DrawVoiceSelectionTable("Bubbles", _npcData.MappedNpcs, ref filteredBubbles,
-                                                ref _updateDataBubbles, ref resetDataBubbles, ref filterGenderBubbles,
-                                                ref filterRaceBubbles, ref filterNameBubbles, ref filterVoiceBubbles,
-                                                true);
-                    }
-                }
-
-                using (var tabItemVoices = ImRaii.TabItem(Loc.S("Voices")))
-                {
-                    if (tabItemVoices)
-                    {
-                        DrawVoices();
-                    }
-                }
-            }
+            DrawVoices();
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(DrawVoiceSelection), ex.ToString(), new EKEventId(0, TextSource.None));
+            _log.Error(nameof(DrawVoicesTab), ex.ToString(), new EKEventId(0, TextSource.None));
         }
     }
 

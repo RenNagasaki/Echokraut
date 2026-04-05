@@ -301,6 +301,12 @@
       "Echotools.Logging": {
         "type": "Project"
       },
+      "Echotools.UI": {
+        "type": "Project",
+        "dependencies": {
+          "KamiToolKit": "[1.0.0, )"
+        }
+      },
       "kamitoolkit": {
         "type": "Project",
         "dependencies": {

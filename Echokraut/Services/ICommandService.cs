@@ -11,6 +11,7 @@ public interface ICommandService
 
     event Action? ToggleConfigRequested;
     event Action? ToggleFirstTimeRequested;
+    event Action? ToggleVoiceClipManagerRequested;
     event Action<EKEventId>? CancelAllRequested;
     event Action? UiModeSwitchRequested;
 

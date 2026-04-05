@@ -109,7 +109,8 @@ public class AddonBattleTalkHelper : IAddonBattleTalkHelper
         if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(1000))
             voiceNext = false;
 
-        var eventId = _log.Start(nameof(HandleChange), TextSource.AddonBattleTalk);
+        var _baseId = _log.Start(nameof(HandleChange), TextSource.AddonBattleTalk);
+        var eventId = new EKEventId(_baseId.Id, _baseId.TextSource);
         _log.Debug(nameof(HandleChange), $"\"{state}\"", eventId);
 
         // Notify observers that the addon state was advanced

@@ -73,7 +73,8 @@ public class DialogHarvestService : IDialogHarvestService
         if (IsRunning) return;
         IsRunning = true;
 
-        var eventId = _log.Start(nameof(RunAsync), TextSource.None);
+        var _baseId = _log.Start(nameof(RunAsync), TextSource.None);
+        var eventId = new EKEventId(_baseId.Id, _baseId.TextSource);
 
         try
         {

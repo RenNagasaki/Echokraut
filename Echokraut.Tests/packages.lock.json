@@ -412,6 +412,7 @@
         "type": "Project",
         "dependencies": {
           "Echotools.Logging": "[1.0.0, )",
+          "Echotools.UI": "[1.0.0, )",
           "Google.Apis.Auth": "[1.73.0, )",
           "Google.Apis.Drive.v3": "[1.73.0.3996, )",
           "Humanizer.Core": "[2.14.1, )",
@@ -428,6 +429,12 @@
       },
       "Echotools.Logging": {
         "type": "Project"
+      },
+      "Echotools.UI": {
+        "type": "Project",
+        "dependencies": {
+          "KamiToolKit": "[1.0.0, )"
+        }
       },
       "kamitoolkit": {
         "type": "Project",

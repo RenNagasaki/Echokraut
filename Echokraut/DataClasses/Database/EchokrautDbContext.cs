@@ -7,13 +7,13 @@ public class EchokrautDbContext : DbContext
     public DbSet<CharacterEntity> Characters => Set<CharacterEntity>();
     public DbSet<CharacterContextEntity> CharacterContexts => Set<CharacterContextEntity>();
     public DbSet<CharacterInstanceEntity> CharacterInstances => Set<CharacterInstanceEntity>();
-    public DbSet<DialogEncounterEntity> DialogEncounters => Set<DialogEncounterEntity>();
+    public DbSet<VoiceClipEntity> VoiceClips => Set<VoiceClipEntity>();
     public DbSet<VoiceEntity> Voices => Set<VoiceEntity>();
     public DbSet<VoiceAllowedGenderEntity> VoiceAllowedGenders => Set<VoiceAllowedGenderEntity>();
     public DbSet<VoiceAllowedRaceEntity> VoiceAllowedRaces => Set<VoiceAllowedRaceEntity>();
     public DbSet<PhoneticCorrectionEntity> PhoneticCorrections => Set<PhoneticCorrectionEntity>();
 
-    private readonly string _dbPath;
+    private readonly string _dbPath = "";
 
     public EchokrautDbContext(string dbPath)
     {
@@ -50,11 +50,11 @@ public class EchokrautDbContext : DbContext
             .HasIndex(ci => ci.NpcBaseId);
 
         // DialogEncounter: indexes
-        modelBuilder.Entity<DialogEncounterEntity>()
+        modelBuilder.Entity<VoiceClipEntity>()
             .HasIndex(e => e.CharacterId);
-        modelBuilder.Entity<DialogEncounterEntity>()
+        modelBuilder.Entity<VoiceClipEntity>()
             .HasIndex(e => e.Timestamp);
-        modelBuilder.Entity<DialogEncounterEntity>()
+        modelBuilder.Entity<VoiceClipEntity>()
             .HasIndex(e => e.TextSource);
 
         // Voice: unique on backend_voice
@@ -84,7 +84,7 @@ public class EchokrautDbContext : DbContext
             .HasMany(c => c.Encounters)
             .WithOne(e => e.Character)
             .HasForeignKey(e => e.CharacterId)
-            .OnDelete(DeleteBehavior.SetNull);
+            .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<VoiceEntity>()
             .HasMany(v => v.AllowedGenders)

@@ -246,6 +246,17 @@ public class NpcDataService : INpcDataService
         return result;
     }
 
+    public void SaveCharacterWithOldIdentity(NpcMapData data, string oldName, Genders oldGender, NpcRaces oldRace)
+    {
+        // Delete old character record (identity changed)
+        var oldChar = _db.FindCharacter(oldName, oldGender, oldRace);
+        if (oldChar != null)
+            _db.DeleteCharacter(oldChar.Id);
+
+        // Save with new identity
+        SaveCharacter(data);
+    }
+
     public void SaveCharacter(NpcMapData data)
     {
         var entity = NpcMapDataToEntity(data);

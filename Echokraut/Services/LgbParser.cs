@@ -110,8 +110,6 @@ public class LgbParser
         if (layerStart + 16 > data.Length)
             return;
 
-        // var layerId = BitConverter.ToUInt32(data, layerStart);
-        // var nameOffset = BitConverter.ToInt32(data, layerStart + 4);
         var instanceObjectsOffset = BitConverter.ToInt32(data, layerStart + 8);
         var instanceObjectCount = BitConverter.ToInt32(data, layerStart + 12);
 

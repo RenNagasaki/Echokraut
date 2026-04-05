@@ -14,6 +14,7 @@ public class ImGuiWindowManager : IWindowManager
     private readonly ConfigWindow _configWindow;
     private readonly FirstTimeWindow _firstTimeWindow;
     private readonly DialogExtraOptionsWindow _dialogExtraOptionsWindow;
+    private readonly VoiceClipManagerWindow _voiceClipManagerWindow;
 
     public bool IsFirstTimeOpen => _firstTimeWindow.IsOpen;
 
@@ -55,14 +56,24 @@ public class ImGuiWindowManager : IWindowManager
             log, config, audioPlayback, lipSync,
             () => addonTalk.RecreateInference(), npcData);
 
+        _voiceClipManagerWindow = new VoiceClipManagerWindow(
+            services.GetService<IDatabaseService>(),
+            services.GetService<IVoiceClipManagerService>(),
+            audioPlayback,
+            npcData);
+
+        _configWindow.OnToggleVoiceClipManager = () => _voiceClipManagerWindow.Toggle();
+
         _windowSystem.AddWindow(_configWindow);
         _windowSystem.AddWindow(alttalkInstanceWindow);
         _windowSystem.AddWindow(_firstTimeWindow);
         _windowSystem.AddWindow(_dialogExtraOptionsWindow);
+        _windowSystem.AddWindow(_voiceClipManagerWindow);
     }
 
     public void ToggleConfig() => _configWindow.Toggle();
     public void ToggleFirstTime() => _firstTimeWindow.Toggle();
+    public void ToggleVoiceClipManager() => _voiceClipManagerWindow.Toggle();
     public void Draw() => _windowSystem.Draw();
 
     public void Dispose()

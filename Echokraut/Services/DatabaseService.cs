@@ -32,7 +32,15 @@ public class DatabaseService : IDatabaseService
         var dbPath = Path.Combine(configDirectory, "echokraut.db");
         _context = new EchokrautDbContext(dbPath);
 
-        InitializeDatabase(config);
+        try
+        {
+            InitializeDatabase(config);
+        }
+        catch
+        {
+            Dispose();
+            throw;
+        }
     }
 
     /// <summary>
@@ -47,12 +55,16 @@ public class DatabaseService : IDatabaseService
         RefreshAllCaches();
     }
 
+    private const int CurrentSchemaVersion = 6;
+
     private void InitializeDatabase(Configuration config)
     {
         // Enable WAL mode for better concurrent read performance
         _context.Database.ExecuteSqlRaw("PRAGMA journal_mode=WAL");
         _context.Database.ExecuteSqlRaw("PRAGMA foreign_keys=ON");
         _context.Database.EnsureCreated();
+
+        RunSchemaMigrations();
 
         if (NeedsMigration(config))
         {
@@ -62,6 +74,148 @@ public class DatabaseService : IDatabaseService
         }
 
         RefreshAllCaches();
+    }
+
+    private void RunSchemaMigrations()
+    {
+        // Create schema_version table if it doesn't exist
+        _context.Database.ExecuteSqlRaw(
+            "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)");
+
+        var version = 0;
+        try
+        {
+            using var cmd = _context.Database.GetDbConnection().CreateCommand();
+            cmd.CommandText = "SELECT version FROM schema_version LIMIT 1";
+            if (_context.Database.GetDbConnection().State != System.Data.ConnectionState.Open)
+                _context.Database.GetDbConnection().Open();
+            var result = cmd.ExecuteScalar();
+            if (result != null)
+                version = Convert.ToInt32(result);
+        }
+        catch { /* Table may not exist yet on first run */ }
+
+        if (version < 1)
+        {
+            _log.Info(nameof(RunSchemaMigrations), "Applying schema v1: initial schema",
+                new EKEventId(0, TextSource.None));
+            // v1 is the initial schema created by EnsureCreated — just record it
+            SetSchemaVersion(1);
+        }
+
+        // Migrations v2-v4 operate on the old dialog_encounters table.
+        // On fresh installs, EnsureCreated creates voice_clips directly — skip these.
+        var hasOldTable = false;
+        try
+        {
+            using var checkCmd = _context.Database.GetDbConnection().CreateCommand();
+            checkCmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name='dialog_encounters'";
+            var checkResult = checkCmd.ExecuteScalar();
+            hasOldTable = checkResult != null;
+        }
+        catch { /* ignore */ }
+
+        if (version < 2 && hasOldTable)
+        {
+            _log.Info(nameof(RunSchemaMigrations), "Applying schema v2: cascade delete encounters on character deletion, make character_id non-nullable",
+                new EKEventId(0, TextSource.None));
+
+            // Delete orphaned encounters (character_id is NULL)
+            _context.Database.ExecuteSqlRaw(
+                "DELETE FROM dialog_encounters WHERE character_id IS NULL");
+
+            // SQLite doesn't support ALTER COLUMN or ALTER CONSTRAINT.
+            // Recreate the table with the new schema.
+            _context.Database.ExecuteSqlRaw(@"
+                CREATE TABLE IF NOT EXISTS dialog_encounters_new (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+                    npc_base_id INTEGER NOT NULL DEFAULT 0,
+                    timestamp TEXT NOT NULL,
+                    text_source INTEGER NOT NULL,
+                    language INTEGER NOT NULL,
+                    voice_key TEXT NOT NULL DEFAULT '',
+                    original_text TEXT NOT NULL DEFAULT '',
+                    cleaned_text TEXT NOT NULL DEFAULT '',
+                    saved_to_disk INTEGER NOT NULL DEFAULT 0,
+                    body_type INTEGER NOT NULL DEFAULT 0
+                )");
+
+            _context.Database.ExecuteSqlRaw(@"
+                INSERT INTO dialog_encounters_new
+                    (id, character_id, npc_base_id, timestamp, text_source, language,
+                     voice_key, original_text, cleaned_text, saved_to_disk, body_type)
+                SELECT id, character_id, npc_base_id, timestamp, text_source, language,
+                       voice_key, original_text, cleaned_text, saved_to_disk, body_type
+                FROM dialog_encounters
+                WHERE character_id IS NOT NULL");
+
+            _context.Database.ExecuteSqlRaw("DROP TABLE dialog_encounters");
+            _context.Database.ExecuteSqlRaw("ALTER TABLE dialog_encounters_new RENAME TO dialog_encounters");
+
+            // Recreate indexes
+            _context.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS idx_enc_character ON dialog_encounters(character_id)");
+            _context.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS idx_enc_timestamp ON dialog_encounters(timestamp)");
+            _context.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS idx_enc_source ON dialog_encounters(text_source)");
+
+            SetSchemaVersion(2);
+        }
+
+        if (version < 3 && hasOldTable)
+        {
+            _log.Info(nameof(RunSchemaMigrations), "Applying schema v3: add zone_name, map_x, map_y to dialog_encounters",
+                new EKEventId(0, TextSource.None));
+
+            _context.Database.ExecuteSqlRaw("ALTER TABLE dialog_encounters ADD COLUMN zone_name TEXT NOT NULL DEFAULT ''");
+            _context.Database.ExecuteSqlRaw("ALTER TABLE dialog_encounters ADD COLUMN map_x REAL NOT NULL DEFAULT 0");
+            _context.Database.ExecuteSqlRaw("ALTER TABLE dialog_encounters ADD COLUMN map_y REAL NOT NULL DEFAULT 0");
+
+            SetSchemaVersion(3);
+        }
+
+        if (version < 4 && hasOldTable)
+        {
+            _log.Info(nameof(RunSchemaMigrations), "Applying schema v4: add last_seen, zone_name, map_x, map_y to character_instances",
+                new EKEventId(0, TextSource.None));
+
+            _context.Database.ExecuteSqlRaw("ALTER TABLE character_instances ADD COLUMN last_seen TEXT NOT NULL DEFAULT '0001-01-01'");
+            _context.Database.ExecuteSqlRaw("ALTER TABLE character_instances ADD COLUMN zone_name TEXT NOT NULL DEFAULT ''");
+            _context.Database.ExecuteSqlRaw("ALTER TABLE character_instances ADD COLUMN map_x REAL NOT NULL DEFAULT 0");
+            _context.Database.ExecuteSqlRaw("ALTER TABLE character_instances ADD COLUMN map_y REAL NOT NULL DEFAULT 0");
+
+            // Backfill last_seen from first_seen
+            _context.Database.ExecuteSqlRaw("UPDATE character_instances SET last_seen = first_seen");
+
+            SetSchemaVersion(4);
+        }
+
+        if (version < 5)
+        {
+            _log.Info(nameof(RunSchemaMigrations), "Applying schema v5: rename dialog_encounters table to voice_clips",
+                new EKEventId(0, TextSource.None));
+
+            // Only rename if old table exists (upgrades); new installs already have voice_clips
+            try { _context.Database.ExecuteSqlRaw("ALTER TABLE dialog_encounters RENAME TO voice_clips"); }
+            catch { /* Table already named voice_clips on fresh install */ }
+
+            SetSchemaVersion(5);
+        }
+
+        if (version < 6)
+        {
+            _log.Info(nameof(RunSchemaMigrations), "Applying schema v6: add save_path to voice_clips",
+                new EKEventId(0, TextSource.None));
+
+            _context.Database.ExecuteSqlRaw("ALTER TABLE voice_clips ADD COLUMN save_path TEXT NOT NULL DEFAULT ''");
+
+            SetSchemaVersion(6);
+        }
+    }
+
+    private void SetSchemaVersion(int version)
+    {
+        _context.Database.ExecuteSqlRaw("DELETE FROM schema_version");
+        _context.Database.ExecuteSqlRaw("INSERT INTO schema_version (version) VALUES ({0})", version);
     }
 
     // ── Migration ───────────────────────────────────────────
@@ -314,7 +468,8 @@ public class DatabaseService : IDatabaseService
 
     // ── Character Instances ─────────────────────────────────
 
-    public CharacterInstanceEntity GetOrCreateInstance(int characterId, uint npcBaseId)
+    public CharacterInstanceEntity GetOrCreateInstance(int characterId, uint npcBaseId,
+        string zoneName = "", float mapX = 0, float mapY = 0)
     {
         lock (_writeLock)
         {
@@ -322,18 +477,40 @@ public class DatabaseService : IDatabaseService
                 .FirstOrDefault(ci => ci.CharacterId == characterId && ci.NpcBaseId == (long)npcBaseId);
 
             if (existing != null)
+            {
+                // Update location and last_seen on re-encounter
+                existing.LastSeen = DateTime.UtcNow;
+                if (!string.IsNullOrEmpty(zoneName))
+                {
+                    existing.ZoneName = zoneName;
+                    existing.MapX = mapX;
+                    existing.MapY = mapY;
+                }
+                _context.SaveChanges();
                 return existing;
+            }
 
             existing = new CharacterInstanceEntity
             {
                 CharacterId = characterId,
                 NpcBaseId = (long)npcBaseId,
-                FirstSeen = DateTime.UtcNow
+                FirstSeen = DateTime.UtcNow,
+                LastSeen = DateTime.UtcNow,
+                ZoneName = zoneName,
+                MapX = mapX,
+                MapY = mapY
             };
             _context.CharacterInstances.Add(existing);
             _context.SaveChanges();
             return existing;
         }
+    }
+
+    public List<CharacterInstanceEntity> GetInstancesForCharacter(int characterId)
+    {
+        return _context.CharacterInstances
+            .Where(ci => ci.CharacterId == characterId)
+            .ToList();
     }
 
     public void MuteInstance(uint npcBaseId)
@@ -494,18 +671,57 @@ public class DatabaseService : IDatabaseService
 
     // ── Dialog Encounters ───────────────────────────────────
 
-    public void LogEncounter(DialogEncounterEntity encounter)
+    public event Action? VoiceClipLogged;
+
+    public void LogVoiceClip(VoiceClipEntity encounter)
     {
         lock (_writeLock)
         {
-            _context.DialogEncounters.Add(encounter);
+            _context.VoiceClips.Add(encounter);
             _context.SaveChanges();
+            VoiceClipLogged?.Invoke();
         }
     }
 
-    public List<DialogEncounterEntity> GetEncounters(int limit = 1000, int offset = 0)
+    public void LogOrUpdateVoiceClip(VoiceClipEntity encounter)
     {
-        return _context.DialogEncounters
+        lock (_writeLock)
+        {
+            var existing = _context.VoiceClips
+                .FirstOrDefault(e => e.CharacterId == encounter.CharacterId
+                    && e.NpcBaseId == encounter.NpcBaseId
+                    && e.OriginalText == encounter.OriginalText);
+
+            if (existing != null)
+            {
+                existing.Timestamp = encounter.Timestamp;
+                existing.VoiceKey = encounter.VoiceKey;
+                existing.CleanedText = encounter.CleanedText;
+                existing.ZoneName = encounter.ZoneName;
+                existing.MapX = encounter.MapX;
+                existing.MapY = encounter.MapY;
+                // Don't overwrite SavedToDisk/SavePath with empty values on re-encounter
+                if (encounter.SavedToDisk || !string.IsNullOrEmpty(encounter.SavePath))
+                {
+                    existing.SavedToDisk = encounter.SavedToDisk;
+                    existing.SavePath = encounter.SavePath;
+                }
+            }
+            else
+            {
+                _context.VoiceClips.Add(encounter);
+            }
+
+            _context.SaveChanges();
+            VoiceClipLogged?.Invoke();
+        }
+    }
+
+    public List<VoiceClipEntity> GetVoiceClips(int limit = 1000, int offset = 0,
+        string? npcNameFilter = null, string? textFilter = null,
+        int? textSourceFilter = null, bool? savedFilter = null)
+    {
+        return ApplyEncounterFilters(npcNameFilter, textFilter, textSourceFilter, savedFilter)
             .Include(e => e.Character)
             .OrderByDescending(e => e.Timestamp)
             .Skip(offset)
@@ -513,15 +729,103 @@ public class DatabaseService : IDatabaseService
             .ToList();
     }
 
-    public int GetEncounterCount() => _context.DialogEncounters.Count();
+    public int GetVoiceClipCount(string? npcNameFilter = null, string? textFilter = null,
+        int? textSourceFilter = null, bool? savedFilter = null)
+    {
+        return ApplyEncounterFilters(npcNameFilter, textFilter, textSourceFilter, savedFilter).Count();
+    }
 
-    public void ClearEncounters()
+    public List<CharacterEntity> GetCharactersWithVoiceClips()
+    {
+        var characterIds = _context.VoiceClips
+            .Select(e => e.CharacterId)
+            .Distinct()
+            .ToList();
+
+        return _context.Characters
+            .Include(c => c.Contexts)
+            .Where(c => characterIds.Contains(c.Id))
+            .OrderBy(c => c.Name)
+            .ToList();
+    }
+
+    public List<VoiceClipEntity> GetVoiceClipsForCharacter(int characterId, int limit = 1000, int offset = 0)
+    {
+        return _context.VoiceClips
+            .Include(e => e.Character)
+            .Where(e => e.CharacterId == characterId)
+            .OrderByDescending(e => e.Timestamp)
+            .Skip(offset)
+            .Take(limit)
+            .ToList();
+    }
+
+    public int GetVoiceClipCountForCharacter(int characterId)
+    {
+        return _context.VoiceClips.Count(e => e.CharacterId == characterId);
+    }
+
+    public int GetSavedVoiceClipCountForCharacter(int characterId)
+    {
+        return _context.VoiceClips.Count(e => e.CharacterId == characterId && e.SavedToDisk);
+    }
+
+    public void UpdateVoiceClipSaved(int voiceClipId, bool savedToDisk, string savePath)
     {
         lock (_writeLock)
         {
-            _context.DialogEncounters.RemoveRange(_context.DialogEncounters);
+            var entity = _context.VoiceClips.Find(voiceClipId);
+            if (entity != null)
+            {
+                entity.SavedToDisk = savedToDisk;
+                entity.SavePath = savePath;
+                _context.SaveChanges();
+            }
+        }
+    }
+
+    public void DeleteVoiceClip(int encounterId)
+    {
+        lock (_writeLock)
+        {
+            var entity = _context.VoiceClips.Find(encounterId);
+            if (entity != null)
+            {
+                _context.VoiceClips.Remove(entity);
+                _context.SaveChanges();
+            }
+        }
+    }
+
+    public void ClearVoiceClips()
+    {
+        lock (_writeLock)
+        {
+            _context.VoiceClips.RemoveRange(_context.VoiceClips);
             _context.SaveChanges();
         }
+    }
+
+    private IQueryable<VoiceClipEntity> ApplyEncounterFilters(
+        string? npcNameFilter, string? textFilter, int? textSourceFilter, bool? savedFilter)
+    {
+        IQueryable<VoiceClipEntity> query = _context.VoiceClips;
+
+        if (!string.IsNullOrEmpty(npcNameFilter))
+            query = query.Where(e => e.Character != null &&
+                e.Character.Name.Contains(npcNameFilter));
+
+        if (!string.IsNullOrEmpty(textFilter))
+            query = query.Where(e => e.OriginalText.Contains(textFilter) ||
+                e.CleanedText.Contains(textFilter));
+
+        if (textSourceFilter.HasValue)
+            query = query.Where(e => e.TextSource == textSourceFilter.Value);
+
+        if (savedFilter.HasValue)
+            query = query.Where(e => e.SavedToDisk == savedFilter.Value);
+
+        return query;
     }
 
     // ── Cache Management ────────────────────────────────────
@@ -577,6 +881,14 @@ public class DatabaseService : IDatabaseService
 
     public void Dispose()
     {
-        _context.Dispose();
+        try
+        {
+            var connection = _context.Database.GetDbConnection();
+            _context.Dispose();
+            connection.Close();
+            connection.Dispose();
+            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        }
+        catch { /* In-memory databases may already be disposed */ }
     }
 }

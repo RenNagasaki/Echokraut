@@ -15,6 +15,8 @@ public class NativeWindowManager : IWindowManager
     private readonly DialogTalkController _dialogController;
     private readonly NativeConfigWindow _configWindow;
     private readonly NativeFirstTimeWindow _firstTimeWindow;
+    private readonly NativeVoiceClipManagerWindow _voiceClipManagerWindow;
+    private readonly NativeVoiceClipDetailWindow _voiceClipDetailWindow;
 
     public bool IsFirstTimeOpen => _firstTimeWindow.IsOpen;
 
@@ -56,9 +58,33 @@ public class NativeWindowManager : IWindowManager
         {
             InternalName = "EchokrautSettings",
             Title = Loc.S("Configuration"),
-            Size = new Vector2(1120, 650),
+            Size = new Vector2(970, 650),
             RespectCloseAll = false,
         };
+
+        _voiceClipDetailWindow = new NativeVoiceClipDetailWindow(
+            services.GetService<IDatabaseService>(),
+            services.GetService<IVoiceClipManagerService>(),
+            services.GetService<IAudioPlaybackService>())
+        {
+            InternalName = "EchokrautEncounterDetail",
+            Title = Loc.S("Voice Clip Detail"),
+            Size = new Vector2(900, 500),
+            RespectCloseAll = false,
+        };
+
+        _voiceClipManagerWindow = new NativeVoiceClipManagerWindow(
+            services.GetService<IDatabaseService>(),
+            services.GetService<IVoiceClipManagerService>(),
+            services.GetService<IAudioPlaybackService>(),
+            services.GetService<INpcDataService>())
+        {
+            InternalName = "EchokrautEncounters",
+            Title = Loc.S("Voice Clip Manager"),
+            Size = new Vector2(1000, 600),
+            RespectCloseAll = false,
+        };
+        _voiceClipManagerWindow.SetDetailWindow(_voiceClipDetailWindow);
 
         _firstTimeWindow = new NativeFirstTimeWindow(
             config,
@@ -72,8 +98,10 @@ public class NativeWindowManager : IWindowManager
             RespectCloseAll = false,
         };
 
+        _configWindow.OnToggleVoiceClipManager = () => _voiceClipManagerWindow.Toggle();
+
         // Suppress Talk advance when clicking inside our native windows
-        _dialogController.SetWindowHitTest(pos => IsInsideWindow(_configWindow, pos) || IsInsideWindow(_firstTimeWindow, pos));
+        _dialogController.SetWindowHitTest(pos => IsInsideWindow(_configWindow, pos) || IsInsideWindow(_firstTimeWindow, pos) || IsInsideWindow(_voiceClipManagerWindow, pos) || IsInsideWindow(_voiceClipDetailWindow, pos));
     }
 
     private static unsafe bool IsInsideWindow(NativeAddon window, Vector2 pos)
@@ -89,6 +117,7 @@ public class NativeWindowManager : IWindowManager
 
     public void ToggleConfig() => _configWindow.Toggle();
     public void ToggleFirstTime() => _firstTimeWindow.Toggle();
+    public void ToggleVoiceClipManager() => _voiceClipManagerWindow.Toggle();
     public void Draw() { }
 
     public void Dispose()
@@ -96,6 +125,8 @@ public class NativeWindowManager : IWindowManager
         _dialogController.Dispose();
         _configWindow.Dispose();
         _firstTimeWindow.Dispose();
+        _voiceClipManagerWindow.Dispose();
+        _voiceClipDetailWindow.Dispose();
         KamiToolKit.KamiToolKitLibrary.Cleanup();
     }
 }

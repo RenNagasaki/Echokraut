@@ -157,6 +157,7 @@ public partial class Plugin : IDalamudPlugin
             // Unwire events from old window manager
             _commands.ToggleConfigRequested    -= _windowManager.ToggleConfig;
             _commands.ToggleFirstTimeRequested -= _windowManager.ToggleFirstTime;
+            _commands.ToggleVoiceClipManagerRequested -= _windowManager.ToggleVoiceClipManager;
             _pluginInterface.UiBuilder.Draw   -= _windowManager.Draw;
 
             // Dispose old window manager
@@ -168,6 +169,7 @@ public partial class Plugin : IDalamudPlugin
             // Rewire events
             _commands.ToggleConfigRequested    += _windowManager.ToggleConfig;
             _commands.ToggleFirstTimeRequested += _windowManager.ToggleFirstTime;
+            _commands.ToggleVoiceClipManagerRequested += _windowManager.ToggleVoiceClipManager;
             _pluginInterface.UiBuilder.Draw   += _windowManager.Draw;
 
             // Open the config window in the new UI mode
@@ -182,6 +184,7 @@ public partial class Plugin : IDalamudPlugin
 
         _commands.ToggleConfigRequested    += _windowManager.ToggleConfig;
         _commands.ToggleFirstTimeRequested += _windowManager.ToggleFirstTime;
+        _commands.ToggleVoiceClipManagerRequested += _windowManager.ToggleVoiceClipManager;
         _commands.CancelAllRequested += _ => _audioPlayback?.ClearQueue();
         _commands.UiModeSwitchRequested += SwitchUiMode;
     }
@@ -222,7 +225,7 @@ public partial class Plugin : IDalamudPlugin
             { 
                 _alltalkInstance.StartInstance();
                 _backend.RefreshBackend();
-            }  
+            }   
         }
         catch (Exception e)
         { 

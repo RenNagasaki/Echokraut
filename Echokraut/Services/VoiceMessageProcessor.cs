@@ -169,6 +169,9 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
 
             _log.Debug(nameof(ProcessSpeechAsync), voiceMessage.GetDebugInfo(), eventId);
 
+            // Log encounter to database (regardless of mute/volume state)
+            LogVoiceClip(voiceMessage);
+
             // Update DialogState so UI controls (mute/unmute) have access to the current
             // speaker even when the NPC is muted and audio won't play.
             if (isDialogue)
@@ -289,6 +292,69 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
             _npcData.SaveCharacter(npcData);
 
         return npcData;
+    }
+
+    private void LogVoiceClip(VoiceMessage message)
+    {
+        try
+        {
+            var speaker = message.Speaker;
+            var character = speaker != null
+                ? _db.FindCharacter(speaker.Name, speaker.Gender, speaker.Race)
+                : null;
+            if (character == null) return;
+
+            // Get zone name and map coordinates
+            var zoneName = "";
+            var mapX = 0f;
+            var mapY = 0f;
+            try
+            {
+                var territory = _lumina.GetTerritory();
+                if (territory != null)
+                {
+                    zoneName = territory.Value.PlaceName.Value.Name.ToString();
+                    if (message.SpeakerObj != null)
+                    {
+                        var pos = message.SpeakerObj.Position;
+                        var map = territory.Value.Map.Value;
+                        var sf = map.SizeFactor / 100.0f;
+                        mapX = 41.0f / sf * ((pos.X + map.OffsetX) * sf + 1024.0f) / 2048.0f + 1.0f;
+                        mapY = 41.0f / sf * ((pos.Z + map.OffsetY) * sf + 1024.0f) / 2048.0f + 1.0f;
+                    }
+                }
+            }
+            catch { /* Map coordinate calculation may fail for some territories */ }
+
+            // Create or update character instance with location data
+            if (message.SpeakerObj != null && message.SpeakerObj.BaseId != 0)
+                _db.GetOrCreateInstance(character.Id, message.SpeakerObj.BaseId, zoneName, mapX, mapY);
+
+            var npcBaseId = message.SpeakerObj != null ? (long)message.SpeakerObj.BaseId : 0;
+            var originalText = message.OriginalText ?? "";
+
+            _db.LogOrUpdateVoiceClip(new DataClasses.Database.VoiceClipEntity
+            {
+                CharacterId = character.Id,
+                NpcBaseId = npcBaseId,
+                Timestamp = DateTime.UtcNow,
+                TextSource = (int)message.Source,
+                Language = (int)message.Language,
+                VoiceKey = speaker?.voice ?? "",
+                OriginalText = originalText,
+                CleanedText = message.Text ?? "",
+                SavedToDisk = false,
+                BodyType = speaker?.IsChild == true ? (int)BodyType.Child : (int)BodyType.Adult,
+                ZoneName = zoneName,
+                MapX = mapX,
+                MapY = mapY
+            });
+        }
+        catch (Exception ex)
+        {
+            _log.Debug(nameof(LogVoiceClip), $"Failed to log encounter: {ex.Message}",
+                new EKEventId(0, TextSource.None));
+        }
     }
 
     private bool IsNpcMuted(NpcMapData npcData, TextSource source, IGameObject? speaker, EKEventId eventId)
