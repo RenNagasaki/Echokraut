@@ -15,6 +15,7 @@ public interface IDatabaseService : IDisposable
     // Characters
     List<CharacterEntity> GetNpcs();
     List<CharacterEntity> GetPlayers();
+    List<CharacterEntity> GetAllCharacters();
     CharacterEntity? FindCharacter(string name, Genders gender, NpcRaces race, int language = 1);
     CharacterEntity UpsertCharacter(CharacterEntity character);
     void DeleteCharacter(int characterId);
@@ -45,11 +46,19 @@ public interface IDatabaseService : IDisposable
 
     // Dialog encounters
     bool SuppressEvents { get; set; }
+    /// <summary>
+    /// When true, Upsert*/Delete* methods skip the cache-refresh step. Used by bulk
+    /// operations (harvest) to avoid the O(N²) reload cost. Caller MUST invoke
+    /// <see cref="RefreshCaches"/> after the bulk run finishes.
+    /// </summary>
+    bool BulkMode { get; set; }
+    /// <summary>Re-loads all in-memory caches from the database. Call once after a bulk run.</summary>
+    void RefreshCaches();
     void NotifyVoiceClipLogged();
     void ClearChangeTracker();
     event Action? VoiceClipLogged;
-    void LogVoiceClip(VoiceClipEntity encounter);
-    void LogOrUpdateVoiceClip(VoiceClipEntity encounter);
+    void LogVoiceClip(VoiceClipEntity voiceClip);
+    void LogOrUpdateVoiceClip(VoiceClipEntity voiceClip);
     List<VoiceClipEntity> GetVoiceClips(int limit = 1000, int offset = 0,
         string? npcNameFilter = null, string? textFilter = null,
         int? textSourceFilter = null, bool? savedFilter = null);
@@ -57,9 +66,25 @@ public interface IDatabaseService : IDisposable
         int? textSourceFilter = null, bool? savedFilter = null);
     List<CharacterEntity> GetCharactersWithVoiceClips();
     List<VoiceClipEntity> GetVoiceClipsForCharacter(int characterId, int limit = 1000, int offset = 0);
-    int GetVoiceClipCountForCharacter(int characterId);
+    int GetVoiceClipCountForCharacter(int characterId, int? questTypeFilter = null);
+    HashSet<int> GetCharacterIdsWithQuestType(int questType);
     int GetSavedVoiceClipCountForCharacter(int characterId);
     void UpdateVoiceClipSaved(int voiceClipId, bool savedToDisk, string savePath);
-    void DeleteVoiceClip(int encounterId);
+    void DeleteVoiceClip(int voiceClipId);
     void ClearVoiceClips();
+    void WipeAll();
+    void FlushChanges();
+
+    // Per-player generation tracking
+    void LogVoiceClipGeneration(int voiceClipId, long playerContentId, string playerName, string savePath);
+    void DeleteVoiceClipGeneration(int voiceClipId, long playerContentId);
+    VoiceClipGenerationEntity? GetVoiceClipGeneration(int voiceClipId, long playerContentId);
+    int GetGeneratedCountForCharacter(int characterId, long playerContentId, int? questTypeFilter = null);
+    /// <summary>
+    /// Aggregate count of voice clips and player-generated voice clips across all characters
+    /// of a given language and context (npc/player), optionally filtered by quest type.
+    /// Single round-trip; intended for status-bar style summaries.
+    /// </summary>
+    (int totalClips, int generatedClips) GetClipTotalsForLanguage(
+        int language, string contextType, long playerContentId, int? questTypeFilter = null);
 }

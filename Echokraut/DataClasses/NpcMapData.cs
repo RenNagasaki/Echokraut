@@ -3,7 +3,6 @@ using Dalamud.Game.ClientState.Objects.Enums;
 using Echokraut.Enums;
 using Echotools.Logging.Enums;
 using Echokraut.Helper;
-using OtterGui.Widgets;
 using System;
 using System.Collections.Generic;
 
@@ -39,9 +38,6 @@ namespace Echokraut.DataClasses
 
         public ObjectKind ObjectKind { get; set; }
 
-        internal ClippedSelectableCombo<EchokrautVoice> VoicesSelectable { get; set; } = null!;
-        internal ClippedSelectableCombo<EchokrautVoice> VoicesSelectableDialogue { get; set; } = null!;
-
         internal List<EchokrautVoice> Voices { get; set; } = null!;
 
         public NpcMapData(ObjectKind objectKind) {
@@ -72,10 +68,5 @@ namespace Echokraut.DataClasses
             return otherObj?.ToString().ToLower().CompareTo(ToString().ToLower()) ?? -1;
         }
 
-        public void RefreshSelectable()
-        {
-            VoicesSelectable = new($"##AllVoices{ToString()}", string.Empty, 200, Voices.FindAll(f => f.IsSelectable(Name, Gender, Race, BodyType)), g => g.VoiceNameNote);
-            VoicesSelectableDialogue = new($"##AllVoices{ToString()}", string.Empty, 200, Voices.FindAll(f => f.IsSelectable(Name, Gender, Race, BodyType)), g => g.VoiceNameNote);
-        }
     }
 }

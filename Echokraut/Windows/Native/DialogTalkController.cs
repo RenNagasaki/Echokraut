@@ -340,7 +340,6 @@ public sealed unsafe class DialogTalkController : IDisposable
 
                 msg.Speaker.Voice = newVoice;
                 msg.Speaker.DoNotDelete = true;
-                msg.Speaker.RefreshSelectable();
                 _config.Save();
 
                 // Force dropdown label refresh on next frame.

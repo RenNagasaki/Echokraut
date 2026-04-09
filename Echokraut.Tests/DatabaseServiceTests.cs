@@ -244,7 +244,7 @@ public class DatabaseServiceTests : IDisposable
         Assert.Empty(_db.GetPhoneticCorrections());
     }
 
-    // ── Dialog Encounters ───────────────────────────────────
+    // ── Voice Clips ──────────────────────────────────────────
 
     [Fact]
     public void LogVoiceClip_InsertsAndQueries()
@@ -270,10 +270,10 @@ public class DatabaseServiceTests : IDisposable
         });
 
         Assert.Equal(1, _db.GetVoiceClipCount());
-        var encounters = _db.GetVoiceClips();
-        Assert.Single(encounters);
-        Assert.Equal("Hello, adventurer!", encounters[0].OriginalText);
-        Assert.Equal("Alphinaud", encounters[0].Character?.Name);
+        var voiceClips = _db.GetVoiceClips();
+        Assert.Single(voiceClips);
+        Assert.Equal("Hello, adventurer!", voiceClips[0].OriginalText);
+        Assert.Equal("Alphinaud", voiceClips[0].Character?.Name);
     }
 
     [Fact]

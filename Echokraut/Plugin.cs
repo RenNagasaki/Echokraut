@@ -7,6 +7,7 @@ using Echokraut.Enums;
 using Echotools.Logging.Enums;
 using System;
 using System.IO;
+using System.Threading;
 using Echokraut.DataClasses;
 using Echotools.Logging.DataClasses;
 using Dalamud.Game.Text.SeStringHandling;
@@ -24,7 +25,7 @@ namespace Echokraut;
 public partial class Plugin : IDalamudPlugin
 {
     public static readonly string PluginVersion =
-        $"v{System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!.ToString(3)}";
+        $"v{System.Reflection.Assembly.GetExecutingAssembly().GetName().Version!}";
 
     // Service container for dependency injection
     private readonly ServiceContainer _services;
@@ -121,7 +122,12 @@ public partial class Plugin : IDalamudPlugin
         _addonBubbleHelper              = _services.GetService<IAddonBubbleHelper>();
         _chatTalkHelper                 = _services.GetService<IChatTalkHelper>();
 
-        _windowManager = CreateWindowManager();
+        if (!_kamiToolKitInitialized)
+        {
+            KamiToolKit.KamiToolKitLibrary.Initialize(_pluginInterface, $"Echokraut {PluginVersion}");
+            _kamiToolKitInitialized = true;
+        }
+        _windowManager = new NativeWindowManager(_services, _configuration, _addonLifecycle, _commandManager, _clientState);
         WireEvents();
 
         _framework.Update += OnFrameworkUpdate;
@@ -135,48 +141,6 @@ public partial class Plugin : IDalamudPlugin
         _log.Info(nameof(Plugin), "Echokraut initialized", new EKEventId(0, TextSource.None));
     }
 
-    private IWindowManager CreateWindowManager()
-    {
-        if (_configuration.UseNativeUI)
-        {
-            if (!_kamiToolKitInitialized)
-            {
-                KamiToolKit.KamiToolKitLibrary.Initialize(_pluginInterface, $"Echokraut {PluginVersion}");
-                _kamiToolKitInitialized = true;
-            }
-            return new NativeWindowManager(_services, _configuration, _addonLifecycle, _commandManager, _clientState);
-        }
-        return new ImGuiWindowManager(_services, _configuration, _framework, _clientState, _commandManager, _pluginInterface);
-    }
-
-    public void SwitchUiMode()
-    {
-        // Defer to next framework tick — can't dispose a window from within its own draw/click callback
-        _framework.RunOnTick(() =>
-        {
-            // Unwire events from old window manager
-            _commands.ToggleConfigRequested    -= _windowManager.ToggleConfig;
-            _commands.ToggleFirstTimeRequested -= _windowManager.ToggleFirstTime;
-            _commands.ToggleVoiceClipManagerRequested -= _windowManager.ToggleVoiceClipManager;
-            _pluginInterface.UiBuilder.Draw   -= _windowManager.Draw;
-
-            // Dispose old window manager
-            _windowManager.Dispose();
-
-            // Create new window manager
-            _windowManager = CreateWindowManager();
-
-            // Rewire events
-            _commands.ToggleConfigRequested    += _windowManager.ToggleConfig;
-            _commands.ToggleFirstTimeRequested += _windowManager.ToggleFirstTime;
-            _commands.ToggleVoiceClipManagerRequested += _windowManager.ToggleVoiceClipManager;
-            _pluginInterface.UiBuilder.Draw   += _windowManager.Draw;
-
-            // Open the config window in the new UI mode
-            _windowManager.ToggleConfig();
-        });
-    }
-
     private void WireEvents()
     {
         _audioPlayback.AutoAdvanceRequested += eventId => _addonTalkHelper.Click(eventId);
@@ -186,7 +150,11 @@ public partial class Plugin : IDalamudPlugin
         _commands.ToggleFirstTimeRequested += _windowManager.ToggleFirstTime;
         _commands.ToggleVoiceClipManagerRequested += _windowManager.ToggleVoiceClipManager;
         _commands.CancelAllRequested += _ => _audioPlayback?.ClearQueue();
-        _commands.UiModeSwitchRequested += SwitchUiMode;
+        _commands.DumpSheetsRequested += () =>
+        {
+            var harvest = _services.GetService<IDialogHarvestService>();
+            _ = harvest.DumpAllSheetsAsync(CancellationToken.None);
+        };
     }
 
     private void HandleStartup()
@@ -261,6 +229,11 @@ public partial class Plugin : IDalamudPlugin
         _pluginInterface.UiBuilder.OpenMainUi -= _commands.ToggleConfigUi;
         _clientState.Login -= OnLogin;
         _googleDrive.StopSync();
+
+        // Stop background harvest before disposing windows so it can't fire DB events
+        // into half-disposed UI nodes.
+        try { _services.GetService<IDialogHarvestService>()?.Dispose(); } catch { }
+
         _soundHelper.Dispose();
         _addonTalkHelper.Dispose();
         _addonBattleTalkHelper.Dispose();
@@ -273,5 +246,11 @@ public partial class Plugin : IDalamudPlugin
         _windowManager.Dispose();
         _commands.Dispose();
         _services.Dispose();
+
+        if (_kamiToolKitInitialized)
+        {
+            try { KamiToolKit.KamiToolKitLibrary.Cleanup(); } catch { }
+            _kamiToolKitInitialized = false;
+        }
     }
 }

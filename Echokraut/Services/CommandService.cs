@@ -31,8 +31,7 @@ public class CommandService : ICommandService
     public event Action? ToggleFirstTimeRequested;
     public event Action? ToggleVoiceClipManagerRequested;
     public event Action<EKEventId>? CancelAllRequested;
-    public event Action? UiModeSwitchRequested;
-
+    public event Action? DumpSheetsRequested;
     public List<string> CommandKeys { get; private set; } = new();
 
     public CommandService(ICommandManager commandManager, IChatGui chatGui, ICondition condition, ILogService log, ICharacterDataService characterData, ILuminaService lumina, Configuration config, IAudioFileService audioFiles, IGameObjectService gameObjects)
@@ -64,7 +63,8 @@ public class CommandService : ICommandService
         _commandManager.AddHandler("/ekdel", new CommandInfo(OnCommand) { HelpMessage = "/ekdel n -> Deletes last 'n' local saved files. Default 10" });
         _commandManager.AddHandler("/ekdelmin", new CommandInfo(OnCommand) { HelpMessage = "/ekdelmin n -> Deletes last 'n' minutes generated local saved files. Default 10" });
         _commandManager.AddHandler("/ekfirst", new CommandInfo(OnCommand) { HelpMessage = "Opens the first-time setup window" });
-        _commandManager.AddHandler("/ekhistory", new CommandInfo(OnCommand) { HelpMessage = "Opens the encounter history window" });
+        _commandManager.AddHandler("/ekhistory", new CommandInfo(OnCommand) { HelpMessage = "Opens the voice clip history window" });
+        _commandManager.AddHandler("/ekdump", new CommandInfo(OnCommand) { HelpMessage = "Dumps all Lumina sheets to TSV files" });
 
         CommandKeys = _commandManager.Commands.Keys.ToList().FindAll(p => p.StartsWith("/ek"));
         CommandKeys.Sort();
@@ -87,6 +87,9 @@ public class CommandService : ICommandService
                 break;
             case "/ekhistory":
                 ToggleVoiceClipManagerRequested?.Invoke();
+                break;
+            case "/ekdump":
+                DumpSheetsRequested?.Invoke();
                 break;
             case "/ekid":
                 PrintTargetInfo();
@@ -183,7 +186,6 @@ public class CommandService : ICommandService
     }
 
     public void ToggleFirstTimeUi() => ToggleFirstTimeRequested?.Invoke();
-    public void RequestUiModeSwitch() => UiModeSwitchRequested?.Invoke();
 
     private unsafe void PrintTargetInfo()
     {

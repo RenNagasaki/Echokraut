@@ -7,6 +7,7 @@ using Dalamud.Game.ClientState.Objects.Enums;
 using Echokraut.DataClasses;
 using Echokraut.DataClasses.Database;
 using Echokraut.Enums;
+using Echokraut.Helper.Functional;
 using Echotools.Logging.DataClasses;
 using Echotools.Logging.Enums;
 using Echotools.Logging.Services;
@@ -20,11 +21,13 @@ public class VoiceClipManagerService : IVoiceClipManagerService
     private readonly IAudioFileService _audioFiles;
     private readonly IAudioPlaybackService _audioPlayback;
     private readonly INpcDataService _npcData;
+    private readonly IGameObjectService _gameObjects;
     private readonly ILogService _log;
     private readonly Configuration _config;
 
     private VoiceMessage? _currentlyPlaying;
 
+    public bool IsGenerating { get; private set; }
     public event Action? VoiceClipUpdated;
 
     public VoiceClipManagerService(
@@ -33,6 +36,7 @@ public class VoiceClipManagerService : IVoiceClipManagerService
         IAudioFileService audioFiles,
         IAudioPlaybackService audioPlayback,
         INpcDataService npcData,
+        IGameObjectService gameObjects,
         ILogService log,
         Configuration config)
     {
@@ -41,19 +45,29 @@ public class VoiceClipManagerService : IVoiceClipManagerService
         _audioFiles = audioFiles ?? throw new ArgumentNullException(nameof(audioFiles));
         _audioPlayback = audioPlayback ?? throw new ArgumentNullException(nameof(audioPlayback));
         _npcData = npcData ?? throw new ArgumentNullException(nameof(npcData));
+        _gameObjects = gameObjects ?? throw new ArgumentNullException(nameof(gameObjects));
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _config = config ?? throw new ArgumentNullException(nameof(config));
 
         _audioPlayback.CurrentMessageChanged += msg => _currentlyPlaying = msg;
     }
 
-    public VoiceMessage BuildVoiceMessage(VoiceClipEntity encounter)
+    /// <summary>
+    /// Get the effective player content ID for a voice clip.
+    /// Clips with player placeholders use the real player ID; others use 0 (player-independent).
+    /// </summary>
+    private long GetEffectivePlayerId(VoiceClipEntity voiceClip)
     {
-        var character = encounter.Character;
+        return voiceClip.HasPlayerPlaceholder ? (long)_gameObjects.LocalPlayerContentId : 0;
+    }
+
+    public VoiceMessage BuildVoiceMessage(VoiceClipEntity voiceClip)
+    {
+        var character = voiceClip.Character;
         var name = character?.Name ?? "";
         var race = character != null ? (NpcRaces)character.Race : NpcRaces.Unknown;
         var gender = character != null ? (Genders)character.Gender : Genders.None;
-        var bodyType = (BodyType)encounter.BodyType;
+        var bodyType = (BodyType)voiceClip.BodyType;
         var objectKind = character != null ? (ObjectKind)character.ObjectKind : ObjectKind.None;
 
         var npcData = new NpcMapData(objectKind)
@@ -63,41 +77,47 @@ public class VoiceClipManagerService : IVoiceClipManagerService
             RaceStr = character?.RaceStr ?? "",
             Gender = gender,
             BodyType = bodyType,
-            voice = encounter.VoiceKey
+            voice = voiceClip.VoiceKey
         };
 
         // Resolve voice list so Voice property can look up by BackendVoice
         npcData.Voices = _npcData.GetEchokrautVoices();
 
-        var baseEventId = _log.Start(nameof(BuildVoiceMessage), (TextSource)encounter.TextSource);
+        var baseEventId = _log.Start(nameof(BuildVoiceMessage), (TextSource)voiceClip.TextSource);
         var eventId = new EKEventId(baseEventId.Id, baseEventId.TextSource);
+
+        // Substitute player name placeholders for TTS
+        var playerName = _gameObjects.LocalPlayerName;
+        var isMale = _gameObjects.LocalPlayerIsMale;
+        var ttsText = TalkTextHelper.SubstitutePlaceholders(voiceClip.CleanedText, playerName, isMale);
+        var originalText = TalkTextHelper.SubstitutePlaceholders(voiceClip.OriginalText, playerName, isMale);
 
         return new VoiceMessage
         {
-            Text = encounter.CleanedText,
-            OriginalText = encounter.OriginalText,
+            Text = ttsText,
+            OriginalText = originalText,
             Speaker = npcData,
-            Source = (TextSource)encounter.TextSource,
-            Language = (Dalamud.Game.ClientLanguage)encounter.Language,
+            Source = (TextSource)voiceClip.TextSource,
+            Language = (Dalamud.Game.ClientLanguage)voiceClip.Language,
             Volume = 1.0f,
             EventId = eventId,
             Is3D = false
         };
     }
 
-    public void PlayEncounter(VoiceClipEntity encounter)
+    public void PlayVoiceClip(VoiceClipEntity voiceClip)
     {
         try
         {
-            var path = GetAudioPath(encounter);
+            var path = GetAudioPath(voiceClip);
             if (!File.Exists(path))
             {
-                _log.Warning(nameof(PlayEncounter), $"Audio file not found: {path}",
+                _log.Warning(nameof(PlayVoiceClip), $"Audio file not found: {path}",
                     new EKEventId(0, TextSource.None));
                 return;
             }
 
-            var message = BuildVoiceMessage(encounter);
+            var message = BuildVoiceMessage(voiceClip);
             message.Stream = File.OpenRead(path);
             message.LoadedLocally = true;
             message.Source = TextSource.VoiceTest; // bypass dialog-closed check
@@ -105,7 +125,7 @@ public class VoiceClipManagerService : IVoiceClipManagerService
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(PlayEncounter), $"Error playing encounter {encounter.Id}: {ex.Message}",
+            _log.Error(nameof(PlayVoiceClip), $"Error playing voice clip {voiceClip.Id}: {ex.Message}",
                 new EKEventId(0, TextSource.None));
         }
     }
@@ -117,26 +137,32 @@ public class VoiceClipManagerService : IVoiceClipManagerService
         _audioPlayback.ClearQueue(TextSource.VoiceTest);
     }
 
-    public string GetAudioPath(VoiceClipEntity encounter)
+    public string GetAudioPath(VoiceClipEntity voiceClip)
     {
-        // Use saved path from DB if available, otherwise compute from VoiceMessage
-        if (!string.IsNullOrEmpty(encounter.SavePath))
-            return encounter.SavePath;
+        // Check per-player generation record first
+        var playerId = GetEffectivePlayerId(voiceClip);
+        var gen = _db.GetVoiceClipGeneration(voiceClip.Id, playerId);
+        if (gen != null && !string.IsNullOrEmpty(gen.SavePath))
+            return gen.SavePath;
 
-        var message = BuildVoiceMessage(encounter);
+        // Legacy fallback: check old SavePath column
+        if (!string.IsNullOrEmpty(voiceClip.SavePath))
+            return voiceClip.SavePath;
+
+        var message = BuildVoiceMessage(voiceClip);
         return _audioFiles.GetLocalAudioPath(_config.LocalSaveLocation, message);
     }
 
-    public bool HasLocalAudio(VoiceClipEntity encounter)
+    public bool HasLocalAudio(VoiceClipEntity voiceClip)
     {
-        // Skip expensive BuildVoiceMessage for clips that were never generated
-        if (!encounter.SavedToDisk && string.IsNullOrEmpty(encounter.SavePath))
+        var playerId = GetEffectivePlayerId(voiceClip);
+        var gen = _db.GetVoiceClipGeneration(voiceClip.Id, playerId);
+        if (gen == null)
             return false;
 
         try
         {
-            var path = GetAudioPath(encounter);
-            return File.Exists(path);
+            return !string.IsNullOrEmpty(gen.SavePath) && File.Exists(gen.SavePath);
         }
         catch
         {
@@ -144,21 +170,21 @@ public class VoiceClipManagerService : IVoiceClipManagerService
         }
     }
 
-    public async Task<bool> GenerateForEncounter(VoiceClipEntity encounter)
+    public async Task<bool> GenerateForVoiceClip(VoiceClipEntity voiceClip)
     {
         EKEventId eventId = new EKEventId(0, TextSource.None);
         try
         {
-            var message = BuildVoiceMessage(encounter);
+            var message = BuildVoiceMessage(voiceClip);
             eventId = message.EventId;
 
             if (string.IsNullOrEmpty(message.Speaker?.voice))
             {
-                _log.Warning(nameof(GenerateForEncounter), $"No voice assigned for encounter {encounter.Id}", eventId);
+                _log.Warning(nameof(GenerateForVoiceClip), $"No voice assigned for voice clip {voiceClip.Id}", eventId);
                 return false;
             }
 
-            _log.Info(nameof(GenerateForEncounter), $"Generating audio for encounter {encounter.Id}: {encounter.CleanedText}", eventId);
+            _log.Info(nameof(GenerateForVoiceClip), $"Generating audio for voice clip {voiceClip.Id}: {message.Text}", eventId);
 
             var success = await _backend.GenerateVoice(message);
             if (success && message.Stream != null)
@@ -166,25 +192,28 @@ public class VoiceClipManagerService : IVoiceClipManagerService
                 var savePath = _audioFiles.GetLocalAudioPath(_config.LocalSaveLocation, message);
                 await _audioFiles.WriteStreamToFile(eventId, message, message.Stream,
                     _config.LocalSaveLocation, false);
-                _db.UpdateVoiceClipSaved(encounter.Id, true, savePath);
-                encounter.SavedToDisk = true;
-                encounter.SavePath = savePath;
-                _log.Info(nameof(GenerateForEncounter), $"Audio saved for encounter {encounter.Id}", eventId);
-                VoiceClipUpdated?.Invoke();
+
+                var playerId = GetEffectivePlayerId(voiceClip);
+                var playerName = _gameObjects.LocalPlayerName;
+                _db.LogVoiceClipGeneration(voiceClip.Id, playerId, playerName, savePath);
+
+                _log.Info(nameof(GenerateForVoiceClip), $"Audio saved for voice clip {voiceClip.Id}", eventId);
+                if (!IsGenerating) // suppress during batch — fires once at end
+                    VoiceClipUpdated?.Invoke();
                 return true;
             }
 
-            _log.Error(nameof(GenerateForEncounter), $"Generation failed for encounter {encounter.Id}", eventId);
+            _log.Error(nameof(GenerateForVoiceClip), $"Generation failed for voice clip {voiceClip.Id}", eventId);
             return false;
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(GenerateForEncounter), $"Error generating encounter {encounter.Id}: {ex.Message}", eventId);
+            _log.Error(nameof(GenerateForVoiceClip), $"Error generating voice clip {voiceClip.Id}: {ex.Message}", eventId);
             return false;
         }
     }
 
-    public bool DeleteAudioForEncounter(VoiceClipEntity encounter)
+    public bool DeleteAudioForVoiceClip(VoiceClipEntity voiceClip)
     {
         try
         {
@@ -192,65 +221,74 @@ public class VoiceClipManagerService : IVoiceClipManagerService
             StopPlayback();
             Thread.Sleep(100); // Brief wait for audio engine to release file handle
 
-            var path = GetAudioPath(encounter);
+            var path = GetAudioPath(voiceClip);
             if (File.Exists(path))
-            {
                 File.Delete(path);
-                _db.UpdateVoiceClipSaved(encounter.Id, false, "");
-                encounter.SavedToDisk = false;
-                encounter.SavePath = "";
-                _log.Info(nameof(DeleteAudioForEncounter), $"Deleted audio for encounter {encounter.Id}: {path}",
-                    new EKEventId(0, TextSource.None));
-                VoiceClipUpdated?.Invoke();
-                return true;
-            }
+
+            var playerId = GetEffectivePlayerId(voiceClip);
+            _db.DeleteVoiceClipGeneration(voiceClip.Id, playerId);
+
+            _log.Info(nameof(DeleteAudioForVoiceClip), $"Deleted audio for voice clip {voiceClip.Id}: {path}",
+                new EKEventId(0, TextSource.None));
+            VoiceClipUpdated?.Invoke();
+            return true;
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(DeleteAudioForEncounter), $"Error deleting audio for encounter {encounter.Id}: {ex.Message}",
+            _log.Error(nameof(DeleteAudioForVoiceClip), $"Error deleting audio for voice clip {voiceClip.Id}: {ex.Message}",
                 new EKEventId(0, TextSource.None));
         }
         return false;
     }
 
-    public async Task GenerateAllUnsaved(IEnumerable<VoiceClipEntity> encounters,
+    public async Task GenerateAllUnsaved(IEnumerable<VoiceClipEntity> voiceClips,
         Action<int, int>? onProgress = null, CancellationToken ct = default)
     {
         var list = new List<VoiceClipEntity>();
-        foreach (var e in encounters)
+        foreach (var vc in voiceClips)
         {
-            if (!e.SavedToDisk && !string.IsNullOrEmpty(e.VoiceKey))
-                list.Add(e);
+            if (string.IsNullOrEmpty(vc.VoiceKey)) continue;
+            if (!HasLocalAudio(vc))
+                list.Add(vc);
         }
 
         var total = list.Count;
         var completed = 0;
 
-        foreach (var encounter in list)
+        IsGenerating = true;
+        try
         {
-            ct.ThrowIfCancellationRequested();
-            await GenerateForEncounter(encounter);
-            completed++;
-            onProgress?.Invoke(completed, total);
+            foreach (var voiceClip in list)
+            {
+                ct.ThrowIfCancellationRequested();
+                await GenerateForVoiceClip(voiceClip);
+                completed++;
+                onProgress?.Invoke(completed, total);
+            }
+        }
+        finally
+        {
+            IsGenerating = false;
+            VoiceClipUpdated?.Invoke();
         }
     }
 
-    public void DeleteAllSaved(IEnumerable<VoiceClipEntity> encounters,
+    public void DeleteAllSaved(IEnumerable<VoiceClipEntity> voiceClips,
         Action<int, int>? onProgress = null)
     {
         var list = new List<VoiceClipEntity>();
-        foreach (var e in encounters)
+        foreach (var vc in voiceClips)
         {
-            if (e.SavedToDisk)
-                list.Add(e);
+            if (HasLocalAudio(vc))
+                list.Add(vc);
         }
 
         var total = list.Count;
         var completed = 0;
 
-        foreach (var encounter in list)
+        foreach (var voiceClip in list)
         {
-            DeleteAudioForEncounter(encounter);
+            DeleteAudioForVoiceClip(voiceClip);
             completed++;
             onProgress?.Invoke(completed, total);
         }

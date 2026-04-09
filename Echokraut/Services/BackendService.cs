@@ -303,47 +303,57 @@ public class BackendService : IBackendService, IDisposable
             $"Searching voice: {npcData.Voice?.VoiceName ?? ""} for NPC: {npcData.Name}", eventId);
 
         var ekVoices = _db.GetVoices().Select(VoiceEntityToEchokrautVoice).ToList();
+        var picked = PickVoice(npcData, ekVoices);
+
+        if (picked != npcData.Voice)
+        {
+            npcData.Voice = picked;
+            if (picked != null)
+                _npcData.SaveCharacter(npcData);
+        }
+
+        if (picked != null)
+            _log.Debug(nameof(GetVoiceOrRandom), $"Voice: {picked} for NPC: {npcData.Name}", eventId);
+        else
+            _log.Error(nameof(GetVoiceOrRandom), $"Couldn't find voice for NPC: {npcData.Name}", eventId);
+    }
+
+    public EchokrautVoice? PickVoice(NpcMapData npcData, IList<EchokrautVoice> voices)
+    {
         var voiceItem = npcData.Voice;
         var bodyType = npcData.BodyType;
 
-        if (voiceItem == null || voiceItem == ekVoices.Find(p => p.IsDefault))
+        EchokrautVoice? defaultVoice = null;
+        for (var i = 0; i < voices.Count; i++)
         {
-            var npcName = npcData.Name;
-
-            // Try to find voice by name
-            var voiceItems = ekVoices.FindAll(p =>
-                p.VoiceName.Contains(npcName, StringComparison.OrdinalIgnoreCase));
-
-            if (voiceItems.Count > 0)
-            {
-                voiceItem = voiceItems[0];
-            }
-            else
-            {
-                // Find by race/gender
-                voiceItems = ekVoices.FindAll(p =>
-                    p.FitsNpcData(npcData.Gender, npcData.Race, bodyType, _npcData.IsGenderedRace(npcData.Race)));
-
-                if (voiceItems.Count > 0)
-                {
-                    voiceItem = voiceItems[_random.Next(0, voiceItems.Count)];
-                }
-            }
-
-            if (voiceItem == null)
-                voiceItem = ekVoices.Find(p => p.IsDefault);
-
-            if (voiceItem != npcData.Voice)
-            {
-                npcData.Voice = voiceItem;
-                _npcData.SaveCharacter(npcData);
-            }
+            if (voices[i].IsDefault) { defaultVoice = voices[i]; break; }
         }
 
-        if (voiceItem != null)
-            _log.Debug(nameof(GetVoiceOrRandom), $"Voice: {voiceItem} for NPC: {npcData.Name}", eventId);
-        else
-            _log.Error(nameof(GetVoiceOrRandom), $"Couldn't find voice for NPC: {npcData.Name}", eventId);
+        if (voiceItem != null && (defaultVoice == null || voiceItem.BackendVoice != defaultVoice.BackendVoice))
+            return voiceItem;
+
+        var npcName = npcData.Name ?? string.Empty;
+
+        // Try to find voice by name
+        for (var i = 0; i < voices.Count; i++)
+        {
+            if (voices[i].VoiceName.Contains(npcName, StringComparison.OrdinalIgnoreCase))
+                return voices[i];
+        }
+
+        // Find by race/gender
+        var isGenderedRace = _npcData.IsGenderedRace(npcData.Race);
+        List<EchokrautVoice>? matches = null;
+        for (var i = 0; i < voices.Count; i++)
+        {
+            if (voices[i].FitsNpcData(npcData.Gender, npcData.Race, bodyType, isGenderedRace))
+                (matches ??= new List<EchokrautVoice>()).Add(voices[i]);
+        }
+
+        if (matches != null && matches.Count > 0)
+            return matches[_random.Next(0, matches.Count)];
+
+        return defaultVoice;
     }
 
     private async Task GenerationLoopAsync(CancellationToken cancellationToken)

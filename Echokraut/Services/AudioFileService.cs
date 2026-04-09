@@ -183,4 +183,36 @@ public class AudioFileService : IAudioFileService
 
         return false;
     }
+
+    public int RemoveAllSavedFiles(string localSaveLocation)
+    {
+        if (string.IsNullOrWhiteSpace(localSaveLocation) || !Directory.Exists(localSaveLocation))
+            return 0;
+
+        var deleted = 0;
+        try
+        {
+            foreach (var dir in Directory.EnumerateDirectories(localSaveLocation))
+            {
+                try { Directory.Delete(dir, true); deleted++; }
+                catch (Exception ex)
+                {
+                    _log.Error(nameof(RemoveAllSavedFiles), $"Failed to delete {dir}: {ex}", new EKEventId(0, TextSource.None));
+                }
+            }
+            foreach (var file in Directory.EnumerateFiles(localSaveLocation))
+            {
+                try { File.Delete(file); deleted++; }
+                catch (Exception ex)
+                {
+                    _log.Error(nameof(RemoveAllSavedFiles), $"Failed to delete {file}: {ex}", new EKEventId(0, TextSource.None));
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error(nameof(RemoveAllSavedFiles), $"Error enumerating {localSaveLocation}: {ex}", new EKEventId(0, TextSource.None));
+        }
+        return deleted;
+    }
 }

@@ -174,7 +174,6 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
                         _voice.AllowedGenders.Add(g);
                     else if (!v && _voice.AllowedGenders.Contains(g))
                         _voice.AllowedGenders.Remove(g);
-                    _npcData.RefreshSelectables(_npcData.GetEchokrautVoices());
                     Save();
                 },
             };
@@ -255,7 +254,6 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
                         _voice.AllowedRaces.Add(race);
                     else if (!v && _voice.AllowedRaces.Contains(race))
                         _voice.AllowedRaces.Remove(race);
-                    _npcData.RefreshSelectables(_npcData.GetEchokrautVoices());
                     Save();
                 },
             };

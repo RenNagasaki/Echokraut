@@ -4,7 +4,6 @@ using Dalamud.Plugin;
 using Echokraut.DataClasses;
 using Echokraut.Helper.Functional;
 using Echokraut.Services.Queue;
-using Echokraut.Windows;
 
 namespace Echokraut.Services;
 
@@ -114,6 +113,7 @@ public static class ServiceBuilder
             c.GetService<IAudioFileService>(),
             c.GetService<IAudioPlaybackService>(),
             c.GetService<INpcDataService>(),
+            c.GetService<IGameObjectService>(),
             c.GetService<ILogService>(),
             configuration));
 
@@ -248,13 +248,6 @@ public static class ServiceBuilder
             configuration,
             c.GetService<IGameObjectService>(),
             c.GetService<ITextProcessingService>()));
-
-        container.RegisterFactory<AlltalkInstanceWindow>(c => new AlltalkInstanceWindow(
-            c.GetService<ILogService>(),
-            configuration,
-            c.GetService<IAlltalkInstanceService>(),
-            c.GetService<IBackendService>(),
-            pluginInterface));
 
         return container;
     }

@@ -71,10 +71,15 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private bool _deleteNpcsArmed;
     private bool _deletePlayersArmed;
     private bool _deleteBubblesArmed;
+    private bool _wipeAllArmed;
+    private volatile bool _wipeRunning;
+    private volatile bool _wipeCompleted;
+    private int _wipeDeletedCount;
     private DateTime _lastDeleteClick = DateTime.MinValue;
     private TextButtonNode? _clearNpcsButton;
     private TextButtonNode? _clearPlayersButton;
     private TextButtonNode? _clearBubblesButton;
+    private TextButtonNode? _wipeAllButton;
 
     // General
     private SliderNode? _globalVolumeSlider;
@@ -153,10 +158,11 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
 
     internal Action? OnToggleVoiceClipManager;
 
+    private readonly IDatabaseService _db;
+
     // Data Harvest
     private readonly IDialogHarvestService _dialogHarvest;
     private TextButtonNode? _harvestButton;
-    private TextNode? _harvestProgressLabel;
     private CancellationTokenSource? _harvestCts;
     private TextInputNode? _debugQuestIdInput;
     private TextButtonNode? _debugExportButton;
@@ -177,7 +183,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         IVolumeService volumeService,
         IGameObjectService gameObjects,
         IVoiceTestService voiceTest,
-        IDialogHarvestService dialogHarvest)
+        IDialogHarvestService dialogHarvest,
+        IDatabaseService db)
     {
         _config = config;
         _audioPlayback = audioPlayback;
@@ -195,15 +202,14 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _gameObjects = gameObjects;
         _voiceTest = voiceTest;
         _dialogHarvest = dialogHarvest;
+        _db = db;
 
-        _dialogHarvest.ProgressChanged += OnHarvestProgress;
         _backend.CharacterMapped += OnCharacterMapped;
         _backend.VoicesMapped += OnVoicesMapped;
     }
 
     public override void Dispose()
     {
-        _dialogHarvest.ProgressChanged -= OnHarvestProgress;
         _harvestCts?.Cancel();
         _harvestCts?.Dispose();
         _backend.CharacterMapped -= OnCharacterMapped;
@@ -356,14 +362,32 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         ScreenClampHelper.ClampToScreen(addon, Size);
 
         // Reset delete confirmations after 5 seconds
-        if (_lastDeleteClick.AddSeconds(5) <= DateTime.Now && (_deleteNpcsArmed || _deletePlayersArmed || _deleteBubblesArmed))
+        if (_wipeCompleted)
+        {
+            _wipeCompleted = false;
+            _wipeRunning = false;
+            try
+            {
+                _npcData.MappedNpcs.Clear();
+                _npcData.MappedPlayers.Clear();
+            }
+            catch { }
+            if (_wipeAllButton != null) _wipeAllButton.String = Loc.S("Wipe database & local audio");
+            _log.Info(nameof(OnUpdate),
+                $"Wiped database and {_wipeDeletedCount} local audio entries.",
+                new EKEventId(0, TextSource.None));
+        }
+
+        if (_lastDeleteClick.AddSeconds(5) <= DateTime.Now && (_deleteNpcsArmed || _deletePlayersArmed || _deleteBubblesArmed || _wipeAllArmed))
         {
             _deleteNpcsArmed = false;
             _deletePlayersArmed = false;
             _deleteBubblesArmed = false;
+            _wipeAllArmed = false;
             if (_clearNpcsButton != null)    _clearNpcsButton.String    = Loc.S("Clear mapped NPCs");
             if (_clearPlayersButton != null) _clearPlayersButton.String = Loc.S("Clear mapped players");
             if (_clearBubblesButton != null) _clearBubblesButton.String = Loc.S("Clear mapped bubbles");
+            if (_wipeAllButton != null)      _wipeAllButton.String      = Loc.S("Wipe database & local audio");
         }
 
         // Backend dropdown deferred selection (same crash-safe pattern as DialogTalkController)
@@ -505,9 +529,6 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         enabledRow.AddNode(enabledCheck);
         enabledRow.AddNode(_globalVolumeSlider);
 
-        var useNativeUiCheck = Check(Loc.S("Use native FFXIV UI"), w, _config.UseNativeUI,
-            v => { _config.UseNativeUI = v; _config.Save(); _commands.RequestUiModeSwitch(); });
-
         _generateBySentenceCheck = Check(
             Loc.S("Generate per sentence (shorter latency, recommended for CPU inference)"), w,
             _config.GenerateBySentence,
@@ -595,6 +616,43 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
                 _clearBubblesButton!.String = Loc.S("Confirm clear bubbles!");
             }
         });
+        _wipeAllButton = Button(Loc.S("Wipe database & local audio"), 220, () =>
+        {
+            if (_wipeRunning) return;
+            if (_wipeAllArmed)
+            {
+                _wipeAllArmed = false;
+                _wipeRunning = true;
+                _wipeAllButton!.String = Loc.S("Wiping...");
+                _audioPlayback.ClearQueue();
+
+                System.Threading.Tasks.Task.Run(() =>
+                {
+                    try
+                    {
+                        Thread.Sleep(100); // let BASS release file handles
+                        var deleted = _audioFiles.RemoveAllSavedFiles(_config.LocalSaveLocation);
+                        _db.WipeAll();
+                        _wipeDeletedCount = deleted;
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.Error(nameof(BuildGeneralPanel), $"Wipe failed: {ex}", new EKEventId(0, TextSource.None));
+                    }
+                    finally
+                    {
+                        _wipeCompleted = true;
+                    }
+                });
+            }
+            else
+            {
+                _lastDeleteClick = DateTime.Now;
+                _wipeAllArmed = true;
+                _wipeAllButton!.String = Loc.S("Confirm wipe everything!");
+            }
+        });
+
         var reloadRemoteButton = Button(Loc.S("Reload remote mappings"), 180,
             () => _jsonData.Reload(_clientState.ClientLanguage));
 
@@ -613,6 +671,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _clearPlayersButton!.Size = new Vector2(btnW, 24);
         _clearBubblesButton!.Size = new Vector2(btnW, 24);
         reloadRemoteButton.Size   = new Vector2(btnW, 24);
+        _wipeAllButton!.Size      = new Vector2(innerW, 28);
 
         var row1 = new HorizontalListNode { Size = new Vector2(innerW, 28), ItemSpacing = 4 };
         row1.AddNode(_clearNpcsButton);
@@ -622,7 +681,6 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         row2.AddNode(reloadRemoteButton);
 
         list.AddNode(enabledRow);
-        list.AddNode(useNativeUiCheck);
         list.AddNode(_generateBySentenceCheck);
         list.AddNode(removeStuttersCheck);
         list.AddNode(_removePunctuationCheck);
@@ -631,7 +689,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         CreateCollapsibleSection(list, Loc.S("In-Game Controls"), w, true,
             [_showExtraOptionsCheck, _showExtraExtraCheck]);
 
-        CreateCollapsibleSection(list, Loc.S("Reset Data"), w, true, [row1, row2]);
+        CreateCollapsibleSection(list, Loc.S("Reset Data"), w, true, [row1, row2, _wipeAllButton]);
 
         CreateCollapsibleSection(list, Loc.S("Available commands"), w, true,
             commandNodes.Where(n => n != null).Cast<NodeBase>().ToArray());
@@ -642,11 +700,10 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
 
         // Data Harvest section
         _harvestButton = Button(Loc.S("Start Harvest"), 160, OnHarvestClick);
-        _harvestProgressLabel = Label("", w);
         _debugQuestIdInput = Input("Quest ID", 120, 10, "65614", _ => { });
         _debugExportButton = Button(Loc.S("Export Quest Lua Debug"), 200, OnDebugExportClick);
         CreateCollapsibleSection(list, Loc.S("Data Harvest"), w, true,
-            [_harvestButton, _harvestProgressLabel, _debugQuestIdInput, _debugExportButton]);
+            [_harvestButton, _debugQuestIdInput, _debugExportButton]);
 
         return list;
     }
@@ -677,17 +734,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     {
         var questIdStr = _debugQuestIdInput?.String ?? "";
         if (uint.TryParse(questIdStr, out var qid))
-        {
-            var path = _dialogHarvest.ExportQuestLuaDebug(qid);
-            if (_harvestProgressLabel != null)
-                _harvestProgressLabel.String = path != null ? $"Debug exported to: {path}" : "Quest not found.";
-        }
-    }
-
-    private void OnHarvestProgress(string message)
-    {
-        if (_harvestProgressLabel != null)
-            _harvestProgressLabel.String = message;
+            _dialogHarvest.ExportQuestLuaDebug(qid);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

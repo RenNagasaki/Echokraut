@@ -108,7 +108,7 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
             _config.Save();
             _wizardStep = 1;
         });
-        _choiceLocalDesc = Lbl(Loc.S("Runs on your GPU — best quality, requires ~20GB disk space"), w);
+        _choiceLocalDesc = Lbl(Loc.S("Runs on your GPU or CPU — best quality, requires ~20GB disk space"), w);
 
         _choiceRemoteBtn = Btn(Loc.S("Remote Server"), w, () =>
         {

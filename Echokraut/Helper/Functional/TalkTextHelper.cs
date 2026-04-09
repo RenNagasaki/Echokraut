@@ -604,5 +604,90 @@ namespace Echokraut.Helper.Functional
 
             return text;
         }
+
+        // ── Player name placeholder handling ──────────────────────
+
+        public const string PlaceholderFirstName = "-PlayerFirstName-";
+        public const string PlaceholderLastName = "-PlayerLastName-";
+        public const string PlaceholderFullName = "-PlayerName-";
+
+        public static bool ContainsPlayerPlaceholder(string text)
+        {
+            return text.Contains(PlaceholderFirstName)
+                || text.Contains(PlaceholderLastName)
+                || text.Contains(PlaceholderFullName);
+        }
+
+        public static string SubstitutePlaceholders(string text, string playerName, bool isMale = true)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+
+            // Resolve gender conditionals: -IfGender:male|female-
+            if (text.Contains("-IfGender:"))
+                text = ResolveGenderPlaceholders(text, isMale);
+
+            if (string.IsNullOrEmpty(playerName) || !ContainsPlayerPlaceholder(text))
+                return text;
+
+            var parts = playerName.Split(' ');
+            var firstName = parts.Length > 0 ? parts[0] : playerName;
+            var lastName = parts.Length > 1 ? parts[1] : "";
+
+            text = text.Replace(PlaceholderFullName, playerName);
+            text = text.Replace(PlaceholderFirstName, firstName);
+            text = text.Replace(PlaceholderLastName, lastName);
+            return text;
+        }
+
+        // ── Gender conditional placeholder handling ──────────────────
+
+        private const string GenderPlaceholderPrefix = "-IfGender:";
+        private const string GenderPlaceholderSuffix = "-";
+
+        /// <summary>
+        /// Create a gender placeholder from male and female text variants.
+        /// Format: -IfGender:maleText|femaleText-
+        /// </summary>
+        public static string MakeGenderPlaceholder(string maleText, string femaleText)
+        {
+            return $"{GenderPlaceholderPrefix}{maleText}|{femaleText}{GenderPlaceholderSuffix}";
+        }
+
+        /// <summary>
+        /// Check if text contains any gender placeholders.
+        /// </summary>
+        public static bool ContainsGenderPlaceholder(string text)
+        {
+            return text.Contains(GenderPlaceholderPrefix);
+        }
+
+        /// <summary>
+        /// Resolve all -IfGender:male|female- placeholders based on player gender.
+        /// </summary>
+        private static string ResolveGenderPlaceholders(string text, bool isMale)
+        {
+            var startIdx = 0;
+            while (true)
+            {
+                var start = text.IndexOf(GenderPlaceholderPrefix, startIdx, StringComparison.Ordinal);
+                if (start < 0) break;
+
+                var contentStart = start + GenderPlaceholderPrefix.Length;
+                var end = text.IndexOf(GenderPlaceholderSuffix, contentStart, StringComparison.Ordinal);
+                if (end < 0) break;
+
+                var content = text[contentStart..end];
+                var pipeIdx = content.IndexOf('|');
+                if (pipeIdx < 0) { startIdx = end + 1; continue; }
+
+                var maleForm = content[..pipeIdx];
+                var femaleForm = content[(pipeIdx + 1)..];
+                var resolved = isMale ? maleForm : femaleForm;
+
+                text = string.Concat(text[..start], resolved, text[(end + 1)..]);
+                startIdx = start + resolved.Length;
+            }
+            return text;
+        }
     }
 }

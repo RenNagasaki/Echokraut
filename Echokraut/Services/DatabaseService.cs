@@ -55,7 +55,7 @@ public class DatabaseService : IDatabaseService
         RefreshAllCaches();
     }
 
-    private const int CurrentSchemaVersion = 6;
+    private const int CurrentSchemaVersion = 9;
 
     private void InitializeDatabase(Configuration config)
     {
@@ -231,6 +231,67 @@ public class DatabaseService : IDatabaseService
 
             SetSchemaVersion(7);
         }
+
+        if (version < 8)
+        {
+            _log.Info(nameof(RunSchemaMigrations),
+                "Applying schema v8: voice_clip_generations table, has_player_placeholder column",
+                new EKEventId(0, TextSource.None));
+
+            // Create the per-player generation tracking table
+            _context.Database.ExecuteSqlRaw(@"
+                CREATE TABLE IF NOT EXISTS voice_clip_generations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    voice_clip_id INTEGER NOT NULL,
+                    player_content_id INTEGER NOT NULL DEFAULT 0,
+                    player_name TEXT NOT NULL DEFAULT '',
+                    save_path TEXT NOT NULL DEFAULT '',
+                    generated_at TEXT NOT NULL DEFAULT '',
+                    FOREIGN KEY (voice_clip_id) REFERENCES voice_clips(id) ON DELETE CASCADE
+                )");
+
+            // Indexes
+            try { _context.Database.ExecuteSqlRaw(
+                "CREATE UNIQUE INDEX IX_voice_clip_generations_VoiceClipId_PlayerContentId ON voice_clip_generations (voice_clip_id, player_content_id)"); }
+            catch { /* already exists */ }
+            try { _context.Database.ExecuteSqlRaw(
+                "CREATE INDEX IX_voice_clip_generations_PlayerContentId ON voice_clip_generations (player_content_id)"); }
+            catch { /* already exists */ }
+
+            // Add has_player_placeholder to voice_clips
+            try { _context.Database.ExecuteSqlRaw(
+                "ALTER TABLE voice_clips ADD COLUMN has_player_placeholder INTEGER NOT NULL DEFAULT 0"); }
+            catch { /* already exists on fresh install */ }
+
+            // Migrate existing saved_to_disk data → voice_clip_generations (player-independent, content_id=0)
+            _context.Database.ExecuteSqlRaw(@"
+                INSERT OR IGNORE INTO voice_clip_generations (voice_clip_id, player_content_id, player_name, save_path, generated_at)
+                SELECT id, 0, '', save_path, timestamp
+                FROM voice_clips
+                WHERE saved_to_disk = 1");
+
+            // Backfill has_player_placeholder for any already-harvested clips with placeholders
+            _context.Database.ExecuteSqlRaw(@"
+                UPDATE voice_clips SET has_player_placeholder = 1
+                WHERE original_text LIKE '%-PlayerFirstName-%'
+                   OR original_text LIKE '%-PlayerLastName-%'
+                   OR original_text LIKE '%-PlayerName-%'");
+
+            SetSchemaVersion(8);
+        }
+
+        if (version < 9)
+        {
+            _log.Info(nameof(RunSchemaMigrations), "Applying schema v9: quest_type column on voice_clips",
+                new EKEventId(0, TextSource.None));
+            try { _context.Database.ExecuteSqlRaw(
+                "ALTER TABLE voice_clips ADD COLUMN quest_type INTEGER NOT NULL DEFAULT 0"); }
+            catch { /* already exists on fresh install */ }
+            try { _context.Database.ExecuteSqlRaw(
+                "CREATE INDEX IX_voice_clips_QuestType ON voice_clips (quest_type)"); }
+            catch { /* already exists */ }
+            SetSchemaVersion(9);
+        }
     }
 
     private void SetSchemaVersion(int version)
@@ -243,13 +304,16 @@ public class DatabaseService : IDatabaseService
 
     public bool NeedsMigration(Configuration config)
     {
-        var hasDbData = _context.Characters.Any() || _context.Voices.Any();
-        var hasConfigData = config.MappedNpcs.Count > 0
-                            || config.MappedPlayers.Count > 0
-                            || config.EchokrautVoices.Count > 0
-                            || config.PhoneticCorrections.Count > 0;
+        lock (_writeLock)
+        {
+            var hasDbData = _context.Characters.Any() || _context.Voices.Any();
+            var hasConfigData = config.MappedNpcs.Count > 0
+                                || config.MappedPlayers.Count > 0
+                                || config.EchokrautVoices.Count > 0
+                                || config.PhoneticCorrections.Count > 0;
 
-        return !hasDbData && hasConfigData;
+            return !hasDbData && hasConfigData;
+        }
     }
 
     public void MigrateFromConfig(Configuration config)
@@ -401,6 +465,14 @@ public class DatabaseService : IDatabaseService
     public List<CharacterEntity> GetNpcs() => _cachedNpcs;
     public List<CharacterEntity> GetPlayers() => _cachedPlayers;
 
+    public List<CharacterEntity> GetAllCharacters()
+    {
+        lock (_writeLock)
+        {
+            return _context.Characters.AsNoTracking().ToList();
+        }
+    }
+
     public CharacterEntity? FindCharacter(string name, Genders gender, NpcRaces race, int language = 1)
     {
         lock (_writeLock)
@@ -425,7 +497,9 @@ public class DatabaseService : IDatabaseService
             {
                 existing.RaceStr = character.RaceStr;
                 existing.BodyType = character.BodyType;
-                existing.VoiceKey = character.VoiceKey;
+                // Don't overwrite an existing voice with an empty one
+                if (!string.IsNullOrEmpty(character.VoiceKey))
+                    existing.VoiceKey = character.VoiceKey;
                 existing.DoNotDelete = character.DoNotDelete;
                 existing.ObjectKind = character.ObjectKind;
             }
@@ -435,7 +509,8 @@ public class DatabaseService : IDatabaseService
             }
 
             _context.SaveChanges();
-            RefreshCharacterCaches();
+
+            if (!BulkMode) RefreshCharacterCaches();
             return existing ?? character;
         }
     }
@@ -449,7 +524,7 @@ public class DatabaseService : IDatabaseService
             {
                 _context.Characters.Remove(entity);
                 _context.SaveChanges();
-                RefreshCharacterCaches();
+                if (!BulkMode) RefreshCharacterCaches();
             }
         }
     }
@@ -458,8 +533,11 @@ public class DatabaseService : IDatabaseService
 
     public CharacterContextEntity? GetContext(int characterId, string contextType)
     {
-        return _context.CharacterContexts
-            .FirstOrDefault(cc => cc.CharacterId == characterId && cc.ContextType == contextType);
+        lock (_writeLock)
+        {
+            return _context.CharacterContexts
+                .FirstOrDefault(cc => cc.CharacterId == characterId && cc.ContextType == contextType);
+        }
     }
 
     public CharacterContextEntity UpsertContext(int characterId, string contextType,
@@ -488,7 +566,7 @@ public class DatabaseService : IDatabaseService
             }
 
             _context.SaveChanges();
-            RefreshCharacterCaches();
+            if (!BulkMode) RefreshCharacterCaches();
             return existing;
         }
     }
@@ -535,9 +613,12 @@ public class DatabaseService : IDatabaseService
 
     public List<CharacterInstanceEntity> GetInstancesForCharacter(int characterId)
     {
-        return _context.CharacterInstances
-            .Where(ci => ci.CharacterId == characterId)
-            .ToList();
+        lock (_writeLock)
+        {
+            return _context.CharacterInstances
+                .Where(ci => ci.CharacterId == characterId)
+                .ToList();
+        }
     }
 
     public void MuteInstance(uint npcBaseId)
@@ -593,10 +674,13 @@ public class DatabaseService : IDatabaseService
 
     public VoiceEntity? GetVoiceByKey(string backendVoice)
     {
-        return _context.Voices
-            .Include(v => v.AllowedGenders)
-            .Include(v => v.AllowedRaces)
-            .FirstOrDefault(v => v.BackendVoice == backendVoice);
+        lock (_writeLock)
+        {
+            return _context.Voices
+                .Include(v => v.AllowedGenders)
+                .Include(v => v.AllowedRaces)
+                .FirstOrDefault(v => v.BackendVoice == backendVoice);
+        }
     }
 
     public VoiceEntity UpsertVoice(VoiceEntity voice)
@@ -707,6 +791,21 @@ public class DatabaseService : IDatabaseService
     /// </summary>
     public bool SuppressEvents { get; set; }
 
+    /// <inheritdoc/>
+    public bool BulkMode { get; set; }
+
+    /// <inheritdoc/>
+    public void RefreshCaches()
+    {
+        lock (_writeLock)
+        {
+            RefreshCharacterCaches();
+            RefreshVoiceCache();
+            RefreshPhoneticCache();
+            RefreshMutedCache();
+        }
+    }
+
     public void NotifyVoiceClipLogged() => VoiceClipLogged?.Invoke();
 
     public void ClearChangeTracker()
@@ -719,47 +818,66 @@ public class DatabaseService : IDatabaseService
 
     public event Action? VoiceClipLogged;
 
-    public void LogVoiceClip(VoiceClipEntity encounter)
+    public void LogVoiceClip(VoiceClipEntity voiceClip)
     {
         lock (_writeLock)
         {
-            _context.VoiceClips.Add(encounter);
+            _context.VoiceClips.Add(voiceClip);
             _context.SaveChanges();
             if (!SuppressEvents) VoiceClipLogged?.Invoke();
         }
     }
 
-    public void LogOrUpdateVoiceClip(VoiceClipEntity encounter)
+    public void LogOrUpdateVoiceClip(VoiceClipEntity voiceClip)
     {
         lock (_writeLock)
         {
             var existing = _context.VoiceClips
-                .FirstOrDefault(e => e.CharacterId == encounter.CharacterId
-                    && e.NpcBaseId == encounter.NpcBaseId
-                    && e.OriginalText == encounter.OriginalText);
+                .FirstOrDefault(vc => vc.CharacterId == voiceClip.CharacterId
+                    && vc.NpcBaseId == voiceClip.NpcBaseId
+                    && vc.OriginalText == voiceClip.OriginalText);
 
             if (existing != null)
             {
-                existing.Timestamp = encounter.Timestamp;
-                existing.VoiceKey = encounter.VoiceKey;
-                existing.CleanedText = encounter.CleanedText;
-                existing.ZoneName = encounter.ZoneName;
-                existing.MapX = encounter.MapX;
-                existing.MapY = encounter.MapY;
+                existing.Timestamp = voiceClip.Timestamp;
+                existing.VoiceKey = voiceClip.VoiceKey;
+                existing.CleanedText = voiceClip.CleanedText;
+                existing.BodyType = voiceClip.BodyType;
+                existing.HasPlayerPlaceholder = voiceClip.HasPlayerPlaceholder;
+                if (voiceClip.QuestType != 0)
+                    existing.QuestType = voiceClip.QuestType;
+                existing.ZoneName = voiceClip.ZoneName;
+                existing.MapX = voiceClip.MapX;
+                existing.MapY = voiceClip.MapY;
                 // Don't overwrite SavedToDisk/SavePath with empty values on re-encounter
-                if (encounter.SavedToDisk || !string.IsNullOrEmpty(encounter.SavePath))
+                if (voiceClip.SavedToDisk || !string.IsNullOrEmpty(voiceClip.SavePath))
                 {
-                    existing.SavedToDisk = encounter.SavedToDisk;
-                    existing.SavePath = encounter.SavePath;
+                    existing.SavedToDisk = voiceClip.SavedToDisk;
+                    existing.SavePath = voiceClip.SavePath;
                 }
             }
             else
             {
-                _context.VoiceClips.Add(encounter);
+                _context.VoiceClips.Add(voiceClip);
             }
 
+            // In batch mode (SuppressEvents), skip per-item SaveChanges — caller flushes in batches
+            if (!SuppressEvents)
+            {
+                _context.SaveChanges();
+                VoiceClipLogged?.Invoke();
+            }
+        }
+    }
+
+    /// <summary>
+    /// Flush pending DB changes. Call periodically during batch operations.
+    /// </summary>
+    public void FlushChanges()
+    {
+        lock (_writeLock)
+        {
             _context.SaveChanges();
-            if (!SuppressEvents) VoiceClipLogged?.Invoke();
         }
     }
 
@@ -767,53 +885,86 @@ public class DatabaseService : IDatabaseService
         string? npcNameFilter = null, string? textFilter = null,
         int? textSourceFilter = null, bool? savedFilter = null)
     {
-        return ApplyEncounterFilters(npcNameFilter, textFilter, textSourceFilter, savedFilter)
-            .Include(e => e.Character)
-            .OrderByDescending(e => e.Timestamp)
-            .Skip(offset)
-            .Take(limit)
-            .ToList();
+        lock (_writeLock)
+        {
+            return ApplyEncounterFilters(npcNameFilter, textFilter, textSourceFilter, savedFilter)
+                .Include(e => e.Character)
+                .OrderByDescending(e => e.Timestamp)
+                .Skip(offset)
+                .Take(limit)
+                .ToList();
+        }
     }
 
     public int GetVoiceClipCount(string? npcNameFilter = null, string? textFilter = null,
         int? textSourceFilter = null, bool? savedFilter = null)
     {
-        return ApplyEncounterFilters(npcNameFilter, textFilter, textSourceFilter, savedFilter).Count();
+        lock (_writeLock)
+        {
+            return ApplyEncounterFilters(npcNameFilter, textFilter, textSourceFilter, savedFilter).Count();
+        }
     }
 
     public List<CharacterEntity> GetCharactersWithVoiceClips()
     {
-        var characterIds = _context.VoiceClips
-            .Select(e => e.CharacterId)
-            .Distinct()
-            .ToList();
+        lock (_writeLock)
+        {
+            var characterIds = _context.VoiceClips
+                .Select(e => e.CharacterId)
+                .Distinct()
+                .ToList();
 
-        return _context.Characters
-            .Include(c => c.Contexts)
-            .Where(c => characterIds.Contains(c.Id))
-            .OrderBy(c => c.Name)
-            .ToList();
+            return _context.Characters
+                .Include(c => c.Contexts)
+                .Where(c => characterIds.Contains(c.Id))
+                .OrderBy(c => c.Name)
+                .ToList();
+        }
     }
 
     public List<VoiceClipEntity> GetVoiceClipsForCharacter(int characterId, int limit = 1000, int offset = 0)
     {
-        return _context.VoiceClips
-            .Include(e => e.Character)
-            .Where(e => e.CharacterId == characterId)
-            .OrderByDescending(e => e.Timestamp)
-            .Skip(offset)
-            .Take(limit)
-            .ToList();
+        lock (_writeLock)
+        {
+            return _context.VoiceClips
+                .Include(e => e.Character)
+                .Where(e => e.CharacterId == characterId)
+                .OrderByDescending(e => e.Timestamp)
+                .Skip(offset)
+                .Take(limit)
+                .ToList();
+        }
     }
 
-    public int GetVoiceClipCountForCharacter(int characterId)
+    public int GetVoiceClipCountForCharacter(int characterId, int? questTypeFilter = null)
     {
-        return _context.VoiceClips.Count(e => e.CharacterId == characterId);
+        lock (_writeLock)
+        {
+            var q = _context.VoiceClips.Where(e => e.CharacterId == characterId);
+            if (questTypeFilter.HasValue)
+                q = q.Where(e => e.QuestType == questTypeFilter.Value);
+            return q.Count();
+        }
+    }
+
+    public HashSet<int> GetCharacterIdsWithQuestType(int questType)
+    {
+        lock (_writeLock)
+        {
+            return _context.VoiceClips
+                .Where(vc => vc.QuestType == questType)
+                .Select(vc => vc.CharacterId)
+                .Distinct()
+                .ToHashSet();
+        }
     }
 
     public int GetSavedVoiceClipCountForCharacter(int characterId)
     {
-        return _context.VoiceClips.Count(e => e.CharacterId == characterId && e.SavedToDisk);
+        lock (_writeLock)
+        {
+            return _context.VoiceClips.Count(e => e.CharacterId == characterId && e.SavedToDisk);
+        }
     }
 
     public void UpdateVoiceClipSaved(int voiceClipId, bool savedToDisk, string savePath)
@@ -830,11 +981,11 @@ public class DatabaseService : IDatabaseService
         }
     }
 
-    public void DeleteVoiceClip(int encounterId)
+    public void DeleteVoiceClip(int voiceClipId)
     {
         lock (_writeLock)
         {
-            var entity = _context.VoiceClips.Find(encounterId);
+            var entity = _context.VoiceClips.Find(voiceClipId);
             if (entity != null)
             {
                 _context.VoiceClips.Remove(entity);
@@ -849,6 +1000,122 @@ public class DatabaseService : IDatabaseService
         {
             _context.VoiceClips.RemoveRange(_context.VoiceClips);
             _context.SaveChanges();
+        }
+    }
+
+    public void WipeAll()
+    {
+        lock (_writeLock)
+        {
+            // Order matters for FK constraints: dependent rows first.
+            _context.VoiceClipGenerations.RemoveRange(_context.VoiceClipGenerations);
+            _context.VoiceClips.RemoveRange(_context.VoiceClips);
+            _context.CharacterInstances.RemoveRange(_context.CharacterInstances);
+            _context.CharacterContexts.RemoveRange(_context.CharacterContexts);
+            _context.Characters.RemoveRange(_context.Characters);
+            _context.PhoneticCorrections.RemoveRange(_context.PhoneticCorrections);
+            // Voices have child tables (allowed_races / allowed_genders) — EF cascades via relationship.
+            _context.Voices.RemoveRange(_context.Voices);
+            _context.SaveChanges();
+            _context.ChangeTracker.Clear();
+
+            _cachedVoices = new List<VoiceEntity>();
+            _cachedPhonetics = new List<PhoneticCorrectionEntity>();
+            _cachedMutedBaseIds = new HashSet<uint>();
+        }
+        if (!SuppressEvents) VoiceClipLogged?.Invoke();
+    }
+
+    // ── Per-player generation tracking ──────────────────────────
+
+    public void LogVoiceClipGeneration(int voiceClipId, long playerContentId, string playerName, string savePath)
+    {
+        lock (_writeLock)
+        {
+            var existing = _context.VoiceClipGenerations
+                .FirstOrDefault(g => g.VoiceClipId == voiceClipId && g.PlayerContentId == playerContentId);
+            if (existing != null)
+            {
+                existing.PlayerName = playerName;
+                existing.SavePath = savePath;
+                existing.GeneratedAt = DateTime.UtcNow;
+            }
+            else
+            {
+                _context.VoiceClipGenerations.Add(new VoiceClipGenerationEntity
+                {
+                    VoiceClipId = voiceClipId,
+                    PlayerContentId = playerContentId,
+                    PlayerName = playerName,
+                    SavePath = savePath,
+                    GeneratedAt = DateTime.UtcNow,
+                });
+            }
+            _context.SaveChanges();
+        }
+    }
+
+    public void DeleteVoiceClipGeneration(int voiceClipId, long playerContentId)
+    {
+        lock (_writeLock)
+        {
+            var existing = _context.VoiceClipGenerations
+                .FirstOrDefault(g => g.VoiceClipId == voiceClipId && g.PlayerContentId == playerContentId);
+            if (existing != null)
+            {
+                _context.VoiceClipGenerations.Remove(existing);
+                _context.SaveChanges();
+            }
+        }
+    }
+
+    public VoiceClipGenerationEntity? GetVoiceClipGeneration(int voiceClipId, long playerContentId)
+    {
+        lock (_writeLock)
+        {
+            return _context.VoiceClipGenerations
+                .FirstOrDefault(g => g.VoiceClipId == voiceClipId && g.PlayerContentId == playerContentId);
+        }
+    }
+
+    public int GetGeneratedCountForCharacter(int characterId, long playerContentId, int? questTypeFilter = null)
+    {
+        lock (_writeLock)
+        {
+            var q = _context.VoiceClipGenerations
+                .Where(g => g.VoiceClip != null
+                    && g.VoiceClip.CharacterId == characterId
+                    && g.PlayerContentId == (g.VoiceClip.HasPlayerPlaceholder ? playerContentId : 0));
+            if (questTypeFilter.HasValue)
+                q = q.Where(g => g.VoiceClip!.QuestType == questTypeFilter.Value);
+            return q.Count();
+        }
+    }
+
+    public (int totalClips, int generatedClips) GetClipTotalsForLanguage(
+        int language, string contextType, long playerContentId, int? questTypeFilter = null)
+    {
+        lock (_writeLock)
+        {
+            // Characters of this language that have a context of the requested type.
+            var charIds = _context.Characters
+                .Where(c => c.Language == language && c.Contexts.Any(ctx => ctx.ContextType == contextType))
+                .Select(c => c.Id);
+
+            var clipsQ = _context.VoiceClips.Where(vc => charIds.Contains(vc.CharacterId));
+            if (questTypeFilter.HasValue)
+                clipsQ = clipsQ.Where(vc => vc.QuestType == questTypeFilter.Value);
+            var totalClips = clipsQ.Count();
+
+            var genQ = _context.VoiceClipGenerations
+                .Where(g => g.VoiceClip != null
+                    && charIds.Contains(g.VoiceClip.CharacterId)
+                    && g.PlayerContentId == (g.VoiceClip.HasPlayerPlaceholder ? playerContentId : 0));
+            if (questTypeFilter.HasValue)
+                genQ = genQ.Where(g => g.VoiceClip!.QuestType == questTypeFilter.Value);
+            var generatedClips = genQ.Count();
+
+            return (totalClips, generatedClips);
         }
     }
 

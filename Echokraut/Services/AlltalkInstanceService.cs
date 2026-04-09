@@ -7,12 +7,10 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.IO.Compression;
-using System.Linq;
 using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
 
 namespace Echokraut.Services;
 
@@ -56,6 +54,12 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
     public void Install()
     {
         var eventId = new EKEventId(0, TextSource.Backend);
+        var (pathValid, _) = Windows.Native.NativeAlltalkBuilder.ValidateInstallPath(_config.Alltalk.LocalInstallPath);
+        if (!pathValid)
+        {
+            _log.Warning(nameof(Install), "Install path is invalid, aborting.", eventId);
+            return;
+        }
         try
         {
             _log.Info(nameof(Install), "Starting alltalk install process", eventId);
@@ -67,6 +71,9 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
                 // Args: install <installFolder> <customModelUrl> <customVoicesUrl> <reinstall>
                 //        <isWindows> <isWindows11> <alltalkUrl> <voicesUrl> <voices2Url>
                 //        <msBuildToolsUrl> <xttsModelUrls(;-separated)>
+                // Args: install <installFolder> <customModelUrl> <customVoicesUrl> <reinstall>
+                //        <isWindows> <isWindows11> <alltalkUrl> <voicesUrl> <voices2Url>
+                //        <msBuildToolsUrl> <xttsModelUrls(;-separated)> <cpuMode>
                 var urls = _remoteUrls.Urls;
                 var processInfo = new ProcessStartInfo(localInstallerLocation)
                 {
@@ -85,7 +92,8 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
                         urls.VoicesUrl,
                         urls.Voices2Url,
                         urls.MsBuildToolsUrl,
-                        string.Join(";", urls.XttsModelUrls)
+                        string.Join(";", urls.XttsModelUrls),
+                        _config.Alltalk.CpuMode.ToString(),
                     }
                 };
 
@@ -135,6 +143,12 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
     public void StartInstance()
     {
         var eventId = new EKEventId(0, TextSource.Backend);
+        var (pathValid, _) = Windows.Native.NativeAlltalkBuilder.ValidateInstallPath(_config.Alltalk.LocalInstallPath);
+        if (!pathValid)
+        {
+            _log.Warning(nameof(StartInstance), "Install path is invalid, aborting.", eventId);
+            return;
+        }
         try
         {
             if (!(!_instanceProcessIsRunning && _instanceProcess == null && _instanceThread == null))
@@ -219,97 +233,89 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
         }
     }
 
-    public async Task InstallCustomData(EKEventId eventId, bool installProcess = true)
+    public Task InstallCustomData(EKEventId eventId, bool installProcess = true)
     {
+        var (pathValid, _) = Windows.Native.NativeAlltalkBuilder.ValidateInstallPath(_config.Alltalk.LocalInstallPath);
+        if (!pathValid)
+        {
+            _log.Warning(nameof(InstallCustomData), "Install path is invalid, aborting.", eventId);
+            return Task.CompletedTask;
+        }
         try
         {
-            if (!installProcess)
-                StopInstance(eventId);
+            var wasRunning = InstanceRunning || InstanceStarting;
+            var shouldRestart = wasRunning || (!installProcess && _config.Alltalk.AutoStartLocalInstance);
 
-            var installFolder = _config.Alltalk.LocalInstallPath;
-            var alltalkFolder = Path.Join(installFolder, Constants.ALLTALKFOLDERNAME);
-            var modelFolder = Path.Join(alltalkFolder, "models", "xtts");
-            var voicesFile = Path.Join(alltalkFolder, "voices.zip");
-            var voicesFolder = Path.Join(alltalkFolder, "voices");
+            _log.Info(nameof(InstallCustomData), $"Starting custom data install (wasRunning={wasRunning}, shouldRestart={shouldRestart})", eventId);
 
-            if (!string.IsNullOrWhiteSpace(_config.Alltalk.CustomModelUrl))
+            // The installer's named pipe shutdown kills any running installer (and its AllTalk instance).
+            // If shouldRestart, the installer will start AllTalk again after installing.
+            _installThread = Task.Run(() =>
             {
-                _log.Info(nameof(InstallCustomData), "Downloading custom model", eventId);
-                using var client = new HttpClient();
-                try
+                Installing = true;
+                if (wasRunning)
                 {
-                    var modelFolderName = "echokraut_trained";
-                    modelFolder = Path.Join(modelFolder, modelFolderName);
-                    if (Directory.Exists(modelFolder))
-                        Directory.Delete(modelFolder, true);
-                    Directory.CreateDirectory(modelFolder);
+                    InstanceRunning = false;
+                    InstanceStarting = false;
+                }
 
-                    var modelFile = modelFolder + ".zip";
-                    var downloadUrl = _googleDrive.CheckForGoogleAndConvertToDirectDownloadLink(
-                        _config.Alltalk.CustomModelUrl, out bool isGoogle);
-                    var response = await client.GetAsync(downloadUrl);
-                    if (isGoogle)
-                        response = _googleDrive.DownloadGoogleDrive(downloadUrl, response, client);
+                var localInstallerLocation = CheckAndDownloadLocalInstaller(eventId);
 
-                    using (var fs = new FileStream(modelFile, FileMode.Create, FileAccess.Write))
-                        await response.Content.CopyToAsync(fs);
-
-                    ZipFile.ExtractToDirectory(modelFile, modelFolder, true);
-                    File.Delete(modelFile);
-
-                    var ttsEnginesFile = Path.Join(alltalkFolder, "system", "tts_engines", "tts_engines.json");
-                    dynamic? configEngines = JsonConvert.DeserializeObject(File.ReadAllText(ttsEnginesFile));
-                    if (configEngines != null)
+                // Args: installcustomdata <installFolder> <customModelUrl> <customVoicesUrl> <isWindows> <shouldRestart>
+                var processInfo = new ProcessStartInfo(localInstallerLocation)
+                {
+                    UseShellExecute = true,
+                    CreateNoWindow = false,
+                    ArgumentList =
                     {
-                        configEngines["engine_loaded"] = "xtts";
-                        configEngines["selected_model"] = $"xtts - {modelFolderName}";
-                        File.WriteAllText(ttsEnginesFile, JsonConvert.SerializeObject(configEngines));
+                        "installcustomdata",
+                        _config.Alltalk.LocalInstallPath,
+                        _config.Alltalk.CustomModelUrl,
+                        _config.Alltalk.CustomVoicesUrl,
+                        IsWindows.ToString(),
+                        shouldRestart.ToString(),
                     }
-                }
-                catch (Exception ex)
+                };
+
+                _installProcess = new Process { StartInfo = processInfo };
+                _installProcess.Start();
+
+                if (shouldRestart)
                 {
-                    _log.Error(nameof(InstallCustomData), $"Error while downloading custom model, skipping: {ex}", eventId);
-                }
-            }
-            else
-                _log.Info(nameof(InstallCustomData), "No custom model found, skipping", eventId);
+                    // Poll for Ready.txt — installer will start AllTalk after custom data install
+                    while (!_installProcess.HasExited &&
+                           !File.Exists(Path.Join(Path.GetDirectoryName(localInstallerLocation), "Ready.txt")))
+                        Thread.Sleep(2000);
 
-            if (!string.IsNullOrWhiteSpace(_config.Alltalk.CustomVoicesUrl))
-            {
-                _log.Info(nameof(InstallCustomData), "Downloading custom voices", eventId);
-                using var client = new HttpClient();
-                try
+                    Installing = false;
+                    InstanceRunning = true;
+                    _log.Info(nameof(InstallCustomData), "Custom data installed, instance restarted", eventId);
+                    OnInstanceReady?.Invoke();
+
+                    // Keep tracking the process (it stays alive while AllTalk runs)
+                    _instanceProcess = _installProcess;
+                    _installProcess = null;
+                    _instanceProcessIsRunning = true;
+
+                    _instanceProcess.WaitForExit();
+                    _instanceProcessIsRunning = false;
+                    InstanceRunning = false;
+                    _log.Info(nameof(InstallCustomData), "Instance stopped", eventId);
+                }
+                else
                 {
-                    var downloadUrl = _googleDrive.CheckForGoogleAndConvertToDirectDownloadLink(
-                        _config.Alltalk.CustomVoicesUrl, out bool isGoogle);
-                    var response = await client.GetAsync(downloadUrl);
-                    if (isGoogle)
-                        response = _googleDrive.DownloadGoogleDrive(downloadUrl, response, client);
-
-                    using (var fs = new FileStream(voicesFile, FileMode.Create, FileAccess.Write))
-                        await response.Content.CopyToAsync(fs);
-
-                    if (Directory.Exists(voicesFolder))
-                        Directory.Delete(voicesFolder, true);
-
-                    ZipFile.ExtractToDirectory(voicesFile, alltalkFolder, true);
-                    File.Delete(voicesFile);
+                    _installProcess.WaitForExit();
+                    Installing = false;
+                    _log.Info(nameof(InstallCustomData), "Custom data installed", eventId);
                 }
-                catch (Exception ex)
-                {
-                    _log.Error(nameof(InstallCustomData), $"Error while downloading custom voices, skipping: {ex}", eventId);
-                }
-            }
-            else
-                _log.Info(nameof(InstallCustomData), "No custom voices found, skipping", eventId);
-
-            if (_config.Alltalk.AutoStartLocalInstance && !installProcess)
-                StartInstance();
+            });
         }
         catch (Exception ex)
         {
             _log.Error(nameof(InstallCustomData), $"Error while installing custom data: {ex}", eventId);
         }
+
+        return Task.CompletedTask;
     }
 
     public bool IsCudaInstalledCheck(EKEventId eventId)
@@ -363,14 +369,18 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
         if (!File.Exists(localInstallerExeLocation))
         {
             _log.Info(nameof(CheckAndDownloadLocalInstaller), "Downloading local installer", eventId);
-            using var http = new HttpClient();
+            Directory.CreateDirectory(_config.Alltalk.LocalInstallPath);
+            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
             var installerUrl = _remoteUrls.Urls.InstallerUrl;
             string fileName = Path.GetFileName(new Uri(installerUrl).LocalPath);
             string zipPath = Path.Combine(_config.Alltalk.LocalInstallPath, fileName);
-            var bytes = http.GetByteArrayAsync(installerUrl).Result;
+            _log.Debug(nameof(CheckAndDownloadLocalInstaller), $"URL: {installerUrl} → {zipPath}", eventId);
+            var bytes = http.GetByteArrayAsync(installerUrl).GetAwaiter().GetResult();
+            _log.Debug(nameof(CheckAndDownloadLocalInstaller), $"Downloaded {bytes.Length} bytes", eventId);
             File.WriteAllBytes(zipPath, bytes);
             Directory.CreateDirectory(localInstallerLocation);
             ZipFile.ExtractToDirectory(zipPath, localInstallerLocation, overwriteFiles: true);
+            _log.Info(nameof(CheckAndDownloadLocalInstaller), "Installer extracted", eventId);
         }
 
         _log.Debug(nameof(CheckAndDownloadLocalInstaller), $"Location: {localInstallerExeLocation}", eventId);

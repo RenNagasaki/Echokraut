@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
+using System.Threading;
 using Echokraut.DataClasses.Database;
 using Echotools.UI.Nodes;
 using Echokraut.Helper.Functional;
@@ -21,17 +22,21 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
     private readonly IDatabaseService _db;
     private readonly IVoiceClipManagerService _voiceClipManager;
     private readonly IAudioPlaybackService _audioPlayback;
+    private readonly IGameObjectService _gameObjects;
 
     private float _contentWidth;
     private ScrollingListNode? _panel;
-    private TextNode? _titleLabel;
+    private TextButtonNode? _genToggleButton;
+    private StatusProgressBar? _progressBar;
+    private int _genDone;
+    private int _genTotal;
+    private CancellationTokenSource? _genCts;
+    private bool _genRunning;
 
     // Column widths (measured at setup)
     private float _colPlay;
     private float _colSource;
     private const float ColTimestamp = 85f;
-    private const float ColSaved = 20f;
-    private float _colDel;
     private float _colText;
 
     // Pagination
@@ -40,49 +45,61 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
     private bool _paginationPending;
 
     // Current data
-    private List<VoiceClipEntity> _encounters = new();
+    private List<VoiceClipEntity> _voiceClips = new();
+    private HashSet<int>? _voiceClipIdFilter; // IDs from original filtered set
     private string _npcKey = "";
     private int _characterId;
     private bool _needsRebuild;
     private int? _playingVoiceClipId;
     private readonly Dictionary<int, bool> _audioExistsCache = new();
-    private readonly Dictionary<int, TextButtonNode> _playButtons = new();
+    private readonly Dictionary<int, (ImageNode playImg, ImageNode genImg, bool wasSaved)> _buttonImages = new();
+    private Action? _pendingAction; // Deferred click action to avoid ATK use-after-free
+    private int _progressUpdateCounter;
 
-    // Progressive loading
-    private int _progressiveIndex;
-    private bool _progressiveActive;
-    private const int RowsPerFrame = 10;
+    private static readonly Vector2 PlayIconUV = new(56, 56);   // Part 14
+    private static readonly Vector2 StopIconUV = new(84, 56);   // Part 15
+
 
     public NativeVoiceClipDetailWindow(
         IDatabaseService db,
         IVoiceClipManagerService voiceClipManager,
-        IAudioPlaybackService audioPlayback)
+        IAudioPlaybackService audioPlayback,
+        IGameObjectService gameObjects)
     {
         _db = db;
         _voiceClipManager = voiceClipManager;
         _audioPlayback = audioPlayback;
+        _gameObjects = gameObjects;
 
-        _voiceClipManager.VoiceClipUpdated += () =>
-        {
-            if (_characterId > 0)
-                _encounters = _db.GetVoiceClipsForCharacter(_characterId, 10000);
-            _needsRebuild = true;
-            _audioExistsCache.Clear();
-        };
-        _db.VoiceClipLogged += () =>
+        _onVoiceClipUpdated = () => _audioExistsCache.Clear();
+        _onVoiceClipLogged = () =>
         {
             if (_characterId > 0 && IsOpen)
             {
-                _encounters = _db.GetVoiceClipsForCharacter(_characterId, 10000);
-                _paginationBar?.SetTotalItems(_encounters.Count, PageSize);
+                ReloadFilteredVoiceClips();
+                _paginationBar?.SetTotalItems(_voiceClips.Count, PageSize);
                 _needsRebuild = true;
                 _audioExistsCache.Clear();
             }
         };
-        _audioPlayback.CurrentMessageChanged += msg =>
+        _onCurrentMessageChanged = msg =>
         {
             if (msg == null) _playingVoiceClipId = null;
         };
+        _voiceClipManager.VoiceClipUpdated += _onVoiceClipUpdated;
+        _db.VoiceClipLogged += _onVoiceClipLogged;
+        _audioPlayback.CurrentMessageChanged += _onCurrentMessageChanged;
+    }
+
+    private readonly Action _onVoiceClipUpdated;
+    private readonly Action _onVoiceClipLogged;
+    private readonly Action<Echokraut.DataClasses.VoiceMessage?> _onCurrentMessageChanged;
+
+    protected override void OnFinalize(AtkUnitBase* addon)
+    {
+        try { _voiceClipManager.VoiceClipUpdated -= _onVoiceClipUpdated; } catch { }
+        try { _db.VoiceClipLogged -= _onVoiceClipLogged; } catch { }
+        try { _audioPlayback.CurrentMessageChanged -= _onCurrentMessageChanged; } catch { }
     }
 
     protected override void OnSetup(AtkUnitBase* addon)
@@ -93,51 +110,62 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         var size = ContentSize;
         _contentWidth = size.X;
 
-        _titleLabel = new TextNode
-        {
-            Position = pos,
-            Size = new Vector2(size.X, 24),
-            String = "",
-            FontType = FontType.Axis,
-            FontSize = 14,
-        };
-        AddNode(_titleLabel);
-
-        // Action buttons row
-        var btnY = pos.Y + 26;
+        // Action buttons row (offset from content top to avoid overlapping window title)
+        var btnY = pos.Y + 24;
         var btnRow = new HorizontalListNode
         {
             Position = new Vector2(pos.X, btnY),
             Size = new Vector2(size.X, 26),
             ItemSpacing = 4,
         };
-        btnRow.AddNode(Button(Loc.S("Generate All Unsaved"), 160, () =>
+        _genToggleButton = Button(Loc.S("Generate All Unsaved"), 160, () =>
         {
-            _voiceClipManager.GenerateAllUnsaved(_encounters).ContinueWith(_ =>
+            if (_genRunning)
             {
-                _needsRebuild = true;
+                _genCts?.Cancel();
+                return;
+            }
+
+            _genRunning = true;
+            _genCts?.Dispose();
+            _genCts = new CancellationTokenSource();
+            if (_genToggleButton != null) _genToggleButton.String = Loc.S("Stop");
+            _genDone = 0;
+            _genTotal = 0;
+            ShowProgressBar(true);
+
+            _voiceClipManager.GenerateAllUnsaved(_voiceClips,
+                (done, total) =>
+                {
+                    _genDone = done;
+                    _genTotal = total;
+                    // Clear cache so throttled OnUpdate picks up new audio state
+                    _audioExistsCache.Clear();
+                },
+                _genCts.Token).ContinueWith(_ =>
+            {
+                _genRunning = false;
+                if (_genToggleButton != null) _genToggleButton.String = Loc.S("Generate All Unsaved");
+                ShowProgressBar(false);
                 _audioExistsCache.Clear();
             });
-        }));
-        btnRow.AddNode(Button(Loc.S("Delete All Saved"), 140, () =>
+        });
+        btnRow.AddNode(_genToggleButton);
+
+        // Progress bar inline on button row
+        var barOffset = 268f;
+        var barWidth = size.X - barOffset - 34;
+        _progressBar = new StatusProgressBar
         {
-            _audioPlayback.ClearQueue(TextSource.VoiceTest);
-            _playingVoiceClipId = null;
-            _voiceClipManager.DeleteAllSaved(_encounters);
-            _needsRebuild = true;
-            _audioExistsCache.Clear();
-        }));
+            Position = new Vector2(barOffset, 2),
+            Size = new Vector2(barWidth, 28),
+        };
+        _progressBar.AttachNode(btnRow);
+
         AddNode(btnRow);
 
-        // Measure column widths from localized text
-        var measureBtn = new TextButtonNode { Size = new Vector2(40, 24), String = Loc.S("Play") };
-        var playW = measureBtn.LabelNode.GetTextDrawSize(Loc.S("Play")).X + 36;
-        var genW = measureBtn.LabelNode.GetTextDrawSize(Loc.S("Generate")).X + 36;
-        _colPlay = Math.Max(40f, Math.Max(playW, genW));
-
-        var delW = measureBtn.LabelNode.GetTextDrawSize(Loc.S("Del")).X + 36;
-        _colDel = Math.Max(40f, delW);
-        measureBtn.Dispose();
+        // Circle buttons: play (28px) + regenerate (28px) in a group with 2px spacing
+        _colPlay = 58f; // 28 + 2 + 28
 
         // Measure widest source name (only sources that actually appear in encounters)
         var measureTxt = new TextNode { FontType = FontType.Axis, FontSize = 12 };
@@ -151,7 +179,7 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         measureTxt.Dispose();
 
         var hw = size.X - 16; // scrollbar offset
-        _colText = hw - _colPlay - _colSource - ColTimestamp - _colDel - 3 * 4;
+        _colText = hw - _colPlay - _colSource - ColTimestamp - 3 * 4;
         if (_colText < 80) _colText = 80;
 
         // Column headers
@@ -162,11 +190,10 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
             Size = new Vector2(hw, 20),
             ItemSpacing = 4,
         };
-        headers.AddNode(Spacer(_colPlay, 20));
+        headers.AddNode(Spacer(_colPlay, 20));  // Play + Regenerate button group
         headers.AddNode(HeaderLabel(Loc.S("Source"), _colSource));
         headers.AddNode(HeaderLabel(Loc.S("Timestamp"), ColTimestamp));
         headers.AddNode(HeaderLabel(Loc.S("Text"), _colText));
-        headers.AddNode(Spacer(_colDel, 20));
         AddNode(headers);
 
         var sepY = headerY + 20;
@@ -178,8 +205,11 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         AddNode(sep);
 
         // Pagination controls (ListItemB arrow style from GatheringNoteBook)
+        // ContentPadding.Y is negative to shift content up, which inflates ContentSize.Y.
+        // Compensate so the pagination bar stays inside the window bottom border.
         const float paginationH = 28f;
-        var pagY = pos.Y + size.Y - paginationH;
+        var bottomOffset = Math.Abs(ContentPadding.Y);
+        var pagY = pos.Y + size.Y - paginationH - bottomOffset;
 
         _paginationBar = new PaginationBar(
             new Vector2(pos.X, pagY), size.X,
@@ -204,10 +234,19 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
     {
         ScreenClampHelper.ClampToScreen(addon, Size);
 
+        // Process deferred actions (button clicks that would cause use-after-free if run immediately)
+        if (_pendingAction != null)
+        {
+            var action = _pendingAction;
+            _pendingAction = null;
+            action();
+            return;
+        }
+
         if (_paginationPending && _paginationBar != null)
         {
             _paginationPending = false;
-            _paginationBar.SetTotalItems(_encounters.Count, PageSize);
+            _paginationBar.SetTotalItems(_voiceClips.Count, PageSize);
         }
 
         _paginationBar?.Update();
@@ -216,96 +255,174 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         {
             _needsRebuild = false;
             RebuildPanel();
+            UpdateProgressBar();
         }
 
-        // Update play/stop button labels
-        foreach (var (id, btn) in _playButtons)
+        // Throttled update: swap icons, tooltips, dim state, and progress bar
+        _progressUpdateCounter++;
+        if (_progressUpdateCounter >= 30)
         {
-            var isPlaying = _playingVoiceClipId == id;
-            var expectedLabel = isPlaying ? Loc.S("Stop") : Loc.S("Play");
-            if (btn.LabelNode.Node != null && btn.LabelNode.String.ToString() != expectedLabel)
-                btn.LabelNode.String = expectedLabel;
+            _progressUpdateCounter = 0;
+            UpdateProgressBar();
+
+            var isGen = _voiceClipManager.IsGenerating;
+            try
+            {
+                var updates = new Dictionary<int, (ImageNode playImg, ImageNode genImg, bool wasSaved)>(_buttonImages);
+                foreach (var (id, (playImg, genImg, wasSaved)) in updates)
+                {
+                    if (playImg?.PartsList == null || genImg?.PartsList == null) continue;
+                    var nowSaved = GetAudioExists(_voiceClips.Find(vc => vc.Id == id)!);
+
+                    // Play/Stop icon swap
+                    var isPlaying = _playingVoiceClipId == id;
+                    var playUV = isPlaying ? StopIconUV : PlayIconUV;
+                    var playPart = playImg.PartsList[0];
+                    if (playPart != null && (playPart->U != (ushort)playUV.X || playPart->V != (ushort)playUV.Y))
+                    {
+                        playPart->U = (ushort)playUV.X;
+                        playPart->V = (ushort)playUV.Y;
+                    }
+
+                    // Play tooltip update
+                    var playTooltip = nowSaved ? Loc.S("Play voice clip") : Loc.S("Generate and play voice clip");
+                    if (isPlaying) playTooltip = Loc.S("Stop voice clip");
+                    playImg.TextTooltip = playTooltip;
+
+                    // Gen icon swap: generate (Part 10) → regenerate (Part 4) when saved
+                    var genUV = nowSaved ? new Vector2(112, 0) : new Vector2(112, 28);
+                    var genPart = genImg.PartsList[0];
+                    if (genPart != null && (genPart->U != (ushort)genUV.X || genPart->V != (ushort)genUV.Y))
+                    {
+                        genPart->U = (ushort)genUV.X;
+                        genPart->V = (ushort)genUV.Y;
+                    }
+
+                    // Gen tooltip update
+                    genImg.TextTooltip = nowSaved ? Loc.S("Generate again") : Loc.S("Generate");
+
+                    // Dim gen buttons + unsaved play buttons during batch
+                    genImg.Alpha = isGen ? 178f / 255f : 1f;
+                    genImg.MultiplyColor = isGen ? new Vector3(0.5f, 0.5f, 0.5f) : new Vector3(1f, 1f, 1f);
+                    if (!nowSaved)
+                    {
+                        playImg.Alpha = isGen ? 178f / 255f : 1f;
+                        playImg.MultiplyColor = isGen ? new Vector3(0.5f, 0.5f, 0.5f) : new Vector3(1f, 1f, 1f);
+                    }
+                    else if (wasSaved != nowSaved)
+                    {
+                        // Clip just got generated — restore play button brightness
+                        playImg.Alpha = 1f;
+                        playImg.MultiplyColor = new Vector3(1f, 1f, 1f);
+                    }
+
+                    // Update tracked state
+                    if (wasSaved != nowSaved)
+                        _buttonImages[id] = (playImg, genImg, nowSaved);
+                }
+            }
+            catch { /* Images may be disposed during rebuild */ }
+        }
+        else
+        {
+            // Play/stop icon needs per-frame update for responsive feel
+            try
+            {
+                foreach (var (id, (playImg, _, _)) in _buttonImages)
+                {
+                    if (playImg?.PartsList == null) continue;
+                    var isPlaying = _playingVoiceClipId == id;
+                    var playUV = isPlaying ? StopIconUV : PlayIconUV;
+                    var playPart = playImg.PartsList[0];
+                    if (playPart != null && (playPart->U != (ushort)playUV.X || playPart->V != (ushort)playUV.Y))
+                    {
+                        playPart->U = (ushort)playUV.X;
+                        playPart->V = (ushort)playUV.Y;
+                    }
+                }
+            }
+            catch { }
         }
 
-        ContinueProgressiveBuild();
     }
 
-    public void ShowEncounters(string title, List<VoiceClipEntity> encounters, string npcKey)
+    private void ReloadFilteredVoiceClips()
     {
-        _encounters = encounters;
+        var all = _db.GetVoiceClipsForCharacter(_characterId, 10000);
+        if (_voiceClipIdFilter != null)
+            all = all.FindAll(vc => _voiceClipIdFilter.Contains(vc.Id));
+        _voiceClips = all
+            .OrderBy(vc => vc.TextSource)
+            .ThenBy(vc => vc.Timestamp)
+            .ThenBy(vc => vc.OriginalText)
+            .ToList();
+    }
+
+    public void ShowVoiceClips(string title, List<VoiceClipEntity> voiceClips, string npcKey)
+    {
+        _voiceClips = voiceClips
+            .OrderBy(vc => vc.TextSource)
+            .ThenBy(vc => vc.Timestamp)
+            .ThenBy(vc => vc.OriginalText)
+            .ToList();
+        _voiceClipIdFilter = _voiceClips.Select(vc => vc.Id).ToHashSet();
         _npcKey = npcKey;
-        _characterId = encounters.Count > 0 ? encounters[0].CharacterId : 0;
+        _characterId = voiceClips.Count > 0 ? voiceClips[0].CharacterId : 0;
         _audioExistsCache.Clear();
+        _buttonImages.Clear();
         if (_paginationBar != null)
-            _paginationBar.SetTotalItems(encounters.Count, PageSize);
+            _paginationBar.SetTotalItems(voiceClips.Count, PageSize);
         else
             _paginationPending = true;
-
-        if (_titleLabel != null)
-            _titleLabel.String = title;
 
         _needsRebuild = true;
 
         if (!IsOpen)
             Toggle();
+
+        Title = title;
     }
 
-    private void RebuildPanel()
+    private unsafe void RebuildPanel()
     {
         if (_panel == null) return;
+
+        // Hide any stuck tooltip before disposing nodes
+        AtkStage.Instance()->TooltipManager.HideTooltip(0);
+
         _panel.Clear();
+        _buttonImages.Clear();
         _audioExistsCache.Clear();
-        _playButtons.Clear();
 
         var pageStart = _paginationBar!.CurrentPage * PageSize;
-        var pageEnd = Math.Min(pageStart + PageSize, _encounters.Count);
-        var pageCount = pageEnd - pageStart;
+        var pageEnd = Math.Min(pageStart + PageSize, _voiceClips.Count);
+        var w = _contentWidth - 16; // scrollbar
 
-        _progressiveIndex = 0;
-        _progressiveActive = pageCount > 0;
-
-        if (pageCount == 0)
+        if (pageEnd <= pageStart)
         {
             _panel.AddNode(Label(Loc.S("No voice clips found."), _contentWidth));
-            _panel.RecalculateLayout();
         }
-    }
-
-    private void ContinueProgressiveBuild()
-    {
-        if (!_progressiveActive || _panel == null) return;
-
-        var w = _contentWidth - 16; // scrollbar
-        var pageStart = _paginationBar!.CurrentPage * PageSize;
-        var pageEnd = Math.Min(pageStart + PageSize, _encounters.Count);
-        var pageCount = pageEnd - pageStart;
-
-        var end = Math.Min(_progressiveIndex + RowsPerFrame, pageCount);
-
-        for (var i = _progressiveIndex; i < end; i++)
+        else
         {
-            var enc = _encounters[pageStart + i];
-            _panel.AddNode(BuildEncounterRow(enc, w));
+            for (var i = pageStart; i < pageEnd; i++)
+                _panel.AddNode(BuildVoiceClipRow(_voiceClips[i], w));
         }
 
-        _progressiveIndex = end;
         _panel.RecalculateLayout();
-
-        if (_progressiveIndex >= pageCount)
-            _progressiveActive = false;
     }
 
-    private HorizontalListNode BuildEncounterRow(VoiceClipEntity enc, float w)
+    private HorizontalListNode BuildVoiceClipRow(VoiceClipEntity vc, float w)
     {
-        var hasSaved = GetAudioExists(enc);
-        var capturedEnc = enc;
+        var hasSaved = GetAudioExists(vc);
+        var capturedVoiceClip = vc;
         var capturedKey = _npcKey;
 
         // Create text node first to measure wrapped height
         var textNode = new TextNode
         {
             Size = new Vector2(_colText, 18),
-            String = enc.OriginalText,
+            Position = new Vector2(0, 5),
+            String = TalkTextHelper.SubstitutePlaceholders(vc.OriginalText, _gameObjects.LocalPlayerName, _gameObjects.LocalPlayerIsMale),
             FontType = FontType.Axis,
             FontSize = 12,
         };
@@ -315,70 +432,112 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
 
         var row = new HorizontalListNode { Size = new Vector2(w, rowHeight), ItemSpacing = 4 };
 
-        // Play/Stop/Generate toggle button
-        var playLabel = hasSaved ? Loc.S("Play") : Loc.S("Generate");
-        var encId = capturedEnc.Id;
-        TextButtonNode? playBtn = null;
-        playBtn = Button(playLabel, _colPlay, () =>
-        {
-            if (_playingVoiceClipId == encId)
-            {
-                _voiceClipManager.StopPlayback();
-                _playingVoiceClipId = null;
-                return;
-            }
+        // Play/Stop or Generate circle button (CircleButtons texture)
+        var vcId = capturedVoiceClip.Id;
 
-            _playingVoiceClipId = encId;
-            if (GetAudioExists(capturedEnc))
-                _voiceClipManager.PlayEncounter(capturedEnc);
-            else
+        // Play button (Part 14) / Stop button (Part 15) — swapped in OnUpdate
+        var playTooltip = hasSaved ? Loc.S("Play voice clip") : Loc.S("Generate and play voice clip");
+        var playResult = CircleButton(PlayIconUV, playTooltip, () =>
+        {
+            _pendingAction = () =>
             {
-                _voiceClipManager.GenerateForEncounter(capturedEnc).ContinueWith(t =>
+                if (_playingVoiceClipId == vcId)
                 {
-                    if (t.Result)
-                        _voiceClipManager.PlayEncounter(capturedEnc);
-                    else
-                        _playingVoiceClipId = null;
-                    _audioExistsCache.Clear();
-                    _needsRebuild = true;
-                });
-            }
+                    _voiceClipManager.StopPlayback();
+                    _playingVoiceClipId = null;
+                    return;
+                }
+
+                // Block generation while batch is running (playback still allowed)
+                if (_voiceClipManager.IsGenerating && !GetAudioExists(capturedVoiceClip))
+                    return;
+
+                _playingVoiceClipId = vcId;
+                if (GetAudioExists(capturedVoiceClip))
+                    _voiceClipManager.PlayVoiceClip(capturedVoiceClip);
+                else
+                {
+                    _voiceClipManager.GenerateForVoiceClip(capturedVoiceClip).ContinueWith(t =>
+                    {
+                        if (t.Result)
+                            _voiceClipManager.PlayVoiceClip(capturedVoiceClip);
+                        else
+                            _playingVoiceClipId = null;
+                        _audioExistsCache.Clear();
+                    });
+                }
+            };
         });
-        _playButtons[encId] = playBtn;
-        row.AddNode(playBtn);
+        // Track both buttons for live icon/tooltip swaps during generation
+
+        // Generate / Regenerate button (Part 20) — always active
+        var genTooltip = hasSaved ? Loc.S("Generate again") : Loc.S("Generate");
+        var capturedHasSaved = hasSaved;
+        var genIconUV = hasSaved ? new Vector2(112, 0) : new Vector2(112, 28); // Part 4 (regenerate) or Part 10 (generate)
+        var genResult = CircleButton(genIconUV, genTooltip, () =>
+        {
+            if (_voiceClipManager.IsGenerating) return;
+            // Defer to next frame to avoid ATK use-after-free (delete triggers rebuild)
+            _pendingAction = () =>
+            {
+                _audioPlayback.ClearQueue(TextSource.VoiceTest);
+                _playingVoiceClipId = null;
+                if (capturedHasSaved)
+                    _voiceClipManager.DeleteAudioForVoiceClip(capturedVoiceClip);
+                _voiceClipManager.GenerateForVoiceClip(capturedVoiceClip).ContinueWith(_ =>
+                {
+                    _audioExistsCache.Clear();
+                });
+            };
+        });
+        // Wrap both buttons in a tight sub-row, shifted up 3px
+        var btnGroup = new HorizontalListNode
+        {
+            Size = new Vector2(28 + 2 + 28, 28),
+            ItemSpacing = 2,
+            Position = new Vector2(0, 0),
+        };
+        btnGroup.AddNode(playResult.node);
+        btnGroup.AddNode(genResult.node);
+        _buttonImages[vcId] = (playResult.img, genResult.img, hasSaved);
+        row.AddNode(btnGroup);
 
         // Source
-        row.AddNode(Label(((TextSource)enc.TextSource).ToString(), _colSource));
+        row.AddNode(Label(((TextSource)vc.TextSource).ToString(), _colSource));
 
         // Timestamp
-        row.AddNode(Label(enc.Timestamp.ToLocalTime().ToString("MM/dd HH:mm"), ColTimestamp));
+        row.AddNode(Label(vc.Timestamp.ToLocalTime().ToString("MM/dd HH:mm"), ColTimestamp));
 
         // Text (word wrapped, dynamic height)
         textNode.Size = new Vector2(_colText, Math.Max(18, textHeight));
         row.AddNode(textNode);
 
-        // Delete
-        if (hasSaved)
-        {
-            row.AddNode(Button(Loc.S("Del"), _colDel, () =>
-            {
-                _audioPlayback.ClearQueue(TextSource.VoiceTest);
-                _playingVoiceClipId = null;
-                _voiceClipManager.DeleteAudioForEncounter(capturedEnc);
-                _audioExistsCache.Clear();
-                _needsRebuild = true;
-            }));
-        }
-
         return row;
     }
 
-    private bool GetAudioExists(VoiceClipEntity enc)
+    private void ShowProgressBar(bool generating)
     {
-        if (_audioExistsCache.TryGetValue(enc.Id, out var exists))
+        if (_progressBar != null)
+            _progressBar.ActionText = generating ? Loc.S("Generating voice clips...") : Loc.S("Generation progress");
+    }
+
+    private void UpdateProgressBar()
+    {
+        if (_progressBar == null) return;
+
+        var total = _voiceClips.Count;
+        var saved = _voiceClips.Count(vc => _voiceClipManager.HasLocalAudio(vc));
+        var fraction = total > 0 ? (float)saved / total : 0f;
+
+        _progressBar.SetProgress(fraction, $"{saved}/{total}");
+    }
+
+    private bool GetAudioExists(VoiceClipEntity vc)
+    {
+        if (_audioExistsCache.TryGetValue(vc.Id, out var exists))
             return exists;
-        exists = _voiceClipManager.HasLocalAudio(enc);
-        _audioExistsCache[enc.Id] = exists;
+        exists = _voiceClipManager.HasLocalAudio(vc);
+        _audioExistsCache[vc.Id] = exists;
         return exists;
     }
 
@@ -387,6 +546,7 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
     private static TextNode Label(string text, float width) => new()
     {
         Size = new Vector2(width, 18),
+        Position = new Vector2(0, 5),
         String = text,
         FontType = FontType.Axis,
         FontSize = 12,
@@ -412,6 +572,24 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         if (textW > minWidth) node.Size = new Vector2(textW, 24);
         node.OnClick = onClick;
         return node;
+    }
+
+    private static (ImageNode node, ImageNode img) CircleButton(Vector2 textureCoords, string tooltip, Action onClick)
+    {
+        var img = new ImageNode { Size = new Vector2(28, 28) };
+        img.AddPart(new KamiToolKit.Classes.Part
+        {
+            TexturePath = "ui/uld/img01/CircleButtons.tex",
+            TextureCoordinates = textureCoords,
+            Size = new Vector2(28, 28),
+            Id = 0,
+        });
+        img.PartId = 0;
+        img.TextTooltip = tooltip;
+        img.DrawFlags = KamiToolKit.Enums.DrawFlags.ClickableCursor;
+        img.AddNodeFlags(NodeFlags.RespondToMouse | NodeFlags.HasCollision | NodeFlags.EmitsEvents);
+        img.AddEvent(AtkEventType.MouseClick, onClick);
+        return (img, img);
     }
 
     public override void Dispose()

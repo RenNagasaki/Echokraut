@@ -11,11 +11,16 @@ using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echokraut.DataClasses.Database;
 using Echokraut.Enums;
+using Echokraut.Helper.Functional;
+using Echokraut.Localization;
 using Echotools.Logging.DataClasses;
 using Echotools.Logging.Enums;
 using Echotools.Logging.Services;
+using System.Text;
 using Lumina.Excel;
 using Lumina.Excel.Sheets;
+using Lumina.Text.Payloads;
+using Lumina.Text.ReadOnly;
 
 namespace Echokraut.Services;
 
@@ -28,6 +33,121 @@ public class DialogHarvestService : IDialogHarvestService
     private readonly IDatabaseService _db;
     private readonly IBackendService _backend;
     private readonly INpcDataService _npcData;
+
+    /// <summary>Sheets excluded from /ekdump — already harvested or clearly non-dialog.</summary>
+    private static readonly HashSet<string> DumpExcludedSheets = new(StringComparer.OrdinalIgnoreCase)
+    {
+        // Already harvested
+        "DefaultTalk", "Balloon", "Quest",
+        "ENpcResident", "ENpcBase", "BNpcName", "Race",
+        "GilShop", "Warp", "FateShop", "SpecialShop", "TripleTriad",
+        "PreHandler", "SwitchTalkVariation", "ArrayEventHandler", "CustomTalk",
+        "TerritoryType", "Level", "Behavior",
+        "InstanceContentTextData", "ContentTalk", "NpcYell", "PublicContentTextData",
+        "GimmickTalk", "PartyContentTextData", "MassivePcContentTextData", "GoldSaucerTextData",
+        "ContentDirectorBattleTalk", "ContentNpcTalk", "ContentTalkParam",
+
+        // Achievements / Titles
+        "Achievement", "AchievementCategory", "AchievementKind", "AchievementHideCondition",
+        "AchievementTarget", "Title",
+
+        // Items / Equipment / Inventory
+        "Item", "ItemAction", "ItemFood", "ItemLevel", "ItemSearchCategory", "ItemSeries",
+        "ItemSortCategory", "ItemSpecialBonus", "ItemUICategory", "ItemRetainerCategory",
+        "EquipSlotCategory", "EquipRaceCategory", "BaseParam", "Materia", "MateriaGrade",
+        "Stain", "StainTransient", "Relic", "Relic3", "RelicNote", "RelicNoteCategory",
+
+        // Actions / Abilities / Traits
+        "Action", "ActionCategory", "ActionComboRoute", "ActionIndirection", "ActionParam",
+        "ActionProcStatus", "ActionTimeline", "ActionTimelineReplace", "ActionTransient",
+        "CraftAction", "BuddyAction", "PetAction", "CompanyAction", "EventAction",
+        "Trait", "TraitRecast", "TraitTransient", "Status", "StatusHitEffect", "StatusLoopVFX",
+
+        // Jobs / Classes
+        "ClassJob", "ClassJobCategory",
+
+        // Crafting / Gathering
+        "Recipe", "RecipeLookup", "RecipeNotebookList", "CraftType", "CraftLeve", "CraftLevelDifference",
+        "GatheringItem", "GatheringItemLevelConvertTable", "GatheringItemPoint", "GatheringPoint",
+        "GatheringPointBase", "GatheringPointBonus", "GatheringPointBonusType", "GatheringPointName",
+        "GatheringType", "GatheringCondition", "GatheringSubCategory",
+        "SpearfishingItem", "SpearfishingNotebook", "FishParameter", "FishingSpot",
+
+        // Maps / Zones / Weather
+        "Map", "MapMarker", "MapSymbol", "PlaceName", "Weather", "WeatherGroup", "WeatherRate",
+        "Aetheryte", "AetherCurrentCompFlgSet", "AetheryteSystemDefine",
+
+        // UI / HUD / System
+        "Addon", "AddonParam", "Lobby", "MainCommand", "MainCommandCategory",
+        "GeneralAction", "Marker", "FieldMarker", "HudParamMaster",
+        "ConfigKey", "Completion", "Tutorial", "TutorialDPS", "TutorialHealer", "TutorialTank",
+        "ScreenImage", "LoadingImage", "LoadingTips", "LoadingTipsSubCategory",
+
+        // Mounts / Minions / Companions
+        "Mount", "MountAction", "MountCustomize", "MountFlyingCondition", "MountSpeed",
+        "Companion", "CompanionMove", "CompanionTransient",
+        "BuddyEquip", "BuddyItem", "BuddySkill",
+        "Ornament",
+
+        // Housing / Furniture
+        "HousingFurniture", "HousingYardObject", "HousingPreset", "HousingExterior",
+        "HousingInterior", "HousingMapMarkerInfo", "HousingPlacement", "HousingUnitedExterior",
+
+        // Gold Saucer / Triple Triad / LoVM / Chocobo Racing
+        "GoldSaucerArcadeMachine", "GoldSaucerTextData",
+        "TripleTriadCard", "TripleTriadCardType", "TripleTriadRule", "TripleTriadResident",
+        "TripleTriadCardResident", "TripleTriadTournament",
+
+        // Fashion / Aesthetics
+        "CharaMakeCustomize", "CharaMakeType", "HairMakeType", "Glasses", "GlassesStyle",
+
+        // Orchestrion / BGM / Sound
+        "Orchestrion", "OrchestrionCategory", "OrchestrionPath", "OrchestrionUiparam",
+        "BGM", "BGMFade", "BGMScene", "BGMSituation", "BGMSwitch",
+
+        // Leves / FATEs
+        "Leve", "LeveAssignmentType", "LeveClient", "LeveRewardItem", "LeveString", "LeveVfx",
+        "Fate", "FateEvent", "FateProgressUI", "FateTokenType",
+
+        // Grand Company / Free Company
+        "GrandCompany", "GrandCompanyRank", "GCShop", "GCScripShopCategory", "GCScripShopItem",
+        "FCActivity", "FCAuthority", "FCChestName", "FCProfile", "FCRank", "FCReputation", "FCRights",
+
+        // PvP
+        "PvPAction", "PvPActionSort", "PvPRank", "PvPSeries", "PvPTrait",
+
+        // Deep Dungeon
+        "DeepDungeon", "DeepDungeonBan", "DeepDungeonDanger", "DeepDungeonEquipment",
+        "DeepDungeonFloorEffectUI", "DeepDungeonItem", "DeepDungeonLayer", "DeepDungeonMagicStone",
+        "DeepDungeonRoom", "DeepDungeonStatus",
+
+        // Eureka / Bozja
+        "DynamicEvent", "DynamicEventType",
+
+        // Retainers / Ventures
+        "RetainerTask", "RetainerTaskLvRange", "RetainerTaskNormal", "RetainerTaskParameter",
+        "RetainerTaskRandom",
+
+        // Misc data tables (no dialog)
+        "AnimationLOD", "AttackType", "BattleLeve", "BeastTribe", "BeastReputationRank",
+        "Calendar", "CircleActivity", "CollectablesShop", "ContentType", "ContentFinderCondition",
+        "ContentFinderConditionTransient", "ContentRoulette", "ContentRouletteRoleBonus",
+        "Currency", "DawnContent", "Emote", "EmoteCategory", "EmoteMode",
+        "EObj", "EObjName", "ExVersion", "GardeningSeed",
+        "GroupPoseStamp", "GroupPoseStampCategory",
+        "InstanceContent", "InstanceContentCSBonus",
+        "Jingle", "JournalCategory", "JournalGenre", "JournalSection",
+        "LogFilter", "LogKind", "LogMessage",
+        "ModelChara", "ModelScale", "ModelSkeleton", "ModelState", "MonsterNote", "MonsterNoteTarget",
+        "MYCWarResultNotebook",
+        "NotebookDivision", "NotebookDivisionCategory",
+        "OnlineStatus", "ParamGrow", "Perform", "Permission",
+        "PhysicsGroup", "QuestClassJobReward", "QuestRepeatFlag", "QuestRewardOther",
+        "Resident", "SatisfactionNpc", "SatisfactionSupply", "SatisfactionSupplyReward",
+        "TextCommand", "TextCommandParam",
+        "TopicSelect", "Town", "Transformation", "Treasure", "TreasureHuntRank",
+        "UIColor", "VFX", "World", "WorldDCGroupType",
+    };
 
     private static readonly string[] LangCodes = { "en", "de", "ja", "fr" };
     private static readonly Dalamud.Game.ClientLanguage[] LangValues =
@@ -62,6 +182,15 @@ public class DialogHarvestService : IDialogHarvestService
 
     public bool IsRunning { get; private set; }
     public event Action<string>? ProgressChanged;
+    public event Action<int, int>? ProgressCountChanged;
+
+    private int _phaseTotal = 1;
+    private int _phaseCurrent;
+
+    private CancellationTokenSource? _internalCts;
+    private Task? _runningTask;
+    private readonly object _runLock = new();
+    private bool _disposed;
 
     public DialogHarvestService(
         IDataManager dataManager,
@@ -83,63 +212,125 @@ public class DialogHarvestService : IDialogHarvestService
 
     public async Task RunAsync(Dalamud.Game.ClientLanguage language, CancellationToken ct)
     {
-        if (IsRunning) return;
+        if (_disposed || IsRunning) return;
         IsRunning = true;
 
         var _baseId = _log.Start(nameof(RunAsync), TextSource.None);
         var eventId = new EKEventId(_baseId.Id, _baseId.TextSource);
 
+        CancellationTokenSource linkedCts;
+        lock (_runLock)
+        {
+            _internalCts?.Dispose();
+            _internalCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+            linkedCts = _internalCts;
+        }
+        var linkedCt = linkedCts.Token;
+
         try
         {
-            await Task.Run(() => DoHarvest(language, ct, eventId), ct);
+            Task task;
+            lock (_runLock) { _runningTask = Task.Run(() => DoHarvest(language, linkedCt, eventId), linkedCt); task = _runningTask; }
+            await task;
         }
         catch (OperationCanceledException)
         {
             _log.Info(nameof(RunAsync), "Harvest cancelled by user.", eventId);
-            ReportProgress("Cancelled.");
+            BeginPhase(Loc.S("Cancelled."), 1);
         }
         catch (Exception ex)
         {
             _log.Error(nameof(RunAsync), $"Harvest failed: {ex}", eventId);
-            ReportProgress($"Error: {ex.Message}");
+            BeginPhase(string.Format(Loc.S("Error: {0}"), ex.Message), 1);
         }
         finally
         {
             IsRunning = false;
+            lock (_runLock) { _runningTask = null; }
             _log.End(nameof(RunAsync), eventId);
         }
     }
 
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        Task? task;
+        CancellationTokenSource? cts;
+        lock (_runLock) { task = _runningTask; cts = _internalCts; }
+        try { cts?.Cancel(); } catch { }
+        if (task != null)
+        {
+            try { task.Wait(TimeSpan.FromSeconds(5)); } catch { }
+        }
+        try { cts?.Dispose(); } catch { }
+    }
+
     private void DoHarvest(Dalamud.Game.ClientLanguage language, CancellationToken ct, EKEventId eventId)
     {
-        // Step 1: Load dialog sheets in all languages
-        ReportProgress("Loading DefaultTalk...");
+        // Step 1: Load dialog sheets in all languages (LoadDialogSheet drives its own phase progress)
         var defaultTalkTexts = LoadDialogSheet<DefaultTalk>("DefaultTalk", GetDefaultTalkTexts, ct, eventId);
         ct.ThrowIfCancellationRequested();
 
-        ReportProgress("Loading Balloon...");
         var balloonTexts = LoadDialogSheet<Balloon>("Balloon", GetBalloonTexts, ct, eventId);
+        ct.ThrowIfCancellationRequested();
+
+        var instanceTexts = LoadDialogSheet<InstanceContentTextData>("InstanceContentTextData", GetSingleTextSheet, ct, eventId);
+        ct.ThrowIfCancellationRequested();
+
+        var contentTalkTexts = LoadDialogSheet<ContentTalk>("ContentTalk", GetSingleTextSheet, ct, eventId);
+        ct.ThrowIfCancellationRequested();
+
+        var npcYellTexts = LoadDialogSheet<NpcYell>("NpcYell", GetSingleTextSheet, ct, eventId);
+        ct.ThrowIfCancellationRequested();
+
+        var publicContentTexts = LoadDialogSheet<PublicContentTextData>("PublicContentTextData",
+            (row, lang) => [ExtractTextWithPlayerName(row.TextData, lang) ?? ""], ct, eventId);
+        ct.ThrowIfCancellationRequested();
+
+        var gimmickTalkTexts = LoadDialogSheet<GimmickTalk>("GimmickTalk",
+            (row, lang) => [ExtractTextWithPlayerName(row.Message, lang) ?? ""], ct, eventId);
+        ct.ThrowIfCancellationRequested();
+
+        var partyContentTexts = LoadDialogSheet<PartyContentTextData>("PartyContentTextData",
+            (row, lang) => [ExtractTextWithPlayerName(row.Data, lang) ?? ""], ct, eventId);
+        ct.ThrowIfCancellationRequested();
+
+        var massiveTexts = LoadDialogSheet<MassivePcContentTextData>("MassivePcContentTextData", GetSingleTextSheet, ct, eventId);
+        ct.ThrowIfCancellationRequested();
+
+        var goldSaucerTexts = LoadDialogSheet<GoldSaucerTextData>("GoldSaucerTextData", GetSingleTextSheet, ct, eventId);
         ct.ThrowIfCancellationRequested();
 
         var allDialogSheets = new Dictionary<string, Dictionary<uint, Dictionary<string, List<string>>>>
         {
             ["DefaultTalk"] = defaultTalkTexts,
-            ["Balloon"] = balloonTexts
+            ["Balloon"] = balloonTexts,
+            ["InstanceContentTextData"] = instanceTexts,
+            ["ContentTalk"] = contentTalkTexts,
+            ["NpcYell"] = npcYellTexts,
+            ["PublicContentTextData"] = publicContentTexts,
+            ["GimmickTalk"] = gimmickTalkTexts,
+            ["PartyContentTextData"] = partyContentTexts,
+            ["MassivePcContentTextData"] = massiveTexts,
+            ["GoldSaucerTextData"] = goldSaucerTexts,
         };
 
         // Step 2: Load NPC names in all languages (ENpcResident + BNpcName)
-        ReportProgress("Loading NPC names...");
+        BeginPhase(Loc.S("Loading NPC names..."), 1);
         var npcNames = LoadNpcNames(ct, eventId);
+        EndPhase();
         ct.ThrowIfCancellationRequested();
 
-        ReportProgress("Loading BNpc names...");
+        BeginPhase(Loc.S("Loading BNpc names..."), 1);
         var bnpcNames = LoadBNpcNames(ct, eventId);
+        EndPhase();
         ct.ThrowIfCancellationRequested();
 
         // Step 3: Load ENpcBase for race/gender
         // Build multi-hop DefaultTalk lookup: intermediate sheet row ID → set of DefaultTalk IDs.
         // ENpcData references GilShop/Warp/FateShop/etc. which then link to DefaultTalk.
-        ReportProgress("Building DefaultTalk chain lookup...");
+        BeginPhase(Loc.S("Building DefaultTalk chain lookup..."), 1);
         var intermediateToDefaultTalk = new Dictionary<uint, HashSet<uint>>();
 
         // GilShop: AcceptTalk (col 3) + FailTalk (col 4) → DefaultTalk
@@ -283,7 +474,7 @@ public class DialogHarvestService : IDialogHarvestService
         // ENpcData references SwitchTalk row IDs. SwitchTalkVariation uses the SAME row IDs
         // as sub-row keys, with DefaultTalk in each sub-row.
         // SwitchTalkVariation: col 3 = DefaultTalk (based on xivapi schema)
-        ReportProgress("Loading SwitchTalkVariation...");
+        BeginPhase(Loc.S("Loading SwitchTalkVariation..."), 1);
         var stvCount = 0;
         try
         {
@@ -352,14 +543,16 @@ public class DialogHarvestService : IDialogHarvestService
         _log.Debug(nameof(DoHarvest),
             $"Built multi-hop lookup: {intermediateToDefaultTalk.Count} intermediate entries", eventId);
 
-        ReportProgress("Loading NPC data...");
+        EndPhase();
+        BeginPhase(Loc.S("Loading NPC data..."), 1);
         var npcBaseSheet = _dataManager.GetExcelSheet<ENpcBase>()!;
         var npcBaseRaw = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, "ENpcBase");
+        EndPhase();
 
         // Pre-build NPC → Balloon ID lookup from:
         // 1. ENpcBase col 105 (direct Balloon link)
         // 2. ENpcBase col 64 (Behavior) → Behavior col 8 (Balloon link)
-        ReportProgress("Building Balloon lookup...");
+        BeginPhase(Loc.S("Building Balloon lookup..."), 1);
         var behaviorToBalloon = new Dictionary<uint, HashSet<uint>>();
         var behaviorBalloonCount = 0;
         try
@@ -429,7 +622,9 @@ public class DialogHarvestService : IDialogHarvestService
         // Two-pass hybrid: (1) scan within each entry's own bounds for accurate matches,
         // (2) for remaining unmatched Balloon IDs, find them anywhere in LGB and attribute
         // to the nearest ENpc entry.
-        ReportProgress("Scanning LGB territory files for Balloon data...");
+        EndPhase();
+        var ttSheetCount = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>()?.Count ?? 1;
+        BeginPhase(Loc.S("Scanning LGB territory files..."), ttSheetCount);
         var lgbBalloonToNpc = new Dictionary<uint, uint>(); // Balloon ID → ENpcBase ID
         var lgbTerritoriesScanned = 0;
         var lgbEntriesTotal = 0;
@@ -498,8 +693,7 @@ public class DialogHarvestService : IDialogHarvestService
                     }
 
                     lgbTerritoriesScanned++;
-                    if (lgbTerritoriesScanned % 100 == 0)
-                        ReportProgress($"Scanning LGB... {lgbTerritoriesScanned} territories");
+                    ReportPhaseProgress(lgbTerritoriesScanned);
                 }
             }
         }
@@ -514,7 +708,8 @@ public class DialogHarvestService : IDialogHarvestService
             balloonSheetIds.Where(id => !lgbBalloonToNpc.ContainsKey(id)));
         if (unmatchedBalloonIds.Count > 0)
         {
-            ReportProgress($"LGB pass 2: searching for {unmatchedBalloonIds.Count} unmatched Balloon IDs...");
+            EndPhase();
+            BeginPhase(string.Format(Loc.S("LGB pass 2: searching for {0} unmatched Balloon IDs..."), unmatchedBalloonIds.Count), 1);
             foreach (var (data, entries) in lgbFileCache)
             {
                 ct.ThrowIfCancellationRequested();
@@ -539,18 +734,19 @@ public class DialogHarvestService : IDialogHarvestService
 
         var linkedDialogs = new List<LinkedDialog>();
         var npcCount = 0;
+        var npcBaseTotal = npcBaseSheet.Count;
 
         // Build appearance → named NPC lookup for pass 2 (unnamed NPC resolution)
         // Key: "race_gender_face_hair" → (npcId, names, raceStr, gender)
         var appearanceToNamedNpc = new Dictionary<string, (uint npcId, Dictionary<string, string> names, string raceStr, Genders gender)>();
 
         // Pass 1: Scan named NPCs
+        BeginPhase(Loc.S("Processing named NPCs..."), npcBaseTotal);
         foreach (var npcBase in npcBaseSheet)
         {
             ct.ThrowIfCancellationRequested();
             npcCount++;
-            if (npcCount % 1000 == 0)
-                ReportProgress($"Processing named NPCs... {npcCount}");
+            ReportPhaseProgress(npcCount);
 
             var npcId = npcBase.RowId;
 
@@ -667,9 +863,10 @@ public class DialogHarvestService : IDialogHarvestService
 
         ct.ThrowIfCancellationRequested();
 
+        EndPhase();
         // Pass 2: Scan unnamed NPCs for dialog not yet matched.
         // Resolve names by matching appearance (race+gender+face+hair) to named NPCs.
-        ReportProgress("Processing unnamed NPCs...");
+        BeginPhase(Loc.S("Processing unnamed NPCs..."), npcBaseTotal);
         npcCount = 0;
         var pass2UnnamedWithDialog = 0;
         var pass2AppearanceMatched = 0;
@@ -678,8 +875,7 @@ public class DialogHarvestService : IDialogHarvestService
         {
             ct.ThrowIfCancellationRequested();
             npcCount++;
-            if (npcCount % 1000 == 0)
-                ReportProgress($"Processing unnamed NPCs... {npcCount}");
+            ReportPhaseProgress(npcCount);
 
             var npcId = npcBase.RowId;
 
@@ -852,8 +1048,9 @@ public class DialogHarvestService : IDialogHarvestService
             $"{unnamedWithBalloon} unnamed with unmatched Balloon, " +
             $"{unnamedBalloonMatched} Balloon appearance matched", eventId);
 
+        EndPhase();
         // Diagnostic: check where unmatched DefaultTalk IDs live
-        ReportProgress("Diagnosing unmatched DefaultTalk...");
+        BeginPhase(Loc.S("Diagnosing unmatched DefaultTalk..."), 1);
         var unmatchedDtIds = new HashSet<uint>(
             defaultTalkTexts.Keys.Where(k => !matchedDialogIds["DefaultTalk"].Contains(k)));
         var foundInENpcData = 0;
@@ -970,9 +1167,9 @@ public class DialogHarvestService : IDialogHarvestService
             $"{foundInENpcData} in ENpcData, " +
             $"{foundViaArrayEventHandler} via AEH, " +
             $"{foundViaSwitchTalk} via STV", eventId);
-        ReportProgress($"Diag: {unmatchedDtIds.Count} unmatched, {foundViaCustomTalk} CustomTalk, {foundViaSwitchTalk} STV, {foundInENpcData} ENpcData");
-
-        ReportProgress($"Pass 2: {pass2UnnamedWithDialog} unnamed with dialog, {pass2AppearanceMatched} matched");
+        EndPhase();
+        _log.Info(nameof(DoHarvest), $"Diag: {unmatchedDtIds.Count} unmatched, {foundViaCustomTalk} CustomTalk, {foundViaSwitchTalk} STV, {foundInENpcData} ENpcData", eventId);
+        _log.Info(nameof(DoHarvest), $"Pass 2: {pass2UnnamedWithDialog} unnamed with dialog, {pass2AppearanceMatched} matched", eventId);
 
         // Pass 3: Link Balloon entries via LGB planevent data
         var lgbLinked = 0;
@@ -1020,7 +1217,7 @@ public class DialogHarvestService : IDialogHarvestService
         _log.Info(nameof(DoHarvest), $"Pass 3 (LGB Balloon): {lgbLinked} new Balloon entries linked", eventId);
 
         // Step 4: Collect unmatched dialog entries
-        ReportProgress("Collecting unmatched dialogs...");
+        BeginPhase(Loc.S("Collecting unmatched dialogs..."), 1);
         var unmatchedDialogs = new List<UnmatchedDialog>();
 
         foreach (var (sheetName, dialogEntries) in allDialogSheets)
@@ -1045,19 +1242,50 @@ public class DialogHarvestService : IDialogHarvestService
             }
         }
 
-        // Step 5: Harvest quest dialogs
+        // Step 4b: Build NPC → zone name lookup from Level sheet
+        EndPhase();
         ct.ThrowIfCancellationRequested();
-        ReportProgress("Harvesting quest dialogs...");
-        var (linkedQuests, unmatchedQuests) = HarvestQuestDialogs(npcNames, bnpcNames, npcBaseSheet, ct, eventId);
+        var (npcTerritories, npcZoneNames) = BuildNpcTerritoryLookup(language, ct, eventId);
+
+        // Step 5: Harvest quest dialogs (HarvestQuestDialogs drives its own phase)
+        ct.ThrowIfCancellationRequested();
+        var (linkedQuests, unmatchedQuests) = HarvestQuestDialogs(npcNames, bnpcNames, npcBaseSheet, npcTerritories, npcZoneNames, language, ct, eventId);
+
+        // Log unmapped ModelChara IDs before persist (so it's visible early)
+        if (_unmappedModels.Count > 0)
+        {
+            var lines = _unmappedModels
+                .OrderByDescending(kvp => kvp.Value.Count)
+                .Select(kvp => $"ModelChara={kvp.Key} ({kvp.Value.Count}x): {string.Join(", ", kvp.Value.Take(5))}");
+            _log.Warning(nameof(DoHarvest),
+                $"Unmapped ModelChara IDs (race=Unknown, need NpcRaces.json entry): {_unmappedModels.Count} model IDs\n" +
+                string.Join("\n", lines), eventId);
+            _unmappedModels.Clear();
+        }
 
         // Step 6: Persist linked dialogs to database
-        ct.ThrowIfCancellationRequested();
-        ReportProgress("Persisting linked dialogs to database...");
-        var persisted = PersistLinkedDialogs(linkedDialogs, npcBaseSheet, language, ct, eventId);
+        // Suppress events for the entire persist phase to prevent concurrent DbContext access.
+        // NpcDataService.LoadFromDatabase skips while SuppressEvents is true.
+        // BulkMode disables per-Upsert cache refreshes — we refresh once at the end.
+        _db.SuppressEvents = true;
+        _db.BulkMode = true;
+        int persisted;
+        int persistedQuest;
+        try
+        {
+            ct.ThrowIfCancellationRequested();
+            persisted = PersistLinkedDialogs(linkedDialogs, npcBaseSheet, language, npcZoneNames, ct, eventId);
 
-        ct.ThrowIfCancellationRequested();
-        ReportProgress("Persisting linked quest dialogs to database...");
-        var persistedQuest = PersistLinkedQuestDialogs(linkedQuests, npcBaseSheet, language, ct, eventId);
+            ct.ThrowIfCancellationRequested();
+            persistedQuest = PersistLinkedQuestDialogs(linkedQuests, npcBaseSheet, language, npcZoneNames, ct, eventId);
+        }
+        finally
+        {
+            _db.BulkMode = false;
+            _db.RefreshCaches();
+            _db.SuppressEvents = false;
+            _db.NotifyVoiceClipLogged();
+        }
 
         // Write unmatched dialogs to JSON (no NPC link — can't go in DB)
         ct.ThrowIfCancellationRequested();
@@ -1068,9 +1296,18 @@ public class DialogHarvestService : IDialogHarvestService
             Directory.CreateDirectory(outputDir);
             var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
 
-            if (unmatchedDialogs.Count > 0)
+            // Split unmatched dialogs by category
+            var coreSheets = new HashSet<string> { "DefaultTalk", "Balloon" };
+            var unmatchedCore = unmatchedDialogs.Where(d => coreSheets.Contains(d.Sheet)).ToList();
+            var unmatchedBattleTalks = unmatchedDialogs.Where(d => !coreSheets.Contains(d.Sheet)).ToList();
+
+            if (unmatchedCore.Count > 0)
                 File.WriteAllText(Path.Combine(outputDir, "unmatched_dialogs.json"),
-                    JsonSerializer.Serialize(unmatchedDialogs, jsonOptions));
+                    JsonSerializer.Serialize(unmatchedCore, jsonOptions));
+
+            if (unmatchedBattleTalks.Count > 0)
+                File.WriteAllText(Path.Combine(outputDir, "unmatched_battletalks.json"),
+                    JsonSerializer.Serialize(unmatchedBattleTalks, jsonOptions));
 
             if (unmatchedQuests.Count > 0)
                 File.WriteAllText(Path.Combine(outputDir, "unmatched_quest_dialogs.json"),
@@ -1079,15 +1316,17 @@ public class DialogHarvestService : IDialogHarvestService
 
         var linkedDtCount = linkedDialogs.Count(d => d.Sheet == "DefaultTalk");
         var linkedBalloonCount = linkedDialogs.Count(d => d.Sheet == "Balloon");
+        var linkedBattleTalkCount = linkedDialogs.Count(d => d.Sheet != "DefaultTalk" && d.Sheet != "Balloon");
         var unmatchedDtCount = unmatchedDialogs.Count(d => d.Sheet == "DefaultTalk");
         var unmatchedBalloonCount = unmatchedDialogs.Count(d => d.Sheet == "Balloon");
+        var unmatchedBattleTalkCount = unmatchedDialogs.Count(d => d.Sheet != "DefaultTalk" && d.Sheet != "Balloon");
         var msg = $"Done: {persisted + persistedQuest} persisted to DB " +
-                  $"({linkedDialogs.Count} linked: {linkedDtCount} DT, {linkedBalloonCount} Balloon, " +
+                  $"({linkedDialogs.Count} linked: {linkedDtCount} DT, {linkedBalloonCount} Balloon, {linkedBattleTalkCount} BattleTalk, " +
                   $"{linkedQuests.Count} quest), " +
-                  $"{unmatchedDialogs.Count} unmatched ({unmatchedDtCount} DT, {unmatchedBalloonCount} Balloon), " +
+                  $"{unmatchedDialogs.Count} unmatched ({unmatchedDtCount} DT, {unmatchedBalloonCount} Balloon, {unmatchedBattleTalkCount} BattleTalk), " +
                   $"{unmatchedQuests.Count} quest unmatched";
         _log.Info(nameof(DoHarvest), msg, eventId);
-        ReportProgress(msg);
+        BeginPhase(string.Format(Loc.S("Done: {0} dialogs persisted"), persisted + persistedQuest), 1);
     }
 
     private static readonly Dictionary<Dalamud.Game.ClientLanguage, string> LangToCode = new()
@@ -1102,50 +1341,96 @@ public class DialogHarvestService : IDialogHarvestService
         List<LinkedDialog> dialogs,
         ExcelSheet<ENpcBase> npcBaseSheet,
         Dalamud.Game.ClientLanguage language,
+        Dictionary<uint, string> npcZoneNames,
         CancellationToken ct,
         EKEventId eventId)
     {
         var langCode = LangToCode.GetValueOrDefault(language, "en");
         var persisted = 0;
-        // Cache by character identity (name+gender+race+language) to avoid re-assigning voices
-        // for the same NPC appearing under different ENpcBase IDs
-        var characterCache = new Dictionary<string, (CharacterEntity character, CharacterContextEntity context)>();
 
-        // Suppress per-item events to prevent UI threads from querying the DB concurrently
-        _db.SuppressEvents = true;
-
-        try
-        {
+        // Pre-process: for each NPC name, find the best gender/race (prefer non-Unknown/None).
+        // This deduplicates NPCs that appear as both (Male, Elezen) and (None, Unknown).
+        var bestIdentity = new Dictionary<string, (string gender, string race, string raceStr)>();
         foreach (var dialog in dialogs)
         {
-            ct.ThrowIfCancellationRequested();
+            if (!dialog.NpcName.TryGetValue(langCode, out var name) || string.IsNullOrEmpty(name)) continue;
+            var resolvedName = _jsonData.GetNpcName(name).Trim();
+            if (string.IsNullOrEmpty(resolvedName)) continue;
 
-            // Get text in the selected language
+            if (!bestIdentity.TryGetValue(resolvedName, out var current))
+            {
+                bestIdentity[resolvedName] = (dialog.Gender, dialog.Race, dialog.Race);
+            }
+            else
+            {
+                // Prefer real gender/race over None/Unknown
+                var curGender = Enum.TryParse<Genders>(current.gender, true, out var cg) ? cg : Genders.None;
+                var newGender = Enum.TryParse<Genders>(dialog.Gender, true, out var ng) ? ng : Genders.None;
+                var curRace = Enum.TryParse<NpcRaces>(current.race, true, out var cr) ? cr : NpcRaces.Unknown;
+                var newRace = Enum.TryParse<NpcRaces>(dialog.Race, true, out var nr) ? nr : NpcRaces.Unknown;
+
+                var upgrade = false;
+                if (curRace == NpcRaces.Unknown && newRace != NpcRaces.Unknown) upgrade = true;
+                else if (curGender == Genders.None && newGender != Genders.None && curRace == newRace) upgrade = true;
+
+                if (upgrade)
+                    bestIdentity[resolvedName] = (dialog.Gender, dialog.Race, dialog.Race);
+            }
+        }
+
+        // ── Phase 1: Create all unique characters and assign voices ──
+        var characterCache = new Dictionary<string, (CharacterEntity character, CharacterContextEntity context)>();
+        var dialogNpcNames = new Dictionary<int, (string npcName, Genders gender, NpcRaces race, string raceStr)>(); // dialog index → resolved identity
+
+        // Hoist the voice list once — converting EF entities to EchokrautVoice on every NPC was the main allocation hot-spot.
+        var voicesForHarvest = _npcData.GetEchokrautVoices();
+
+        BeginPhase(Loc.S("Linking dialogs to characters..."), Math.Max(1, dialogs.Count));
+        for (var i = 0; i < dialogs.Count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            ReportPhaseProgress(i);
+            var dialog = dialogs[i];
+
             if (!dialog.Texts.TryGetValue(langCode, out var text) || string.IsNullOrWhiteSpace(text))
                 continue;
 
             var gender = Enum.TryParse<Genders>(dialog.Gender, true, out var g) ? g : Genders.None;
-
-            // Get NPC name in the selected language, resolving gender tags (e.g. German [a]/[p])
-            var resolvedNames = ResolveGenderTags(dialog.NpcName, gender);
+            _npcDePronoun.TryGetValue(dialog.NpcId, out var dePronoun);
+            var resolvedNames = ResolveGenderTags(dialog.NpcName, gender, dePronoun);
             if (!resolvedNames.TryGetValue(langCode, out var npcName) || string.IsNullOrWhiteSpace(npcName))
                 continue;
 
-            npcName = _jsonData.GetNpcName(npcName);
+            npcName = _jsonData.GetNpcName(npcName).Trim();
+
+            if (bestIdentity.TryGetValue(npcName, out var best))
+            {
+                gender = Enum.TryParse<Genders>(best.gender, true, out var bg) ? bg : gender;
+                dialog.Race = best.race;
+            }
 
             var race = Enum.TryParse<NpcRaces>(dialog.Race, true, out var r) ? r : NpcRaces.Unknown;
+            dialogNpcNames[i] = (npcName, gender, race, dialog.Race);
             var charKey = $"{npcName}|{(int)gender}|{(int)race}|{(int)language}";
 
-            if (!characterCache.TryGetValue(charKey, out var cached))
+            if (!characterCache.ContainsKey(charKey))
             {
-                // Read body type from ENpcBase
                 var bodyType = BodyType.Adult;
                 try
                 {
                     var npcBase = npcBaseSheet.GetRow(dialog.NpcId);
                     bodyType = npcBase.BodyType switch { 4 => BodyType.Child, 3 => BodyType.Elder, _ => BodyType.Adult };
                 }
-                catch { /* ENpcBase not found — default to adult */ }
+                catch { }
+
+                // Resolve voice up-front (pure, no DB writes, no logging) so we can persist it
+                // in the same UpsertCharacter call instead of issuing a second round-trip.
+                var npcData = new NpcMapData(ObjectKind.BattleNpc)
+                {
+                    Name = npcName, Race = race, RaceStr = dialog.Race,
+                    Gender = gender, BodyType = bodyType, Language = language,
+                };
+                var pickedVoice = _backend.PickVoice(npcData, voicesForHarvest);
 
                 var character = _db.UpsertCharacter(new CharacterEntity
                 {
@@ -1155,38 +1440,37 @@ public class DialogHarvestService : IDialogHarvestService
                     Gender = (int)gender,
                     BodyType = (int)bodyType,
                     Language = (int)language,
-                    ObjectKind = (int)ObjectKind.BattleNpc
+                    ObjectKind = (int)ObjectKind.BattleNpc,
+                    VoiceKey = pickedVoice?.BackendVoice ?? string.Empty,
                 });
 
                 var context = _db.UpsertContext(character.Id, dialog.Sheet == "Balloon" ? "bubble" : "npc");
 
-                // Assign voice
-                var npcData = new NpcMapData(ObjectKind.BattleNpc)
-                {
-                    Name = npcName,
-                    Race = race,
-                    RaceStr = dialog.Race,
-                    Gender = gender,
-                    BodyType = bodyType,
-                    Language = language,
-                    voice = character.VoiceKey
-                };
-                npcData.Voices = _npcData.GetEchokrautVoices();
-                _backend.GetVoiceOrRandom(eventId, npcData);
-
-                // Update voice key if changed
-                if (npcData.voice != character.VoiceKey)
-                {
-                    character.VoiceKey = npcData.voice;
-                    _db.UpsertCharacter(character);
-                }
-
-                cached = (character, context);
-                characterCache[charKey] = cached;
+                characterCache[charKey] = (character, context);
             }
+        }
 
-            // Always create instance per NpcId (same character can appear at multiple ENpcBase locations)
-            _db.GetOrCreateInstance(cached.character.Id, dialog.NpcId);
+        EndPhase();
+        BeginPhase(Loc.S("Saving voice clips to database..."), Math.Max(1, dialogs.Count));
+
+        // ─��� Phase 2: Persist voice clips and instances ──
+        for (var i = 0; i < dialogs.Count; i++)
+        {
+            ct.ThrowIfCancellationRequested();
+            var dialog = dialogs[i];
+
+            if (!dialogNpcNames.TryGetValue(i, out var resolved))
+                continue;
+
+            var charKey = $"{resolved.npcName}|{(int)resolved.gender}|{(int)resolved.race}|{(int)language}";
+            if (!characterCache.TryGetValue(charKey, out var cached))
+                continue;
+
+            if (!dialog.Texts.TryGetValue(langCode, out var text) || string.IsNullOrWhiteSpace(text))
+                continue;
+
+            npcZoneNames.TryGetValue(dialog.NpcId, out var zoneName);
+            _db.GetOrCreateInstance(cached.character.Id, dialog.NpcId, zoneName ?? "");
 
             var textSource = dialog.Sheet == "Balloon" ? TextSource.AddonBubble : TextSource.AddonTalk;
             _db.LogOrUpdateVoiceClip(new VoiceClipEntity
@@ -1201,24 +1485,24 @@ public class DialogHarvestService : IDialogHarvestService
                 CleanedText = text,
                 SavedToDisk = false,
                 BodyType = cached.character.BodyType,
+                HasPlayerPlaceholder = TalkTextHelper.ContainsPlayerPlaceholder(text),
+                QuestType = (int)dialog.QuestType,
             });
 
             persisted++;
+            ReportPhaseProgress(persisted);
             if (persisted % 500 == 0)
             {
-                // Clear EF Core change tracker to prevent slowdown from accumulated tracked entities
+                // Flush accumulated changes in one transaction, then clear tracker
+                _db.FlushChanges();
                 _db.ClearChangeTracker();
-                characterCache.Clear(); // cached entities are now detached
-                ReportProgress($"Persisted {persisted} / {dialogs.Count} linked dialogs...");
             }
         }
-        }
-        finally
-        {
-            _db.SuppressEvents = false;
-            _db.NotifyVoiceClipLogged();
-        }
 
+        // Flush remaining changes
+        _db.FlushChanges();
+
+        EndPhase();
         return persisted;
     }
 
@@ -1226,6 +1510,7 @@ public class DialogHarvestService : IDialogHarvestService
         List<LinkedQuestDialog> dialogs,
         ExcelSheet<ENpcBase> npcBaseSheet,
         Dalamud.Game.ClientLanguage language,
+        Dictionary<uint, string> npcZoneNames,
         CancellationToken ct,
         EKEventId eventId)
     {
@@ -1239,10 +1524,11 @@ public class DialogHarvestService : IDialogHarvestService
             Sheet = "DefaultTalk",
             DialogId = 0,
             MatchSource = q.MatchSource,
+            QuestType = q.QuestType,
             Texts = q.Texts
         }).ToList();
 
-        return PersistLinkedDialogs(converted, npcBaseSheet, language, ct, eventId);
+        return PersistLinkedDialogs(converted, npcBaseSheet, language, npcZoneNames, ct, eventId);
     }
 
     /// <summary>
@@ -1250,11 +1536,21 @@ public class DialogHarvestService : IDialogHarvestService
     /// </summary>
     private Dictionary<uint, Dictionary<string, List<string>>> LoadDialogSheet<T>(
         string sheetName,
-        Func<T, List<string>> textExtractor,
+        Func<T, string, List<string>> textExtractor,
         CancellationToken ct,
         EKEventId eventId) where T : struct, Lumina.Excel.IExcelRow<T>
     {
         var result = new Dictionary<uint, Dictionary<string, List<string>>>();
+
+        // Total = sum of row counts across all 4 languages so the bar reflects real work.
+        var totalRows = 0;
+        for (var li = 0; li < LangValues.Length; li++)
+        {
+            var s = _dataManager.GetExcelSheet<T>(LangValues[li]);
+            if (s != null) totalRows += s.Count;
+        }
+        BeginPhase(string.Format(Loc.S("Scanning {0} for dialogs..."), sheetName), totalRows);
+        var processed = 0;
 
         for (var langIdx = 0; langIdx < LangCodes.Length; langIdx++)
         {
@@ -1268,10 +1564,10 @@ public class DialogHarvestService : IDialogHarvestService
             foreach (var row in sheet)
             {
                 count++;
-                if (count % 2000 == 0)
-                    ReportProgress($"Loading {sheetName} ({langCode})... {count}");
+                processed++;
+                ReportPhaseProgress(processed);
 
-                var texts = textExtractor(row);
+                var texts = textExtractor(row, langCode);
                 if (texts.Count == 0) continue;
 
                 if (!result.TryGetValue(row.RowId, out var langDict))
@@ -1286,23 +1582,35 @@ public class DialogHarvestService : IDialogHarvestService
             _log.Debug(nameof(LoadDialogSheet), $"Loaded {count} {sheetName} rows for {langCode}", eventId);
         }
 
+        EndPhase();
         return result;
     }
 
-    private static List<string> GetDefaultTalkTexts(DefaultTalk row)
+    private static List<string> GetDefaultTalkTexts(DefaultTalk row, string langCode)
     {
         var texts = new List<string>();
         for (var i = 0; i < 3; i++)
         {
-            var text = row.Text[i].ExtractText();
+            var text = ExtractTextWithPlayerName(row.Text[i], langCode);
             texts.Add(text ?? "");
         }
         return texts;
     }
 
-    private static List<string> GetBalloonTexts(Balloon row)
+    private static List<string> GetBalloonTexts(Balloon row, string langCode)
     {
-        var text = row.Dialogue.ExtractText();
+        var text = ExtractTextWithPlayerName(row.Dialogue, langCode);
+        return [text ?? ""];
+    }
+
+    /// <summary>
+    /// Generic extractor for sheets with a single .Text property
+    /// (InstanceContentTextData, ContentTalk, NpcYell, MassivePcContentTextData, GoldSaucerTextData).
+    /// </summary>
+    private static List<string> GetSingleTextSheet<T>(T row, string langCode) where T : struct
+    {
+        // Use dynamic dispatch — all these sheets have a .Text property returning ReadOnlySeString
+        var text = ExtractTextWithPlayerName(((dynamic)row).Text, langCode);
         return [text ?? ""];
     }
 
@@ -1370,7 +1678,11 @@ public class DialogHarvestService : IDialogHarvestService
                     nameDict = new Dictionary<string, string>();
                     result[row.RowId] = nameDict;
                 }
-                nameDict[langCode] = name ?? "";
+                nameDict[langCode] = name?.Trim() ?? "";
+
+                // Store German Article value for gender tag resolution
+                if (lang == Dalamud.Game.ClientLanguage.German)
+                    _npcDePronoun[row.RowId] = row.Pronoun;
             }
 
             _log.Debug(nameof(LoadNpcNames), $"Loaded ENpcResident names for {langCode}", eventId);
@@ -1401,13 +1713,39 @@ public class DialogHarvestService : IDialogHarvestService
                     nameDict = new Dictionary<string, string>();
                     result[row.RowId] = nameDict;
                 }
-                nameDict[langCode] = name;
+                nameDict[langCode] = name.Trim();
             }
 
             _log.Debug(nameof(LoadBNpcNames), $"Loaded BNpcName names for {langCode}", eventId);
         }
 
         return result;
+    }
+
+    // Collect unmapped ModelChara IDs during harvest for diagnostic output
+    private readonly Dictionary<int, HashSet<string>> _unmappedModels = new();
+    // German Pronoun value per NPC ID (from ENpcResident). 1 = feminine noun (sie).
+    private readonly Dictionary<uint, sbyte> _npcDePronoun = new();
+
+    private static QuestType ClassifyQuest(Quest quest)
+    {
+        // Beast tribe quests
+        if (quest.BeastTribe.RowId != 0) return QuestType.BeastTribe;
+
+        // Repeatable quests (dailies, weeklies, leves)
+        if (quest.IsRepeatable) return QuestType.Repeatable;
+
+        // Classify by EventIconType
+        var iconType = quest.EventIconType.RowId;
+        return iconType switch
+        {
+            3 => QuestType.MSQ,         // Meteor icon
+            8 => QuestType.Unlock,      // Blue + icon (unlock & class/job)
+            10 => QuestType.Unlock,     // Also blue + variant
+            2 => QuestType.Event,       // Seasonal event icon
+            1 => QuestType.SideQuest,   // Normal ! icon
+            _ => QuestType.SideQuest,   // Default to side quest for unknown types
+        };
     }
 
     private string GetRaceString(ENpcBase npcBase)
@@ -1432,6 +1770,19 @@ public class DialogHarvestService : IDialogHarvestService
             if (modelChara != 0 && _jsonData.ModelsToRaceMap.TryGetValue(modelChara, out var beastRace))
                 return beastRace.ToString();
 
+            // Track unmapped models for diagnostic
+            if (modelChara != 0)
+            {
+                if (!_unmappedModels.TryGetValue(modelChara, out var names))
+                {
+                    names = new HashSet<string>();
+                    _unmappedModels[modelChara] = names;
+                }
+                var enName = _dataManager.GetExcelSheet<ENpcResident>(Dalamud.Game.ClientLanguage.English)?
+                    .GetRowOrDefault(npcBase.RowId)?.Singular.ExtractText() ?? $"ENpcBase#{npcBase.RowId}";
+                names.Add(enName);
+            }
+
             return "Unknown";
         }
         catch
@@ -1452,7 +1803,13 @@ public class DialogHarvestService : IDialogHarvestService
     /// Applied per-language; languages without known tags pass through unchanged.
     /// Any remaining [x] tags are stripped as fallback.
     /// </summary>
-    private static Dictionary<string, string> ResolveGenderTags(Dictionary<string, string> names, Genders gender)
+    /// <summary>
+    /// Resolve German [a]/[p] and French [a]/[p] gender tags in NPC names.
+    /// The <paramref name="dePronoun"/> value from ENpcResident.Pronoun (German sheet) controls
+    /// whether [p] adds "in": Pronoun 1 = sie (feminine noun) → [p] is empty since the name
+    /// is already feminine. Pronoun 0 = er (masculine) → [p] adds "in" for feminine NPC gender.
+    /// </summary>
+    private static Dictionary<string, string> ResolveGenderTags(Dictionary<string, string> names, Genders gender, int dePronoun = 0)
     {
         var resolved = new Dictionary<string, string>(names.Count);
         foreach (var (lang, name) in names)
@@ -1463,9 +1820,19 @@ public class DialogHarvestService : IDialogHarvestService
                 switch (lang)
                 {
                     case "de":
-                        n = gender == Genders.Female
-                            ? n.Replace("[a]", "e").Replace("[p]", "in")
-                            : n.Replace("[a]", "er").Replace("[p]", "");
+                        if (gender == Genders.Female)
+                        {
+                            n = n.Replace("[a]", "e");
+                            // [p] adds "in" only when the noun is grammatically masculine (Pronoun 0).
+                            // Pronoun 1 = "sie" = already feminine noun → [p] should be empty.
+                            n = dePronoun == 1
+                                ? n.Replace("[p]", "")
+                                : n.Replace("[p]", "in");
+                        }
+                        else
+                        {
+                            n = n.Replace("[a]", "er").Replace("[p]", "");
+                        }
                         break;
                     case "fr":
                         n = gender == Genders.Female
@@ -1480,6 +1847,7 @@ public class DialogHarvestService : IDialogHarvestService
         }
         return resolved;
     }
+
 
     private Genders DetermineGender(ENpcBase npcBase, NpcRaces race)
     {
@@ -1741,11 +2109,17 @@ public class DialogHarvestService : IDialogHarvestService
         Dictionary<uint, Dictionary<string, string>> npcNames,
         Dictionary<uint, Dictionary<string, string>> bnpcNames,
         ExcelSheet<ENpcBase> npcBaseSheet,
+        Dictionary<uint, HashSet<uint>> npcTerritories,
+        Dictionary<uint, string> npcZoneNames,
+        Dalamud.Game.ClientLanguage language,
         CancellationToken ct,
         EKEventId eventId)
     {
         var linked = new List<LinkedQuestDialog>();
         var unmatched = new List<UnmatchedQuestDialog>();
+
+        // Load localized PlaceName sheet for quest zone fallback
+        var placeNameSheet = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.PlaceName>(language);
 
         // Build NPC name lookup from ENpcResident English names
         var npcNameLookup = new Dictionary<string, List<uint>>(StringComparer.OrdinalIgnoreCase);
@@ -1780,16 +2154,15 @@ public class DialogHarvestService : IDialogHarvestService
             }
         }
 
-        // Build NPC → territory lookup from Level sheet for disambiguation
-        ReportProgress("Loading NPC locations...");
-        var npcTerritories = BuildNpcTerritoryLookup(ct, eventId);
-
         // Read all quests
         var questSheet = _dataManager.GetExcelSheet<Quest>();
         if (questSheet == null) return (linked, unmatched);
 
         var questCount = 0;
         var questTotal = questSheet.Count();
+        var questsWithDialog = 0;
+
+        BeginPhase(Loc.S("Scanning for quest dialogs..."), questTotal);
 
         foreach (var quest in questSheet)
         {
@@ -1802,12 +2175,14 @@ public class DialogHarvestService : IDialogHarvestService
             var questName = quest.Name.ExtractText();
             if (string.IsNullOrEmpty(questName)) continue;
 
-            if (questCount % 200 == 0)
-                ReportProgress($"Quest dialogs... {questCount}/{questTotal} ({questName})");
+            var questType = ClassifyQuest(quest);
+
+            ReportPhaseProgress(questCount);
 
             // Compute sheet path: quest/{subdir}/{questId}
+            // FFXIV organizes quest EXDs in folders of 100 (not 1000)
             var suffix = quest.RowId - 65536;
-            var subdir = (suffix / 1000).ToString("D3");
+            var subdir = (suffix / 100).ToString("D3");
             var sheetPath = $"quest/{subdir}/{questId}";
 
             // Parse Lua script to get textKey → actor register mapping
@@ -1839,7 +2214,7 @@ public class DialogHarvestService : IDialogHarvestService
                         var key = row.ReadStringColumn(0).ExtractText();
                         if (string.IsNullOrEmpty(key) || !key.StartsWith("TEXT_")) continue;
 
-                        var text = row.ReadStringColumn(1).ExtractText();
+                        var text = ExtractTextWithPlayerName(row.ReadStringColumn(1), langCode);
                         if (string.IsNullOrEmpty(text)) continue;
 
                         if (!keyTexts.TryGetValue(key, out var langDict))
@@ -1855,6 +2230,8 @@ public class DialogHarvestService : IDialogHarvestService
                     }
                 }
             }
+
+            questsWithDialog += keyTexts.Count;
 
             // Process collected text entries
             foreach (var (key, texts) in keyTexts)
@@ -1892,6 +2269,7 @@ public class DialogHarvestService : IDialogHarvestService
                         Race = "Unknown",
                         Gender = Genders.None.ToString(),
                         MatchSource = DialogMatchSource.Narrator.ToString(),
+                        QuestType = questType,
                         Texts = texts
                     });
                     continue;
@@ -1950,6 +2328,15 @@ public class DialogHarvestService : IDialogHarvestService
                         matchedNames = npcNames.TryGetValue(npcId, out var en) ? en : new Dictionary<string, string>();
                     }
 
+                    // Use quest PlaceName as fallback zone for NPCs not in the Level sheet
+                    if (!npcZoneNames.ContainsKey(npcId) && placeNameSheet != null)
+                    {
+                        var placeRow = placeNameSheet.GetRowOrDefault(quest.PlaceName.RowId);
+                        var questPlaceName = placeRow?.Name.ExtractText();
+                        if (!string.IsNullOrEmpty(questPlaceName))
+                            npcZoneNames[npcId] = questPlaceName;
+                    }
+
                     linked.Add(new LinkedQuestDialog
                     {
                         QuestId = quest.RowId,
@@ -1960,6 +2347,7 @@ public class DialogHarvestService : IDialogHarvestService
                         Race = raceStr,
                         Gender = gender.ToString(),
                         MatchSource = finalSource.ToString(),
+                        QuestType = questType,
                         Texts = texts
                     });
                 }
@@ -1977,46 +2365,67 @@ public class DialogHarvestService : IDialogHarvestService
         }
 
         _log.Info(nameof(HarvestQuestDialogs),
-            $"Quest harvest: {linked.Count} linked, {unmatched.Count} unmatched", eventId);
+            $"Quest harvest: {linked.Count} linked, {unmatched.Count} unmatched, " +
+            $"{questCount} quests scanned ({questsWithDialog} text entries)", eventId);
 
+        EndPhase();
         return (linked, unmatched);
     }
 
     /// <summary>
     /// Build NPC ID → set of PlaceName IDs from the Level sheet (Type 8 = NPC placement).
+    /// Also builds NPC ID → resolved zone name string for instance creation.
     /// </summary>
-    private Dictionary<uint, HashSet<uint>> BuildNpcTerritoryLookup(CancellationToken ct, EKEventId eventId)
+    private (Dictionary<uint, HashSet<uint>> territories, Dictionary<uint, string> zoneNames)
+        BuildNpcTerritoryLookup(Dalamud.Game.ClientLanguage language, CancellationToken ct, EKEventId eventId)
     {
-        var result = new Dictionary<uint, HashSet<uint>>();
+        var territories = new Dictionary<uint, HashSet<uint>>();
+        var zoneNames = new Dictionary<uint, string>();
         var levelSheet = _dataManager.GetExcelSheet<Level>();
-        if (levelSheet == null) return result;
+        if (levelSheet == null) return (territories, zoneNames);
 
+        // Use the selected harvest language for PlaceName resolution
+        var placeNameSheet = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.PlaceName>(language);
+
+        var levelTotal = levelSheet.Count;
+        BeginPhase(Loc.S("Loading NPC locations..."), levelTotal);
         var count = 0;
         foreach (var level in levelSheet)
         {
             ct.ThrowIfCancellationRequested();
             count++;
-            if (count % 50000 == 0)
-                ReportProgress($"Loading NPC locations... {count}");
+            ReportPhaseProgress(count);
 
             if (level.Type != 8) continue; // Type 8 = NPC placement
 
             var npcId = level.Object.RowId;
             if (npcId == 0) continue;
 
-            var placeNameId = level.Territory.ValueNullable?.PlaceName.RowId ?? 0;
+            var territory = level.Territory.ValueNullable;
+            var placeNameId = territory?.PlaceName.RowId ?? 0;
             if (placeNameId == 0) continue;
 
-            if (!result.TryGetValue(npcId, out var places))
+            if (!territories.TryGetValue(npcId, out var places))
             {
                 places = new HashSet<uint>();
-                result[npcId] = places;
+                territories[npcId] = places;
             }
             places.Add(placeNameId);
+
+            // Resolve zone name for instance labels (first placement wins)
+            if (!zoneNames.ContainsKey(npcId) && placeNameSheet != null)
+            {
+                var placeName = placeNameSheet.GetRowOrDefault(placeNameId);
+                var name = placeName?.Name.ExtractText() ?? "";
+                if (!string.IsNullOrEmpty(name))
+                    zoneNames[npcId] = name;
+            }
         }
 
-        _log.Debug(nameof(BuildNpcTerritoryLookup), $"Built territory lookup for {result.Count} NPCs from {count} Level entries", eventId);
-        return result;
+        _log.Debug(nameof(BuildNpcTerritoryLookup),
+            $"Built territory lookup for {territories.Count} NPCs ({zoneNames.Count} with zone names) from {count} Level entries", eventId);
+        EndPhase();
+        return (territories, zoneNames);
     }
 
     /// <summary>
@@ -2158,7 +2567,7 @@ public class DialogHarvestService : IDialogHarvestService
 
         var questName = q.Name.ExtractText();
         var suffix = q.RowId - 65536;
-        var subdir = (suffix / 1000).ToString("D3");
+        var subdir = (suffix / 100).ToString("D3");
 
         var sb = new System.Text.StringBuilder();
         sb.AppendLine($"Quest: {questName} (RowId={questRowId}, Id={questId})");
@@ -2466,5 +2875,523 @@ public class DialogHarvestService : IDialogHarvestService
     private void ReportProgress(string message)
     {
         ProgressChanged?.Invoke(message);
+    }
+
+    /// <summary>
+    /// Start a new sub-stage. Sets the label, resets the count to 0/total.
+    /// If total is 1, the bar appears full immediately (instant phase).
+    /// </summary>
+    private void BeginPhase(string label, int total)
+    {
+        ReportProgress(label);
+        _phaseTotal = Math.Max(1, total);
+        _phaseCurrent = total <= 1 ? _phaseTotal : 0;
+        ProgressCountChanged?.Invoke(_phaseCurrent, _phaseTotal);
+    }
+
+    /// <summary>Update progress within the current sub-stage.</summary>
+    private void ReportPhaseProgress(int current)
+    {
+        _phaseCurrent = current;
+        ProgressCountChanged?.Invoke(_phaseCurrent, _phaseTotal);
+    }
+
+    /// <summary>Mark the current sub-stage as fully complete (bar full).</summary>
+    private void EndPhase()
+    {
+        _phaseCurrent = _phaseTotal;
+        ProgressCountChanged?.Invoke(_phaseCurrent, _phaseTotal);
+    }
+
+    /// <summary>
+    /// Dump all Lumina Excel sheets to TSV files in the harvest directory.
+    /// Each sheet gets one file with RowId + all string columns extracted in German.
+    /// </summary>
+    public async Task DumpAllSheetsAsync(CancellationToken ct)
+    {
+        if (IsRunning) return;
+        IsRunning = true;
+
+        try
+        {
+            await Task.Run(() =>
+            {
+                var baseDir = _config.SaveToLocal ? _config.LocalSaveLocation : @"C:\alltalk_tts";
+                var outputDir = Path.Combine(baseDir, "sheet_dump");
+                Directory.CreateDirectory(outputDir);
+
+                var sheetNames = _dataManager.Excel.SheetNames;
+                var total = sheetNames.Count;
+                var done = 0;
+
+                foreach (var sheetName in sheetNames)
+                {
+                    ct.ThrowIfCancellationRequested();
+                    done++;
+
+                    // Skip sheets already processed by the harvest
+                    if (sheetName.StartsWith("quest/")
+                        || sheetName.StartsWith("custom/")
+                        || DumpExcludedSheets.Contains(sheetName)) { continue; }
+
+                    if (done % 50 == 0)
+                        ReportProgress($"Dumping sheets... {done}/{total} ({sheetName})");
+
+                    try
+                    {
+                        var sheet = _dataManager.GetExcelSheet<RawRow>(
+                            Dalamud.Game.ClientLanguage.German, sheetName);
+                        if (sheet == null) continue;
+
+                        var rows = new List<string>();
+                        var hasText = false;
+
+                        foreach (var row in sheet)
+                        {
+                            // Probe columns for string data
+                            var cols = new List<string> { row.RowId.ToString() };
+                            for (var c = 0; c < 64; c++)
+                            {
+                                try
+                                {
+                                    var text = row.ReadStringColumn(c).ExtractText();
+                                    cols.Add(text?.Replace("\t", " ").Replace("\n", "\\n").Replace("\r", "") ?? "");
+                                    if (!string.IsNullOrWhiteSpace(text)) hasText = true;
+                                }
+                                catch
+                                {
+                                    // Column doesn't exist or isn't a string — stop probing
+                                    break;
+                                }
+                            }
+
+                            if (cols.Count > 1)
+                                rows.Add(string.Join("\t", cols));
+                        }
+
+                        // Only write sheets that have at least one non-empty string
+                        if (hasText && rows.Count > 0)
+                        {
+                            var safeName = sheetName.Replace("/", "_").Replace("\\", "_");
+                            File.WriteAllLines(Path.Combine(outputDir, $"{safeName}.tsv"), rows);
+                        }
+                    }
+                    catch
+                    {
+                        // Sheet can't be read — skip
+                    }
+                }
+
+                // Dump ContentDirectorBattleTalk → speaker ID + text mapping
+                ReportProgress("Dumping battle talk speaker mapping...");
+                DumpBattleTalkMapping(outputDir);
+
+                ReportProgress($"Done. Dumped {done} sheets to {outputDir}");
+            }, ct);
+        }
+        catch (OperationCanceledException)
+        {
+            ReportProgress("Dump cancelled.");
+        }
+        catch (Exception ex)
+        {
+            ReportProgress($"Dump error: {ex.Message}");
+        }
+        finally
+        {
+            IsRunning = false;
+        }
+    }
+
+    /// <summary>
+    /// Dump all ContentDirectorBattleTalk entries with duty name, speaker ID, and text.
+    /// Output: battle_talk_speakers.tsv with columns: DutyName, SpeakerID, TextRowId, Text_DE, Text_EN
+    /// </summary>
+    private void DumpBattleTalkMapping(string outputDir)
+    {
+        try
+        {
+            var icSheet = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.InstanceContent>();
+            if (icSheet == null) return;
+
+            var cfcSheet = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.ContentFinderCondition>(
+                Dalamud.Game.ClientLanguage.German);
+
+            var textSheetDe = _dataManager.GetExcelSheet<InstanceContentTextData>(Dalamud.Game.ClientLanguage.German);
+            var textSheetEn = _dataManager.GetExcelSheet<InstanceContentTextData>(Dalamud.Game.ClientLanguage.English);
+            var bnpcNameDe = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.BNpcName>(Dalamud.Game.ClientLanguage.German);
+            var enpcDe = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.ENpcResident>(Dalamud.Game.ClientLanguage.German);
+
+            string ResolveSpeakerNameDe(uint speakerId)
+            {
+                if (speakerId == 0) return "";
+                try
+                {
+                    var bn = bnpcNameDe?.GetRowOrDefault(speakerId)?.Singular.ExtractText();
+                    if (!string.IsNullOrWhiteSpace(bn)) return bn!;
+                }
+                catch { }
+                try
+                {
+                    var en = enpcDe?.GetRowOrDefault(speakerId)?.Singular.ExtractText();
+                    if (!string.IsNullOrWhiteSpace(en)) return en!;
+                }
+                catch { }
+                return "";
+            }
+
+            var lines = new List<string> { "Source\tDutyName_DE\tSpeakerID\tSpeakerName_DE\tRowId\tText_DE\tText_EN" };
+
+            foreach (var ic in icSheet)
+            {
+                // Get duty name from ContentFinderCondition
+                var dutyName = "";
+                var cfcRef = ic.ContentFinderCondition;
+                if (cfcRef.RowId != 0 && cfcSheet != null)
+                {
+                    var cfc = cfcSheet.GetRowOrDefault(cfcRef.RowId);
+                    dutyName = cfc?.Name.ExtractText() ?? "";
+                }
+                if (string.IsNullOrEmpty(dutyName)) dutyName = $"InstanceContent#{ic.RowId}";
+
+                // Read ContentDirectorBattleTalk subrows via RawSubrow
+                try
+                {
+                    var cdbtSheet = _dataManager.GetSubrowExcelSheet<RawSubrow>(
+                        Dalamud.Game.ClientLanguage.English, "ContentDirectorBattleTalk");
+                    if (cdbtSheet == null) continue;
+
+                    var subrows = cdbtSheet.GetRowOrDefault(ic.RowId);
+                    if (subrows == null) continue;
+
+                    foreach (var subrow in subrows.Value)
+                    {
+                        try
+                        {
+                            var speakerId = subrow.ReadUInt32Column(0);  // Unknown0
+                            var textRef = subrow.ReadUInt32Column(2);    // Text RowRef (after Unknown1)
+
+                            if (textRef == 0) continue;
+
+                            var textDe = textSheetDe?.GetRowOrDefault(textRef)?.Text.ExtractText() ?? "";
+                            var textEn = textSheetEn?.GetRowOrDefault(textRef)?.Text.ExtractText() ?? "";
+
+                            if (string.IsNullOrWhiteSpace(textDe) && string.IsNullOrWhiteSpace(textEn)) continue;
+
+                            textDe = textDe.Replace("\t", " ").Replace("\n", "\\n");
+                            textEn = textEn.Replace("\t", " ").Replace("\n", "\\n");
+
+                            var speakerNameDe = ResolveSpeakerNameDe(speakerId);
+                            lines.Add($"BattleTalk\t{dutyName}\t{speakerId}\t{speakerNameDe}\t{textRef}\t{textDe}\t{textEn}");
+                        }
+                        catch { }
+                    }
+                }
+                catch { }
+            }
+
+            // Also dump ContentTalk entries (used by some dungeons instead of ContentDirectorBattleTalk)
+            try
+            {
+                var ctSheet = _dataManager.GetExcelSheet<ContentTalk>(Dalamud.Game.ClientLanguage.German);
+                var ctSheetEn = _dataManager.GetExcelSheet<ContentTalk>(Dalamud.Game.ClientLanguage.English);
+                if (ctSheet != null && ctSheetEn != null)
+                {
+                    // ContentTalk has a ContentTalkParam ref which may link to an NPC
+                    var ctParamSheet = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, "ContentTalkParam");
+
+                    foreach (var row in ctSheet)
+                    {
+                        var textDe = row.Text.ExtractText();
+                        if (string.IsNullOrWhiteSpace(textDe)) continue;
+
+                        var textEn = ctSheetEn.GetRowOrDefault(row.RowId)?.Text.ExtractText() ?? "";
+
+                        // Try to get speaker from ContentTalkParam
+                        var paramRef = row.ContentTalkParam.RowId;
+                        var speakerId = paramRef;
+
+                        textDe = textDe.Replace("\t", " ").Replace("\n", "\\n");
+                        textEn = textEn.Replace("\t", " ").Replace("\n", "\\n");
+
+                        lines.Add($"ContentTalk\t\t{speakerId}\t\t{row.RowId}\t{textDe}\t{textEn}");
+                    }
+                }
+            }
+            catch { }
+
+            // Also dump NpcYell entries
+            try
+            {
+                var yellDe = _dataManager.GetExcelSheet<NpcYell>(Dalamud.Game.ClientLanguage.German);
+                var yellEn = _dataManager.GetExcelSheet<NpcYell>(Dalamud.Game.ClientLanguage.English);
+                if (yellDe != null && yellEn != null)
+                {
+                    foreach (var row in yellDe)
+                    {
+                        var textDe = row.Text.ExtractText();
+                        if (string.IsNullOrWhiteSpace(textDe)) continue;
+
+                        var textEn = yellEn.GetRowOrDefault(row.RowId)?.Text.ExtractText() ?? "";
+
+                        textDe = textDe.Replace("\t", " ").Replace("\n", "\\n");
+                        textEn = textEn.Replace("\t", " ").Replace("\n", "\\n");
+
+                        lines.Add($"NpcYell\t\t0\t\t{row.RowId}\t{textDe}\t{textEn}");
+                    }
+                }
+            }
+            catch { }
+
+            File.WriteAllLines(Path.Combine(outputDir, "battle_talk_speakers.tsv"), lines);
+            _log.Info(nameof(DumpBattleTalkMapping),
+                $"Dumped {lines.Count - 1} battle talk entries to battle_talk_speakers.tsv",
+                new EKEventId(0, TextSource.None));
+
+            // Probe for instance content scripts
+            var scriptLines = new List<string> { "DutyName\tTerritoryId\tBgPath\tScriptPath\tScriptSize" };
+            var cfcSheetEn = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.ContentFinderCondition>(
+                Dalamud.Game.ClientLanguage.English);
+            var ttSheet = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>();
+            if (cfcSheetEn != null && ttSheet != null)
+            {
+                foreach (var cfc in cfcSheetEn)
+                {
+                    var name = cfc.Name.ExtractText();
+                    if (string.IsNullOrEmpty(name)) continue;
+
+                    var ttId = cfc.TerritoryType.RowId;
+                    if (ttId == 0) continue;
+                    var tt = ttSheet.GetRowOrDefault(ttId);
+                    var bg = tt?.Bg.ExtractText() ?? "";
+                    if (string.IsNullOrEmpty(bg)) continue;
+
+                    // Extract the instance code from Bg path (e.g., "ffxiv/sea_s1/dun/s1d1/level/s1d1" → "s1d1")
+                    var parts = bg.Split('/');
+                    var code = parts.Length >= 4 ? parts[3] : parts[^1];
+                    // Also try the last segment and the territory name
+                    var lastPart = parts[^1];
+                    var ttName = tt?.Name.ExtractText() ?? "";
+
+                    // Try various script paths — content scripts are in game_script/content/
+                    // Also try raid/, public_content/, party_content/, massive_pc_content/
+                    var pathsToTry = new[]
+                    {
+                        $"game_script/content/{code}.luab",
+                        $"game_script/content/{code}/{code}.luab",
+                        $"game_script/content/{code}/director.luab",
+                        $"game_script/content/{code}/battletalk.luab",
+                        $"game_script/raid/{code}.luab",
+                        $"game_script/raid/{code}/{code}.luab",
+                        $"game_script/public_content/{code}.luab",
+                        $"game_script/public_content/{code}/{code}.luab",
+                        $"game_script/party_content/{code}.luab",
+                        $"game_script/party_content/{code}/{code}.luab",
+                        $"game_script/massive_pc_content/{code}.luab",
+                        $"game_script/story/{code}.luab",
+                        $"game_script/story/{code}/{code}.luab",
+                        $"game_script/content/{lastPart}.luab",
+                        $"game_script/content/{lastPart}/{lastPart}.luab",
+                        $"game_script/content/{ttName}.luab",
+                        $"game_script/raid/{lastPart}.luab",
+                        $"game_script/raid/{lastPart}/{lastPart}.luab",
+                    };
+
+                    var found = false;
+                    foreach (var path in pathsToTry)
+                    {
+                        if (string.IsNullOrEmpty(path) || path.Contains("//")) continue;
+                        var file = _dataManager.GetFile(path);
+                        if (file != null)
+                        {
+                            scriptLines.Add($"{name}\t{ttId}\t{bg}\t{path}\t{file.Data.Length}");
+                            found = true;
+
+                            // Dump the script file
+                            var scriptDir = Path.Combine(outputDir, "content_scripts");
+                            Directory.CreateDirectory(scriptDir);
+                            var safeName = path.Replace("/", "_").Replace("\\", "_");
+                            File.WriteAllBytes(Path.Combine(scriptDir, safeName), file.Data);
+                            break;
+                        }
+                    }
+                    if (!found)
+                        scriptLines.Add($"{name}\t{ttId}\t{bg}\tNOT FOUND (tried: {code})\t0");
+                }
+            }
+            File.WriteAllLines(Path.Combine(outputDir, "instance_scripts.tsv"), scriptLines);
+            _log.Info(nameof(DumpBattleTalkMapping),
+                $"Found {scriptLines.Count - 1} instance content scripts",
+                new EKEventId(0, TextSource.None));
+        }
+        catch (Exception ex)
+        {
+            _log.Error(nameof(DumpBattleTalkMapping), $"Error dumping battle talks: {ex.Message}",
+                new EKEventId(0, TextSource.None));
+        }
+    }
+
+    /// <summary>
+    /// Known formatting-only macros that don't produce visible text content.
+    /// </summary>
+    private static readonly HashSet<MacroCode> FormattingOnlyMacros = new()
+    {
+        MacroCode.Color, MacroCode.EdgeColor, MacroCode.ShadowColor,
+        MacroCode.ColorType, MacroCode.EdgeColorType,
+        MacroCode.Bold, MacroCode.Italic, MacroCode.Edge, MacroCode.Shadow,
+        MacroCode.SoftHyphen, MacroCode.Icon, MacroCode.Icon2,
+        MacroCode.Scale, MacroCode.Ruby, MacroCode.Sound,
+        MacroCode.SetResetTime, MacroCode.SetTime, MacroCode.Wait,
+        MacroCode.Key,
+    };
+
+    /// <summary>
+    /// Regex to detect Split index in a macro ToString() representation.
+    /// Matches patterns like: Split(PcName(...), ..., 1) or Split(Head(PcName(...)), ..., 2)
+    /// </summary>
+    private static readonly Regex SplitIndexRegex = new(@"Split\(.*?PcName.*?,\s*.+?,\s*(\d+)\)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Extract text from a SeString, replacing player-name macros with
+    /// -PlayerFirstName-, -PlayerLastName-, or -PlayerName- placeholders.
+    /// </summary>
+    /// <summary>
+    /// Macros that produce conditional/computed text (need special extraction).
+    /// </summary>
+    private static readonly HashSet<MacroCode> ConditionalTextMacros = new()
+    {
+        MacroCode.IfPcGender, MacroCode.IfPcName, MacroCode.IfSelf,
+        MacroCode.If, MacroCode.Switch,
+    };
+
+    private static string ExtractTextWithPlayerName(ReadOnlySeString seString, string langCode)
+    {
+        // Quick scan: check if any payload needs special handling
+        var needsCustomExtraction = false;
+        foreach (var payload in seString)
+        {
+            if (payload.Type != ReadOnlySePayloadType.Macro) continue;
+            if (payload.MacroCode == MacroCode.PcName)
+            {
+                needsCustomExtraction = true;
+                break;
+            }
+            if (ConditionalTextMacros.Contains(payload.MacroCode))
+            {
+                needsCustomExtraction = true;
+                break;
+            }
+            if (!FormattingOnlyMacros.Contains(payload.MacroCode)
+                && payload.MacroCode != MacroCode.NewLine
+                && payload.MacroCode != MacroCode.Hyphen
+                && payload.MacroCode != MacroCode.NonBreakingSpace)
+            {
+                var repr = payload.ToString();
+                if (repr.Contains("PcName", StringComparison.OrdinalIgnoreCase))
+                {
+                    needsCustomExtraction = true;
+                    break;
+                }
+            }
+        }
+
+        // Fast path: no macros that need special handling
+        if (!needsCustomExtraction)
+            return seString.ExtractText();
+
+        // Rebuild text, handling player name and conditional macros
+        var sb = new StringBuilder();
+        foreach (var payload in seString)
+        {
+            if (payload.Type == ReadOnlySePayloadType.Text)
+            {
+                sb.Append(Encoding.UTF8.GetString(payload.Body.Span));
+            }
+            else if (payload.Type == ReadOnlySePayloadType.Macro)
+            {
+                if (payload.MacroCode == MacroCode.PcName)
+                {
+                    sb.Append(TalkTextHelper.PlaceholderFullName);
+                }
+                else if (payload.MacroCode == MacroCode.NewLine)
+                {
+                    sb.Append('\n');
+                }
+                else if (payload.MacroCode == MacroCode.Hyphen)
+                {
+                    sb.Append('-');
+                }
+                else if (payload.MacroCode == MacroCode.NonBreakingSpace)
+                {
+                    sb.Append(' ');
+                }
+                else if (ConditionalTextMacros.Contains(payload.MacroCode))
+                {
+                    // Extract first text branch from conditional macros (e.g., IfPcGender → male form)
+                    sb.Append(ExtractConditionalText(payload));
+                }
+                else if (!FormattingOnlyMacros.Contains(payload.MacroCode))
+                {
+                    var repr = payload.ToString();
+                    if (repr.Contains("PcName", StringComparison.OrdinalIgnoreCase))
+                        sb.Append(GetPlayerPlaceholderFromRepr(repr));
+                }
+            }
+        }
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Extract text from conditional macros like IfPcGender.
+    /// For IfPcGender: stores both forms as -IfGender:male|female- placeholder.
+    /// For other conditionals: extracts first available text branch.
+    /// </summary>
+    private static string ExtractConditionalText(ReadOnlySePayload payload)
+    {
+        // IfPcGender: 3 expressions (condition, male_text, female_text)
+        if (payload.MacroCode == MacroCode.IfPcGender
+            && payload.TryGetExpression(out _, out var maleExpr, out var femaleExpr))
+        {
+            var maleText = maleExpr.TryGetString(out var ms) ? ms.ExtractText() : "";
+            var femaleText = femaleExpr.TryGetString(out var fs) ? fs.ExtractText() : "";
+            if (!string.IsNullOrEmpty(maleText) || !string.IsNullOrEmpty(femaleText))
+                return TalkTextHelper.MakeGenderPlaceholder(maleText, femaleText);
+        }
+
+        // Other conditionals: try to extract first text branch
+        if (payload.TryGetExpression(out _, out var expr2, out var expr3))
+        {
+            if (expr2.TryGetString(out var text2)) return text2.ExtractText();
+            if (expr3.TryGetString(out var text3)) return text3.ExtractText();
+        }
+        if (payload.TryGetExpression(out _, out var e2))
+        {
+            if (e2.TryGetString(out var text)) return text.ExtractText();
+        }
+        if (payload.TryGetExpression(out var e1))
+        {
+            if (e1.TryGetString(out var text)) return text.ExtractText();
+        }
+
+        return "";
+    }
+
+    /// <summary>
+    /// Determine the correct placeholder from a macro's string representation.
+    /// Split(..., " ", 1) → first name, Split(..., " ", 2) → last name, else → full name.
+    /// </summary>
+    private static string GetPlayerPlaceholderFromRepr(string repr)
+    {
+        var match = SplitIndexRegex.Match(repr);
+        if (match.Success && int.TryParse(match.Groups[1].Value, out var index))
+        {
+            return index switch
+            {
+                1 => TalkTextHelper.PlaceholderFirstName,
+                2 => TalkTextHelper.PlaceholderLastName,
+                _ => TalkTextHelper.PlaceholderFullName,
+            };
+        }
+        return TalkTextHelper.PlaceholderFullName;
     }
 }

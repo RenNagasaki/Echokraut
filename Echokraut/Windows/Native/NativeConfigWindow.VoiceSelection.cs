@@ -469,7 +469,6 @@ public sealed unsafe partial class NativeConfigWindow
             {
                 capturedNpc.Voice = newVoice;
                 capturedNpc.DoNotDelete = true;
-                capturedNpc.RefreshSelectable();
                 _config.Save();
             }
         };

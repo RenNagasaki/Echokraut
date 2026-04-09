@@ -152,9 +152,10 @@ public class Program
                 case "install":
                     // Args: install <installFolder> <customModelUrl> <customVoicesUrl> <reinstall>
                     //        <isWindows> <isWindows11> <alltalkUrl> <voicesUrl> <voices2Url>
-                    //        <msBuildToolsUrl> <xttsModelUrls(;-separated)>
+                    //        <msBuildToolsUrl> <xttsModelUrls(;-separated)> <cpuMode>
                     Log($"Mode: install | installFolder={args[1]} | customModelUrl={args[2]} | customVoicesUrl={args[3]} | reinstall={args[4]} | isWindows={args[5]} | isWindows11={args[6]}");
                     Log($"URLs: alltalkUrl={args[7]} | voicesUrl={args[8]} | voices2Url={args[9]} | msBuildToolsUrl={args[10]} | xttsModelUrls={args[11]}");
+                    Log($"Options: cpuMode={args[12]}");
                     IsWindows = Convert.ToBoolean(args[5]);
                     Install(args[1],
                             args[2],
@@ -165,7 +166,18 @@ public class Program
                             args[8],
                             args[9],
                             args[10],
-                            args[11].Split(';'));
+                            args[11].Split(';'),
+                            Convert.ToBoolean(args[12]));
+                    break;
+                case "installcustomdata":
+                    // Args: installcustomdata <installFolder> <customModelUrl> <customVoicesUrl> <isWindows> <shouldRestart>
+                    // Note: any running installer (and its AllTalk instance) is already killed by the named pipe shutdown above.
+                    Log($"Mode: installcustomdata | installFolder={args[1]} | customModelUrl={args[2]} | customVoicesUrl={args[3]} | isWindows={args[4]} | shouldRestart={args[5]}");
+                    IsWindows = Convert.ToBoolean(args[4]);
+                    var customDataFolder = Path.Join(args[1], Constants.ALLTALKFOLDERNAME);
+                    InstallCustomData(customDataFolder, args[2], args[3]).Wait();
+                    if (Convert.ToBoolean(args[5]))
+                        StartInstance(customDataFolder);
                     break;
             }
         }
@@ -173,7 +185,8 @@ public class Program
 
     static void Install(string installFolder, string customModelUrl, string customVoicesUrl,
         bool reinstall, bool isWindows11,
-        string alltalkUrl, string voicesUrl, string voices2Url, string msBuildToolsUrl, string[] xttsModelUrls)
+        string alltalkUrl, string voicesUrl, string voices2Url, string msBuildToolsUrl, string[] xttsModelUrls,
+        bool cpuMode)
     {
         try
         {
@@ -294,7 +307,8 @@ public class Program
                 System.IO.Compression.ZipFile.ExtractToDirectory(voices2File, alltalkFolder, true);
                 File.Delete(voices2File);
 
-                Log($"Configuring InstallProcess");
+                var silentArgs = cpuMode ? "-silent cpu" : "-silent";
+                Log($"Configuring InstallProcess (atsetup args: {silentArgs})");
                 InstallProcess.StartInfo.UseShellExecute = false;
                 InstallProcess.StartInfo.CreateNoWindow = true;
                 InstallProcess.StartInfo.RedirectStandardOutput = true;
@@ -304,9 +318,9 @@ public class Program
                     var batPath = Path.Join(alltalkFolder, "atsetup.bat");
                     InstallProcess.StartInfo.FileName = "cmd.exe";
                     InstallProcess.StartInfo.Arguments =
-                        $"/C start \"atsetup\" /wait {batPath} -silent";
+                        $"/C start \"atsetup\" /wait {batPath} {silentArgs}";
                     Log($"InstallProcess FileName: cmd.exe");
-                    Log($"InstallProcess Arguments: /C start \"atsetup\" /wait {batPath} -silent");
+                    Log($"InstallProcess Arguments: /C start \"atsetup\" /wait {batPath} {silentArgs}");
                     Log($"atsetup.bat exists: {File.Exists(batPath)}");
                     if (File.Exists(batPath))
                         Log($"atsetup.bat size: {new FileInfo(batPath).Length} bytes");
@@ -316,9 +330,9 @@ public class Program
                     var shPath = Path.Join(alltalkFolder, "atsetup.sh");
                     InstallProcess.StartInfo.FileName = "/bin/bash";
                     InstallProcess.StartInfo.Arguments =
-                        $"-c \"setsid bash -c '{shPath} -silent' & wait $!\"";
+                        $"-c \"setsid bash -c '{shPath} {silentArgs}' & wait $!\"";
                     Log($"InstallProcess FileName: /bin/bash");
-                    Log($"InstallProcess Arguments: -c \"setsid bash -c '{shPath} -silent' & wait $!\"");
+                    Log($"InstallProcess Arguments: -c \"setsid bash -c '{shPath} {silentArgs}' & wait $!\"");
                     Log($"atsetup.sh exists: {File.Exists(shPath)}");
                 }
 
@@ -374,10 +388,12 @@ public class Program
                     dynamic? configEngine = JsonConvert.DeserializeObject(File.ReadAllText(modelSettingsFile));
                     if (configEngine != null)
                     {
-                        configEngine["settings"]["lowvram_enabled"] = false;
-                        configEngine["settings"]["deepspeed_enabled"] = true;
+                        configEngine["settings"]["lowvram_enabled"] = cpuMode;
+                        if (!cpuMode)
+                            configEngine["settings"]["deepspeed_enabled"] = true;
                         File.WriteAllText(modelSettingsFile, JsonConvert.SerializeObject(configEngine));
                     }
+                    Log($"Configured for {(cpuMode ? "CPU" : "GPU")} mode (lowvram={cpuMode}{(cpuMode ? "" : ", deepspeed=true")})");
                     InstallCustomData(alltalkFolder, customModelUrl, customVoicesUrl).Wait();
 
                     Log($"Done!");

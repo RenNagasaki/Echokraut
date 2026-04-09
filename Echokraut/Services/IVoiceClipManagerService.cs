@@ -9,16 +9,17 @@ namespace Echokraut.Services;
 
 public interface IVoiceClipManagerService
 {
-    VoiceMessage BuildVoiceMessage(VoiceClipEntity encounter);
-    Task<bool> GenerateForEncounter(VoiceClipEntity encounter);
-    bool DeleteAudioForEncounter(VoiceClipEntity encounter);
-    bool HasLocalAudio(VoiceClipEntity encounter);
-    void PlayEncounter(VoiceClipEntity encounter);
+    bool IsGenerating { get; }
+    VoiceMessage BuildVoiceMessage(VoiceClipEntity voiceClip);
+    Task<bool> GenerateForVoiceClip(VoiceClipEntity voiceClip);
+    bool DeleteAudioForVoiceClip(VoiceClipEntity voiceClip);
+    bool HasLocalAudio(VoiceClipEntity voiceClip);
+    void PlayVoiceClip(VoiceClipEntity voiceClip);
     void StopPlayback();
-    string GetAudioPath(VoiceClipEntity encounter);
-    Task GenerateAllUnsaved(IEnumerable<VoiceClipEntity> encounters,
+    string GetAudioPath(VoiceClipEntity voiceClip);
+    Task GenerateAllUnsaved(IEnumerable<VoiceClipEntity> voiceClips,
         Action<int, int>? onProgress = null, CancellationToken ct = default);
-    void DeleteAllSaved(IEnumerable<VoiceClipEntity> encounters,
+    void DeleteAllSaved(IEnumerable<VoiceClipEntity> voiceClips,
         Action<int, int>? onProgress = null);
     event Action? VoiceClipUpdated;
 }

@@ -16,4 +16,5 @@ public interface IAudioFileService
     int DeleteLastNFiles(int nFilesToDelete = 10);
     int DeleteLastNMinutesFiles(int nMinutesFilesToDelete = 10);
     bool RemoveSavedNpcFiles(string localSaveLocation, string speaker);
+    int RemoveAllSavedFiles(string localSaveLocation);
 }

@@ -47,6 +47,12 @@ public class VoiceClipEntity
     [Column("save_path")]
     public string SavePath { get; set; } = "";
 
+    [Column("has_player_placeholder")]
+    public bool HasPlayerPlaceholder { get; set; }
+
+    [Column("quest_type")]
+    public int QuestType { get; set; } // QuestType enum
+
     [Column("zone_name")]
     public string ZoneName { get; set; } = "";
 

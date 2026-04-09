@@ -114,13 +114,13 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
             }
 
             // Step 5: Assign voice if needed
-            if (npcData.Voice == null && !onlyRequest && _config.Alltalk.InstanceType != AlltalkInstanceType.None)
+            if (string.IsNullOrEmpty(npcData.voice) && !onlyRequest && _config.Alltalk.InstanceType != AlltalkInstanceType.None)
             {
                 _log.Info(nameof(ProcessSpeechAsync), "Getting voice since not set.", eventId);
                 _backend.GetVoiceOrRandom(eventId, npcData);
             }
 
-            if (npcData.Voice == null && !onlyRequest && _config.Alltalk.InstanceType != AlltalkInstanceType.None)
+            if (string.IsNullOrEmpty(npcData.voice) && !onlyRequest && _config.Alltalk.InstanceType != AlltalkInstanceType.None)
             {
                 _log.Info(nameof(ProcessSpeechAsync), "Skipping voice inference. No Voice set.", eventId);
                 _log.End(nameof(ProcessSpeechAsync), eventId);
@@ -169,7 +169,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
 
             _log.Debug(nameof(ProcessSpeechAsync), voiceMessage.GetDebugInfo(), eventId);
 
-            // Log encounter to database (regardless of mute/volume state)
+            // Log voice clip to database (regardless of mute/volume state)
             LogVoiceClip(voiceMessage);
 
             // Update DialogState so UI controls (mute/unmute) have access to the current
@@ -359,7 +359,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         }
         catch (Exception ex)
         {
-            _log.Debug(nameof(LogVoiceClip), $"Failed to log encounter: {ex.Message}",
+            _log.Debug(nameof(LogVoiceClip), $"Failed to log voice clip: {ex.Message}",
                 new EKEventId(0, TextSource.None));
         }
     }

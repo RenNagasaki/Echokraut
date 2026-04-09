@@ -33,10 +33,15 @@ public class NpcDataService : INpcDataService
         _jsonData = jsonData ?? throw new ArgumentNullException(nameof(jsonData));
 
         LoadFromDatabase();
+        _db.VoiceClipLogged += LoadFromDatabase;
     }
 
     private void LoadFromDatabase()
     {
+        // Skip if harvest is running — the harvest holds the DbContext on its own thread.
+        // NpcDataService will reload once the harvest fires the final VoiceClipLogged event.
+        if (_db.SuppressEvents) return;
+
         _mappedNpcs.Clear();
         _mappedPlayers.Clear();
 
@@ -196,8 +201,8 @@ public class NpcDataService : INpcDataService
     {
         try
         {
-            _mappedNpcs.ForEach(p => { p.Voices = voices; p.RefreshSelectable(); });
-            _mappedPlayers.ForEach(p => { p.Voices = voices; p.RefreshSelectable(); });
+            _mappedNpcs.ForEach(p => p.Voices = voices);
+            _mappedPlayers.ForEach(p => p.Voices = voices);
             _log.Debug(nameof(RefreshSelectables), $"Refreshed selectables: {_mappedNpcs.Count} NPCs, {_mappedPlayers.Count} players", new EKEventId(0, TextSource.None));
         }
         catch (Exception ex)
@@ -244,7 +249,6 @@ public class NpcDataService : INpcDataService
                 datas.Add(data);
                 var voices = _db.GetVoices();
                 data.Voices = voices.Select(VoiceEntityToEchokrautVoice).ToList();
-                data.RefreshSelectable();
                 backend.GetVoiceOrRandom(eventId, data);
                 backend.NotifyCharacterMapped();
                 SaveCharacter(data);

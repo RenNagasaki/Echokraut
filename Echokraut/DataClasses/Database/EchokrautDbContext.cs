@@ -12,6 +12,7 @@ public class EchokrautDbContext : DbContext
     public DbSet<VoiceAllowedGenderEntity> VoiceAllowedGenders => Set<VoiceAllowedGenderEntity>();
     public DbSet<VoiceAllowedRaceEntity> VoiceAllowedRaces => Set<VoiceAllowedRaceEntity>();
     public DbSet<PhoneticCorrectionEntity> PhoneticCorrections => Set<PhoneticCorrectionEntity>();
+    public DbSet<VoiceClipGenerationEntity> VoiceClipGenerations => Set<VoiceClipGenerationEntity>();
 
     private readonly string _dbPath = "";
 
@@ -56,6 +57,8 @@ public class EchokrautDbContext : DbContext
             .HasIndex(e => e.Timestamp);
         modelBuilder.Entity<VoiceClipEntity>()
             .HasIndex(e => e.TextSource);
+        modelBuilder.Entity<VoiceClipEntity>()
+            .HasIndex(e => e.QuestType);
         // Composite index for upsert lookup in LogOrUpdateVoiceClip
         modelBuilder.Entity<VoiceClipEntity>()
             .HasIndex(e => new { e.CharacterId, e.NpcBaseId, e.OriginalText });
@@ -84,9 +87,23 @@ public class EchokrautDbContext : DbContext
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<CharacterEntity>()
-            .HasMany(c => c.Encounters)
-            .WithOne(e => e.Character)
-            .HasForeignKey(e => e.CharacterId)
+            .HasMany(c => c.VoiceClips)
+            .WithOne(vc => vc.Character)
+            .HasForeignKey(vc => vc.CharacterId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // VoiceClipGeneration: unique on (voice_clip_id, player_content_id)
+        modelBuilder.Entity<VoiceClipGenerationEntity>()
+            .HasIndex(g => new { g.VoiceClipId, g.PlayerContentId })
+            .IsUnique();
+        modelBuilder.Entity<VoiceClipGenerationEntity>()
+            .HasIndex(g => g.PlayerContentId);
+
+        // Cascade delete: VoiceClip → Generations
+        modelBuilder.Entity<VoiceClipEntity>()
+            .HasMany<VoiceClipGenerationEntity>()
+            .WithOne(g => g.VoiceClip)
+            .HasForeignKey(g => g.VoiceClipId)
             .OnDelete(DeleteBehavior.Cascade);
 
         modelBuilder.Entity<VoiceEntity>()

@@ -50,6 +50,7 @@
 
   <ItemGroup>
     <EmbeddedResource Include="Resources\RemoteUrls.json" />
+    <EmbeddedResource Include="Resources\NpcRaces.json" />
   </ItemGroup>
 
   <ItemGroup>
@@ -77,7 +78,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\OtterGui\OtterGui.csproj" />
     <ProjectReference Include="..\KamiToolKit\KamiToolKit.csproj" />
     <ProjectReference Include="..\Echotools\Logging\Logging.csproj" />
     <ProjectReference Include="..\Echotools\UI\UI.csproj" />

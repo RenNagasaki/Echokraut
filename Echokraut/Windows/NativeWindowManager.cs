@@ -54,7 +54,8 @@ public class NativeWindowManager : IWindowManager
             services.GetService<IVolumeService>(),
             services.GetService<IGameObjectService>(),
             services.GetService<IVoiceTestService>(),
-            services.GetService<IDialogHarvestService>())
+            services.GetService<IDialogHarvestService>(),
+            services.GetService<IDatabaseService>())
         {
             InternalName = "EchokrautSettings",
             Title = Loc.S("Configuration"),
@@ -65,7 +66,8 @@ public class NativeWindowManager : IWindowManager
         _voiceClipDetailWindow = new NativeVoiceClipDetailWindow(
             services.GetService<IDatabaseService>(),
             services.GetService<IVoiceClipManagerService>(),
-            services.GetService<IAudioPlaybackService>())
+            services.GetService<IAudioPlaybackService>(),
+            services.GetService<IGameObjectService>())
         {
             InternalName = "EchokrautEncounterDetail",
             Title = Loc.S("Voice Clip Detail"),
@@ -79,6 +81,7 @@ public class NativeWindowManager : IWindowManager
             services.GetService<IAudioPlaybackService>(),
             services.GetService<INpcDataService>(),
             services.GetService<IDialogHarvestService>(),
+            services.GetService<IGameObjectService>(),
             clientState)
         {
             InternalName = "EchokrautEncounters",
@@ -129,6 +132,5 @@ public class NativeWindowManager : IWindowManager
         _firstTimeWindow.Dispose();
         _voiceClipManagerWindow.Dispose();
         _voiceClipDetailWindow.Dispose();
-        KamiToolKit.KamiToolKitLibrary.Cleanup();
     }
 }

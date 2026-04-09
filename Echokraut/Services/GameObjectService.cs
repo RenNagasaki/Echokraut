@@ -23,19 +23,32 @@ public class GameObjectService : IGameObjectService
     
     private IGameObject? _nextUnknownCharacter;
     private string _localPlayerName = "";
+    private ulong _localPlayerContentId;
+    private bool _localPlayerIsMale = true;
 
     public IGameObject? LocalPlayer
     {
         get
         {
             var player = _objectTable.LocalPlayer;
-            if (player != null) _localPlayerName = player.Name.TextValue;
+            if (player != null)
+            {
+                _localPlayerName = player.Name.TextValue;
+                unsafe
+                {
+                    var chara = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)player.Address;
+                    _localPlayerIsMale = chara->DrawData.CustomizeData.Sex == 0;
+                }
+            }
+            _localPlayerContentId = _clientState.LocalContentId;
             return player;
         }
     }
 
     // Safe to read from any thread — updated whenever LocalPlayer is accessed on the main thread.
     public string LocalPlayerName => _localPlayerName;
+    public ulong LocalPlayerContentId => _localPlayerContentId;
+    public bool LocalPlayerIsMale => _localPlayerIsMale;
 
     public IGameObject? NextUnknownCharacter => _nextUnknownCharacter;
 

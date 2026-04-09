@@ -13,11 +13,10 @@ public interface ICommandService
     event Action? ToggleFirstTimeRequested;
     event Action? ToggleVoiceClipManagerRequested;
     event Action<EKEventId>? CancelAllRequested;
-    event Action? UiModeSwitchRequested;
+    event Action? DumpSheetsRequested;
 
     void ToggleConfigUi();
     void ToggleFirstTimeUi();
-    void RequestUiModeSwitch();
     void PrintText(string name, string text);
     void Dispose();
 }

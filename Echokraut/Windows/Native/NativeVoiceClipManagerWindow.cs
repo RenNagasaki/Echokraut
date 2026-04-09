@@ -26,21 +26,44 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     private readonly IAudioPlaybackService _audioPlayback;
     private readonly INpcDataService _npcData;
     private readonly IDialogHarvestService _dialogHarvest;
+    private readonly IGameObjectService _gameObjects;
     private readonly IClientState _clientState;
 
     // Harvest
     private CancellationTokenSource? _harvestCts;
     private TextButtonNode? _harvestButton;
     private TextDropDownNode? _langDropDown;
-    private TextNode? _harvestProgressNode;
+    private StatusProgressBar? _statusBar;
+    private TextButtonNode? _genAllToggleButton;
+    private CancellationTokenSource? _genAllCts;
+    private bool _genAllRunning;
+    private int _genAllDone;
+    private int _genAllTotal;
     private ClientLanguage _selectedLanguage;
     private string _harvestProgress = "";
+    private int _statusUpdateCounter;
+    private bool _statusForceRecompute;
+    private volatile bool _statusCalcRunning;
+    private volatile int _statusTotalClips;
+    private volatile int _statusTotalSaved;
     private bool _pendingHarvestClick;
     private int _pendingLangSelection = -1;
 
     // Layout
     private float _contentWidth;
     private const float ScrollbarWidth = 16f;
+
+    // Filter
+    private TextInputNode? _filterInput;
+    private string _filterText = "";
+
+    // Quest type filter
+    private TextDropDownNode? _questTypeDropDown;
+    private int _selectedQuestType = -1; // -1 = All
+    private int _pendingQuestTypeSelection = -1;
+    private string[]? _questTypeLabels;
+    // Maps dropdown index → QuestType enum value (-1 = all, 0-6 = enum values)
+    private static readonly int[] QuestTypeValues = { -1, 1, 2, 3, 4, 5, 6, 0 };
 
     // Tabs
     private TabBarNode? _tabBar;
@@ -63,18 +86,34 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     private int _lastPlayerCount;
     private bool _needsRebuild = true;
 
+    // Progressive load+build — each frame loads a batch from DB and creates nodes immediately
+    private const int BatchSize = 5;
+    private int _progressiveIndex = -1; // -1 = idle
+    private int _progressiveTab = -1;
+    private List<NpcMapData> _progressiveDataList = new();
+    private int _progressiveVisibleCount; // NPCs that passed the quest type filter
+    private int _progressivePageStart;
+    private int _progressivePageEnd;
+    private bool _firstFrame = true; // skip first OnUpdate to let OnSetup settle
+
     // Caches
-    private readonly Dictionary<string, int> _encCountCache = new();
+    private readonly Dictionary<string, int> _vcCountCache = new();
     private readonly Dictionary<string, int> _savedCountCache = new();
     private readonly Dictionary<string, int> _charIdCache = new();
-    private readonly Dictionary<long, (string zone, float x, float y)> _instanceLocationCache = new();
-    private readonly Dictionary<string, List<(long npcBaseId, List<VoiceClipEntity> encounters)>> _npcInstanceCache = new();
+    private readonly Dictionary<long, string> _instanceZoneCache = new();
+    private readonly Dictionary<string, List<(long npcBaseId, List<VoiceClipEntity> voiceClips)>> _npcInstanceCache = new();
 
     // Expanded state — survives rebuilds
     private readonly HashSet<string> _expandedNpcs = new();
 
     // Detail window reference
     private NativeVoiceClipDetailWindow? _detailWindow;
+    private ListButtonNode? _selectedInstanceButton;
+
+    // Tracked nodes for text-only updates (no rebuild needed)
+    private readonly Dictionary<string, TreeListCategoryNode> _npcCategoryNodes = new();
+    private readonly List<(string npcKey, int questType, IconListItemNode node)> _subGroupNodes = new();
+    private bool _countsNeedRefresh;
 
     public NativeVoiceClipManagerWindow(
         IDatabaseService db,
@@ -82,6 +121,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         IAudioPlaybackService audioPlayback,
         INpcDataService npcData,
         IDialogHarvestService dialogHarvest,
+        IGameObjectService gameObjects,
         IClientState clientState)
     {
         _db = db;
@@ -89,16 +129,37 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _audioPlayback = audioPlayback;
         _npcData = npcData;
         _dialogHarvest = dialogHarvest;
+        _gameObjects = gameObjects;
         _clientState = clientState;
         _selectedLanguage = clientState.ClientLanguage;
 
-        _voiceClipManager.VoiceClipUpdated += () =>
+        _onVoiceClipUpdated = () => _countsNeedRefresh = true;
+        _onVoiceClipLogged = () => _needsRebuild = true;
+        _onHarvestProgress = msg => _harvestProgress = msg;
+        _onHarvestCount = (current, total) =>
         {
-            _needsRebuild = true;
-            _npcInstanceCache.Clear();
+            _harvestProgressCurrent = current;
+            _harvestProgressTotal = total;
         };
-        _db.VoiceClipLogged += () => _needsRebuild = true;
-        _dialogHarvest.ProgressChanged += msg => _harvestProgress = msg;
+        _voiceClipManager.VoiceClipUpdated += _onVoiceClipUpdated;
+        _db.VoiceClipLogged += _onVoiceClipLogged;
+        _dialogHarvest.ProgressChanged += _onHarvestProgress;
+        _dialogHarvest.ProgressCountChanged += _onHarvestCount;
+    }
+
+    private readonly Action _onVoiceClipUpdated;
+    private readonly Action _onVoiceClipLogged;
+    private readonly Action<string> _onHarvestProgress;
+    private readonly Action<int, int> _onHarvestCount;
+    private volatile int _harvestProgressCurrent;
+    private volatile int _harvestProgressTotal = 1;
+
+    protected override void OnFinalize(AtkUnitBase* addon)
+    {
+        try { _voiceClipManager.VoiceClipUpdated -= _onVoiceClipUpdated; } catch { }
+        try { _db.VoiceClipLogged -= _onVoiceClipLogged; } catch { }
+        try { _dialogHarvest.ProgressChanged -= _onHarvestProgress; } catch { }
+        try { _dialogHarvest.ProgressCountChanged -= _onHarvestCount; } catch { }
     }
 
     public void SetDetailWindow(NativeVoiceClipDetailWindow detailWindow)
@@ -138,12 +199,24 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _langDropDown.OnOptionSelected = selected => _pendingLangSelection = Array.IndexOf(LangLabels, selected);
         AddNode(_langDropDown);
 
-        _harvestProgressNode = new TextNode
+        _questTypeLabels = new[]
         {
-            Size = new Vector2(size.X - 260, harvestRowH),
-            Position = pos + new Vector2(260, 0),
+            Loc.S("All"), Loc.S("Main Scenario"), Loc.S("Side Quest"),
+            Loc.S("Unlock / Class Quest"), Loc.S("Beast Tribe"),
+            Loc.S("Repeatable"), Loc.S("Seasonal Event"), Loc.S("Non-Quest Dialog")
         };
-        AddNode(_harvestProgressNode);
+        _questTypeDropDown = new TextDropDownNode
+        {
+            Size = new Vector2(180, harvestRowH),
+            Position = pos + new Vector2(258, 0),
+            Options = [],
+        };
+        _questTypeDropDown.OptionListNode.Options = new List<string>(_questTypeLabels);
+        _questTypeDropDown.OptionListNode.SelectedOption = _questTypeLabels[0];
+        if (_questTypeDropDown.LabelNode.Node != null)
+            _questTypeDropDown.LabelNode.String = _questTypeLabels[0];
+        _questTypeDropDown.OnOptionSelected = selected => _pendingQuestTypeSelection = Array.IndexOf(_questTypeLabels, selected);
+        AddNode(_questTypeDropDown);
 
         var tabY = pos.Y + harvestRowH + 4;
         const float tabH = 32f;
@@ -153,8 +226,89 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _tabBar.AddTab(Loc.S("Players"), () => ShowPanel(1));
         AddNode(_tabBar);
 
+        // Generate all row + progress bar
+        const float genRowH = 28f;
+        var genRowY = tabY + tabH + 2;
+        var genMeasure = new TextButtonNode { Size = new Vector2(100, genRowH), String = Loc.S("Generate All Unsaved") };
+        var genW1 = genMeasure.LabelNode.GetTextDrawSize(Loc.S("Generate All Unsaved")).X + 36;
+        var genW2 = genMeasure.LabelNode.GetTextDrawSize(Loc.S("Stop")).X + 36;
+        var genBtnW = Math.Max(genW1, genW2);
+        genMeasure.Dispose();
+
+        _genAllToggleButton = new TextButtonNode
+        {
+            Size = new Vector2(genBtnW, genRowH),
+            Position = new Vector2(pos.X, genRowY),
+            String = Loc.S("Generate All Unsaved"),
+        };
+        _genAllToggleButton.OnClick = () =>
+        {
+            if (_genAllRunning)
+            {
+                _genAllCts?.Cancel();
+                return;
+            }
+
+            _genAllRunning = true;
+            _genAllCts?.Dispose();
+            _genAllCts = new CancellationTokenSource();
+            if (_genAllToggleButton != null) _genAllToggleButton.String = Loc.S("Stop");
+
+            // Gather ALL clips matching current language + quest type filter for active tab
+            var allClips = new List<VoiceClipEntity>();
+            var langInt = (int)_selectedLanguage;
+            var chars = _activeTab == 0 ? _db.GetNpcs() : _db.GetPlayers();
+            foreach (var c in chars)
+            {
+                if (c.Language != langInt) continue;
+                var clips = _db.GetVoiceClipsForCharacter(c.Id, 100000);
+                if (_selectedQuestType >= 0)
+                    clips = clips.FindAll(vc => vc.QuestType == _selectedQuestType);
+                allClips.AddRange(clips);
+            }
+
+            _voiceClipManager.GenerateAllUnsaved(allClips, (done, total) =>
+            {
+                _genAllDone = done;
+                _genAllTotal = total;
+            }, _genAllCts.Token).ContinueWith(_ =>
+            {
+                _genAllRunning = false;
+                _genAllDone = 0;
+                _genAllTotal = 0;
+                if (_genAllToggleButton != null) _genAllToggleButton.String = Loc.S("Generate All Unsaved");
+                _countsNeedRefresh = true;
+            });
+        };
+        AddNode(_genAllToggleButton);
+
+        _statusBar = new StatusProgressBar
+        {
+            Position = new Vector2(pos.X + genBtnW + 4, genRowY),
+            Size = new Vector2(size.X - genBtnW - 4, genRowH),
+        };
+        AddNode(_statusBar);
+
+        // Filter input
+        const float filterH = 28f;
+        var filterY = genRowY + genRowH + 2;
+        _filterInput = new TextInputNode
+        {
+            Size = new Vector2(size.X, filterH),
+            Position = new Vector2(pos.X, filterY),
+            MaxCharacters = 80,
+            PlaceholderString = Loc.S("Search..."),
+            String = "",
+        };
+        _filterInput.OnInputReceived = s =>
+        {
+            _filterText = s.ToString();
+            _needsRebuild = true;
+        };
+        AddNode(_filterInput);
+
         const float paginationH = 28f;
-        var treeTop = tabY + tabH + 2;
+        var treeTop = filterY + filterH + 2;
         _treePos = new Vector2(pos.X, treeTop);
         _treeSize = new Vector2(size.X, pos.Y + size.Y - treeTop - paginationH - 4);
         var pagY = pos.Y + size.Y - paginationH;
@@ -184,6 +338,9 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     {
         ScreenClampHelper.ClampToScreen(addon, Size);
 
+        // Skip first frame so OnSetup node creation doesn't compound with data loading
+        if (_firstFrame) { _firstFrame = false; return; }
+
         // Process deferred harvest click
         if (_pendingHarvestClick)
         {
@@ -211,27 +368,54 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
             _selectedLanguage = (ClientLanguage)_pendingLangSelection;
             _pendingLangSelection = -1;
             _needsRebuild = true;
+            _statusForceRecompute = true;
         }
 
-        // Update harvest progress text
-        if (_harvestProgressNode != null)
-            _harvestProgressNode.String = _harvestProgress;
+        // Process deferred quest type selection
+        if (_pendingQuestTypeSelection >= 0)
+        {
+            _selectedQuestType = QuestTypeValues[_pendingQuestTypeSelection];
+            _pendingQuestTypeSelection = -1;
+            _needsRebuild = true;
+            // Force the status bar to recompute against the new filter on the next frame
+            _statusForceRecompute = true;
+        }
+
+        // Update status bar
+        UpdateStatusBar();
 
         if (_npcData.MappedNpcs.Count != _lastNpcCount || _npcData.MappedPlayers.Count != _lastPlayerCount)
             _needsRebuild = true;
 
+        // Start or restart progressive load+build
         if (_needsRebuild)
         {
-            LoadData();
-            _panelDirty[_activeTab] = true;
+            StartProgressive();
+            return;
+        }
+
+        // Continue progressive load+build (batch per frame)
+        if (_progressiveIndex >= 0)
+        {
+            ContinueProgressive();
+            return;
         }
 
         _paginationBars[_activeTab]?.Update();
 
+        // Refresh generated counts without rebuilding (e.g. after single clip generation)
+        if (_countsNeedRefresh)
+        {
+            _countsNeedRefresh = false;
+            RefreshCounts();
+        }
+
+        // Panel dirty without full rebuild (e.g. page change)
         if (_panelDirty[_activeTab])
         {
             _panelDirty[_activeTab] = false;
-            RebuildPanel(_activeTab);
+            StartProgressivePage(_activeTab);
+            return;
         }
     }
 
@@ -245,104 +429,143 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
                 foreach (var node in _paginationBars[i]!.Nodes)
                     SetVisible(node, i == index);
         }
+        // Cancel any in-progress progressive build for the previous tab
+        _progressiveIndex = -1;
+        _progressiveTab = -1;
         _panelDirty[index] = true;
     }
 
-    private void LoadData()
+    /// <summary>
+    /// Full rebuild: filter + sort data, prepare fresh tree, start progressive load+build.
+    /// </summary>
+    private void StartProgressive()
     {
         _needsRebuild = false;
-        _npcList = _npcData.MappedNpcs.FindAll(n => n.Language == _selectedLanguage);
-        _playerList = _npcData.MappedPlayers.FindAll(n => n.Language == _selectedLanguage);
+        _progressiveIndex = -1; // cancel any in-progress work
+
+        var filter = _filterText.Trim();
+        var hasFilter = !string.IsNullOrEmpty(filter);
+
+        _npcList = _npcData.MappedNpcs
+            .FindAll(n => n.Language == _selectedLanguage
+                && (!hasFilter || n.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(n => n.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        _playerList = _npcData.MappedPlayers
+            .FindAll(n => n.Language == _selectedLanguage
+                && (!hasFilter || n.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)))
+            .OrderBy(n => n.Name, StringComparer.OrdinalIgnoreCase)
+            .ToList();
         _lastNpcCount = _npcData.MappedNpcs.Count;
         _lastPlayerCount = _npcData.MappedPlayers.Count;
 
-        _encCountCache.Clear();
+        _vcCountCache.Clear();
         _savedCountCache.Clear();
         _charIdCache.Clear();
-        _instanceLocationCache.Clear();
-        
-        foreach (var mapData in _npcList.Concat(_playerList))
-        {
-            var key = mapData.ToString();
-            if (_encCountCache.ContainsKey(key)) continue;
-            var character = _db.FindCharacter(mapData.Name, mapData.Gender, mapData.Race, (int)mapData.Language);
-            if (character != null)
-            {
-                _charIdCache[key] = character.Id;
-                _encCountCache[key] = _db.GetVoiceClipCountForCharacter(character.Id);
-                _savedCountCache[key] = _db.GetSavedVoiceClipCountForCharacter(character.Id);
-                foreach (var inst in _db.GetInstancesForCharacter(character.Id))
-                    _instanceLocationCache[inst.NpcBaseId] = (inst.ZoneName, inst.MapX, inst.MapY);
-            }
-            else
-                _encCountCache[key] = 0;
-        }
-
-        // Update pagination totals
-        _paginationBars[0]?.SetTotalItems(_npcList.Count, PageSize);
-        _paginationBars[1]?.SetTotalItems(_playerList.Count, PageSize);
-    }
-
-    private void RebuildPanel(int tabIndex)
-    {
-        var tree = _treePanels[tabIndex];
-        if (tree == null) return;
-
-        // Clear caches so stale data doesn't persist
+        _instanceZoneCache.Clear();
         _npcInstanceCache.Clear();
 
-        // If panel was built before, schedule old tree for deferred disposal
-        // and create a fresh one. Don't dispose during OnUpdate — causes ATK crashes.
-        if (_panelBuilt[tabIndex])
+        // Pre-filter NPC lists by quest type if a filter is active
+        if (_selectedQuestType >= 0)
         {
-            tree.IsVisible = false;
-            _oldTrees.Add(tree);
+            var charIds = _db.GetCharacterIdsWithQuestType(_selectedQuestType);
+            // Build a fast lookup: character key → ID from cached NPC/player data
+            var npcCharIds = new HashSet<string>();
+            foreach (var npc in _db.GetNpcs())
+                if (charIds.Contains(npc.Id))
+                    npcCharIds.Add($"{npc.Name}|{npc.Gender}|{npc.Race}|{npc.Language}");
+            foreach (var player in _db.GetPlayers())
+                if (charIds.Contains(player.Id))
+                    npcCharIds.Add($"{player.Name}|{player.Gender}|{player.Race}|{player.Language}");
 
-            var pos = tree.Position;
-            var size = tree.Size;
-            tree = new ScrollingTreeNode
-            {
-                Position = pos,
-                Size = size,
-                CategoryVerticalSpacing = 2,
-            };
-            _treePanels[tabIndex] = tree;
-            AddNode(tree);
+            _npcList = _npcList.FindAll(n => npcCharIds.Contains($"{n.Name}|{(int)n.Gender}|{(int)n.Race}|{(int)n.Language}"));
+            _playerList = _playerList.FindAll(n => npcCharIds.Contains($"{n.Name}|{(int)n.Gender}|{(int)n.Race}|{(int)n.Language}"));
         }
 
-        _panelBuilt[tabIndex] = true;
+        _paginationBars[0]?.SetTotalItems(_npcList.Count, PageSize);
+        _paginationBars[1]?.SetTotalItems(_playerList.Count, PageSize);
 
-        // Hide the other panel
-        for (var i = 0; i < 2; i++)
-            SetVisible(_treePanels[i], i == tabIndex);
+        // Prepare a fresh tree for the active tab
+        PrepareTreeForBuild(_activeTab);
+
+        var dataList = _activeTab == 0 ? _npcList : _playerList;
+        var currentPage = _paginationBars[_activeTab]?.CurrentPage ?? 0;
+        _progressiveTab = _activeTab;
+        _progressiveDataList = dataList;
+        _progressivePageStart = currentPage * PageSize;
+        _progressivePageEnd = Math.Min(_progressivePageStart + PageSize, dataList.Count);
+        _progressiveIndex = _progressivePageStart;
+        _progressiveVisibleCount = 0;
+    }
+
+    /// <summary>
+    /// Page-only rebuild: data is already loaded, just rebuild the tree for the current page.
+    /// </summary>
+    private void StartProgressivePage(int tabIndex)
+    {
+        _npcInstanceCache.Clear();
+        PrepareTreeForBuild(tabIndex);
 
         var dataList = tabIndex == 0 ? _npcList : _playerList;
-        var isPlayer = tabIndex == 1;
-        var w = _contentWidth - ScrollbarWidth;
-
-        // Paginate
         var currentPage = _paginationBars[tabIndex]?.CurrentPage ?? 0;
-        var pageStart = currentPage * PageSize;
-        var pageEnd = Math.Min(pageStart + PageSize, dataList.Count);
+        _progressiveTab = tabIndex;
+        _progressiveDataList = dataList;
+        _progressivePageStart = currentPage * PageSize;
+        _progressivePageEnd = Math.Min(_progressivePageStart + PageSize, dataList.Count);
+        _progressiveIndex = _progressivePageStart;
+    }
 
-        for (var idx = pageStart; idx < pageEnd; idx++)
+    /// <summary>
+    /// Each frame: load DB data for a batch of NPCs and immediately create their tree nodes.
+    /// </summary>
+    private void ContinueProgressive()
+    {
+        var tree = _treePanels[_progressiveTab];
+        if (tree == null) { _progressiveIndex = -1; return; }
+
+        var isPlayer = _progressiveTab == 1;
+        var w = _contentWidth - ScrollbarWidth;
+        var batchEnd = Math.Min(_progressiveIndex + BatchSize, _progressivePageEnd);
+
+        for (var idx = _progressiveIndex; idx < batchEnd; idx++)
         {
-            var mapData = dataList[idx];
+            var mapData = _progressiveDataList[idx];
             var npcKey = mapData.ToString();
-            _encCountCache.TryGetValue(npcKey, out var encCount);
 
-            // NPC category node — restore expanded state from previous rebuild
+            // Load DB data for this NPC if not cached
+            if (!_vcCountCache.ContainsKey(npcKey))
+            {
+                var character = _db.FindCharacter(mapData.Name, mapData.Gender, mapData.Race, (int)mapData.Language);
+                if (character != null)
+                {
+                    _charIdCache[npcKey] = character.Id;
+                    var allClips = _db.GetVoiceClipsForCharacter(character.Id, 100000);
+                    if (_selectedQuestType >= 0)
+                        allClips = allClips.FindAll(vc => vc.QuestType == _selectedQuestType);
+                    _vcCountCache[npcKey] = allClips.Count;
+                    var playerId = (long)_gameObjects.LocalPlayerContentId;
+                    _savedCountCache[npcKey] = _db.GetGeneratedCountForCharacter(character.Id, playerId);
+                    foreach (var inst in _db.GetInstancesForCharacter(character.Id))
+                        if (!string.IsNullOrEmpty(inst.ZoneName))
+                            _instanceZoneCache[inst.NpcBaseId] = inst.ZoneName;
+                }
+                else
+                    _vcCountCache[npcKey] = 0;
+            }
+
+            // Skip NPCs with no clips matching the current filter
+            _vcCountCache.TryGetValue(npcKey, out var vcCount);
+            if (vcCount == 0) continue;
             var wasExpanded = _expandedNpcs.Contains(npcKey);
             var npcCategory = new TreeListCategoryNode
             {
                 Size = new Vector2(w, 28),
-                String = $"{mapData.Name}  |  {mapData.Gender}  |  {mapData.Race}  |  {encCount} {Loc.S("Voice Clips")} | {(_savedCountCache.TryGetValue(npcKey, out var sc) ? sc : 0)} {Loc.S("Generated")}",
+                String = $"{mapData.Name}  |  {mapData.Gender}  |  {mapData.Race}",
                 IsCollapsed = !wasExpanded,
             };
 
-            // Lazy-load instance groups on expand
             var capturedKey = npcKey;
-            var capturedMapData = mapData;
+            var capturedName = mapData.Name;
             var capturedIsPlayer = isPlayer;
             var capturedW = w;
             var capturedTree = tree;
@@ -351,101 +574,285 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
                 if (expanded)
                 {
                     _expandedNpcs.Add(capturedKey);
-                    PopulateNpcCategory(npcCategory, capturedKey, capturedIsPlayer, capturedW, capturedTree);
+                    PopulateNpcCategory(npcCategory, capturedKey, capturedName, capturedIsPlayer, capturedW, capturedTree);
                 }
                 else
                     _expandedNpcs.Remove(capturedKey);
             };
 
-            // If restoring expanded state, populate immediately
             if (wasExpanded)
-                PopulateNpcCategory(npcCategory, npcKey, isPlayer, w, tree);
+                PopulateNpcCategory(npcCategory, npcKey, mapData.Name, isPlayer, w, tree);
 
             tree.AddCategoryNode(npcCategory);
+            _npcCategoryNodes[npcKey] = npcCategory;
+            _progressiveVisibleCount++;
         }
 
+        _progressiveIndex = batchEnd;
         tree.RecalculateLayout();
+
+        // Done
+        if (_progressiveIndex >= _progressivePageEnd)
+        {
+            _progressiveIndex = -1;
+            _progressiveTab = -1;
+        }
     }
 
-    private void PopulateNpcCategory(TreeListCategoryNode category, string npcKey, bool isPlayer, float w, ScrollingTreeNode tree)
+    private void UpdateStatusBar()
     {
-        // Only populate once
+        if (_statusBar == null) return;
+
+        if (_dialogHarvest.IsRunning)
+        {
+            _statusBar.ActionText = _harvestProgress;
+            var hc = _harvestProgressCurrent;
+            var ht = _harvestProgressTotal;
+            var hf = ht > 0 ? (float)hc / ht : 0f;
+            _statusBar.SetProgress(hf, $"{hc}/{ht}");
+            return;
+        }
+
+        var isGenerating = _genAllRunning || _voiceClipManager.IsGenerating;
+        var questLabel = _questTypeLabels != null && _selectedQuestType >= 0
+            ? _questTypeLabels[Array.IndexOf(QuestTypeValues, _selectedQuestType)]
+            : (_questTypeLabels != null ? _questTypeLabels[0] : Loc.S("All"));
+        _statusBar.ActionText = isGenerating
+            ? Loc.S("Generating voice clips...")
+            : string.Format(Loc.S("{0} generation progress"), questLabel);
+
+        // Show overall generated/total counts — computed on background thread
+        _statusUpdateCounter++;
+        var updateInterval = isGenerating ? 10 : 60;
+        if ((_statusForceRecompute || _statusUpdateCounter >= updateInterval) && !_statusCalcRunning)
+        {
+            _statusUpdateCounter = 0;
+            _statusForceRecompute = false;
+            _statusCalcRunning = true;
+            var langInt = (int)_selectedLanguage;
+            var playerId = (long)_gameObjects.LocalPlayerContentId;
+            int? questFilter = _selectedQuestType >= 0 ? _selectedQuestType : null;
+            var contextType = _activeTab == 0 ? "npc" : "player";
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    var (clips, saved) = _db.GetClipTotalsForLanguage(langInt, contextType, playerId, questFilter);
+                    _statusTotalClips = clips;
+                    _statusTotalSaved = saved;
+                }
+                finally
+                {
+                    _statusCalcRunning = false;
+                }
+            });
+        }
+
+        var tc = _statusTotalClips;
+        var ts = _statusTotalSaved;
+        var fraction = tc > 0 ? (float)ts / tc : 0f;
+        _statusBar.SetProgress(fraction, $"{ts}/{tc}");
+    }
+
+    private void RefreshCounts()
+    {
+        var playerId = (long)_gameObjects.LocalPlayerContentId;
+
+        // Update NPC category labels
+        foreach (var (npcKey, node) in _npcCategoryNodes)
+        {
+            if (!_charIdCache.TryGetValue(npcKey, out var charId)) continue;
+            var total = _vcCountCache.TryGetValue(npcKey, out var tc) ? tc : 0;
+            var saved = _db.GetGeneratedCountForCharacter(charId, playerId);
+            _savedCountCache[npcKey] = saved;
+
+            var mapData = _npcData.MappedNpcs.Find(n => n.ToString() == npcKey)
+                       ?? _npcData.MappedPlayers.Find(n => n.ToString() == npcKey);
+            if (mapData != null)
+                node.String = $"{mapData.Name}  |  {mapData.Gender}  |  {mapData.Race}";
+        }
+
+        // Update sub-group subtitles
+        foreach (var (npcKey, questType, btn) in _subGroupNodes)
+        {
+            if (!_charIdCache.TryGetValue(npcKey, out var charId)) continue;
+            var clips = _db.GetVoiceClipsForCharacter(charId, 100000);
+            if (_selectedQuestType >= 0)
+                clips = clips.FindAll(vc => vc.QuestType == _selectedQuestType);
+            var typeClips = clips.FindAll(vc => vc.QuestType == questType);
+            var savedCount = typeClips.Count(vc => _voiceClipManager.HasLocalAudio(vc));
+            btn.Subtitle = $"{typeClips.Count} {Loc.S("Voice Clips")} | {savedCount} {Loc.S("Generated")}";
+        }
+
+        // Update stats headers
+        _npcInstanceCache.Clear();
+    }
+
+    private void PrepareTreeForBuild(int tabIndex)
+    {
+        _npcCategoryNodes.Clear();
+        _subGroupNodes.Clear();
+        _selectedInstanceButton = null;
+
+        var tree = _treePanels[tabIndex];
+        if (tree == null) return;
+
+        if (_panelBuilt[tabIndex])
+        {
+            tree.IsVisible = false;
+            _oldTrees.Add(tree);
+
+            tree = new ScrollingTreeNode
+            {
+                Position = _treePos,
+                Size = _treeSize,
+                CategoryVerticalSpacing = 2,
+            };
+            _treePanels[tabIndex] = tree;
+            AddNode(tree);
+        }
+
+        _panelBuilt[tabIndex] = true;
+
+        for (var i = 0; i < 2; i++)
+            SetVisible(_treePanels[i], i == tabIndex);
+    }
+
+    // Quest type icon IDs (FFXIV quest marker icons)
+    private static readonly Dictionary<int, uint> QuestTypeIcons = new()
+    {
+        { (int)QuestType.None, 61502 },       // Chat bubble icon
+        { (int)QuestType.MSQ, 71201 },        // Meteor (MSQ)
+        { (int)QuestType.SideQuest, 71221 },  // ! (side quest)
+        { (int)QuestType.Unlock, 71341 },     // Blue + (unlock)
+        { (int)QuestType.BeastTribe, 71221 }, // ! (beast tribe)
+        { (int)QuestType.Repeatable, 71261 }, // Repeatable
+        { (int)QuestType.Event, 71221 },      // ! (event)
+    };
+
+    private static string GetQuestTypeLabel(int questType) => questType switch
+    {
+        (int)QuestType.MSQ => Loc.S("Main Scenario"),
+        (int)QuestType.SideQuest => Loc.S("Side Quest"),
+        (int)QuestType.Unlock => Loc.S("Unlock / Class Quest"),
+        (int)QuestType.BeastTribe => Loc.S("Beast Tribe"),
+        (int)QuestType.Repeatable => Loc.S("Repeatable"),
+        (int)QuestType.Event => Loc.S("Seasonal Event"),
+        _ => Loc.S("Non-Quest Dialog"),
+    };
+
+    private void PopulateNpcCategory(TreeListCategoryNode category, string npcKey, string npcName, bool isPlayer, float w, ScrollingTreeNode tree)
+    {
+        // Only populate once (lazy load on expand)
         if (category.Children.Any()) return;
+
+        // Stats header (journal separator style)
+        _vcCountCache.TryGetValue(npcKey, out var totalClips);
+        _savedCountCache.TryGetValue(npcKey, out var totalSaved);
+        var statsHeader = new TreeListHeaderNode
+        {
+            Size = new Vector2(w - 24, 24),
+            String = $"{totalClips} {Loc.S("Voice Clips")}  |  {totalSaved} {Loc.S("Generated")}",
+        };
+        category.AddNode(statsHeader);
 
         // Action buttons row (Generate All / Delete All)
         var capturedNpcKey = npcKey;
         var actionsRow = new HorizontalListNode { Size = new Vector2(w - 24, 26), ItemSpacing = 4 };
+        var capturedQuestTypeFilter = _selectedQuestType;
         actionsRow.AddNode(Button(Loc.S("Generate All Unsaved"), 160, () =>
         {
+            if (_voiceClipManager.IsGenerating) return;
             if (_charIdCache.TryGetValue(capturedNpcKey, out var genCharId))
             {
-                var encounters = _db.GetVoiceClipsForCharacter(genCharId, 10000);
-                _voiceClipManager.GenerateAllUnsaved(encounters).ContinueWith(_ =>
+                var voiceClips = _db.GetVoiceClipsForCharacter(genCharId, 100000);
+                if (capturedQuestTypeFilter >= 0)
+                    voiceClips = voiceClips.FindAll(vc => vc.QuestType == capturedQuestTypeFilter);
+                _voiceClipManager.GenerateAllUnsaved(voiceClips).ContinueWith(_ =>
                 {
                     _npcInstanceCache.Remove(capturedNpcKey);
-                                        _panelDirty[_activeTab] = true;
+                    _panelDirty[_activeTab] = true;
                 });
             }
         }));
         actionsRow.AddNode(Button(Loc.S("Delete All Saved"), 140, () =>
         {
+            if (_voiceClipManager.IsGenerating) return;
             _audioPlayback.ClearQueue(TextSource.VoiceTest);
 
             if (_charIdCache.TryGetValue(capturedNpcKey, out var delCharId))
             {
-                var encounters = _db.GetVoiceClipsForCharacter(delCharId, 10000);
-                _voiceClipManager.DeleteAllSaved(encounters);
+                var voiceClips = _db.GetVoiceClipsForCharacter(delCharId, 100000);
+                if (capturedQuestTypeFilter >= 0)
+                    voiceClips = voiceClips.FindAll(vc => vc.QuestType == capturedQuestTypeFilter);
+                _voiceClipManager.DeleteAllSaved(voiceClips);
                 _npcInstanceCache.Remove(capturedNpcKey);
-                                _panelDirty[_activeTab] = true;
+                _panelDirty[_activeTab] = true;
             }
         }));
         category.AddNode(actionsRow);
 
-        // Load instance groups
-        if (!_npcInstanceCache.TryGetValue(npcKey, out var instanceGroups))
+        // Group voice clips by quest type
+        if (!_npcInstanceCache.TryGetValue(npcKey, out var questTypeGroups))
         {
-            instanceGroups = new List<(long npcBaseId, List<VoiceClipEntity> encounters)>();
+            questTypeGroups = new List<(long npcBaseId, List<VoiceClipEntity> voiceClips)>();
             if (_charIdCache.TryGetValue(npcKey, out var charId))
             {
-                var allEncounters = _db.GetVoiceClipsForCharacter(charId, 500);
-                var grouped = allEncounters
-                    .GroupBy(e => e.NpcBaseId)
-                    .OrderByDescending(g => g.Max(e => e.Timestamp));
-                foreach (var group in grouped)
-                    instanceGroups.Add((group.Key, group.OrderByDescending(e => e.Timestamp).ToList()));
+                var allVoiceClips = _db.GetVoiceClipsForCharacter(charId, 100000);
+                if (_selectedQuestType >= 0)
+                    allVoiceClips = allVoiceClips.FindAll(vc => vc.QuestType == _selectedQuestType);
+
+                var byType = new Dictionary<int, List<VoiceClipEntity>>();
+                foreach (var vc in allVoiceClips)
+                {
+                    if (!byType.TryGetValue(vc.QuestType, out var list))
+                    {
+                        list = new List<VoiceClipEntity>();
+                        byType[vc.QuestType] = list;
+                    }
+                    list.Add(vc);
+                }
+                // Sort: MSQ first, then by count descending
+                foreach (var (qt, vcs) in byType.OrderBy(kvp => kvp.Key == (int)QuestType.MSQ ? 0 : kvp.Key))
+                    questTypeGroups.Add((qt, vcs.OrderByDescending(vc => vc.Timestamp).ToList()));
             }
-            _npcInstanceCache[npcKey] = instanceGroups;
+            _npcInstanceCache[npcKey] = questTypeGroups;
         }
 
-        foreach (var (npcBaseId, encounters) in instanceGroups)
+        foreach (var (questTypeLong, voiceClips) in questTypeGroups)
         {
-            // Instance label
-            string instanceLabel;
-            if (isPlayer)
-                instanceLabel = Loc.S("Chat");
-            else if (_instanceLocationCache.TryGetValue(npcBaseId, out var loc) && !string.IsNullOrEmpty(loc.zone))
-                instanceLabel = $"{loc.zone} ({loc.x:F1}, {loc.y:F1})";
-            else if (npcBaseId > 0)
-                instanceLabel = $"ID: {npcBaseId}";
-            else
-                instanceLabel = Loc.S("Unknown");
+            var questTypeInt = (int)questTypeLong;
+            var label = isPlayer ? Loc.S("Chat") : GetQuestTypeLabel(questTypeInt);
+            var savedCount = voiceClips.Count(vc => _voiceClipManager.HasLocalAudio(vc));
+            var subtitle = $"{voiceClips.Count} {Loc.S("Voice Clips")} | {savedCount} {Loc.S("Generated")}";
 
-            // Instance as nested collapsible TreeListCategoryNode
-            // Crafting-log style clickable sub-category button
-            var capturedEncounters = encounters;
-            var capturedInstLabel = instanceLabel;
-            var capturedInstKey = npcKey;
-            var instanceButton = new ListButtonNode
+            var itemW = w - 48;
+            const float itemH = 41f; // 36px content + 5px spacing
+
+            QuestTypeIcons.TryGetValue(questTypeInt, out var iconId);
+            var btn = new IconListItemNode
             {
-                Size = new Vector2(w - 48, 24),
-                String = $"{instanceLabel}  —  {encounters.Count} {Loc.S("Voice Clips")} | {encounters.Count(e => e.SavedToDisk)} {Loc.S("Generated")}",
-            };
-            instanceButton.OnClick = () =>
-            {
-                _detailWindow?.ShowEncounters(capturedInstLabel, capturedEncounters, capturedInstKey);
+                Size = new Vector2(itemW, itemH),
+                Title = label,
+                Subtitle = subtitle,
+                IconId = iconId,
             };
 
-            category.AddNode(instanceButton);
+            var capturedVoiceClips = voiceClips;
+            var capturedTitle = $"{npcName} — {label}";
+            var capturedKey = npcKey;
+            var capturedBtn = btn;
+            btn.OnClick = () =>
+            {
+                try { if (_selectedInstanceButton != null) _selectedInstanceButton.Selected = false; }
+                catch { /* may be disposed */ }
+                capturedBtn.Selected = true;
+                _selectedInstanceButton = capturedBtn;
+                _detailWindow?.ShowVoiceClips(capturedTitle, capturedVoiceClips, capturedKey);
+            };
+
+            category.AddNode(btn);
+            _subGroupNodes.Add((npcKey, questTypeInt, btn));
         }
 
         category.RecalculateLayout();
