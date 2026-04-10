@@ -132,7 +132,7 @@ public sealed unsafe class DialogTalkController : IDisposable
 
     private void OnAttach(AtkUnitBase* addon)
     {
-        _playStopButton = new DynamicIconButtonNode { Size = new Vector2(28, 28) };
+        _playStopButton = new DynamicIconButtonNode { Size = new Vector2(28, 28), Position = new Vector2(0, 2) };
         _playStopButton.Icon = ButtonIcon.Volume;
         _playStopButton.Tooltip = Loc.S("Play");
         _playStopButton.OnClick = OnPlayStopClick;
@@ -145,7 +145,7 @@ public sealed unsafe class DialogTalkController : IDisposable
 
         _voiceDropDown = new TextDropDownNode { Size = new Vector2(185, 24), Options = [], Position = new Vector2(0, 5) };
 
-        _settingsButton = new DynamicIconButtonNode { Size = new Vector2(28, 28) };
+        _settingsButton = new DynamicIconButtonNode { Size = new Vector2(28, 28), Position = new Vector2(0, 2) };
         _settingsButton.Icon = ButtonIcon.GearCog;
         _settingsButton.Tooltip = Loc.S("Settings");
         _settingsButton.OnClick = () => _toggleConfig();
