@@ -105,7 +105,8 @@ public static class ServiceBuilder
             c.GetService<IAlltalkInstanceService>(),
             c.GetService<INpcDataService>(),
             c.GetService<IAudioFileService>(),
-            c.GetService<IDatabaseService>()));
+            c.GetService<IDatabaseService>(),
+            c.GetService<IAudioPlaybackService>()));
 
         container.RegisterFactory<IVoiceClipManagerService>(c => new VoiceClipManagerService(
             c.GetService<IDatabaseService>(),

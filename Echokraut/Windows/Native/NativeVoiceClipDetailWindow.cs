@@ -11,8 +11,6 @@ using Echokraut.Services;
 using Echotools.Logging.Enums;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
-using KamiToolKit;
-using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 
 namespace Echokraut.Windows.Native;
@@ -52,12 +50,9 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
     private bool _needsRebuild;
     private int? _playingVoiceClipId;
     private readonly Dictionary<int, bool> _audioExistsCache = new();
-    private readonly Dictionary<int, (ImageNode playImg, ImageNode genImg, bool wasSaved)> _buttonImages = new();
+    private readonly Dictionary<int, (DynamicIconButtonNode playBtn, DynamicIconButtonNode genBtn, bool wasSaved)> _buttonImages = new();
     private Action? _pendingAction; // Deferred click action to avoid ATK use-after-free
     private int _progressUpdateCounter;
-
-    private static readonly Vector2 PlayIconUV = new(56, 56);   // Part 14
-    private static readonly Vector2 StopIconUV = new(84, 56);   // Part 15
 
 
     public NativeVoiceClipDetailWindow(
@@ -268,77 +263,54 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
             var isGen = _voiceClipManager.IsGenerating;
             try
             {
-                var updates = new Dictionary<int, (ImageNode playImg, ImageNode genImg, bool wasSaved)>(_buttonImages);
-                foreach (var (id, (playImg, genImg, wasSaved)) in updates)
+                var updates = new Dictionary<int, (DynamicIconButtonNode playBtn, DynamicIconButtonNode genBtn, bool wasSaved)>(_buttonImages);
+                foreach (var (id, (playBtn, genBtn, wasSaved)) in updates)
                 {
-                    if (playImg?.PartsList == null || genImg?.PartsList == null) continue;
+                    if (playBtn == null || genBtn == null) continue;
                     var nowSaved = GetAudioExists(_voiceClips.Find(vc => vc.Id == id)!);
 
-                    // Play/Stop icon swap
+                    // Play/Stop icon + tooltip swap
                     var isPlaying = _playingVoiceClipId == id;
-                    var playUV = isPlaying ? StopIconUV : PlayIconUV;
-                    var playPart = playImg.PartsList[0];
-                    if (playPart != null && (playPart->U != (ushort)playUV.X || playPart->V != (ushort)playUV.Y))
-                    {
-                        playPart->U = (ushort)playUV.X;
-                        playPart->V = (ushort)playUV.Y;
-                    }
+                    playBtn.Icon = isPlaying ? ButtonIcon.Mute : ButtonIcon.Volume;
+                    playBtn.Tooltip = isPlaying ? Loc.S("Stop voice clip")
+                        : nowSaved ? Loc.S("Play voice clip")
+                        : Loc.S("Generate and play voice clip");
 
-                    // Play tooltip update
-                    var playTooltip = nowSaved ? Loc.S("Play voice clip") : Loc.S("Generate and play voice clip");
-                    if (isPlaying) playTooltip = Loc.S("Stop voice clip");
-                    playImg.TextTooltip = playTooltip;
-
-                    // Gen icon swap: generate (Part 10) → regenerate (Part 4) when saved
-                    var genUV = nowSaved ? new Vector2(112, 0) : new Vector2(112, 28);
-                    var genPart = genImg.PartsList[0];
-                    if (genPart != null && (genPart->U != (ushort)genUV.X || genPart->V != (ushort)genUV.Y))
-                    {
-                        genPart->U = (ushort)genUV.X;
-                        genPart->V = (ushort)genUV.Y;
-                    }
-
-                    // Gen tooltip update
-                    genImg.TextTooltip = nowSaved ? Loc.S("Generate again") : Loc.S("Generate");
+                    // Gen icon + tooltip swap
+                    genBtn.Icon = nowSaved ? ButtonIcon.Refresh : ButtonIcon.MusicNote;
+                    genBtn.Tooltip = nowSaved ? Loc.S("Generate again") : Loc.S("Generate");
 
                     // Dim gen buttons + unsaved play buttons during batch
-                    genImg.Alpha = isGen ? 178f / 255f : 1f;
-                    genImg.MultiplyColor = isGen ? new Vector3(0.5f, 0.5f, 0.5f) : new Vector3(1f, 1f, 1f);
+                    genBtn.ImageNode.Alpha = isGen ? 178f / 255f : 1f;
+                    genBtn.ImageNode.MultiplyColor = isGen ? new Vector3(0.5f, 0.5f, 0.5f) : new Vector3(1f, 1f, 1f);
                     if (!nowSaved)
                     {
-                        playImg.Alpha = isGen ? 178f / 255f : 1f;
-                        playImg.MultiplyColor = isGen ? new Vector3(0.5f, 0.5f, 0.5f) : new Vector3(1f, 1f, 1f);
+                        playBtn.ImageNode.Alpha = isGen ? 178f / 255f : 1f;
+                        playBtn.ImageNode.MultiplyColor = isGen ? new Vector3(0.5f, 0.5f, 0.5f) : new Vector3(1f, 1f, 1f);
                     }
                     else if (wasSaved != nowSaved)
                     {
                         // Clip just got generated — restore play button brightness
-                        playImg.Alpha = 1f;
-                        playImg.MultiplyColor = new Vector3(1f, 1f, 1f);
+                        playBtn.ImageNode.Alpha = 1f;
+                        playBtn.ImageNode.MultiplyColor = new Vector3(1f, 1f, 1f);
                     }
 
                     // Update tracked state
                     if (wasSaved != nowSaved)
-                        _buttonImages[id] = (playImg, genImg, nowSaved);
+                        _buttonImages[id] = (playBtn, genBtn, nowSaved);
                 }
             }
-            catch { /* Images may be disposed during rebuild */ }
+            catch { /* Buttons may be disposed during rebuild */ }
         }
         else
         {
             // Play/stop icon needs per-frame update for responsive feel
             try
             {
-                foreach (var (id, (playImg, _, _)) in _buttonImages)
+                foreach (var (id, (playBtn, _, _)) in _buttonImages)
                 {
-                    if (playImg?.PartsList == null) continue;
-                    var isPlaying = _playingVoiceClipId == id;
-                    var playUV = isPlaying ? StopIconUV : PlayIconUV;
-                    var playPart = playImg.PartsList[0];
-                    if (playPart != null && (playPart->U != (ushort)playUV.X || playPart->V != (ushort)playUV.Y))
-                    {
-                        playPart->U = (ushort)playUV.X;
-                        playPart->V = (ushort)playUV.Y;
-                    }
+                    if (playBtn == null) continue;
+                    playBtn.Icon = _playingVoiceClipId == id ? ButtonIcon.Mute : ButtonIcon.Volume;
                 }
             }
             catch { }
@@ -435,9 +407,12 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         // Play/Stop or Generate circle button (CircleButtons texture)
         var vcId = capturedVoiceClip.Id;
 
-        // Play button (Part 14) / Stop button (Part 15) — swapped in OnUpdate
+        // Play/Stop button — icon swapped in OnUpdate
         var playTooltip = hasSaved ? Loc.S("Play voice clip") : Loc.S("Generate and play voice clip");
-        var playResult = CircleButton(PlayIconUV, playTooltip, () =>
+        var playBtn = new DynamicIconButtonNode { Size = new Vector2(28, 28) };
+        playBtn.Icon = ButtonIcon.Volume;
+        playBtn.Tooltip = playTooltip;
+        playBtn.OnClick = () =>
         {
             _pendingAction = () =>
             {
@@ -467,14 +442,15 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
                     });
                 }
             };
-        });
-        // Track both buttons for live icon/tooltip swaps during generation
+        };
 
-        // Generate / Regenerate button (Part 20) — always active
+        // Generate / Regenerate button — icon swapped in OnUpdate
         var genTooltip = hasSaved ? Loc.S("Generate again") : Loc.S("Generate");
         var capturedHasSaved = hasSaved;
-        var genIconUV = hasSaved ? new Vector2(112, 0) : new Vector2(112, 28); // Part 4 (regenerate) or Part 10 (generate)
-        var genResult = CircleButton(genIconUV, genTooltip, () =>
+        var genBtn = new DynamicIconButtonNode { Size = new Vector2(28, 28) };
+        genBtn.Icon = hasSaved ? ButtonIcon.Refresh : ButtonIcon.MusicNote;
+        genBtn.Tooltip = genTooltip;
+        genBtn.OnClick = () =>
         {
             if (_voiceClipManager.IsGenerating) return;
             // Defer to next frame to avoid ATK use-after-free (delete triggers rebuild)
@@ -489,17 +465,18 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
                     _audioExistsCache.Clear();
                 });
             };
-        });
-        // Wrap both buttons in a tight sub-row, shifted up 3px
+        };
+
+        // Wrap both buttons in a tight sub-row
         var btnGroup = new HorizontalListNode
         {
             Size = new Vector2(28 + 2 + 28, 28),
             ItemSpacing = 2,
             Position = new Vector2(0, 0),
         };
-        btnGroup.AddNode(playResult.node);
-        btnGroup.AddNode(genResult.node);
-        _buttonImages[vcId] = (playResult.img, genResult.img, hasSaved);
+        btnGroup.AddNode(playBtn);
+        btnGroup.AddNode(genBtn);
+        _buttonImages[vcId] = (playBtn, genBtn, hasSaved);
         row.AddNode(btnGroup);
 
         // Source
@@ -572,24 +549,6 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         if (textW > minWidth) node.Size = new Vector2(textW, 24);
         node.OnClick = onClick;
         return node;
-    }
-
-    private static (ImageNode node, ImageNode img) CircleButton(Vector2 textureCoords, string tooltip, Action onClick)
-    {
-        var img = new ImageNode { Size = new Vector2(28, 28) };
-        img.AddPart(new KamiToolKit.Classes.Part
-        {
-            TexturePath = "ui/uld/img01/CircleButtons.tex",
-            TextureCoordinates = textureCoords,
-            Size = new Vector2(28, 28),
-            Id = 0,
-        });
-        img.PartId = 0;
-        img.TextTooltip = tooltip;
-        img.DrawFlags = KamiToolKit.Enums.DrawFlags.ClickableCursor;
-        img.AddNodeFlags(NodeFlags.RespondToMouse | NodeFlags.HasCollision | NodeFlags.EmitsEvents);
-        img.AddEvent(AtkEventType.MouseClick, onClick);
-        return (img, img);
     }
 
     public override void Dispose()

@@ -257,10 +257,16 @@ public class NpcDataService : INpcDataService
                 result = data;
             }
             else
+            {
                 _log.Debug(nameof(GetAddCharacterMapData), $"Found existing mapping for: {data.ToString()} result: {result.ToString()}", eventId);
+                result.Voices ??= _db.GetVoices().Select(VoiceEntityToEchokrautVoice).ToList();
+            }
         }
         else
+        {
             _log.Debug(nameof(GetAddCharacterMapData), $"Found existing mapping for: {data.ToString()} result: {result.ToString()}", eventId);
+            result.Voices ??= _db.GetVoices().Select(VoiceEntityToEchokrautVoice).ToList();
+        }
 
         return result;
     }

@@ -27,6 +27,7 @@ public class BackendService : IBackendService, IDisposable
     private readonly INpcDataService _npcData;
     private readonly IAudioFileService _audioFiles;
     private readonly IDatabaseService _db;
+    private readonly IAudioPlaybackService _audioPlayback;
     private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly Task _generationTask;
 
@@ -43,7 +44,8 @@ public class BackendService : IBackendService, IDisposable
         IAlltalkInstanceService alltalkInstance,
         INpcDataService npcData,
         IAudioFileService audioFiles,
-        IDatabaseService db)
+        IDatabaseService db,
+        IAudioPlaybackService audioPlayback)
     {
         _queue = queue ?? throw new ArgumentNullException(nameof(queue));
         _log = log ?? throw new ArgumentNullException(nameof(log));
@@ -52,6 +54,7 @@ public class BackendService : IBackendService, IDisposable
         _npcData = npcData ?? throw new ArgumentNullException(nameof(npcData));
         _audioFiles = audioFiles ?? throw new ArgumentNullException(nameof(audioFiles));
         _db = db ?? throw new ArgumentNullException(nameof(db));
+        _audioPlayback = audioPlayback ?? throw new ArgumentNullException(nameof(audioPlayback));
 
         _random = new Random(Guid.NewGuid().GetHashCode());
         _cancellationTokenSource = new CancellationTokenSource();
@@ -415,12 +418,14 @@ public class BackendService : IBackendService, IDisposable
             else
             {
                 _queue.MarkAsFailed(entry.Id, new Exception("Failed to generate audio"));
+                _audioPlayback.RecreationStarted = false;
                 _log.Error(nameof(ProcessGenerationAsync), "Failed to generate audio", eventId);
             }
         }
         catch (Exception ex)
         {
             _queue.MarkAsFailed(entry.Id, ex);
+            _audioPlayback.RecreationStarted = false;
             _log.Error(nameof(ProcessGenerationAsync), $"Error generating audio: {ex}", eventId);
         }
     }

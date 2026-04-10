@@ -9,6 +9,7 @@ using Echokraut.Services;
 using Echotools.Logging.DataClasses;
 using Echotools.Logging.Enums;
 using Echotools.Logging.Services;
+using Echotools.UI.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Classes;
@@ -34,6 +35,7 @@ public sealed unsafe class DialogTalkController : IDisposable
     private readonly IAudioPlaybackService _audioPlayback;
     private readonly ILipSyncHelper _lipSync;
     private readonly Action _recreateInference;
+    private readonly Action _toggleConfig;
     private readonly ILogService _log;
     private readonly IAddonLifecycle _addonLifecycle;
     private readonly INpcDataService _npcData;
@@ -43,8 +45,8 @@ public sealed unsafe class DialogTalkController : IDisposable
 
     private SimpleImageNode? _background;
     private HorizontalListNode? _layout;
-    private TextButtonNode?   _playPauseButton;
-    private TextButtonNode?   _stopButton;
+    private DynamicIconButtonNode? _playStopButton;
+    private DynamicIconButtonNode? _settingsButton;
     private CheckboxNode?     _muteCheckbox;
     private CheckboxNode?     _autoAdvanceCheckbox;
     private TextDropDownNode? _voiceDropDown;
@@ -69,6 +71,7 @@ public sealed unsafe class DialogTalkController : IDisposable
         IAudioPlaybackService audioPlayback,
         ILipSyncHelper lipSync,
         Action recreateInference,
+        Action toggleConfig,
         IAddonLifecycle addonLifecycle,
         ILogService log,
         INpcDataService npcData)
@@ -78,6 +81,7 @@ public sealed unsafe class DialogTalkController : IDisposable
         _audioPlayback = audioPlayback;
         _lipSync = lipSync;
         _recreateInference = recreateInference;
+        _toggleConfig = toggleConfig;
         _npcData = npcData;
         _addonLifecycle = addonLifecycle;
 
@@ -113,8 +117,8 @@ public sealed unsafe class DialogTalkController : IDisposable
         _background = null;
         _layout?.Dispose();
         _layout = null;
-        _playPauseButton = null;
-        _stopButton = null;
+        _playStopButton = null;
+        _settingsButton = null;
         _muteCheckbox = null;
         _autoAdvanceCheckbox = null;
         _voiceDropDown = null;
@@ -128,24 +132,23 @@ public sealed unsafe class DialogTalkController : IDisposable
 
     private void OnAttach(AtkUnitBase* addon)
     {
-        _playPauseButton = new TextButtonNode { Size = new Vector2(60, 24), String = Loc.S("Play") };
-        _playPauseButton.OnClick = OnPlayPauseClick;
-        // Size to fit the longest label (Play vs Pause)
-        var playW = _playPauseButton.LabelNode.GetTextDrawSize(Loc.S("Play")).X;
-        var pauseW = _playPauseButton.LabelNode.GetTextDrawSize(Loc.S("Pause")).X;
-        _playPauseButton.Size = new Vector2(Math.Max(playW, pauseW) + 36, 24);
+        _playStopButton = new DynamicIconButtonNode { Size = new Vector2(28, 28) };
+        _playStopButton.Icon = ButtonIcon.Volume;
+        _playStopButton.Tooltip = Loc.S("Play");
+        _playStopButton.OnClick = OnPlayStopClick;
 
-        _stopButton = new TextButtonNode { Size = new Vector2(60, 24), String = Loc.S("Stop") };
-        _stopButton.OnClick = OnStopClick;
-        _stopButton.Size = new Vector2(_stopButton.LabelNode.GetTextDrawSize(Loc.S("Stop")).X + 36, 24);
-
-        _muteCheckbox = new CheckboxNode { Size = new Vector2(60, 24), String = Loc.S("Mute") };
+        _muteCheckbox = new CheckboxNode { Size = new Vector2(60, 24), String = Loc.S("Mute"), Position = new Vector2(0, 5) };
         _muteCheckbox.OnClick = OnMuteClick;
 
-        _autoAdvanceCheckbox = new CheckboxNode { Size = new Vector2(130, 24), String = Loc.S("Auto-advance") };
+        _autoAdvanceCheckbox = new CheckboxNode { Size = new Vector2(130, 24), String = Loc.S("Auto-advance"), Position = new Vector2(0, 5) };
         _autoAdvanceCheckbox.OnClick = OnAutoAdvanceClick;
 
-        _voiceDropDown = new TextDropDownNode { Size = new Vector2(185, 24), Options = [] };
+        _voiceDropDown = new TextDropDownNode { Size = new Vector2(185, 24), Options = [], Position = new Vector2(0, 5) };
+
+        _settingsButton = new DynamicIconButtonNode { Size = new Vector2(28, 28) };
+        _settingsButton.Icon = ButtonIcon.GearCog;
+        _settingsButton.Tooltip = Loc.S("Settings");
+        _settingsButton.OnClick = () => _toggleConfig();
 
         // OnOptionSelected fires as the first line of OptionSelectedHandler, before UpdateLabel.
         // UpdateLabel then crashes (LabelNode.Node null after Uncollapse's ReattachNode triggers
@@ -174,11 +177,11 @@ public sealed unsafe class DialogTalkController : IDisposable
             Alignment = HorizontalListAnchor.Left,
             ItemSpacing = 4,
         };
-        _layout.AddNode(_playPauseButton);
-        _layout.AddNode(_stopButton);
+        _layout.AddNode(_playStopButton);
         _layout.AddNode(_muteCheckbox);
         _layout.AddNode(_autoAdvanceCheckbox);
         _layout.AddNode(_voiceDropDown);
+        _layout.AddNode(_settingsButton);
 
         var addonW = addon->RootNode->Width;
         var addonH = addon->RootNode->Height;
@@ -197,7 +200,7 @@ public sealed unsafe class DialogTalkController : IDisposable
         };
         _background.AttachNode(addon, NodePosition.AsFirstChild);
 
-        _layout.Position = new Vector2(bgX + (bgW - _layout.Size.X) / 2f - 25, addonH - overlap + (bgH - buttonH) / 2f);
+        _layout.Position = new Vector2(bgX + (bgW - _layout.Size.X) / 2f - 25, addonH - overlap + (bgH - buttonH) / 2f - 5);
         _layout.AttachNode(addon);
     }
 
@@ -246,7 +249,7 @@ public sealed unsafe class DialogTalkController : IDisposable
 
         _background!.Scale = new Vector2(bgW / 544f, bgH / 144f);
         _background.Position = new Vector2(bgX, addonH - overlap);
-        _layout.Position = new Vector2(bgX + (bgW - _layout.Size.X) / 2f - 25, addonH - overlap + (bgH - buttonH) / 2f);
+        _layout.Position = new Vector2(bgX + (bgW - _layout.Size.X) / 2f - 25, addonH - overlap + (bgH - buttonH) / 2f - 5);
 
         // Safety net: sync _dropDownIsOpen if dropdown physically collapsed without OnCollapsed firing.
         if (_dropDownIsOpen && _voiceDropDown is { IsCollapsed: true })
@@ -270,9 +273,9 @@ public sealed unsafe class DialogTalkController : IDisposable
         var isStreamPaused  = streamState == PlaybackState.Paused;
         var isActive        = _audioPlayback.IsPlaying || isStreamPaused;
 
-        _playPauseButton!.String = isStreamPlaying ? Loc.S("Pause") : Loc.S("Play");
-        SetEnabled(_playPauseButton, !isMuted && (isActive || !_audioPlayback.RecreationStarted));
-        SetEnabled(_stopButton!, isActive && !isMuted);
+        _playStopButton!.Icon = isActive ? ButtonIcon.Mute : ButtonIcon.Volume;
+        _playStopButton.Tooltip = isActive ? Loc.S("Stop") : Loc.S("Play");
+        SetEnabled(_playStopButton, !isMuted && (isActive || !_audioPlayback.RecreationStarted));
 
         _muteCheckbox!.IsVisible = hasSpeaker;
         if (hasSpeaker)
@@ -295,6 +298,7 @@ public sealed unsafe class DialogTalkController : IDisposable
             _voiceDropDown?.Collapse(false);
 
         _voiceDropDown!.IsVisible = showVoice;
+        _settingsButton!.IsVisible = showVoice;
         if (showVoice)
         {
             var speakerKey = speaker!.ToString();
@@ -431,28 +435,20 @@ public sealed unsafe class DialogTalkController : IDisposable
         }
     }
 
-    private void OnPlayPauseClick()
+    private void OnPlayStopClick()
     {
         var msg = DialogState.CurrentVoiceMessage;
+        var isActive = _audioPlayback.IsPlaying || (msg != null && _audioPlayback.GetStreamState(msg.StreamId) == PlaybackState.Paused);
 
-        if (_audioPlayback.IsPlaying && msg != null)
+        if (isActive)
         {
-            var streamState = _audioPlayback.GetStreamState(msg.StreamId);
-            if (streamState == PlaybackState.Playing)
-                _audioPlayback.PausePlaying(msg);
-            else
-                _audioPlayback.ResumePlaying(msg);
+            if (msg != null) _lipSync.TryStopLipSync(msg);
+            _audioPlayback.StopPlaying(msg);
         }
         else if (!_audioPlayback.RecreationStarted)
         {
             _recreateInference();
         }
-    }
-
-    private void OnStopClick()
-    {
-        if (DialogState.CurrentVoiceMessage != null) _lipSync.TryStopLipSync(DialogState.CurrentVoiceMessage);
-        _audioPlayback.StopPlaying(DialogState.CurrentVoiceMessage);
     }
 
     private void OnMuteClick(bool isChecked)
