@@ -4,3 +4,6 @@
 [submodule "Echotools"]
 	path = Echotools
 	url = https://github.com/RenNagasaki/Echotools.git
+[submodule "KamiToolKit"]
+	path = KamiToolKit
+	url = https://github.com/MidoriKami/KamiToolKit.git

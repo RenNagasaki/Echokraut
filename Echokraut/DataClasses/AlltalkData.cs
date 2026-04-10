@@ -19,6 +19,7 @@ namespace Echokraut.DataClasses
         public string LocalInstallPath { get; set; }  = "";
         public bool StreamingGeneration { get; set; } = true;
         public bool IsWindows11 { get; set; } = true;
+        public bool CpuMode { get; set; } = false;
 
         // TODO: Remove LocalInstance, RemoteInstance, NoInstance fields in a future update
         //       once all users have migrated to InstanceType. Keep for deserialization compat.

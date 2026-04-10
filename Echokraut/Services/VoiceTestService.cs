@@ -19,6 +19,7 @@ internal class VoiceTestService : IVoiceTestService
     private readonly IClientState _clientState;
     private readonly IGameObjectService _gameObjects;
     private readonly Configuration _config;
+    private readonly INpcDataService _npcData;
 
     public EchokrautVoice? TestingVoice { get; private set; }
     public bool IsPlaying => _audioPlayback.IsPlaying;
@@ -32,7 +33,8 @@ internal class VoiceTestService : IVoiceTestService
         IAudioPlaybackService audioPlayback,
         IClientState clientState,
         IGameObjectService gameObjects,
-        Configuration config)
+        Configuration config,
+        INpcDataService npcData)
     {
         _log = log;
         _volumeService = volumeService;
@@ -41,6 +43,7 @@ internal class VoiceTestService : IVoiceTestService
         _clientState = clientState;
         _gameObjects = gameObjects;
         _config = config;
+        _npcData = npcData;
 
         _audioPlayback.CurrentMessageChanged += OnCurrentMessageChanged;
     }
@@ -52,7 +55,8 @@ internal class VoiceTestService : IVoiceTestService
         StopVoice();
         TestingVoice = voice;
 
-        var eventId = _log.Start(nameof(TestVoice), TextSource.AddonTalk);
+        var _baseId = _log.Start(nameof(TestVoice), TextSource.AddonTalk);
+        var eventId = new EKEventId(_baseId.Id, _baseId.TextSource);
         _log.Debug(nameof(TestVoice), $"Testing voice: {voice}", eventId);
 
         var volume = _volumeService.GetVoiceVolume(eventId) * voice.Volume;
@@ -61,7 +65,7 @@ internal class VoiceTestService : IVoiceTestService
             Gender = voice.AllowedGenders.Count > 0 ? voice.AllowedGenders[0] : Genders.Male,
             Race = voice.AllowedRaces.Count > 0 ? voice.AllowedRaces[0] : NpcRaces.Hyur,
             Name = voice.VoiceName,
-            Voices = _config.EchokrautVoices,
+            Voices = _npcData.GetEchokrautVoices(),
             Voice = voice
         };
 

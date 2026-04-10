@@ -12,5 +12,7 @@ public interface IGameObjectService
     void ClearLastUnknownState();
     IGameObject? LocalPlayer { get; }
     string LocalPlayerName { get; }
+    ulong LocalPlayerContentId { get; }
+    bool LocalPlayerIsMale { get; }
     IGameObject? NextUnknownCharacter { get; }
 }

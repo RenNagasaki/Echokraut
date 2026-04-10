@@ -1,6 +1,7 @@
 using Echotools.Logging.Services;
 using Echokraut.Backend;
 using Echokraut.DataClasses;
+using Echokraut.DataClasses.Database;
 using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
 using Echotools.Logging.Enums;
@@ -25,6 +26,8 @@ public class BackendService : IBackendService, IDisposable
     private readonly IAlltalkInstanceService _alltalkInstance;
     private readonly INpcDataService _npcData;
     private readonly IAudioFileService _audioFiles;
+    private readonly IDatabaseService _db;
+    private readonly IAudioPlaybackService _audioPlayback;
     private readonly CancellationTokenSource _cancellationTokenSource;
     private readonly Task _generationTask;
 
@@ -40,7 +43,9 @@ public class BackendService : IBackendService, IDisposable
         Configuration config,
         IAlltalkInstanceService alltalkInstance,
         INpcDataService npcData,
-        IAudioFileService audioFiles)
+        IAudioFileService audioFiles,
+        IDatabaseService db,
+        IAudioPlaybackService audioPlayback)
     {
         _queue = queue ?? throw new ArgumentNullException(nameof(queue));
         _log = log ?? throw new ArgumentNullException(nameof(log));
@@ -48,6 +53,8 @@ public class BackendService : IBackendService, IDisposable
         _alltalkInstance = alltalkInstance ?? throw new ArgumentNullException(nameof(alltalkInstance));
         _npcData = npcData ?? throw new ArgumentNullException(nameof(npcData));
         _audioFiles = audioFiles ?? throw new ArgumentNullException(nameof(audioFiles));
+        _db = db ?? throw new ArgumentNullException(nameof(db));
+        _audioPlayback = audioPlayback ?? throw new ArgumentNullException(nameof(audioPlayback));
 
         _random = new Random(Guid.NewGuid().GetHashCode());
         _cancellationTokenSource = new CancellationTokenSource();
@@ -104,8 +111,10 @@ public class BackendService : IBackendService, IDisposable
             return;
         }
 
-        var newVoices = backendVoices.FindAll(p =>
-            _config.EchokrautVoices.Find(f => f.BackendVoice == p) == null);
+        var existingVoices = _db.GetVoices();
+        var existingKeys = existingVoices.Select(v => v.BackendVoice).ToHashSet();
+
+        var newVoices = backendVoices.FindAll(p => !existingKeys.Contains(p));
 
         if (newVoices.Count > 0)
         {
@@ -125,12 +134,14 @@ public class BackendService : IBackendService, IDisposable
                 };
                 _npcData.ReSetVoiceGenders(newEkVoice, eventId);
                 _npcData.ReSetVoiceRaces(newEkVoice, eventId);
-                _config.EchokrautVoices.Add(newEkVoice);
+                _db.UpsertVoice(EchokrautVoiceToEntity(newEkVoice));
             }
-            _config.Save();
         }
 
-        var oldVoices = _config.EchokrautVoices.FindAll(
+        // Refresh after adds
+        existingVoices = _db.GetVoices();
+        var ekVoices = existingVoices.Select(VoiceEntityToEchokrautVoice).ToList();
+        var oldVoices = ekVoices.FindAll(
             p => backendVoices.Find(f => f == p.BackendVoice) == null);
 
         if (oldVoices.Count > 0)
@@ -140,25 +151,27 @@ public class BackendService : IBackendService, IDisposable
                 EchokrautVoice? replacement = null;
                 if (oldVoice.BackendVoice.Contains("NPC"))
                 {
-                    var candidates = _config.EchokrautVoices.FindAll(
+                    var candidates = ekVoices.FindAll(
                         f => !oldVoices.Contains(f) && f.VoiceName.Contains("NPC") &&
+                             f.IsAdultVoice == oldVoice.IsAdultVoice &&
                              f.IsChildVoice == oldVoice.IsChildVoice &&
+                             f.IsElderVoice == oldVoice.IsElderVoice &&
                              !oldVoice.AllowedRaces.Except(f.AllowedRaces).Any());
                     replacement = candidates.Count > 0 ? candidates[_random.Next(0, candidates.Count)] : null;
                 }
                 else
                 {
-                    replacement = _config.EchokrautVoices.Find(
+                    replacement = ekVoices.Find(
                         f => !oldVoices.Contains(f) && f.VoiceName == oldVoice.VoiceName);
                 }
                 _npcData.MigrateOldData(oldVoice, replacement);
-                _config.EchokrautVoices.Remove(oldVoice);
+                _db.DeleteVoice(oldVoice.BackendVoice);
             }
-            _config.Save();
         }
 
         _npcData.MigrateOldData();
-        _npcData.RefreshSelectables(_config.EchokrautVoices);
+        ekVoices = _db.GetVoices().Select(VoiceEntityToEchokrautVoice).ToList();
+        _npcData.RefreshSelectables(ekVoices);
         VoicesMapped?.Invoke();
         _log.Info(nameof(MapVoices), "Voices mapped successfully", eventId);
     }
@@ -289,53 +302,61 @@ public class BackendService : IBackendService, IDisposable
 
     public void GetVoiceOrRandom(EKEventId eventId, NpcMapData npcData)
     {
-        _log.Debug(nameof(GetVoiceOrRandom), 
+        _log.Debug(nameof(GetVoiceOrRandom),
             $"Searching voice: {npcData.Voice?.VoiceName ?? ""} for NPC: {npcData.Name}", eventId);
-        
-        var voiceItem = npcData.Voice;
-        var isChild = npcData.IsChild;
-        
-        if (voiceItem == null || voiceItem == _config.EchokrautVoices.Find(p => p.IsDefault))
+
+        var ekVoices = _db.GetVoices().Select(VoiceEntityToEchokrautVoice).ToList();
+        var picked = PickVoice(npcData, ekVoices);
+
+        if (picked != npcData.Voice)
         {
-            var npcName = npcData.Name;
-            
-            // Try to find voice by name
-            var voiceItems = _config.EchokrautVoices.FindAll(p => 
-                p.VoiceName.Contains(npcName, StringComparison.OrdinalIgnoreCase));
-            
-            if (voiceItems.Count > 0)
-            {
-                voiceItem = voiceItems[0];
-            }
-            else
-            {
-                // Find by race/gender
-                voiceItems = _config.EchokrautVoices.FindAll(p => 
-                    p.FitsNpcData(npcData.Gender, npcData.Race, isChild, _npcData.IsGenderedRace(npcData.Race)));
-                
-                if (voiceItems.Count > 0)
-                {
-                    voiceItem = voiceItems[_random.Next(0, voiceItems.Count)];
-                }
-            }
-            
-            if (voiceItem == null)
-                voiceItem = _config.EchokrautVoices.Find(p => p.IsDefault);
-            
-            if (voiceItem != npcData.Voice)
-            {
-                _log.Debug(nameof(GetVoiceOrRandom), 
-                    $"Chose voice: {voiceItem} for {(npcData.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player ? "Player" : "NPC")}: {npcName}", 
-                    eventId);
-                npcData.Voice = voiceItem;
-                _config.Save();
-            }
+            npcData.Voice = picked;
+            if (picked != null)
+                _npcData.SaveCharacter(npcData);
         }
-        
-        if (voiceItem != null)
-            _log.Debug(nameof(GetVoiceOrRandom), $"Found voice: {voiceItem} for NPC: {npcData.Name}", eventId);
+
+        if (picked != null)
+            _log.Debug(nameof(GetVoiceOrRandom), $"Voice: {picked} for NPC: {npcData.Name}", eventId);
         else
             _log.Error(nameof(GetVoiceOrRandom), $"Couldn't find voice for NPC: {npcData.Name}", eventId);
+    }
+
+    public EchokrautVoice? PickVoice(NpcMapData npcData, IList<EchokrautVoice> voices)
+    {
+        var voiceItem = npcData.Voice;
+        var bodyType = npcData.BodyType;
+
+        EchokrautVoice? defaultVoice = null;
+        for (var i = 0; i < voices.Count; i++)
+        {
+            if (voices[i].IsDefault) { defaultVoice = voices[i]; break; }
+        }
+
+        if (voiceItem != null && (defaultVoice == null || voiceItem.BackendVoice != defaultVoice.BackendVoice))
+            return voiceItem;
+
+        var npcName = npcData.Name ?? string.Empty;
+
+        // Try to find voice by name
+        for (var i = 0; i < voices.Count; i++)
+        {
+            if (voices[i].VoiceName.Contains(npcName, StringComparison.OrdinalIgnoreCase))
+                return voices[i];
+        }
+
+        // Find by race/gender
+        var isGenderedRace = _npcData.IsGenderedRace(npcData.Race);
+        List<EchokrautVoice>? matches = null;
+        for (var i = 0; i < voices.Count; i++)
+        {
+            if (voices[i].FitsNpcData(npcData.Gender, npcData.Race, bodyType, isGenderedRace))
+                (matches ??= new List<EchokrautVoice>()).Add(voices[i]);
+        }
+
+        if (matches != null && matches.Count > 0)
+            return matches[_random.Next(0, matches.Count)];
+
+        return defaultVoice;
     }
 
     private async Task GenerationLoopAsync(CancellationToken cancellationToken)
@@ -397,14 +418,57 @@ public class BackendService : IBackendService, IDisposable
             else
             {
                 _queue.MarkAsFailed(entry.Id, new Exception("Failed to generate audio"));
+                _audioPlayback.RecreationStarted = false;
                 _log.Error(nameof(ProcessGenerationAsync), "Failed to generate audio", eventId);
             }
         }
         catch (Exception ex)
         {
             _queue.MarkAsFailed(entry.Id, ex);
+            _audioPlayback.RecreationStarted = false;
             _log.Error(nameof(ProcessGenerationAsync), $"Error generating audio: {ex}", eventId);
         }
+    }
+
+    private static EchokrautVoice VoiceEntityToEchokrautVoice(VoiceEntity entity)
+    {
+        return new EchokrautVoice
+        {
+            BackendVoice = entity.BackendVoice,
+            voiceName = entity.VoiceName,
+            IsDefault = entity.IsDefault,
+            IsEnabled = entity.IsEnabled,
+            UseAsRandom = entity.UseAsRandom,
+            IsAdultVoice = entity.IsAdultVoice,
+            IsChildVoice = entity.IsChildVoice,
+            IsElderVoice = entity.IsElderVoice,
+            Volume = entity.Volume,
+            Note = entity.Note,
+            AllowedGenders = entity.AllowedGenders?.Select(g => (Genders)g.Gender).ToList() ?? new(),
+            AllowedRaces = entity.AllowedRaces?.Select(r => (NpcRaces)r.Race).ToList() ?? new()
+        };
+    }
+
+    private static VoiceEntity EchokrautVoiceToEntity(EchokrautVoice voice)
+    {
+        var entity = new VoiceEntity
+        {
+            BackendVoice = voice.BackendVoice ?? "",
+            VoiceName = voice.voiceName ?? "",
+            IsDefault = voice.IsDefault,
+            IsEnabled = voice.IsEnabled,
+            UseAsRandom = voice.UseAsRandom,
+            IsAdultVoice = voice.IsAdultVoice,
+            IsChildVoice = voice.IsChildVoice,
+            IsElderVoice = voice.IsElderVoice,
+            Volume = voice.Volume,
+            Note = voice.Note ?? ""
+        };
+        entity.AllowedGenders = voice.AllowedGenders
+            .Select(g => new VoiceAllowedGenderEntity { Gender = (int)g }).ToList();
+        entity.AllowedRaces = voice.AllowedRaces
+            .Select(r => new VoiceAllowedRaceEntity { Race = (int)r }).ToList();
+        return entity;
     }
 
     public void Dispose()

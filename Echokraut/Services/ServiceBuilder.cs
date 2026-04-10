@@ -4,7 +4,6 @@ using Dalamud.Plugin;
 using Echokraut.DataClasses;
 using Echokraut.Helper.Functional;
 using Echokraut.Services.Queue;
-using Echokraut.Windows;
 
 namespace Echokraut.Services;
 
@@ -31,8 +30,13 @@ public static class ServiceBuilder
     {
         var container = new ServiceContainer();
 
-        // Regiwhster core services
+        // Register core services
         container.RegisterFactory<ILogService>(c => new LogService(pluginLog));
+
+        container.RegisterFactory<IDatabaseService>(c => new DatabaseService(
+            c.GetService<ILogService>(),
+            pluginInterface.GetPluginConfigDirectory(),
+            configuration));
 
         container.RegisterFactory<IRemoteUrlService>(c => new RemoteUrlService(
             c.GetService<ILogService>()));
@@ -66,7 +70,10 @@ public static class ServiceBuilder
             dataManager,
             c.GetService<IJsonDataService>(),
             c.GetService<ILogService>(),
-            configuration));
+            configuration,
+            c.GetService<IDatabaseService>(),
+            c.GetService<IBackendService>(),
+            c.GetService<INpcDataService>()));
 
         container.RegisterFactory<ILipSyncHelper>(c => new LipSyncHelper(
             c.GetService<ILogService>(),
@@ -97,7 +104,19 @@ public static class ServiceBuilder
             configuration,
             c.GetService<IAlltalkInstanceService>(),
             c.GetService<INpcDataService>(),
-            c.GetService<IAudioFileService>()));
+            c.GetService<IAudioFileService>(),
+            c.GetService<IDatabaseService>(),
+            c.GetService<IAudioPlaybackService>()));
+
+        container.RegisterFactory<IVoiceClipManagerService>(c => new VoiceClipManagerService(
+            c.GetService<IDatabaseService>(),
+            c.GetService<IBackendService>(),
+            c.GetService<IAudioFileService>(),
+            c.GetService<IAudioPlaybackService>(),
+            c.GetService<INpcDataService>(),
+            c.GetService<IGameObjectService>(),
+            c.GetService<ILogService>(),
+            configuration));
 
         // Register business logic services
         container.RegisterFactory<ITextProcessingService>(c => new TextProcessingService(
@@ -112,7 +131,7 @@ public static class ServiceBuilder
 
         container.RegisterFactory<INpcDataService>(c => new NpcDataService(
             c.GetService<ILogService>(),
-            configuration,
+            c.GetService<IDatabaseService>(),
             c.GetService<IJsonDataService>()));
 
         container.RegisterFactory<IGoogleDriveSyncService>(c => new GoogleDriveSyncService(
@@ -133,7 +152,8 @@ public static class ServiceBuilder
             c.GetService<IAudioPlaybackService>(),
             clientState,
             c.GetService<IGameObjectService>(),
-            configuration));
+            configuration,
+            c.GetService<INpcDataService>()));
 
         container.RegisterFactory<IVoiceMessageProcessor>(c => new VoiceMessageProcessor(
             c.GetService<ILogService>(),
@@ -147,7 +167,8 @@ public static class ServiceBuilder
             c.GetService<ILanguageDetectionService>(),
             c.GetService<IJsonDataService>(),
             c.GetService<INpcDataService>(),
-            c.GetService<IGameObjectService>()));
+            c.GetService<IGameObjectService>(),
+            c.GetService<IDatabaseService>()));
 
         container.RegisterFactory<IAddonCancelService>(c => new AddonCancelService(
             c.GetService<IAudioPlaybackService>(),
@@ -228,13 +249,6 @@ public static class ServiceBuilder
             configuration,
             c.GetService<IGameObjectService>(),
             c.GetService<ITextProcessingService>()));
-
-        container.RegisterFactory<AlltalkInstanceWindow>(c => new AlltalkInstanceWindow(
-            c.GetService<ILogService>(),
-            configuration,
-            c.GetService<IAlltalkInstanceService>(),
-            c.GetService<IBackendService>(),
-            pluginInterface));
 
         return container;
     }

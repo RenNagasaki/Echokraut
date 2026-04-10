@@ -1,0 +1,36 @@
+stages:
+  - analysis
+  - mirror
+
+variables:
+  GIT_SUBMODULE_STRATEGY: recursive
+
+sonarqube:
+  stage: analysis
+  image: mcr.microsoft.com/dotnet/sdk:10.0
+  rules:
+    - if: $CI_COMMIT_BRANCH
+  before_script:
+    - apt-get update && apt-get install -y unzip
+    - curl -L https://goatcorp.github.io/dalamud-distrib/latest.zip -o /tmp/dalamud.zip
+    - mkdir -p /tmp/dalamud && unzip -o /tmp/dalamud.zip -d /tmp/dalamud
+    - export DALAMUD_HOME=/tmp/dalamud
+  script:
+    - cp Echokraut/Services/GoogleDriveSyncService.Secrets.cs.example Echokraut/Services/GoogleDriveSyncService.Secrets.cs
+    - dotnet tool install --global dotnet-sonarscanner
+    - export PATH="$PATH:$HOME/.dotnet/tools"
+    - dotnet sonarscanner begin /key:"$SONAR_PROJECT_KEY" /d:sonar.host.url="$SONAR_HOST_URL" /d:sonar.token="$SONAR_TOKEN" /d:sonar.exclusions="OtterGui/**,KamiToolKit/**,Echotools/**,EchokrautLocalInstaller/**"
+    - dotnet build
+    - dotnet test --no-build || true
+    - dotnet sonarscanner end /d:sonar.token="$SONAR_TOKEN"
+
+mirror-to-github:
+  stage: mirror
+  image: alpine/git:latest
+  rules:
+    - if: $CI_COMMIT_BRANCH
+  script:
+    - git clone --mirror "$CI_REPOSITORY_URL" repo.git
+    - cd repo.git
+    - git remote add github "https://${GITHUB_USER}:${GITHUB_PAT}@github.com/${GITHUB_USER}/Echokraut.git"
+    - git push github --mirror --force

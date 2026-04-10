@@ -63,16 +63,33 @@ public class JsonDataService : IJsonDataService, IDisposable
             var json = FetchUrl(_remoteUrls.Urls.NpcRacesUrl);
             if (string.IsNullOrWhiteSpace(json))
             {
-                _log.Error(nameof(LoadModelsToRaceMap), "Failed to load NPC race maps.", eventId);
-                return;
+                _log.Warning(nameof(LoadModelsToRaceMap), "Remote NPC race map empty, using embedded fallback.", eventId);
+                json = LoadEmbeddedResource("Echokraut.Resources.NpcRaces.json");
             }
-            ModelsToRaceMap = System.Text.Json.JsonSerializer.Deserialize<Dictionary<int, NpcRaces>>(json) ?? new();
+
+            var remote = System.Text.Json.JsonSerializer.Deserialize<Dictionary<int, NpcRaces>>(json ?? "") ?? new();
+
+            // Merge with embedded resource so local additions are always included
+            var embedded = System.Text.Json.JsonSerializer.Deserialize<Dictionary<int, NpcRaces>>(
+                LoadEmbeddedResource("Echokraut.Resources.NpcRaces.json") ?? "{}") ?? new();
+            foreach (var (key, value) in embedded)
+                remote.TryAdd(key, value);
+
+            ModelsToRaceMap = remote;
             _log.Info(nameof(LoadModelsToRaceMap), $"Loaded NPC race maps: {ModelsToRaceMap.Count} entries", eventId);
         }
         catch (Exception ex)
         {
             _log.Error(nameof(LoadModelsToRaceMap), $"Error loading NPC race maps: {ex}", eventId);
         }
+    }
+
+    private static string? LoadEmbeddedResource(string resourceName)
+    {
+        using var stream = typeof(JsonDataService).Assembly.GetManifestResourceStream(resourceName);
+        if (stream == null) return null;
+        using var reader = new System.IO.StreamReader(stream);
+        return reader.ReadToEnd();
     }
 
     private void LoadModelsToGenderMap(EKEventId eventId)

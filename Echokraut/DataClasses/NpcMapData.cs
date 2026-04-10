@@ -1,8 +1,8 @@
+using Dalamud.Game;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Echokraut.Enums;
 using Echotools.Logging.Enums;
 using Echokraut.Helper;
-using OtterGui.Widgets;
 using System;
 using System.Collections.Generic;
 
@@ -15,7 +15,7 @@ namespace Echokraut.DataClasses
         public string RaceStr { get; set; } = null!;
         public Genders Gender { get; set; }
 
-        public bool IsChild { get; set; }
+        public BodyType BodyType { get; set; } = BodyType.Adult;
 
         public string voice = "";
         internal EchokrautVoice? Voice
@@ -34,10 +34,9 @@ namespace Echokraut.DataClasses
         public float VolumeBubble { get; set; } = 1f;
         public bool HasBubbles { get; set; }
 
-        public ObjectKind ObjectKind { get; set; }
+        public ClientLanguage Language { get; set; } = ClientLanguage.English;
 
-        internal ClippedSelectableCombo<EchokrautVoice> VoicesSelectable { get; set; } = null!;
-        internal ClippedSelectableCombo<EchokrautVoice> VoicesSelectableDialogue { get; set; } = null!;
+        public ObjectKind ObjectKind { get; set; }
 
         internal List<EchokrautVoice> Voices { get; set; } = null!;
 
@@ -69,10 +68,5 @@ namespace Echokraut.DataClasses
             return otherObj?.ToString().ToLower().CompareTo(ToString().ToLower()) ?? -1;
         }
 
-        public void RefreshSelectable()
-        {
-            VoicesSelectable = new($"##AllVoices{ToString()}", string.Empty, 200, Voices.FindAll(f => f.IsSelectable(Name, Gender, Race, IsChild)), g => g.VoiceNameNote);
-            VoicesSelectableDialogue = new($"##AllVoices{ToString()}", string.Empty, 200, Voices.FindAll(f => f.IsSelectable(Name, Gender, Race, IsChild)), g => g.VoiceNameNote);
-        }
     }
 }

@@ -119,7 +119,8 @@ public unsafe class AddonSelectStringHelper : IAddonSelectStringHelper
     private void HandleChange(AddonSelectStringState state)
     {
         var (speaker, text, pollSource) = state;
-        var eventId = _log.Start(nameof(HandleChange), TextSource.AddonSelectString);
+        var _baseId = _log.Start(nameof(HandleChange), TextSource.AddonSelectString);
+        var eventId = new EKEventId(_baseId.Id, _baseId.TextSource);
 
         if (state == default)
         {

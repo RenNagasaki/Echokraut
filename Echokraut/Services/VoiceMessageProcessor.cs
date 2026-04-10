@@ -31,6 +31,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
     private readonly IJsonDataService _jsonData;
     private readonly INpcDataService _npcData;
     private readonly IGameObjectService _gameObjects;
+    private readonly IDatabaseService _db;
 
     public VoiceMessageProcessor(
         ILogService log,
@@ -44,7 +45,8 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         ILanguageDetectionService languageDetection,
         IJsonDataService jsonData,
         INpcDataService npcData,
-        IGameObjectService gameObjects)
+        IGameObjectService gameObjects,
+        IDatabaseService db)
     {
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _textProcessing = textProcessing ?? throw new ArgumentNullException(nameof(textProcessing));
@@ -58,6 +60,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         _jsonData = jsonData ?? throw new ArgumentNullException(nameof(jsonData));
         _npcData = npcData ?? throw new ArgumentNullException(nameof(npcData));
         _gameObjects = gameObjects ?? throw new ArgumentNullException(nameof(gameObjects));
+        _db = db ?? throw new ArgumentNullException(nameof(db));
     }
 
     public async Task ProcessSpeechAsync(EKEventId eventId, IGameObject? speaker, SeString speakerName, string textValue)
@@ -111,13 +114,13 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
             }
 
             // Step 5: Assign voice if needed
-            if (npcData.Voice == null && !onlyRequest && _config.Alltalk.InstanceType != AlltalkInstanceType.None)
+            if (string.IsNullOrEmpty(npcData.voice) && !onlyRequest && _config.Alltalk.InstanceType != AlltalkInstanceType.None)
             {
                 _log.Info(nameof(ProcessSpeechAsync), "Getting voice since not set.", eventId);
                 _backend.GetVoiceOrRandom(eventId, npcData);
             }
 
-            if (npcData.Voice == null && !onlyRequest && _config.Alltalk.InstanceType != AlltalkInstanceType.None)
+            if (string.IsNullOrEmpty(npcData.voice) && !onlyRequest && _config.Alltalk.InstanceType != AlltalkInstanceType.None)
             {
                 _log.Info(nameof(ProcessSpeechAsync), "Skipping voice inference. No Voice set.", eventId);
                 _log.End(nameof(ProcessSpeechAsync), eventId);
@@ -166,13 +169,16 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
 
             _log.Debug(nameof(ProcessSpeechAsync), voiceMessage.GetDebugInfo(), eventId);
 
+            // Log voice clip to database (regardless of mute/volume state)
+            LogVoiceClip(voiceMessage);
+
             // Update DialogState so UI controls (mute/unmute) have access to the current
             // speaker even when the NPC is muted and audio won't play.
             if (isDialogue)
                 DialogState.CurrentVoiceMessage = voiceMessage;
 
             // Step 8: Check if dialogue is muted
-            if (speaker != null && _config.MutedNpcDialogues.Contains(speaker.BaseId))
+            if (speaker != null && _db.GetMutedBaseIds().Contains(speaker.BaseId))
             {
                 _log.Info(nameof(ProcessSpeechAsync), $"Skipping muted dialogue: {cleanText}", eventId);
                 _log.End(nameof(ProcessSpeechAsync), eventId);
@@ -216,7 +222,9 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         cleanText = _textProcessing.ReplaceRomanNumbers(cleanText);
         cleanText = _textProcessing.ReplaceCurrency(cleanText);
         cleanText = _textProcessing.ReplaceIntWithVerbal(cleanText, language);
-        cleanText = _textProcessing.ReplacePhonetics(cleanText, _config.PhoneticCorrections);
+        var phoneticCorrections = _db.GetPhoneticCorrections()
+            .Select(p => new PhoneticCorrection(p.OriginalText, p.CorrectedText)).ToList();
+        cleanText = _textProcessing.ReplacePhonetics(cleanText, phoneticCorrections);
         cleanText = _textProcessing.AnalyzeAndImproveText(cleanText);
 
         if (source == TextSource.Chat)
@@ -247,6 +255,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         npcData.RaceStr = raceStr;
         npcData.Gender = _characterData.GetCharacterGender(eventId, speaker, npcData.Race, out var modelBody);
         npcData.Name = _textProcessing.CleanUpName(cleanSpeakerName);
+        npcData.Language = _clientState.ClientLanguage;
 
         // Handle NPC name mapping
         if (npcData.ObjectKind != ObjectKind.Player)
@@ -257,26 +266,102 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         else if (string.IsNullOrWhiteSpace(npcData.Name) && source == TextSource.AddonBubble)
             npcData.Name = _textProcessing.GetBubbleName(_lumina.GetTerritory(), speaker, cleanText);
 
-        // Get or add to configuration
+        // Get or add to database
         var resNpcData = _npcData.GetAddCharacterMapData(npcData, eventId, _backend);
-        _config.Save();
         npcData = resNpcData;
 
-        // Check if child character
+        // Check body type (child/elder/adult)
+        var changed = false;
         if (speaker != null && (source == TextSource.AddonBubble || source == TextSource.AddonTalk))
         {
-            npcData.IsChild = _lumina.GetENpcBase(speaker.BaseId, eventId)?.BodyType == 4;
-            _config.Save();
+            var npcBase = _lumina.GetENpcBase(speaker.BaseId, eventId);
+            var bodyType = npcBase?.BodyType switch
+            {
+                4 => BodyType.Child,
+                3 => BodyType.Elder,
+                _ => BodyType.Adult
+            };
+            if (npcData.BodyType != bodyType)
+            {
+                npcData.BodyType = bodyType;
+                changed = true;
+            }
         }
 
         // Update object kind if needed
         if (npcData.ObjectKind != objectKind && objectKind != ObjectKind.None)
         {
             npcData.ObjectKind = objectKind;
-            _config.Save();
+            changed = true;
         }
 
+        if (changed)
+            _npcData.SaveCharacter(npcData);
+
         return npcData;
+    }
+
+    private void LogVoiceClip(VoiceMessage message)
+    {
+        try
+        {
+            var speaker = message.Speaker;
+            var character = speaker != null
+                ? _db.FindCharacter(speaker.Name, speaker.Gender, speaker.Race, (int)speaker.Language)
+                : null;
+            if (character == null) return;
+
+            // Get zone name and map coordinates
+            var zoneName = "";
+            var mapX = 0f;
+            var mapY = 0f;
+            try
+            {
+                var territory = _lumina.GetTerritory();
+                if (territory != null)
+                {
+                    zoneName = territory.Value.PlaceName.Value.Name.ToString();
+                    if (message.SpeakerObj != null)
+                    {
+                        var pos = message.SpeakerObj.Position;
+                        var map = territory.Value.Map.Value;
+                        var sf = map.SizeFactor / 100.0f;
+                        mapX = 41.0f / sf * ((pos.X + map.OffsetX) * sf + 1024.0f) / 2048.0f + 1.0f;
+                        mapY = 41.0f / sf * ((pos.Z + map.OffsetY) * sf + 1024.0f) / 2048.0f + 1.0f;
+                    }
+                }
+            }
+            catch { /* Map coordinate calculation may fail for some territories */ }
+
+            // Create or update character instance with location data
+            if (message.SpeakerObj != null && message.SpeakerObj.BaseId != 0)
+                _db.GetOrCreateInstance(character.Id, message.SpeakerObj.BaseId, zoneName, mapX, mapY);
+
+            var npcBaseId = message.SpeakerObj != null ? (long)message.SpeakerObj.BaseId : 0;
+            var originalText = message.OriginalText ?? "";
+
+            _db.LogOrUpdateVoiceClip(new DataClasses.Database.VoiceClipEntity
+            {
+                CharacterId = character.Id,
+                NpcBaseId = npcBaseId,
+                Timestamp = DateTime.UtcNow,
+                TextSource = (int)message.Source,
+                Language = (int)message.Language,
+                VoiceKey = speaker?.voice ?? "",
+                OriginalText = originalText,
+                CleanedText = message.Text ?? "",
+                SavedToDisk = false,
+                BodyType = (int)(speaker?.BodyType ?? BodyType.Adult),
+                ZoneName = zoneName,
+                MapX = mapX,
+                MapY = mapY
+            });
+        }
+        catch (Exception ex)
+        {
+            _log.Debug(nameof(LogVoiceClip), $"Failed to log voice clip: {ex.Message}",
+                new EKEventId(0, TextSource.None));
+        }
     }
 
     private bool IsNpcMuted(NpcMapData npcData, TextSource source, IGameObject? speaker, EKEventId eventId)

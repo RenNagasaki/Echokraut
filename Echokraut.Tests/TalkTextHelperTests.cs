@@ -332,4 +332,73 @@ public class TalkTextHelperTests
         var result = TalkTextHelper.ReplaceCurrency(Log.Object, EventId, "1.000 gil");
         Assert.Equal("1000 gil", result);
     }
+
+    // ── Player name placeholder substitution ─────────────────────────────────
+
+    [Fact]
+    public void ContainsPlayerPlaceholder_DetectsFirstName()
+    {
+        Assert.True(TalkTextHelper.ContainsPlayerPlaceholder("Hallo, -PlayerFirstName-!"));
+    }
+
+    [Fact]
+    public void ContainsPlayerPlaceholder_DetectsFullName()
+    {
+        Assert.True(TalkTextHelper.ContainsPlayerPlaceholder("Welcome, -PlayerName-!"));
+    }
+
+    [Fact]
+    public void ContainsPlayerPlaceholder_DetectsLastName()
+    {
+        Assert.True(TalkTextHelper.ContainsPlayerPlaceholder("-PlayerLastName-san!"));
+    }
+
+    [Fact]
+    public void ContainsPlayerPlaceholder_ReturnsFalseForPlainText()
+    {
+        Assert.False(TalkTextHelper.ContainsPlayerPlaceholder("Hello there!"));
+    }
+
+    [Fact]
+    public void SubstitutePlaceholders_ReplacesFirstName()
+    {
+        var result = TalkTextHelper.SubstitutePlaceholders("Hallo, -PlayerFirstName-!", "Ren Nagasaki");
+        Assert.Equal("Hallo, Ren!", result);
+    }
+
+    [Fact]
+    public void SubstitutePlaceholders_ReplacesLastName()
+    {
+        var result = TalkTextHelper.SubstitutePlaceholders("-PlayerLastName-san!", "Ren Nagasaki");
+        Assert.Equal("Nagasakisan!", result);
+    }
+
+    [Fact]
+    public void SubstitutePlaceholders_ReplacesFullName()
+    {
+        var result = TalkTextHelper.SubstitutePlaceholders("Welcome, -PlayerName-!", "Ren Nagasaki");
+        Assert.Equal("Welcome, Ren Nagasaki!", result);
+    }
+
+    [Fact]
+    public void SubstitutePlaceholders_HandlesMixedPlaceholders()
+    {
+        var result = TalkTextHelper.SubstitutePlaceholders(
+            "-PlayerFirstName-, also known as -PlayerName-.", "Ren Nagasaki");
+        Assert.Equal("Ren, also known as Ren Nagasaki.", result);
+    }
+
+    [Fact]
+    public void SubstitutePlaceholders_ReturnsOriginalWhenNoPlaceholders()
+    {
+        var result = TalkTextHelper.SubstitutePlaceholders("No placeholders here.", "Ren Nagasaki");
+        Assert.Equal("No placeholders here.", result);
+    }
+
+    [Fact]
+    public void SubstitutePlaceholders_ReturnsOriginalWhenEmptyPlayerName()
+    {
+        var result = TalkTextHelper.SubstitutePlaceholders("Hello -PlayerFirstName-!", "");
+        Assert.Equal("Hello -PlayerFirstName-!", result);
+    }
 }

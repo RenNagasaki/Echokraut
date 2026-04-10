@@ -118,7 +118,8 @@ public class AddonCutSceneSelectStringHelper : IAddonCutSceneSelectStringHelper
             return;
         }
 
-        var eventId = _log.Start(nameof(HandleChange), TextSource.AddonCutsceneSelectString);
+        var _baseId = _log.Start(nameof(HandleChange), TextSource.AddonCutsceneSelectString);
+        var eventId = new EKEventId(_baseId.Id, _baseId.TextSource);
         // Notify observers that the addon state was advanced
         _cancelService.Cancel(DialogState.CurrentVoiceMessage);
 

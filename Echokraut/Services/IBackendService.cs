@@ -3,6 +3,7 @@ using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
 using Echotools.Logging.Enums;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace Echokraut.Services;
@@ -24,6 +25,12 @@ public interface IBackendService
     void Pause(VoiceMessage message);
     void Resume(VoiceMessage message);
     void GetVoiceOrRandom(EKEventId eventId, NpcMapData npcData);
+    /// <summary>
+    /// Pure voice resolution: picks a voice for the given NPC from the supplied voice list
+    /// without writing to the database, refreshing caches, or emitting log entries.
+    /// Used by bulk operations (harvest) where the caller persists the result itself.
+    /// </summary>
+    EchokrautVoice? PickVoice(NpcMapData npcData, IList<EchokrautVoice> voices);
     void RefreshBackend();
     void SetBackendType(TTSBackends backendType);
     bool ReloadService(string reloadModel, EKEventId eventId);

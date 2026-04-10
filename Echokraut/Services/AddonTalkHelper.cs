@@ -108,6 +108,11 @@ public unsafe class AddonTalkHelper : IAddonTalkHelper
             (eventType == AtkEventType.MouseClick && ((byte)eventData->MouseData.Modifier & 0b0001_0000) == 0) || 
             eventArgs.AtkEventType == (byte)AtkEventType.InputReceived;
 
+        // Check if click is inside an owned Echokraut window — don't cancel speech
+        if (eventType == AtkEventType.MouseClick && DialogState.IsInsideOwnedWindow != null
+            && DialogState.IsInsideOwnedWindow(new System.Numerics.Vector2(eventData->MouseData.PosX, eventData->MouseData.PosY)))
+            return;
+
         if (isControllerButtonClick || isDialogueAdvancing)
             if (_configuration.CancelSpeechOnTextAdvance)
                 _cancelService.Cancel(DialogState.CurrentVoiceMessage);
@@ -185,7 +190,8 @@ public unsafe class AddonTalkHelper : IAddonTalkHelper
         if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(500))
             voiceNext = false;
 
-        var eventId = _log.Start(nameof(HandleChange), TextSource.AddonTalk);
+        var _baseId = _log.Start(nameof(HandleChange), TextSource.AddonTalk);
+        var eventId = new EKEventId(_baseId.Id, _baseId.TextSource);
 
         // Notify observers that the addon state was advanced
         if (_configuration.CancelSpeechOnTextAdvance)

@@ -74,12 +74,28 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
             OnClick = v => { _voice.UseAsRandom = v; Save(); },
         };
 
+        var adultCheck = new CheckboxNode
+        {
+            Size = new Vector2(w, 24),
+            String = Loc.S("Adult Voice"),
+            IsChecked = _voice.IsAdultVoice,
+            OnClick = v => { _voice.IsAdultVoice = v; Save(); },
+        };
+
         var childCheck = new CheckboxNode
         {
             Size = new Vector2(w, 24),
-            String = Loc.S("Child voice"),
+            String = Loc.S("Child Voice"),
             IsChecked = _voice.IsChildVoice,
             OnClick = v => { _voice.IsChildVoice = v; Save(); },
+        };
+
+        var elderCheck = new CheckboxNode
+        {
+            Size = new Vector2(w, 24),
+            String = Loc.S("Elder Voice"),
+            IsChecked = _voice.IsElderVoice,
+            OnClick = v => { _voice.IsElderVoice = v; Save(); },
         };
 
         // Note
@@ -124,7 +140,9 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
 
         list.AddNode(enabledCheck);
         list.AddNode(randomCheck);
+        list.AddNode(adultCheck);
         list.AddNode(childCheck);
+        list.AddNode(elderCheck);
         list.AddNode(noteInput);
         list.AddNode(volSlider);
         list.AddNode(playBtn);
@@ -156,7 +174,6 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
                         _voice.AllowedGenders.Add(g);
                     else if (!v && _voice.AllowedGenders.Contains(g))
                         _voice.AllowedGenders.Remove(g);
-                    _npcData.RefreshSelectables(_config.EchokrautVoices);
                     Save();
                 },
             };
@@ -205,7 +222,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
                     }
                 else
                     _voice.AllowedRaces.Clear();
-                _npcData.RefreshSelectables(_config.EchokrautVoices);
+                _npcData.RefreshSelectables(_npcData.GetEchokrautVoices());
                 Save();
             },
         };
@@ -237,7 +254,6 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
                         _voice.AllowedRaces.Add(race);
                     else if (!v && _voice.AllowedRaces.Contains(race))
                         _voice.AllowedRaces.Remove(race);
-                    _npcData.RefreshSelectables(_config.EchokrautVoices);
                     Save();
                 },
             };

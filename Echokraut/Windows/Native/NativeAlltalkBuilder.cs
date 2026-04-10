@@ -23,6 +23,8 @@ public static class NativeAlltalkBuilder
     public class LocalInstanceNodes
     {
         public TextInputNode InstallPathInput = null!;
+        public TextNode ValidationLabel = null!;
+        public CheckboxNode CpuModeCheck = null!;
         public CheckboxNode IsWindows11Check = null!;
         public TextInputNode CustomModelUrlInput = null!;
         public TextInputNode CustomVoicesUrlInput = null!;
@@ -37,13 +39,13 @@ public static class NativeAlltalkBuilder
 
         /// <summary>All nodes in display order, for adding to a list or collapsible section.</summary>
         public NodeBase[] AllNodes => [
-            InstallPathInput, IsWindows11Check,
+            InstallPathInput, ValidationLabel, CpuModeCheck, IsWindows11Check,
             CustomModelUrlInput, CustomVoicesUrlInput, InstallCustomDataRow,
             AutoStartCheck, InstallRow, StartStopRow,
         ];
 
-        /// <summary>Essential nodes visible by default (install path, then install button + start/stop after advanced).</summary>
-        public NodeBase[] EssentialNodes => [InstallPathInput];
+        /// <summary>Essential nodes visible by default (install path + validation + CPU mode, then install button + start/stop after advanced).</summary>
+        public NodeBase[] EssentialNodes => [InstallPathInput, ValidationLabel, CpuModeCheck];
 
         /// <summary>Nodes that come after the advanced section (install button + start/stop).</summary>
         public NodeBase[] PostAdvancedNodes => [InstallRow, StartStopRow];
@@ -54,22 +56,29 @@ public static class NativeAlltalkBuilder
             InstallCustomDataRow, AutoStartCheck,
         ];
 
-        /// <summary>Updates button labels and dimming each frame.</summary>
+        /// <summary>Updates button labels, dimming, and validation each frame.</summary>
         public void Update(Configuration config, IAlltalkInstanceService alltalkInstance)
         {
+            var (pathValid, validationMsg) = ValidateInstallPath(config.Alltalk.LocalInstallPath);
+
+            // Validation label — visible only when path is invalid
+            ValidationLabel.IsVisible = !pathValid;
+            if (!pathValid)
+                ValidationLabel.String = validationMsg;
+
             // Install button
             InstallButton.String = alltalkInstance.Installing
                 ? Loc.S("Installing...")
                 : config.Alltalk.LocalInstall ? Loc.S("Reinstall") : Loc.S("Install");
-            Dim(InstallButton, !alltalkInstance.Installing);
+            Dim(InstallButton, pathValid && !alltalkInstance.Installing);
 
-            // Install custom data — only when installed and not currently installing
-            Dim(InstallCustomDataButton, config.Alltalk.LocalInstall && !alltalkInstance.Installing);
+            // Install custom data — only when installed, not installing, and path valid
+            Dim(InstallCustomDataButton, pathValid && config.Alltalk.LocalInstall && !alltalkInstance.Installing);
 
             // Start/Stop
             StartButton.String = alltalkInstance.InstanceStarting ? Loc.S("Starting...")
                 : alltalkInstance.InstanceRunning ? Loc.S("Running") : Loc.S("Start");
-            Dim(StartButton, !alltalkInstance.InstanceRunning && !alltalkInstance.InstanceStarting);
+            Dim(StartButton, pathValid && !alltalkInstance.InstanceRunning && !alltalkInstance.InstanceStarting);
             Dim(StopButton, (alltalkInstance.InstanceRunning || alltalkInstance.InstanceStarting) && !alltalkInstance.InstanceStopping);
         }
     }
@@ -93,6 +102,21 @@ public static class NativeAlltalkBuilder
         nodes.InstallPathInput = MakeInput(Loc.S("Local install path (no spaces or dashes)"), width, 128,
             config.Alltalk.LocalInstallPath,
             v => { config.Alltalk.LocalInstallPath = v; config.Save(); });
+
+        // Validation label — shown when path is empty
+        nodes.ValidationLabel = new TextNode
+        {
+            Size = new Vector2(width, 18),
+            String = Loc.S("The Alltalk path must not be empty.\r\nPlease enter a valid path."),
+            FontType = FontType.Axis,
+            FontSize = 12,
+            TextColor = new Vector4(1f, 0.3f, 0.3f, 1f),
+            IsVisible = string.IsNullOrWhiteSpace(config.Alltalk.LocalInstallPath),
+        };
+
+        // CPU mode
+        nodes.CpuModeCheck = MakeCheck(Loc.S("CPU mode (no GPU required, slower)"), width, config.Alltalk.CpuMode,
+            v => { config.Alltalk.CpuMode = v; config.Save(); });
 
         // Is Windows 11
         nodes.IsWindows11Check = MakeCheck(Loc.S("Is Windows 11"), width, config.Alltalk.IsWindows11,
@@ -171,6 +195,31 @@ public static class NativeAlltalkBuilder
         };
 
         return nodes;
+    }
+
+    /// <summary>
+    /// Validates the AllTalk install path. Returns (isValid, errorMessage).
+    /// Checks: not empty, rooted (absolute), no invalid path characters, no spaces or dashes in path.
+    /// </summary>
+    public static (bool isValid, string message) ValidateInstallPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return (false, Loc.S("The Alltalk path must not be empty.\r\nPlease enter a valid path."));
+
+        // Must be an absolute/rooted path (e.g. C:\... or /home/...)
+        if (!System.IO.Path.IsPathRooted(path))
+            return (false, Loc.S("Please enter an absolute path (e.g. C:\\Alltalk)."));
+
+        // Check for invalid path characters
+        var invalidChars = System.IO.Path.GetInvalidPathChars();
+        if (path.IndexOfAny(invalidChars) >= 0)
+            return (false, Loc.S("The path contains invalid characters."));
+
+        // No spaces or dashes (AllTalk / conda don't handle them well)
+        if (path.Contains(' ') || path.Contains('-'))
+            return (false, Loc.S("The path must not contain spaces or dashes."));
+
+        return (true, string.Empty);
     }
 
     // ── Private helpers (mirror NativeConfigWindow's factory methods) ─────────

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Echokraut.Enums;
 
 namespace Echokraut.DataClasses;
 
@@ -36,6 +37,7 @@ public class LinkedDialog
     public string Sheet { get; set; } = "";
     public uint DialogId { get; set; }
     public string MatchSource { get; set; } = "";
+    public QuestType QuestType { get; set; }
     public Dictionary<string, string> Texts { get; set; } = new();
 }
 
@@ -56,6 +58,7 @@ public class LinkedQuestDialog
     public string Race { get; set; } = "";
     public string Gender { get; set; } = "";
     public string MatchSource { get; set; } = "";
+    public QuestType QuestType { get; set; }
     public Dictionary<string, string> Texts { get; set; } = new();
 }
 

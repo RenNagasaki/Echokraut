@@ -191,7 +191,7 @@ public static class Loc
         ["Download now"] = new() { { DE, "Jetzt herunterladen" }, { FR, "Télécharger maintenant" }, { JP, "今すぐダウンロード" } },
 
         // ── Backend / Alltalk ─────────────────────────────────────────────
-        ["Local instance (runs on your GPU)"] = new() { { DE, "Lokale Instanz (nutzt Ihre GPU)" }, { FR, "Instance locale (utilise votre GPU)" }, { JP, "ローカルインスタンス（GPUで実行）" } },
+        ["Local instance (runs on your GPU or CPU)"] = new() { { DE, "Lokale Instanz (nutzt Ihre GPU oder CPU)" }, { FR, "Instance locale (utilise votre GPU ou CPU)" }, { JP, "ローカルインスタンス（GPUまたはCPUで実行）" } },
         ["Remote instance (connect to a server)"] = new() { { DE, "Remote-Instanz (Verbindung zu einem Server)" }, { FR, "Instance distante (connexion à un serveur)" }, { JP, "リモートインスタンス（サーバーに接続）" } },
         ["No instance (audio files only, no generation)"] = new() { { DE, "Keine Instanz (nur Audiodateien, keine Generierung)" }, { FR, "Aucune instance (fichiers audio uniquement)" }, { JP, "インスタンスなし（音声ファイルのみ、生成なし）" } },
         ["Remote instance"] = new() { { DE, "Remote-Instanz" }, { FR, "Instance distante" }, { JP, "リモートインスタンス" } },
@@ -203,6 +203,7 @@ public static class Loc
             { JP, "ストリーミング生成（全文生成前に音声を再生）" },
         },
         ["Auto-start local instance on plugin load"] = new() { { DE, "Lokale Instanz beim Laden des Plugins automatisch starten" }, { FR, "Démarrer l'instance locale au chargement du plugin" }, { JP, "プラグイン読み込み時にローカルインスタンスを自動起動" } },
+        ["CPU mode (no GPU required, slower)"] = new() { { DE, "CPU-Modus (keine GPU erforderlich, langsamer)" }, { FR, "Mode CPU (pas de GPU requis, plus lent)" }, { JP, "CPUモード（GPU不要、低速）" } },
         ["Is Windows 11"] = new() { { DE, "Windows 11" }, { FR, "Windows 11" }, { JP, "Windows 11" } },
         ["Local install path (no spaces or dashes)"] = new() { { DE, "Lokaler Installationspfad (keine Leerzeichen oder Bindestriche)" }, { FR, "Chemin d'installation local (sans espaces ni tirets)" }, { JP, "ローカルインストールパス（スペースやダッシュなし）" } },
         ["Custom model URL (zip with one root folder)"] = new() { { DE, "Benutzerdefinierte Modell-URL (ZIP mit einem Stammordner)" }, { FR, "URL du modèle personnalisé (zip avec un dossier racine)" }, { JP, "カスタムモデルURL（ルートフォルダ1つのzip）" } },
@@ -238,6 +239,24 @@ public static class Loc
             { DE, "Der Alltalk-Pfad darf nicht leer sein.\r\nBitte geben Sie einen gültigen Pfad ein." },
             { FR, "Le chemin Alltalk ne doit pas être vide.\r\nVeuillez entrer un chemin valide." },
             { JP, "Alltalkのパスを空にすることはできません。\r\n有効なパスを入力してください。" },
+        },
+        ["Please enter an absolute path (e.g. C:\\Alltalk)."] = new()
+        {
+            { DE, "Bitte geben Sie einen absoluten Pfad ein (z.B. C:\\Alltalk)." },
+            { FR, "Veuillez entrer un chemin absolu (ex. C:\\Alltalk)." },
+            { JP, "絶対パスを入力してください（例: C:\\Alltalk）。" },
+        },
+        ["The path contains invalid characters."] = new()
+        {
+            { DE, "Der Pfad enthält ungültige Zeichen." },
+            { FR, "Le chemin contient des caractères invalides." },
+            { JP, "パスに無効な文字が含まれています。" },
+        },
+        ["The path must not contain spaces or dashes."] = new()
+        {
+            { DE, "Der Pfad darf keine Leerzeichen oder Bindestriche enthalten." },
+            { FR, "Le chemin ne doit pas contenir d'espaces ni de tirets." },
+            { JP, "パスにスペースやダッシュを含めることはできません。" },
         },
         ["The CUDA Toolkit does not appear to be installed.\r\nIt is required for local Alltalk instances."] = new()
         {
@@ -321,17 +340,17 @@ public static class Loc
             { JP, "テキスト読み上げのセットアップ方法を選択してください:" },
         },
         ["Local TTS"] = new() { { DE, "Lokale TTS" }, { FR, "TTS local" }, { JP, "ローカルTTS" } },
-        ["Runs on your GPU — best quality, requires ~20GB disk space"] = new()
+        ["Runs on your GPU or CPU — best quality, requires ~20GB disk space"] = new()
         {
-            { DE, "Läuft auf Ihrer GPU — beste Qualität, benötigt ~20 GB Speicherplatz" },
-            { FR, "Fonctionne sur votre GPU — meilleure qualité, nécessite ~20 Go d'espace" },
-            { JP, "GPUで実行 — 最高品質、約20GBのディスク容量が必要" },
+            { DE, "Läuft auf Ihrer GPU oder CPU — beste Qualität, benötigt ~20 GB Speicherplatz" },
+            { FR, "Fonctionne sur votre GPU ou CPU — meilleure qualité, nécessite ~20 Go d'espace" },
+            { JP, "GPUまたはCPUで実行 — 最高品質、約20GBのディスク容量が必要" },
         },
-        ["Local TTS\nRuns on your GPU — best quality, requires ~20GB disk space"] = new()
+        ["Local TTS\nRuns on your GPU or CPU — best quality, requires ~20GB disk space"] = new()
         {
-            { DE, "Lokale TTS\nLäuft auf Ihrer GPU — beste Qualität, benötigt ~20 GB Speicherplatz" },
-            { FR, "TTS local\nFonctionne sur votre GPU — meilleure qualité, nécessite ~20 Go d'espace" },
-            { JP, "ローカルTTS\nGPUで実行 — 最高品質、約20GBのディスク容量が必要" },
+            { DE, "Lokale TTS\nLäuft auf Ihrer GPU oder CPU — beste Qualität, benötigt ~20 GB Speicherplatz" },
+            { FR, "TTS local\nFonctionne sur votre GPU ou CPU — meilleure qualité, nécessite ~20 Go d'espace" },
+            { JP, "ローカルTTS\nGPUまたはCPUで実行 — 最高品質、約20GBのディスク容量が必要" },
         },
         ["Remote Server"] = new() { { DE, "Remote-Server" }, { FR, "Serveur distant" }, { JP, "リモートサーバー" } },
         ["Connect to a server running Alltalk (yours or someone else's)"] = new()
@@ -416,6 +435,30 @@ public static class Loc
         ["Clear mapped NPCs"] = new() { { DE, "Zugeordnete NPCs löschen" }, { FR, "Effacer les PNJ associés" }, { JP, "マッピング済みNPCをクリア" } },
         ["Clear mapped players"] = new() { { DE, "Zugeordnete Spieler löschen" }, { FR, "Effacer les joueurs associés" }, { JP, "マッピング済みプレイヤーをクリア" } },
         ["Clear mapped bubbles"] = new() { { DE, "Zugeordnete Sprechblasen löschen" }, { FR, "Effacer les bulles associées" }, { JP, "マッピング済み吹き出しをクリア" } },
+        ["Wipe database & local audio"] = new() { { DE, "Datenbank & lokales Audio löschen" }, { FR, "Effacer base de données & audio local" }, { JP, "データベースとローカル音声を消去" } },
+        ["Confirm wipe everything!"] = new() { { DE, "Alles wirklich löschen!" }, { FR, "Confirmer tout effacer !" }, { JP, "全消去を確認！" } },
+        ["Wiping..."] = new() { { DE, "Lösche..." }, { FR, "Effacement..." }, { JP, "消去中..." } },
+        ["Scanning {0} for dialogs..."] = new() { { DE, "Durchsuche {0} nach Dialogen..." }, { FR, "Analyse de {0} pour les dialogues..." }, { JP, "{0}でダイアログをスキャン中..." } },
+        ["Loading NPC names..."] = new() { { DE, "Lade NPC-Namen..." }, { FR, "Chargement des noms de PNJ..." }, { JP, "NPC名を読み込み中..." } },
+        ["Loading BNpc names..."] = new() { { DE, "Lade BNpc-Namen..." }, { FR, "Chargement des noms BNpc..." }, { JP, "BNpc名を読み込み中..." } },
+        ["Loading SwitchTalkVariation..."] = new() { { DE, "Lade SwitchTalkVariation..." }, { FR, "Chargement de SwitchTalkVariation..." }, { JP, "SwitchTalkVariationを読み込み中..." } },
+        ["Loading NPC data..."] = new() { { DE, "Lade NPC-Daten..." }, { FR, "Chargement des données PNJ..." }, { JP, "NPCデータを読み込み中..." } },
+        ["Loading NPC locations..."] = new() { { DE, "Lade NPC-Standorte..." }, { FR, "Chargement des emplacements PNJ..." }, { JP, "NPCの場所を読み込み中..." } },
+        ["Building DefaultTalk chain lookup..."] = new() { { DE, "Erstelle DefaultTalk-Verkettung..." }, { FR, "Construction de la chaîne DefaultTalk..." }, { JP, "DefaultTalkチェーンを構築中..." } },
+        ["Building Balloon lookup..."] = new() { { DE, "Erstelle Sprechblasen-Index..." }, { FR, "Construction de l'index des bulles..." }, { JP, "吹き出しインデックスを構築中..." } },
+        ["Scanning LGB territory files..."] = new() { { DE, "Scanne LGB-Gebietsdateien..." }, { FR, "Analyse des fichiers de territoire LGB..." }, { JP, "LGB地域ファイルをスキャン中..." } },
+        ["LGB pass 2: searching for {0} unmatched Balloon IDs..."] = new() { { DE, "LGB Durchgang 2: suche {0} nicht zugeordnete Sprechblasen..." }, { FR, "LGB passe 2 : recherche de {0} bulles non associées..." }, { JP, "LGBパス2: 未一致の吹き出しID {0}件を検索中..." } },
+        ["Processing named NPCs..."] = new() { { DE, "Verarbeite benannte NPCs..." }, { FR, "Traitement des PNJ nommés..." }, { JP, "名前付きNPCを処理中..." } },
+        ["Processing unnamed NPCs..."] = new() { { DE, "Verarbeite unbenannte NPCs..." }, { FR, "Traitement des PNJ non nommés..." }, { JP, "名前なしNPCを処理中..." } },
+        ["Diagnosing unmatched DefaultTalk..."] = new() { { DE, "Diagnostiziere nicht zugeordnete DefaultTalks..." }, { FR, "Diagnostic des DefaultTalk non associés..." }, { JP, "未一致のDefaultTalkを診断中..." } },
+        ["Collecting unmatched dialogs..."] = new() { { DE, "Sammle nicht zugeordnete Dialoge..." }, { FR, "Collecte des dialogues non associés..." }, { JP, "未一致のダイアログを収集中..." } },
+        ["Scanning for quest dialogs..."] = new() { { DE, "Durchsuche Quest-Dialoge..." }, { FR, "Analyse des dialogues de quête..." }, { JP, "クエストダイアログをスキャン中..." } },
+        ["Saving voice clips to database..."] = new() { { DE, "Speichere Sprachclips in der Datenbank..." }, { FR, "Enregistrement des clips vocaux en base..." }, { JP, "ボイスクリップをデータベースに保存中..." } },
+        ["Linking dialogs to characters..."] = new() { { DE, "Verknüpfe Dialoge mit Charakteren..." }, { FR, "Liaison des dialogues aux personnages..." }, { JP, "ダイアログをキャラクターに紐付け中..." } },
+        ["{0} generation progress"] = new() { { DE, "Generierungsfortschritt: {0}" }, { FR, "Progression de génération : {0}" }, { JP, "{0} 生成進捗" } },
+        ["Done: {0} dialogs persisted"] = new() { { DE, "Fertig: {0} Dialoge gespeichert" }, { FR, "Terminé : {0} dialogues enregistrés" }, { JP, "完了: {0}件のダイアログを保存しました" } },
+        ["Cancelled."] = new() { { DE, "Abgebrochen." }, { FR, "Annulé." }, { JP, "キャンセルされました。" } },
+        ["Error: {0}"] = new() { { DE, "Fehler: {0}" }, { FR, "Erreur : {0}" }, { JP, "エラー: {0}" } },
         ["Confirm clear NPCs!"] = new() { { DE, "NPCs löschen bestätigen!" }, { FR, "Confirmer l'effacement des PNJ !" }, { JP, "NPCクリアを確認！" } },
         ["Confirm clear players!"] = new() { { DE, "Spieler löschen bestätigen!" }, { FR, "Confirmer l'effacement des joueurs !" }, { JP, "プレイヤークリアを確認！" } },
         ["Confirm clear bubbles!"] = new() { { DE, "Sprechblasen löschen bestätigen!" }, { FR, "Confirmer l'effacement des bulles !" }, { JP, "吹き出しクリアを確認！" } },
@@ -427,6 +470,50 @@ public static class Loc
         ["Start Harvest"] = new() { { DE, "Export starten" }, { FR, "Démarrer la récolte" }, { JP, "収集開始" } },
         ["Stop Harvest"] = new() { { DE, "Export stoppen" }, { FR, "Arrêter la récolte" }, { JP, "収集停止" } },
         ["Export Quest Lua Debug"] = new() { { DE, "Quest-Lua-Debug exportieren" }, { FR, "Exporter debug Lua quête" }, { JP, "クエストLuaデバッグ出力" } },
+
+        // ── Encounter History ────────────────────────────────────────────
+        ["Voice Clip Manager"] = new() { { DE, "Sprachaufnahmen-Verwaltung" }, { FR, "Gestionnaire de clips vocaux" }, { JP, "音声クリップ管理" } },
+        ["Voice Clip Detail"] = new() { { DE, "Sprachaufnahmen-Details" }, { FR, "Détails du clip vocal" }, { JP, "音声クリップ詳細" } },
+        ["Generate All Unsaved"] = new() { { DE, "Alle nicht gespeicherten generieren" }, { FR, "Générer tous les non sauvegardés" }, { JP, "未保存をすべて生成" } },
+        ["Delete All Saved"] = new() { { DE, "Alle gespeicherten löschen" }, { FR, "Supprimer tous les sauvegardés" }, { JP, "保存済みをすべて削除" } },
+        ["Clear History"] = new() { { DE, "Verlauf löschen" }, { FR, "Effacer l'historique" }, { JP, "履歴をクリア" } },
+        ["Click again to confirm!"] = new() { { DE, "Erneut klicken zum Bestätigen!" }, { FR, "Cliquez à nouveau pour confirmer !" }, { JP, "もう一度クリックして確認！" } },
+        ["NPC Name"] = new() { { DE, "NPC-Name" }, { FR, "Nom du PNJ" }, { JP, "NPC名" } },
+        ["Text Content"] = new() { { DE, "Textinhalt" }, { FR, "Contenu du texte" }, { JP, "テキスト内容" } },
+        ["Group by NPC"] = new() { { DE, "Nach NPC gruppieren" }, { FR, "Grouper par PNJ" }, { JP, "NPCごとにグループ化" } },
+        ["Race/Gender"] = new() { { DE, "Rasse/Geschlecht" }, { FR, "Race/Genre" }, { JP, "種族/性別" } },
+        ["Voice Clips"] = new() { { DE, "Sprachaufnahmen" }, { FR, "Clips vocaux" }, { JP, "音声クリップ" } },
+        ["Generated"] = new() { { DE, "Generiert" }, { FR, "Générés" }, { JP, "生成済み" } },
+        ["Main Scenario"] = new() { { DE, "Hauptszenario" }, { FR, "Épopée" }, { JP, "メインクエスト" } },
+        ["Side Quest"] = new() { { DE, "Nebenquest" }, { FR, "Quête annexe" }, { JP, "サブクエスト" } },
+        ["Unlock / Class Quest"] = new() { { DE, "Freischalt-/Jobquest" }, { FR, "Quête de déverrouillage" }, { JP, "解放/ジョブクエスト" } },
+        ["Beast Tribe"] = new() { { DE, "Stammesquest" }, { FR, "Quête tribale" }, { JP, "蛮族クエスト" } },
+        ["Repeatable"] = new() { { DE, "Wiederholbar" }, { FR, "Répétable" }, { JP, "リピータブル" } },
+        ["Seasonal Event"] = new() { { DE, "Saisonales Event" }, { FR, "Événement saisonnier" }, { JP, "季節イベント" } },
+        ["Non-Quest Dialog"] = new() { { DE, "Nicht-Quest-Dialog" }, { FR, "Dialogue hors quête" }, { JP, "クエスト外" } },
+        ["All"] = new() { { DE, "Alle" }, { FR, "Tous" }, { JP, "すべて" } },
+        ["Unknown Area"] = new() { { DE, "Unbekanntes Gebiet" }, { FR, "Zone inconnue" }, { JP, "不明なエリア" } },
+        ["Timestamp"] = new() { { DE, "Zeitstempel" }, { FR, "Horodatage" }, { JP, "タイムスタンプ" } },
+        ["NPC"] = new() { { DE, "NPC" }, { FR, "PNJ" }, { JP, "NPC" } },
+        ["Text"] = new() { { DE, "Text" }, { FR, "Texte" }, { JP, "テキスト" } },
+        ["Actions"] = new() { { DE, "Aktionen" }, { FR, "Actions" }, { JP, "アクション" } },
+        ["Generate"] = new() { { DE, "Generieren" }, { FR, "Générer" }, { JP, "生成" } },
+        ["Generate again"] = new() { { DE, "Erneut generieren" }, { FR, "Régénérer" }, { JP, "再生成" } },
+        ["Generating voice clips..."] = new() { { DE, "Sprachaufnahmen werden generiert..." }, { FR, "Génération des clips vocaux..." }, { JP, "音声クリップを生成中..." } },
+        ["Generation progress"] = new() { { DE, "Generierungsfortschritt" }, { FR, "Progression de génération" }, { JP, "生成進捗" } },
+        ["Play voice clip"] = new() { { DE, "Sprachaufnahme abspielen" }, { FR, "Lire le clip vocal" }, { JP, "音声クリップを再生" } },
+        ["Generate and play voice clip"] = new() { { DE, "Sprachaufnahme generieren und abspielen" }, { FR, "Générer et lire le clip vocal" }, { JP, "音声クリップを生成して再生" } },
+        ["Stop voice clip"] = new() { { DE, "Wiedergabe stoppen" }, { FR, "Arrêter la lecture" }, { JP, "再生を停止" } },
+        ["Delete audio"] = new() { { DE, "Audio löschen" }, { FR, "Supprimer l'audio" }, { JP, "音声を削除" } },
+        ["No voice clips found."] = new() { { DE, "Keine Sprachaufnahmen gefunden." }, { FR, "Aucun clip vocal trouvé." }, { JP, "音声クリップが見つかりません。" } },
+        ["Gen All"] = new() { { DE, "Alle gen." }, { FR, "Tout gén." }, { JP, "全生成" } },
+        ["Del All"] = new() { { DE, "Alle lösch." }, { FR, "Tout suppr." }, { JP, "全削除" } },
+        ["Cancel"] = new() { { DE, "Abbrechen" }, { FR, "Annuler" }, { JP, "キャンセル" } },
+        ["Saved"] = new() { { DE, "Gespeichert" }, { FR, "Sauvegardé" }, { JP, "保存済み" } },
+        ["Muted"] = new() { { DE, "Stumm" }, { FR, "Muet" }, { JP, "ミュート" } },
+        ["Chat"] = new() { { DE, "Chat" }, { FR, "Chat" }, { JP, "チャット" } },
+        ["Unknown"] = new() { { DE, "Unbekannt" }, { FR, "Inconnu" }, { JP, "不明" } },
+        ["Generate and play"] = new() { { DE, "Generieren und abspielen" }, { FR, "Générer et lire" }, { JP, "生成して再生" } },
 
         // ── Dialog controls ───────────────────────────────────────────────
         ["Resume dialogue"] = new() { { DE, "Dialog fortsetzen" }, { FR, "Reprendre le dialogue" }, { JP, "ダイアログを再開" } },
@@ -491,6 +578,7 @@ public static class Loc
         ["All"] = new() { { DE, "Alle" }, { FR, "Tous" }, { JP, "全て" } },
         ["Always jump to bottom"] = new() { { DE, "Immer nach unten springen" }, { FR, "Toujours aller en bas" }, { JP, "常に最下部に移動" } },
         ["Base Url"] = new() { { DE, "Basis-URL" }, { FR, "URL de base" }, { JP, "ベースURL" } },
+        ["Adult Voice"] = new() { { DE, "Erwachsenenstimme" }, { FR, "Voix adulte" }, { JP, "大人の声" } },
         ["Child Voice"] = new() { { DE, "Kinderstimme" }, { FR, "Voix d'enfant" }, { JP, "子供の声" } },
         ["Click again to confirm deletion!"] = new() { { DE, "Zum Bestätigen erneut klicken!" }, { FR, "Cliquez à nouveau pour confirmer !" }, { JP, "もう一度クリックして確認！" } },
         ["Custom model URL"] = new() { { DE, "Benutzerdefinierte Modell-URL" }, { FR, "URL du modèle personnalisé" }, { JP, "カスタムモデルURL" } },
@@ -512,7 +600,6 @@ public static class Loc
         ["Select Backend"] = new() { { DE, "Backend auswählen" }, { FR, "Sélectionner le backend" }, { JP, "バックエンドを選択" } },
         ["Stop Voice"] = new() { { DE, "Stimme stoppen" }, { FR, "Arrêter la voix" }, { JP, "ボイスを停止" } },
         ["Test Voice"] = new() { { DE, "Stimme testen" }, { FR, "Tester la voix" }, { JP, "ボイスをテスト" } },
-        ["Timestamp"] = new() { { DE, "Zeitstempel" }, { FR, "Horodatage" }, { JP, "タイムスタンプ" } },
         ["Voice NPC bubbles in cities"] = new() { { DE, "NPC-Sprechblasen in Städten vertonen" }, { FR, "Bulles PNJ vocales en ville" }, { JP, "街中のNPC吹き出しをボイス化" } },
         ["Will remove all local saved audio files for this character"] = new()
         {
@@ -525,7 +612,7 @@ public static class Loc
 
         // ── Voice Config Window ──────────────────────────────────────────
         ["Use as random NPC voice"] = new() { { DE, "Als zufällige NPC-Stimme verwenden" }, { FR, "Utiliser comme voix PNJ aléatoire" }, { JP, "ランダムNPCボイスとして使用" } },
-        ["Child voice"] = new() { { DE, "Kinderstimme" }, { FR, "Voix d'enfant" }, { JP, "子供の声" } },
+        ["Elder Voice"] = new() { { DE, "Ältere Stimme" }, { FR, "Voix de personne âgée" }, { JP, "高齢者の声" } },
         ["Allowed genders"] = new() { { DE, "Erlaubte Geschlechter" }, { FR, "Genres autorisés" }, { JP, "許可する性別" } },
         ["Allowed races"] = new() { { DE, "Erlaubte Völker" }, { FR, "Races autorisées" }, { JP, "許可する種族" } },
 
@@ -536,7 +623,6 @@ public static class Loc
 
         // ── FFXIV Races (official localized names) ───────────────────────
         // Playable races
-        ["Unknown"] = new() { { DE, "Unbekannt" }, { FR, "Inconnu" }, { JP, "不明" } },
         ["Hyur"] = new() { { DE, "Hyuran" }, { FR, "Hyuran" }, { JP, "ヒューラン" } },
         ["Elezen"] = new() { { DE, "Elezen" }, { FR, "Élézen" }, { JP, "エレゼン" } },
         ["Miqote"] = new() { { DE, "Miqo'te" }, { FR, "Miqo'te" }, { JP, "ミコッテ" } },

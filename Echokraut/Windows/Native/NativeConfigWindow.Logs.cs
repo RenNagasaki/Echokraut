@@ -7,6 +7,7 @@ using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
 using Echotools.Logging.Enums;
 using Echokraut.Localization;
+using Echotools.UI.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
@@ -52,14 +53,8 @@ public sealed unsafe partial class NativeConfigWindow
     private int _logsProgressiveIndex;
     private int _logsProgressiveTab = -1; // -1 = idle
 
-    // Deferred page change (set by button click, processed in UpdateLogs)
-    private int _logsPendingPageDelta;
-    private int _logsPendingPageTab = -1;
-
-    // Pagination nodes (individually positioned)
-    private readonly TextButtonNode?[] _logsPrevButtons = new TextButtonNode?[LogTabs.Length];
-    private readonly TextButtonNode?[] _logsNextButtons = new TextButtonNode?[LogTabs.Length];
-    private readonly TextNode?[] _logsPageLabels = new TextNode?[LogTabs.Length];
+    // Pagination bars per log tab
+    private readonly PaginationBar?[] _logsPaginationBars = new PaginationBar?[LogTabs.Length];
 
     // Column widths
     private const float LogColTimestamp = 85f;
@@ -81,7 +76,14 @@ public sealed unsafe partial class NativeConfigWindow
             _logsPanels[i] = Panel(_innerContentPos, new Vector2(_innerContentSize.X, panelH));
             _logsDirty[i] = true;
 
-            CreateLogsPaginationNodes(i, w, _innerContentPos.Y + panelH + 4);
+            var tabIdx = i;
+            _logsPaginationBars[i] = new PaginationBar(
+                new Vector2(_innerContentPos.X, _innerContentPos.Y + panelH + 4), w,
+                page =>
+                {
+                    _logsPage[tabIdx] = page;
+                    _logsDirty[tabIdx] = true;
+                });
         }
 
         for (var i = 0; i < LogTabs.Length; i++)
@@ -93,26 +95,6 @@ public sealed unsafe partial class NativeConfigWindow
         _log.LogUpdated += OnLogUpdated;
     }
 
-    private void CreateLogsPaginationNodes(int index, float w, float y)
-    {
-        var idx = index;
-        const float btnW = 30f;
-        const float labelW = 150f;
-
-        _logsPrevButtons[index] = Button("<", btnW, () => LogsChangePage(idx, -1));
-        _logsNextButtons[index] = Button(">", btnW, () => LogsChangePage(idx, 1));
-        _logsPageLabels[index] = Label("", labelW);
-
-        // Buttons centered in the window
-        const float btnGap = 20f;
-        var centerX = _innerContentPos.X + (w - btnW * 2 - btnGap) / 2f;
-        _logsPrevButtons[index]!.Position = new Vector2(centerX, y);
-        _logsNextButtons[index]!.Position = new Vector2(centerX + btnW + btnGap, y);
-
-        // Label right-aligned
-        _logsPageLabels[index]!.Position = new Vector2(_innerContentPos.X + w - labelW, y + 4);
-    }
-
     private void AddLogsNodes()
     {
         AddNode(_logsTabBar!);
@@ -120,9 +102,9 @@ public sealed unsafe partial class NativeConfigWindow
             if (p != null) AddNode(p);
         for (var i = 0; i < LogTabs.Length; i++)
         {
-            if (_logsPrevButtons[i] != null) AddNode(_logsPrevButtons[i]!);
-            if (_logsNextButtons[i] != null) AddNode(_logsNextButtons[i]!);
-            if (_logsPageLabels[i] != null) AddNode(_logsPageLabels[i]!);
+            if (_logsPaginationBars[i] != null)
+                foreach (var node in _logsPaginationBars[i]!.Nodes)
+                    AddNode(node);
         }
     }
 
@@ -139,9 +121,9 @@ public sealed unsafe partial class NativeConfigWindow
                 SetVisible(p, false);
             for (var i = 0; i < LogTabs.Length; i++)
             {
-                SetVisible(_logsPrevButtons[i], false);
-                SetVisible(_logsNextButtons[i], false);
-                SetVisible(_logsPageLabels[i], false);
+                if (_logsPaginationBars[i] != null)
+                    foreach (var node in _logsPaginationBars[i]!.Nodes)
+                        SetVisible(node, false);
             }
         }
     }
@@ -152,9 +134,9 @@ public sealed unsafe partial class NativeConfigWindow
         for (var i = 0; i < _logsPanels.Length; i++)
         {
             SetVisible(_logsPanels[i], i == index);
-            SetVisible(_logsPrevButtons[i], i == index);
-            SetVisible(_logsNextButtons[i], i == index);
-            SetVisible(_logsPageLabels[i], i == index);
+            if (_logsPaginationBars[i] != null)
+                foreach (var node in _logsPaginationBars[i]!.Nodes)
+                    SetVisible(node, i == index);
         }
 
         _logsDirty[index] = true;
@@ -176,7 +158,7 @@ public sealed unsafe partial class NativeConfigWindow
         _log.UpdateMainThreadLogs();
 
         // Process deferred page changes (queued by button click handlers)
-        ProcessLogsPageChange();
+        _logsPaginationBars[_activeLogTab]?.Update();
 
         if (_logsDirty[_activeLogTab])
         {
@@ -318,7 +300,7 @@ public sealed unsafe partial class NativeConfigWindow
         if (list == null || list.Count == 0)
         {
             panel.AddNode(Label(Loc.S("No log entries."), w));
-            UpdateLogsPaginationLabel(index, 0);
+            _logsPaginationBars[index]?.SetTotalItems(0, LogsPageSize);
             _logsProgressiveTab = -1;
             return;
         }
@@ -326,7 +308,7 @@ public sealed unsafe partial class NativeConfigWindow
         // Start progressive build — rows added in ContinueLogsPageBuild()
         _logsProgressiveTab = index;
         _logsProgressiveIndex = 0;
-        UpdateLogsPaginationLabel(index, list.Count);
+        _logsPaginationBars[index]?.SetTotalItems(list.Count, LogsPageSize);
     }
 
     private void ContinueLogsPageBuild()
@@ -338,7 +320,7 @@ public sealed unsafe partial class NativeConfigWindow
         var list = _logsFilteredData[index];
         if (panel == null || list == null) { _logsProgressiveTab = -1; return; }
 
-        var page = _logsPage[index];
+        var page = _logsPaginationBars[index]?.CurrentPage ?? 0;
         var pageStart = page * LogsPageSize;
         var pageEnd = Math.Min(pageStart + LogsPageSize, list.Count);
         var pageCount = pageEnd - pageStart;
@@ -407,49 +389,6 @@ public sealed unsafe partial class NativeConfigWindow
 
     // ── Logs pagination ──────────────────────────────────────────────────────
 
-    private void LogsChangePage(int tabIndex, int delta)
-    {
-        // Defer to UpdateLogs — never clear/rebuild nodes inside ATK event handlers.
-        _logsPendingPageTab = tabIndex;
-        _logsPendingPageDelta = delta;
-    }
-
-    private void ProcessLogsPageChange()
-    {
-        if (_logsPendingPageTab < 0) return;
-
-        var tabIndex = _logsPendingPageTab;
-        var delta = _logsPendingPageDelta;
-        _logsPendingPageTab = -1;
-
-        var total = _logsFilteredData[tabIndex]?.Count ?? 0;
-        var maxPage = Math.Max(0, (total - 1) / LogsPageSize);
-        var newPage = Math.Clamp(_logsPage[tabIndex] + delta, 0, maxPage);
-        if (newPage == _logsPage[tabIndex]) return;
-
-        _logsPage[tabIndex] = newPage;
-        _logsDirty[tabIndex] = true;
-    }
-
-    private void UpdateLogsPaginationLabel(int tabIndex, int total)
-    {
-        if (_logsPageLabels[tabIndex] == null) return;
-
-        var maxPage = Math.Max(0, (total - 1) / LogsPageSize);
-        Dim(_logsPrevButtons[tabIndex], _logsPage[tabIndex] > 0);
-        Dim(_logsNextButtons[tabIndex], _logsPage[tabIndex] < maxPage);
-
-        if (total == 0)
-        {
-            _logsPageLabels[tabIndex]!.String = $"0 / 0";
-        }
-        else
-        {
-            var start = _logsPage[tabIndex] * LogsPageSize + 1;
-            var end = Math.Min(start + LogsPageSize - 1, total);
-            _logsPageLabels[tabIndex]!.String = $"{start}-{end} / {total}";
-        }
-    }
 
     // ── LogConfig accessor helpers ───────────────────────────────────────────
 

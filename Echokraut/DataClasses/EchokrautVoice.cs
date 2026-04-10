@@ -1,11 +1,8 @@
 using Echokraut.Enums;
 using Echotools.Logging.Enums;
-using Lumina.Excel.Sheets;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace Echokraut.DataClasses
 {
@@ -14,7 +11,9 @@ namespace Echokraut.DataClasses
         public bool IsDefault { get; set; }
         public bool IsEnabled { get; set; } = true;
         public bool UseAsRandom { get; set; }
+        public bool IsAdultVoice { get; set; } = true;
         public bool IsChildVoice { get; set; }
+        public bool IsElderVoice { get; set; }
         public float Volume { get; set; } = 1f;
         public string BackendVoice { get; set; } = "";
         
@@ -42,7 +41,7 @@ namespace Echokraut.DataClasses
                             {
                                 
                                 var voiceNmeArr = voiceNme.Split('-');
-                                if (voiceNmeArr[0] == "All" || voiceNmeArr[0] == "Child")
+                                if (voiceNmeArr[0] == "All" || voiceNmeArr[0] == "Child" || voiceNmeArr[0] == "Elder" || voiceNmeArr[0] == "Adult")
                                     continue;
                                 if (Enum.TryParse(typeof(NpcRaces), voiceNmeArr[0], true, out object? race2))
                                     continue;
@@ -93,22 +92,32 @@ namespace Echokraut.DataClasses
             return otherObj?.ToString().ToLower().CompareTo(ToString().ToLower()) ?? -1;
         }
 
-        public bool FitsNpcData(Genders gender, NpcRaces race, bool isChild, bool isGenderedRace)
+        public bool FitsNpcData(Genders gender, NpcRaces race, BodyType bodyType, bool isGenderedRace)
         {
-            return IsEnabled && 
-                   UseAsRandom && 
+            return IsEnabled &&
+                   UseAsRandom &&
                    ((isGenderedRace && (AllowedGenders.Contains(gender) || AllowedGenders.Count == 0)) || !isGenderedRace) &&
                     AllowedRaces.Contains(race) &&
-                    IsChildVoice == isChild;
+                    FitsBodyType(bodyType);
         }
 
-        public bool IsSelectable(string npcName, Genders gender, NpcRaces race, bool isChild)
+        public bool IsSelectable(string npcName, Genders gender, NpcRaces race, BodyType bodyType)
         {
             return IsEnabled && (
                 IsDefault ||
-                (AllowedGenders.Contains(gender) && AllowedRaces.Contains(race) && IsChildVoice == isChild) ||
+                (AllowedGenders.Contains(gender) && AllowedRaces.Contains(race) && FitsBodyType(bodyType)) ||
                 voiceNameShort.Contains(npcName)
             );
+        }
+
+        private bool FitsBodyType(BodyType bodyType)
+        {
+            return bodyType switch
+            {
+                BodyType.Child => IsChildVoice,
+                BodyType.Elder => IsElderVoice,
+                _ => IsAdultVoice
+            };
         }
     }
 }
