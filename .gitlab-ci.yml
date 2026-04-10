@@ -32,5 +32,5 @@ mirror-to-github:
   script:
     - git clone --mirror "$CI_REPOSITORY_URL" repo.git
     - cd repo.git
-    - git remote add github "https://${GITHUB_USER}:${GITHUB_PAT}@github.com/${GITHUB_USER}/${CI_PROJECT_NAME}.git"
+    - git remote add github "https://${GITHUB_USER}:${GITHUB_PAT}@github.com/${GITHUB_USER}/Echokraut.git"
     - git push github --mirror --force
