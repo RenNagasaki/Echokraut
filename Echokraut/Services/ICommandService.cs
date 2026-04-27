@@ -14,8 +14,10 @@ public interface ICommandService
     event Action? ToggleVoiceClipManagerRequested;
     event Action<EKEventId>? CancelAllRequested;
     event Action? DumpSheetsRequested;
+    event Action<uint>? SearchSheetIdRequested;
 
     void ToggleConfigUi();
+    void ToggleVoiceClipManagerUi();
     void ToggleFirstTimeUi();
     void PrintText(string name, string text);
     void Dispose();

@@ -6,6 +6,7 @@ using Echokraut.DataClasses.Database;
 using Echokraut.Enums;
 using Echokraut.Services;
 using Echotools.Logging.Services;
+using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using Moq;
 using Xunit;
@@ -16,11 +17,18 @@ public class DatabaseServiceTests : IDisposable
 {
     private readonly DatabaseService _db;
     private readonly EchokrautDbContext _context;
+    private readonly SqliteConnection _connection;
 
     public DatabaseServiceTests()
     {
+        // In-memory SQLite (not the EF InMemory provider) so SQLite-only constructs we use
+        // in production — EF.Functions.Collate, COLLATE NOCASE indexes, schema migrations
+        // via raw SQL — actually exercise.
+        _connection = new SqliteConnection("DataSource=:memory:");
+        _connection.Open();
+
         var options = new DbContextOptionsBuilder<EchokrautDbContext>()
-            .UseInMemoryDatabase(databaseName: Guid.NewGuid().ToString())
+            .UseSqlite(_connection)
             .Options;
 
         _context = new EchokrautDbContext(options);
@@ -31,6 +39,7 @@ public class DatabaseServiceTests : IDisposable
     public void Dispose()
     {
         _db.Dispose();
+        _connection.Dispose();
     }
 
     // ── Schema ──────────────────────────────────────────────
@@ -88,7 +97,7 @@ public class DatabaseServiceTests : IDisposable
         };
         _db.UpsertCharacter(updated);
 
-        var found = _db.FindCharacter("Thancred", Genders.Male, NpcRaces.Hyur);
+        var found = _db.FindCharacter("Thancred", Genders.Male, NpcRaces.Hyur, language: 1);
         Assert.NotNull(found);
         Assert.Equal("voice_02", found!.VoiceKey);
     }
@@ -96,7 +105,58 @@ public class DatabaseServiceTests : IDisposable
     [Fact]
     public void FindCharacter_ReturnsNullWhenNotFound()
     {
-        Assert.Null(_db.FindCharacter("Nobody", Genders.Male, NpcRaces.Hyur));
+        Assert.Null(_db.FindCharacter("Nobody", Genders.Male, NpcRaces.Hyur, language: 1));
+    }
+
+    [Fact]
+    public void FindCharacter_IsCaseInsensitive()
+    {
+        // Production scenario: harvest writes "stille Druidin" (lowercase from German [a]→"e"
+        // adjective resolution), runtime later looks up by ObjectTable's "Stille Druidin".
+        // Both must resolve to the same row — that's the COLLATE NOCASE contract.
+        _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Stille Druidin",
+            Race = (int)NpcRaces.Elezen,
+            Gender = (int)Genders.Female,
+            Language = 2,
+        });
+
+        var lower = _db.FindCharacter("stille Druidin", Genders.Female, NpcRaces.Elezen, language: 2);
+        var upper = _db.FindCharacter("Stille Druidin", Genders.Female, NpcRaces.Elezen, language: 2);
+        var mixed = _db.FindCharacter("STILLE druidin", Genders.Female, NpcRaces.Elezen, language: 2);
+
+        Assert.NotNull(lower);
+        Assert.NotNull(upper);
+        Assert.NotNull(mixed);
+        Assert.Equal(lower!.Id, upper!.Id);
+        Assert.Equal(lower.Id, mixed!.Id);
+    }
+
+    [Fact]
+    public void UpsertCharacter_MergesCaseDifferentNames()
+    {
+        // Two writers with different casings hit the same row; the second write must
+        // update the existing row, not insert a new one.
+        var first = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Stille Druidin",
+            Race = (int)NpcRaces.Elezen,
+            Gender = (int)Genders.Female,
+            Language = 2,
+            VoiceKey = "voice_a",
+        });
+        var second = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "stille Druidin",
+            Race = (int)NpcRaces.Elezen,
+            Gender = (int)Genders.Female,
+            Language = 2,
+            VoiceKey = "voice_b",
+        });
+
+        Assert.Equal(first.Id, second.Id);
+        Assert.Equal("voice_b", second.VoiceKey);
     }
 
     [Fact]
@@ -111,7 +171,7 @@ public class DatabaseServiceTests : IDisposable
         });
 
         _db.DeleteCharacter(character.Id);
-        Assert.Null(_db.FindCharacter("Temp", Genders.Female, NpcRaces.Elezen));
+        Assert.Null(_db.FindCharacter("Temp", Genders.Female, NpcRaces.Elezen, language: 1));
     }
 
     // ── Character Contexts ──────────────────────────────────
@@ -279,8 +339,15 @@ public class DatabaseServiceTests : IDisposable
     [Fact]
     public void ClearVoiceClips_RemovesAll()
     {
+        var character = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Test",
+            Race = (int)NpcRaces.Hyur,
+            Gender = (int)Genders.Male
+        });
         _db.LogVoiceClip(new VoiceClipEntity
         {
+            CharacterId = character.Id,
             Timestamp = DateTime.UtcNow,
             TextSource = 2,
             Language = 1,
@@ -356,7 +423,7 @@ public class DatabaseServiceTests : IDisposable
         Assert.Single(_db.GetPhoneticCorrections());
 
         // Thancred should have NPC + bubble contexts
-        var thancred = _db.FindCharacter("Thancred", Genders.Male, NpcRaces.Hyur);
+        var thancred = _db.FindCharacter("Thancred", Genders.Male, NpcRaces.Hyur, language: 1);
         Assert.NotNull(thancred);
         Assert.Equal("voice_01", thancred!.VoiceKey);
 
@@ -371,7 +438,7 @@ public class DatabaseServiceTests : IDisposable
         Assert.Equal(0.5f, bubbleCtx.Volume);
 
         // Player
-        var player = _db.FindCharacter("Player", Genders.Female, NpcRaces.Miqote);
+        var player = _db.FindCharacter("Player", Genders.Female, NpcRaces.Miqote, language: 1);
         Assert.NotNull(player);
     }
 

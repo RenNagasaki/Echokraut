@@ -32,6 +32,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
     private readonly INpcDataService _npcData;
     private readonly IGameObjectService _gameObjects;
     private readonly IDatabaseService _db;
+    private readonly ILodestoneService _lodestone;
 
     public VoiceMessageProcessor(
         ILogService log,
@@ -46,7 +47,8 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         IJsonDataService jsonData,
         INpcDataService npcData,
         IGameObjectService gameObjects,
-        IDatabaseService db)
+        IDatabaseService db,
+        ILodestoneService lodestone)
     {
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _textProcessing = textProcessing ?? throw new ArgumentNullException(nameof(textProcessing));
@@ -61,9 +63,42 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         _npcData = npcData ?? throw new ArgumentNullException(nameof(npcData));
         _gameObjects = gameObjects ?? throw new ArgumentNullException(nameof(gameObjects));
         _db = db ?? throw new ArgumentNullException(nameof(db));
+        _lodestone = lodestone ?? throw new ArgumentNullException(nameof(lodestone));
     }
 
-    public async Task ProcessSpeechAsync(EKEventId eventId, IGameObject? speaker, SeString speakerName, string textValue)
+    /// <summary>
+    /// Background enrichment for chat-only players (not currently visible).
+    /// Looks up Race/Gender via Lodestone and persists if found. Best-effort, never throws to caller.
+    /// </summary>
+    private async Task TryEnrichPlayerFromLodestoneAsync(NpcMapData npcData, EKEventId eventId)
+    {
+        try
+        {
+            var result = await _lodestone.LookupAsync(npcData.Name, npcData.World);
+            if (result == null) return;
+
+            var oldName = npcData.Name;
+            var oldGender = npcData.Gender;
+            var oldRace = npcData.Race;
+
+            npcData.Race = result.Race;
+            npcData.RaceStr = result.RaceStr;
+            npcData.Gender = result.Gender;
+
+            _npcData.SaveCharacterWithOldIdentity(npcData, oldName, oldGender, oldRace);
+            _log.Info(nameof(TryEnrichPlayerFromLodestoneAsync),
+                $"Enriched player {npcData.Name}@{npcData.World}: Race={result.Race}, Gender={result.Gender}",
+                eventId);
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(TryEnrichPlayerFromLodestoneAsync),
+                $"Enrichment failed for {npcData.Name}@{npcData.World}: {ex.Message}", eventId);
+        }
+    }
+
+    public async Task ProcessSpeechAsync(EKEventId eventId, IGameObject? speaker, SeString speakerName, string textValue,
+        string worldEnglish = "")
     {
         try
         {
@@ -97,7 +132,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
             }
 
             // Step 3: Get or create NPC data
-            var npcData = await GetOrCreateNpcDataAsync(speaker, speakerName, cleanText, source, eventId);
+            var npcData = await GetOrCreateNpcDataAsync(speaker, speakerName, cleanText, source, eventId, worldEnglish);
             
             if (npcData == null)
             {
@@ -244,7 +279,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         return cleanText;
     }
 
-    private async Task<NpcMapData> GetOrCreateNpcDataAsync(IGameObject? speaker, SeString speakerName, string cleanText, TextSource source, EKEventId eventId)
+    private async Task<NpcMapData> GetOrCreateNpcDataAsync(IGameObject? speaker, SeString speakerName, string cleanText, TextSource source, EKEventId eventId, string worldEnglish = "")
     {
         var cleanSpeakerName = _textProcessing.NormalizePunctuation(speakerName.TextValue);
         var objectKind = speaker?.ObjectKind ?? ObjectKind.None;
@@ -256,6 +291,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         npcData.Gender = _characterData.GetCharacterGender(eventId, speaker, npcData.Race, out var modelBody);
         npcData.Name = _textProcessing.CleanUpName(cleanSpeakerName);
         npcData.Language = _clientState.ClientLanguage;
+        npcData.World = worldEnglish ?? "";
 
         // Handle NPC name mapping
         if (npcData.ObjectKind != ObjectKind.Player)
@@ -269,6 +305,21 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         // Get or add to database
         var resNpcData = _npcData.GetAddCharacterMapData(npcData, eventId, _backend);
         npcData = resNpcData;
+
+        // Re-pick the voice if the cached assignment doesn't fit anymore (e.g. user edited race/gender
+        // via "Edit Character"). For first-time NPCs GetAddCharacterMapData already assigned a voice,
+        // EnsureFittingVoice short-circuits in that case.
+        _backend.EnsureFittingVoice(npcData, eventId);
+
+        // For Player characters with a World but unknown Race/Gender (e.g. chat sender not currently visible),
+        // kick off an async Lodestone enrichment. Fire-and-forget — the first message is processed with what we have;
+        // subsequent ones use the resolved values.
+        if (npcData.ObjectKind == ObjectKind.Player
+            && !string.IsNullOrWhiteSpace(npcData.World)
+            && (npcData.Race == NpcRaces.Unknown || npcData.Gender == Genders.None))
+        {
+            _ = TryEnrichPlayerFromLodestoneAsync(npcData, eventId);
+        }
 
         // Check body type (child/elder/adult)
         var changed = false;

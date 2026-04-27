@@ -13,6 +13,7 @@ using Echokraut.Localization;
 using Echokraut.Services;
 using Echotools.UI.Nodes;
 using Echotools.Logging.Enums;
+using Echotools.Logging.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
@@ -28,12 +29,17 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     private readonly IDialogHarvestService _dialogHarvest;
     private readonly IGameObjectService _gameObjects;
     private readonly IClientState _clientState;
+    private readonly ILogService _log;
+    private readonly IBackendService _backend;
+    private readonly Action _toggleConfig;
 
     // Harvest
     private CancellationTokenSource? _harvestCts;
     private TextButtonNode? _harvestButton;
     private TextDropDownNode? _langDropDown;
     private StatusProgressBar? _statusBar;
+    private TextNode? _backendStatusLabel;
+    private DynamicIconButtonNode? _settingsButton;
     private TextButtonNode? _genAllToggleButton;
     private CancellationTokenSource? _genAllCts;
     private bool _genAllRunning;
@@ -110,6 +116,9 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     private NativeVoiceClipDetailWindow? _detailWindow;
     private ListButtonNode? _selectedInstanceButton;
 
+    // NPC edit popup reference (Race/Gender override)
+    private NativeNpcEditWindow? _npcEditWindow;
+
     // Tracked nodes for text-only updates (no rebuild needed)
     private readonly Dictionary<string, TreeListCategoryNode> _npcCategoryNodes = new();
     private readonly List<(string npcKey, int questType, IconListItemNode node)> _subGroupNodes = new();
@@ -122,7 +131,10 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         INpcDataService npcData,
         IDialogHarvestService dialogHarvest,
         IGameObjectService gameObjects,
-        IClientState clientState)
+        IClientState clientState,
+        ILogService log,
+        IBackendService backend,
+        Action toggleConfig)
     {
         _db = db;
         _voiceClipManager = voiceClipManager;
@@ -131,6 +143,9 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _dialogHarvest = dialogHarvest;
         _gameObjects = gameObjects;
         _clientState = clientState;
+        _log = log;
+        _backend = backend;
+        _toggleConfig = toggleConfig;
         _selectedLanguage = clientState.ClientLanguage;
 
         _onVoiceClipUpdated = () => _countsNeedRefresh = true;
@@ -308,10 +323,58 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         AddNode(_filterInput);
 
         const float paginationH = 28f;
+        const float settingsBtnSize = 28f;
+        const float settingsBtnGap = 4f;
+        const float backendStatusW = 180f;
         var treeTop = filterY + filterH + 2;
         _treePos = new Vector2(pos.X, treeTop);
         _treeSize = new Vector2(size.X, pos.Y + size.Y - treeTop - paginationH - 4);
         var pagY = pos.Y + size.Y - paginationH;
+
+        // Settings (gear) button — same DynamicIconButtonNode pattern as DialogTalkController.
+        // Sits at the very bottom-left, opens the config window on click.
+        _settingsButton = new DynamicIconButtonNode
+        {
+            Position = new Vector2(pos.X, pagY),
+            Size = new Vector2(settingsBtnSize, settingsBtnSize),
+            Icon = ButtonIcon.GearCog,
+            Tooltip = Loc.S("Open configuration window"),
+            OnClick = () => _toggleConfig(),
+        };
+        // Manual hover highlight + tooltip — in NativeAddon contexts only ImageNode events
+        // fire reliably (same reason DynamicIconButtonNode reroutes OnClick to ImageNode).
+        // The Tooltip setter registers MouseOver/MouseOut on the button itself, which never
+        // fires here, so we drive ShowTooltip/HideTooltip manually from the ImageNode events
+        // we know work.
+        var normalTint = new Vector3(1f, 1f, 1f);
+        var hoverTint = new Vector3(1.4f, 1.4f, 1.4f);
+        _settingsButton.ImageNode.MultiplyColor = normalTint;
+        _settingsButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
+        {
+            if (_settingsButton == null) return;
+            _settingsButton.ImageNode.MultiplyColor = hoverTint;
+            _settingsButton.ShowTooltip();
+        });
+        _settingsButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
+        {
+            if (_settingsButton == null) return;
+            _settingsButton.ImageNode.MultiplyColor = normalTint;
+            _settingsButton.HideTooltip();
+        });
+        AddNode(_settingsButton);
+
+        // Backend reachability indicator — to the right of the settings button, on the pagination row.
+        // Narrow (180px) so it doesn't fight the pagination buttons which sit further right.
+        _backendStatusLabel = new TextNode
+        {
+            Position = new Vector2(pos.X + settingsBtnSize + settingsBtnGap, pagY + 5),
+            Size = new Vector2(backendStatusW, paginationH - 10),
+            String = "",
+            FontType = FontType.Axis,
+            FontSize = 12,
+            AlignmentType = AlignmentType.Left,
+        };
+        AddNode(_backendStatusLabel);
 
         for (var i = 0; i < 2; i++)
         {
@@ -565,7 +628,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
             };
 
             var capturedKey = npcKey;
-            var capturedName = mapData.Name;
+            var capturedMapData = mapData;
             var capturedIsPlayer = isPlayer;
             var capturedW = w;
             var capturedTree = tree;
@@ -574,14 +637,14 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
                 if (expanded)
                 {
                     _expandedNpcs.Add(capturedKey);
-                    PopulateNpcCategory(npcCategory, capturedKey, capturedName, capturedIsPlayer, capturedW, capturedTree);
+                    PopulateNpcCategory(npcCategory, capturedKey, capturedMapData, capturedIsPlayer, capturedW, capturedTree);
                 }
                 else
                     _expandedNpcs.Remove(capturedKey);
             };
 
             if (wasExpanded)
-                PopulateNpcCategory(npcCategory, npcKey, mapData.Name, isPlayer, w, tree);
+                PopulateNpcCategory(npcCategory, npcKey, mapData, isPlayer, w, tree);
 
             tree.AddCategoryNode(npcCategory);
             _npcCategoryNodes[npcKey] = npcCategory;
@@ -602,6 +665,25 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     private void UpdateStatusBar()
     {
         if (_statusBar == null) return;
+
+        // Backend reachability label (bottom-left). Cached for 30s in BackendService so this
+        // is cheap to call repeatedly; if no cached value yet, kick off an async check.
+        var reachability = _backend.CachedReachability;
+        if (reachability == null)
+            _ = _backend.IsBackendReachableAsync();
+        if (_backendStatusLabel != null)
+        {
+            _backendStatusLabel.String = reachability switch
+            {
+                true => Loc.S("Backend: online"),
+                false => Loc.S("Backend: offline"),
+                _ => Loc.S("Backend: checking..."),
+            };
+            // FFXIV's color codes via UI ATK: tint via TextColor (RGBA Vector4).
+            _backendStatusLabel.TextColor = reachability == false
+                ? new System.Numerics.Vector4(1.0f, 0.4f, 0.4f, 1f)   // red-ish for offline
+                : new System.Numerics.Vector4(0.6f, 0.85f, 0.6f, 1f); // greenish for online/checking
+        }
 
         if (_dialogHarvest.IsRunning)
         {
@@ -741,8 +823,9 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _ => Loc.S("Non-Quest Dialog"),
     };
 
-    private void PopulateNpcCategory(TreeListCategoryNode category, string npcKey, string npcName, bool isPlayer, float w, ScrollingTreeNode tree)
+    private void PopulateNpcCategory(TreeListCategoryNode category, string npcKey, NpcMapData mapData, bool isPlayer, float w, ScrollingTreeNode tree)
     {
+        var npcName = mapData.Name;
         // Only populate once (lazy load on expand)
         if (category.Children.Any()) return;
 
@@ -790,6 +873,8 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
                 _panelDirty[_activeTab] = true;
             }
         }));
+        var capturedMapData = mapData;
+        actionsRow.AddNode(Button(Loc.S("Edit Character"), 130, () => OpenNpcEdit(capturedMapData)));
         category.AddNode(actionsRow);
 
         // Group voice clips by quest type
@@ -869,6 +954,32 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         FontSize = 12,
     };
 
+    private void OpenNpcEdit(NpcMapData mapData)
+    {
+        // Close any existing edit popup before opening a new one.
+        _npcEditWindow?.Dispose();
+        _npcEditWindow = new NativeNpcEditWindow(mapData, _npcData, _log, OnNpcEdited)
+        {
+            InternalName = "EKNpcEdit",
+            Title = $"{Loc.S("Edit Character")}: {mapData.Name}",
+            Size = new Vector2(420, 380),
+        };
+        _npcEditWindow.Open();
+    }
+
+    private void OnNpcEdited()
+    {
+        // The edited character's identity (Name+Gender+Race composite) may have changed,
+        // so all caches keyed by that composite need to drop. Easiest: invalidate the active panel.
+        _charIdCache.Clear();
+        _vcCountCache.Clear();
+        _savedCountCache.Clear();
+        _npcInstanceCache.Clear();
+        _expandedNpcs.Clear();
+        for (var i = 0; i < _panelDirty.Length; i++) _panelDirty[i] = true;
+        _statusForceRecompute = true;
+    }
+
     private static TextButtonNode Button(string label, float minWidth, Action onClick)
     {
         var node = new TextButtonNode { Size = new Vector2(minWidth, 24), String = label };
@@ -885,6 +996,12 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
 
     public override void Dispose()
     {
+        // Close before dispose: NativeAddon.Close() is async (framework-thread queued),
+        // so calling Close()→Dispose() explicitly gives the ATK detach a chance to start
+        // before managed cleanup runs. Reduces dangling-pointer crashes on plugin unload.
+        try { if (_npcEditWindow?.IsOpen == true) _npcEditWindow.Close(); } catch { }
+        try { _npcEditWindow?.Dispose(); } catch { }
+        _npcEditWindow = null;
         foreach (var tree in _oldTrees)
         {
             try { tree.Dispose(); } catch { }

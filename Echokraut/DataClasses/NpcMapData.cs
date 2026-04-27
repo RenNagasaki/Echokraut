@@ -15,6 +15,9 @@ namespace Echokraut.DataClasses
         public string RaceStr { get; set; } = null!;
         public Genders Gender { get; set; }
 
+        /// <summary>FFXIV world (server) name in English. Only set for Player characters; empty for NPCs.</summary>
+        public string World { get; set; } = "";
+
         public BodyType BodyType { get; set; } = BodyType.Adult;
 
         public string voice = "";
@@ -27,7 +30,6 @@ namespace Echokraut.DataClasses
         public BackendVoiceItem? voiceItem { get; set; }
 #pragma warning restore CS0618
 
-        public bool DoNotDelete { get; set; }
         public bool IsEnabled { get; set; } = true;
         public bool IsEnabledBubble { get; set; } = true;
         public float Volume { get; set; } = 1f;

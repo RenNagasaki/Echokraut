@@ -62,6 +62,22 @@ public class VoiceClipManagerService : IVoiceClipManagerService
     }
 
     public VoiceMessage BuildVoiceMessage(VoiceClipEntity voiceClip)
+        => BuildVoiceMessageInternal(voiceClip, null, null);
+
+    /// <summary>
+    /// Build a VoiceMessage that substitutes a generic localized alias (Adventurer / Abenteurer(in) /
+    /// Aventurier(ière) / 冒険者) for the player-name placeholders, instead of the local player's
+    /// real name. Uses the clip's language for alias localization. Used to produce shareable
+    /// gender-specific variants of placeholder clips.
+    /// </summary>
+    private VoiceMessage BuildVoiceMessageWithAlias(VoiceClipEntity voiceClip, bool isMale)
+    {
+        var clipLang = (Dalamud.Game.ClientLanguage)voiceClip.Language;
+        var alias = TalkTextHelper.GetPlayerAlias(clipLang, isMale);
+        return BuildVoiceMessageInternal(voiceClip, alias, isMale);
+    }
+
+    private VoiceMessage BuildVoiceMessageInternal(VoiceClipEntity voiceClip, string? overridePlayerName, bool? overrideIsMale)
     {
         var character = voiceClip.Character;
         var name = character?.Name ?? "";
@@ -70,6 +86,14 @@ public class VoiceClipManagerService : IVoiceClipManagerService
         var bodyType = (BodyType)voiceClip.BodyType;
         var objectKind = character != null ? (ObjectKind)character.ObjectKind : ObjectKind.None;
 
+        // Voice resolution: prefer the clip's own snapshot (preserves history if a clip was
+        // generated under a specific voice), but fall back to the character's current VoiceKey
+        // when the snapshot is empty — handles the case where the character's voice was assigned
+        // *after* the line was first logged (e.g. via Edit Character).
+        var resolvedVoice = !string.IsNullOrEmpty(voiceClip.VoiceKey)
+            ? voiceClip.VoiceKey
+            : (character?.VoiceKey ?? "");
+
         var npcData = new NpcMapData(objectKind)
         {
             Name = name,
@@ -77,7 +101,7 @@ public class VoiceClipManagerService : IVoiceClipManagerService
             RaceStr = character?.RaceStr ?? "",
             Gender = gender,
             BodyType = bodyType,
-            voice = voiceClip.VoiceKey
+            voice = resolvedVoice
         };
 
         // Resolve voice list so Voice property can look up by BackendVoice
@@ -86,9 +110,10 @@ public class VoiceClipManagerService : IVoiceClipManagerService
         var baseEventId = _log.Start(nameof(BuildVoiceMessage), (TextSource)voiceClip.TextSource);
         var eventId = new EKEventId(baseEventId.Id, baseEventId.TextSource);
 
-        // Substitute player name placeholders for TTS
-        var playerName = _gameObjects.LocalPlayerName;
-        var isMale = _gameObjects.LocalPlayerIsMale;
+        // Substitute player name placeholders for TTS. Caller can override with an alias
+        // (e.g. "Abenteurer") to produce a shareable variant.
+        var playerName = overridePlayerName ?? _gameObjects.LocalPlayerName;
+        var isMale = overrideIsMale ?? _gameObjects.LocalPlayerIsMale;
         var ttsText = TalkTextHelper.SubstitutePlaceholders(voiceClip.CleanedText, playerName, isMale);
         var originalText = TalkTextHelper.SubstitutePlaceholders(voiceClip.OriginalText, playerName, isMale);
 
@@ -178,6 +203,13 @@ public class VoiceClipManagerService : IVoiceClipManagerService
             var message = BuildVoiceMessage(voiceClip);
             eventId = message.EventId;
 
+            // Auto-assign / re-assign a voice if the current one doesn't fit the NPC
+            // (none assigned, voice disabled, gender/race/bodytype mismatch after a character edit, etc.).
+            // BackendService.EnsureFittingVoice handles character-side persistence; we mirror the
+            // resulting voice into the clip snapshot so future generations skip the lookup entirely.
+            if (message.Speaker != null && _backend.EnsureFittingVoice(message.Speaker, eventId))
+                _db.UpdateVoiceClipVoiceKey(voiceClip.Id, message.Speaker.voice ?? "");
+
             if (string.IsNullOrEmpty(message.Speaker?.voice))
             {
                 _log.Warning(nameof(GenerateForVoiceClip), $"No voice assigned for voice clip {voiceClip.Id}", eventId);
@@ -198,6 +230,16 @@ public class VoiceClipManagerService : IVoiceClipManagerService
                 _db.LogVoiceClipGeneration(voiceClip.Id, playerId, playerName, savePath);
 
                 _log.Info(nameof(GenerateForVoiceClip), $"Audio saved for voice clip {voiceClip.Id}", eventId);
+
+                // Auto-generate shareable male + female alias variants for placeholder clips when
+                // the user opted in. Each runs as a separate backend call — failure of an alias
+                // variant doesn't fail the main generation.
+                if (_config.AutoGenerateShareableAliases && voiceClip.HasPlayerPlaceholder)
+                {
+                    await GenerateAliasVariant(voiceClip, isMale: true);
+                    await GenerateAliasVariant(voiceClip, isMale: false);
+                }
+
                 if (!IsGenerating) // suppress during batch — fires once at end
                     VoiceClipUpdated?.Invoke();
                 return true;
@@ -210,6 +252,55 @@ public class VoiceClipManagerService : IVoiceClipManagerService
         {
             _log.Error(nameof(GenerateForVoiceClip), $"Error generating voice clip {voiceClip.Id}: {ex.Message}", eventId);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Generate one shareable alias variant (male or female) of a placeholder clip and persist
+    /// it as its own row in voice_clip_generations (player_content_id=0, alias_gender=1|2).
+    /// Best-effort — failures are logged at warning level and do not affect the main generation.
+    /// </summary>
+    private async Task GenerateAliasVariant(VoiceClipEntity voiceClip, bool isMale)
+    {
+        var aliasGender = isMale ? 1 : 2;
+        var eventId = new EKEventId(0, TextSource.None);
+        try
+        {
+            var message = BuildVoiceMessageWithAlias(voiceClip, isMale);
+            eventId = message.EventId;
+
+            if (string.IsNullOrEmpty(message.Speaker?.voice))
+            {
+                _log.Warning(nameof(GenerateAliasVariant),
+                    $"No voice on clip {voiceClip.Id}; skipping alias gender={aliasGender}", eventId);
+                return;
+            }
+
+            var success = await _backend.GenerateVoice(message);
+            if (!success || message.Stream == null)
+            {
+                _log.Warning(nameof(GenerateAliasVariant),
+                    $"Backend generation failed for alias gender={aliasGender} on clip {voiceClip.Id}", eventId);
+                return;
+            }
+
+            var savePath = _audioFiles.GetLocalAudioPath(_config.LocalSaveLocation, message);
+            await _audioFiles.WriteStreamToFile(eventId, message, message.Stream,
+                _config.LocalSaveLocation, false);
+
+            // playerContentId = 0 → alias rows are not bound to any specific player.
+            // playerName carries the alias string for human-readable identification in the DB.
+            _db.LogVoiceClipGeneration(voiceClip.Id, 0,
+                TalkTextHelper.GetPlayerAlias((Dalamud.Game.ClientLanguage)voiceClip.Language, isMale),
+                savePath, aliasGender);
+
+            _log.Info(nameof(GenerateAliasVariant),
+                $"Alias variant gender={aliasGender} saved for clip {voiceClip.Id}: {savePath}", eventId);
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(GenerateAliasVariant),
+                $"Alias gender={aliasGender} for clip {voiceClip.Id} failed: {ex.Message}", eventId);
         }
     }
 
@@ -244,10 +335,22 @@ public class VoiceClipManagerService : IVoiceClipManagerService
     public async Task GenerateAllUnsaved(IEnumerable<VoiceClipEntity> voiceClips,
         Action<int, int>? onProgress = null, CancellationToken ct = default)
     {
+        // Pre-check: if AllTalk isn't reachable, abort early instead of blasting hundreds
+        // of failed generation attempts into the log.
+        if (!await _backend.IsBackendReachableAsync())
+        {
+            _log.Warning(nameof(GenerateAllUnsaved),
+                "Backend not reachable — bulk generation aborted. Check AllTalk connection.",
+                new EKEventId(0, TextSource.None));
+            return;
+        }
+
         var list = new List<VoiceClipEntity>();
         foreach (var vc in voiceClips)
         {
-            if (string.IsNullOrEmpty(vc.VoiceKey)) continue;
+            // Don't pre-filter on voice key — GenerateForVoiceClip auto-assigns a fitting voice
+            // via PickVoice when none is set or the current one doesn't fit. Only skip clips
+            // that already have generated audio.
             if (!HasLocalAudio(vc))
                 list.Add(vc);
         }

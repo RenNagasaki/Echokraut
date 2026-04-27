@@ -11,6 +11,7 @@ using FFXIVClientStructs.FFXIV.Client.Game.Control;
 using FFXIVClientStructs.FFXIV.Client.Game.Object;
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using static Dalamud.Plugin.Services.IFramework;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Utility;
@@ -124,6 +125,15 @@ namespace Echokraut.Services
                         var text = MemoryHelper.ReadSeStringNullTerminated(pString);
                         var bubbleInfo = new SpeechBubbleInfo(text, currentTime_mSec, speakerName);
 
+                        // Capture native-pointer-derived data on the game thread *before* dispatching.
+                        // CreateObjectReference must run here while pActor is valid; the resulting
+                        // IGameObject wraps the pointer and is safe to access off-thread (returns
+                        // sentinel values once the actor despawns instead of crashing).
+                        Dalamud.Game.ClientState.Objects.Types.IGameObject? actorObject = null;
+                        var capturedText = text.ToString();
+                        var capturedName = speakerName;
+                        bool dispatch = false;
+
                         lock (mSpeechBubbleInfoLockObj)
                         {
                             var extantMatch = mSpeechBubbleInfo.Find((x) => { return x.IsSameMessageAs(bubbleInfo); });
@@ -132,12 +142,11 @@ namespace Echokraut.Services
                                 if (currentTime_mSec - extantMatch.TimeLastSeen_mSec > 5000)
                                 {
                                     _log.Info(nameof(OpenChatBubbleDetour), $"Found bubble: {speakerName} - {text}", eventId);
-                                    var actorObject = _objectTable.CreateObjectReference((nint)pActor);
-                                    _ = _voiceProcessor.ProcessSpeechAsync(eventId, actorObject, speakerName, text.ToString());
+                                    actorObject = _objectTable.CreateObjectReference((nint)pActor);
+                                    dispatch = true;
                                 }
                                 else
                                 {
-
                                     _log.Info(nameof(OpenChatBubbleDetour), $"Bubble already played in the last <5 seconds. Skipping: {speakerName} - {text}", eventId);
                                     _log.End(nameof(OpenChatBubbleDetour), eventId);
                                 }
@@ -148,9 +157,19 @@ namespace Echokraut.Services
                             {
                                 mSpeechBubbleInfo.Add(bubbleInfo);
                                 _log.Info(nameof(OpenChatBubbleDetour), $"Found bubble: {speakerName} - {text}", eventId);
-                                var actorObject = _objectTable.CreateObjectReference((nint)pActor);
-                                _ = _voiceProcessor.ProcessSpeechAsync(eventId, actorObject, speakerName, text.ToString());
+                                actorObject = _objectTable.CreateObjectReference((nint)pActor);
+                                dispatch = true;
                             }
+                        }
+
+                        // Push the heavy synchronous work (DB lookups, voice picking, SaveCharacter)
+                        // off the game thread. ProcessSpeechAsync → GetOrCreateNpcDataAsync is
+                        // declared async but has no real awaits, so it runs entirely on the calling
+                        // thread. In a busy area bubbles fire several times per second and the
+                        // accumulated DB I/O on the game thread freezes the client.
+                        if (dispatch)
+                        {
+                            _ = Task.Run(() => _voiceProcessor.ProcessSpeechAsync(eventId, actorObject, capturedName, capturedText));
                         }
                     }
                 }

@@ -112,6 +112,11 @@ public class TextProcessingService : ITextProcessingService
         return TalkTextHelper.StripWorldFromNames(message);
     }
 
+    public string StripWorldFromNames(SeString message, out uint worldRowId)
+    {
+        return TalkTextHelper.StripWorldFromNames(message, out worldRowId);
+    }
+
     public string GetBubbleName(Lumina.Excel.Sheets.TerritoryType? territory, IGameObject? speaker, string text)
     {
         return TalkTextHelper.GetBubbleName(territory, speaker, text);

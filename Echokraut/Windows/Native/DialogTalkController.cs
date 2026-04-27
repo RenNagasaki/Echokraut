@@ -35,10 +35,11 @@ public sealed unsafe class DialogTalkController : IDisposable
     private readonly IAudioPlaybackService _audioPlayback;
     private readonly ILipSyncHelper _lipSync;
     private readonly Action _recreateInference;
-    private readonly Action _toggleConfig;
+    private readonly Action _openVoiceClipManager;
     private readonly ILogService _log;
     private readonly IAddonLifecycle _addonLifecycle;
     private readonly INpcDataService _npcData;
+    private readonly IEchokrautIpc _ipc;
     private Func<Vector2, bool>? _isInsideOwnedWindow;
 
     private readonly AddonController _talkController;
@@ -71,19 +72,21 @@ public sealed unsafe class DialogTalkController : IDisposable
         IAudioPlaybackService audioPlayback,
         ILipSyncHelper lipSync,
         Action recreateInference,
-        Action toggleConfig,
+        Action openVoiceClipManager,
         IAddonLifecycle addonLifecycle,
         ILogService log,
-        INpcDataService npcData)
+        INpcDataService npcData,
+        IEchokrautIpc ipc)
     {
         _log = log;
         _config = config;
         _audioPlayback = audioPlayback;
         _lipSync = lipSync;
         _recreateInference = recreateInference;
-        _toggleConfig = toggleConfig;
+        _openVoiceClipManager = openVoiceClipManager;
         _npcData = npcData;
         _addonLifecycle = addonLifecycle;
+        _ipc = ipc;
 
         _talkController = new AddonController("Talk");
         _talkController.OnAttach += OnAttach;
@@ -92,6 +95,11 @@ public sealed unsafe class DialogTalkController : IDisposable
         _talkController.Enable();
 
         _addonLifecycle.RegisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
+
+        // Publish toolbar hit-test via IPC so cooperators (e.g. Echosync) can filter clicks
+        // meant for our buttons. PreventOriginal alone isn't enough — listener order across
+        // plugins isn't deterministic.
+        _ipc.SetClickInToolbarCheck(IsClickInToolbarCoords);
     }
 
     /// <summary>
@@ -107,8 +115,23 @@ public sealed unsafe class DialogTalkController : IDisposable
     public void Dispose()
     {
         _addonLifecycle.UnregisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
+        _ipc.SetClickInToolbarCheck(null);
         _talkController.Dispose();
         DisposeNodes();
+    }
+
+    /// <summary>
+    /// Coordinate-based hit-test for the IPC. Returns true if the screen-space click would
+    /// land inside the visible toolbar (layout buttons or surrounding background panel).
+    /// </summary>
+    private bool IsClickInToolbarCoords(int x, int y)
+    {
+        if (_layout is null || !_layout.IsVisible) return false;
+        var sx = (short)x;
+        var sy = (short)y;
+        if (_layout.CheckCollision(sx, sy)) return true;
+        if (_background != null && _background.IsVisible && _background.CheckCollision(sx, sy)) return true;
+        return false;
     }
 
     private void DisposeNodes()
@@ -147,8 +170,25 @@ public sealed unsafe class DialogTalkController : IDisposable
 
         _settingsButton = new DynamicIconButtonNode { Size = new Vector2(28, 28), Position = new Vector2(0, 2) };
         _settingsButton.Icon = ButtonIcon.GearCog;
-        _settingsButton.Tooltip = Loc.S("Settings");
-        _settingsButton.OnClick = () => _toggleConfig();
+        _settingsButton.OnClick = () => _openVoiceClipManager();
+
+        // Tooltip + hover highlight on the ImageNode — DynamicIconButtonNode gives ImageNode
+        // RespondToMouse/HasCollision/EmitsEvents in its ctor, so MouseOver fires reliably here.
+        // Setting TextTooltip on the ImageNode itself auto-registers ShowTooltip/HideTooltip
+        // bound to that node (which actually has the collision flag, unlike the wrapping
+        // ComponentNode whose tooltip flow ToggleCollisionFlag deliberately skips).
+        _settingsButton.ImageNode.TextTooltip = Loc.S("Open Voice Clip Manager");
+        var normalTint = new Vector3(1f, 1f, 1f);
+        var hoverTint = new Vector3(1.4f, 1.4f, 1.4f);
+        _settingsButton.ImageNode.MultiplyColor = normalTint;
+        _settingsButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
+        {
+            if (_settingsButton != null) _settingsButton.ImageNode.MultiplyColor = hoverTint;
+        });
+        _settingsButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
+        {
+            if (_settingsButton != null) _settingsButton.ImageNode.MultiplyColor = normalTint;
+        });
 
         // OnOptionSelected fires as the first line of OptionSelectedHandler, before UpdateLabel.
         // UpdateLabel then crashes (LabelNode.Node null after Uncollapse's ReattachNode triggers
@@ -177,6 +217,12 @@ public sealed unsafe class DialogTalkController : IDisposable
             Alignment = HorizontalListAnchor.Left,
             ItemSpacing = 4,
         };
+        // Give the layout HasCollision so OnPreReceiveEvent's _layout.CheckCollision reliably
+        // returns true for clicks inside the toolbar — including clicks on dimmed buttons that
+        // would otherwise pass through and advance the Talk dialog. Don't add RespondToMouse
+        // or EmitsEvents — those would change the cursor and risk swallowing events meant for
+        // child buttons.
+        _layout.AddNodeFlags(NodeFlags.HasCollision);
         _layout.AddNode(_playStopButton);
         _layout.AddNode(_muteCheckbox);
         _layout.AddNode(_autoAdvanceCheckbox);
@@ -233,7 +279,11 @@ public sealed unsafe class DialogTalkController : IDisposable
 
         var msg = DialogState.CurrentVoiceMessage;
 
-        var visible = _config.ShowExtraOptionsInDialogue && !DialogState.IsVoiced && _audioPlayback.InDialog;
+        // Master toggle — ONLY ShowExtraOptionsInDialogue hides the whole row.
+        // Every other condition (speaker missing, dialogue voiced, "extra extra" sub-setting)
+        // only dims individual buttons via SetEnabled, so the row layout stays stable and
+        // no button ever disappears unexpectedly.
+        var visible = _config.ShowExtraOptionsInDialogue;
         _layout!.IsVisible = visible;
         if (_background != null) _background.IsVisible = visible;
         if (!visible) return;
@@ -263,43 +313,46 @@ public sealed unsafe class DialogTalkController : IDisposable
         }
         _dropDownWasOpen = _dropDownIsOpen;
 
-        var isMuted    = IsMuted();
-        var hasSpeaker = msg?.SpeakerObj != null;
+        var inDialog      = _audioPlayback.InDialog;
+        var notVoiced     = !DialogState.IsVoiced;
+        var isMuted       = IsMuted();
+        var hasSpeakerObj = msg?.SpeakerObj != null;
+        var speaker       = msg?.Speaker;
+        var hasSpeaker    = speaker != null;
 
         var streamState = msg != null
             ? _audioPlayback.GetStreamState(msg.StreamId)
             : PlaybackState.Stopped;
-        var isStreamPlaying = streamState == PlaybackState.Playing;
-        var isStreamPaused  = streamState == PlaybackState.Paused;
-        var isActive        = _audioPlayback.IsPlaying || isStreamPaused;
+        var isStreamPaused = streamState == PlaybackState.Paused;
+        var isActive       = _audioPlayback.IsPlaying || isStreamPaused;
 
+        // Play/Stop — always visible, dimmed when not in actionable dialogue.
         _playStopButton!.Icon = isActive ? ButtonIcon.Mute : ButtonIcon.Volume;
         _playStopButton.Tooltip = isActive ? Loc.S("Stop") : Loc.S("Play");
-        SetEnabled(_playStopButton, !isMuted && (isActive || !_audioPlayback.RecreationStarted));
+        SetEnabled(_playStopButton, inDialog && notVoiced && !isMuted && (isActive || !_audioPlayback.RecreationStarted));
 
-        _muteCheckbox!.IsVisible = hasSpeaker;
-        if (hasSpeaker)
-        {
-            _muteCheckbox.IsChecked = isMuted;
-            SetEnabled(_muteCheckbox, true);
-        }
+        // Mute — always visible, dimmed when no speaker / dialogue inactive.
+        _muteCheckbox!.IsVisible = true;
+        _muteCheckbox.IsChecked = hasSpeakerObj && isMuted;
+        SetEnabled(_muteCheckbox, hasSpeakerObj && inDialog && notVoiced);
 
+        // ShowExtraExtraOptionsInDialogue is a sub-setting; per spec it only dims, never hides.
         var showExtra = _config.ShowExtraExtraOptionsInDialogue;
-        _autoAdvanceCheckbox!.IsVisible = showExtra;
-        if (showExtra)
-            _autoAdvanceCheckbox.IsChecked = _config.AutoAdvanceTextAfterSpeechCompleted;
 
-        var speaker = msg?.Speaker;
-        var showVoice = showExtra && speaker != null;
+        _autoAdvanceCheckbox!.IsVisible = true;
+        _autoAdvanceCheckbox.IsChecked = _config.AutoAdvanceTextAfterSpeechCompleted;
+        SetEnabled(_autoAdvanceCheckbox, showExtra);
 
-        // If the dropdown is hidden while open (speaker gone, extra options toggled off),
-        // collapse it so the option list isn't left floating over the addon.
-        if (!showVoice && _dropDownIsOpen)
+        var voiceUsable = showExtra && hasSpeaker;
+
+        // Force-collapse if currently open but disabled — otherwise the floating option list
+        // dangles with no way for the user to dismiss it (clicks are inert at low alpha).
+        if (!voiceUsable && _dropDownIsOpen)
             _voiceDropDown?.Collapse(false);
 
-        _voiceDropDown!.IsVisible = showVoice;
-        _settingsButton!.IsVisible = showVoice;
-        if (showVoice)
+        _voiceDropDown!.IsVisible = true;
+        SetEnabled(_voiceDropDown, voiceUsable);
+        if (voiceUsable)
         {
             var speakerKey = speaker!.ToString();
             if (speakerKey != _lastSpeakerKey)
@@ -317,6 +370,11 @@ public sealed unsafe class DialogTalkController : IDisposable
                     _voiceDropDown.LabelNode.String = selectedVoice;
             }
         }
+
+        // Settings button opens an external window — always visible AND enabled,
+        // independent of dialogue state.
+        _settingsButton!.IsVisible = true;
+        SetEnabled(_settingsButton, true);
 
         _layout.RecalculateLayout();
     }
@@ -343,7 +401,6 @@ public sealed unsafe class DialogTalkController : IDisposable
                 _pausedForDropDown = false;
 
                 msg.Speaker.Voice = newVoice;
-                msg.Speaker.DoNotDelete = true;
                 _config.Save();
 
                 // Force dropdown label refresh on next frame.
@@ -392,29 +449,34 @@ public sealed unsafe class DialogTalkController : IDisposable
 
         if (!isDialogueAdvancing) return;
 
+        var clickPos = new Vector2(eventData->MouseData.PosX, eventData->MouseData.PosY);
+
         // Check if the click landed inside any owned Echokraut native window (always, even without layout)
-        var clickedOwnedWindow = _isInsideOwnedWindow != null
-            && _isInsideOwnedWindow(new Vector2(eventData->MouseData.PosX, eventData->MouseData.PosY));
+        var clickedOwnedWindow = _isInsideOwnedWindow != null && _isInsideOwnedWindow(clickPos);
 
         if (clickedOwnedWindow)
         {
-            eventArgs.AtkEventType = 0;
+            // PreventOriginal skips the addon's native ReceiveEvent entirely. Setting AtkEventType=0
+            // alone does NOT suppress — Dalamud forwards the modified event to the original handler,
+            // and the Talk addon's click logic still runs. PreventOriginal calls
+            // atkEvent->SetEventIsHandled() and bypasses the original vtable entry.
+            eventArgs.PreventOriginal();
             return;
         }
 
         if (_layout is null || !_layout.IsVisible) return;
 
-        // If the dropdown is open and this click lands outside our toolbar, close it.
-        // DropDownFocusCollisionNode handles clicks inside Talk's bounds; this handles the rest.
-        if (_dropDownIsOpen && !_suppressNextAdvance && !_layout.CheckCollision(eventData))
-            _voiceDropDown?.Collapse(false); // fires OnCollapsed: _dropDownIsOpen=false, _suppressNextAdvance=true
-
+        var clickedLayout = _layout.CheckCollision(eventData);
         var clickedBackground = _background != null && _background.IsVisible && _background.CheckCollision(eventData);
 
-        if (_layout.CheckCollision(eventData) || clickedBackground || _suppressNextAdvance || _dropDownIsOpen)
+        // If the dropdown is open and this click lands outside our toolbar, close it.
+        if (_dropDownIsOpen && !_suppressNextAdvance && !clickedLayout)
+            _voiceDropDown?.Collapse(false); // fires OnCollapsed: _dropDownIsOpen=false, _suppressNextAdvance=true
+
+        if (clickedLayout || clickedBackground || _suppressNextAdvance || _dropDownIsOpen)
         {
             _suppressNextAdvance = false;
-            eventArgs.AtkEventType = 0;
+            eventArgs.PreventOriginal();
         }
     }
 
@@ -422,6 +484,8 @@ public sealed unsafe class DialogTalkController : IDisposable
         => node.Alpha = enabled ? EnabledAlpha : DisabledAlpha;
 
     private bool IsMuted()
+        // Per-instance mute (CharacterInstance.IsMuted, keyed by ENpcBase ID).
+        // Distinct from Edit NPC's "Enabled" toggle, which disables the whole character context.
         => DialogState.CurrentVoiceMessage?.SpeakerObj != null
            && _npcData.IsDialogueMuted(DialogState.CurrentVoiceMessage.SpeakerObj.BaseId);
 

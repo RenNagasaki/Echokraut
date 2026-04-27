@@ -32,6 +32,7 @@ public class CommandService : ICommandService
     public event Action? ToggleVoiceClipManagerRequested;
     public event Action<EKEventId>? CancelAllRequested;
     public event Action? DumpSheetsRequested;
+    public event Action<uint>? SearchSheetIdRequested;
     public List<string> CommandKeys { get; private set; } = new();
 
     public CommandService(ICommandManager commandManager, IChatGui chatGui, ICondition condition, ILogService log, ICharacterDataService characterData, ILuminaService lumina, Configuration config, IAudioFileService audioFiles, IGameObjectService gameObjects)
@@ -57,7 +58,8 @@ public class CommandService : ICommandService
         _commandManager.AddHandler("/ektchat", new CommandInfo(OnCommand) { HelpMessage = "Toggles chat voicing" });
         _commandManager.AddHandler("/ektcutschoice", new CommandInfo(OnCommand) { HelpMessage = "Toggles cutscene choice voicing" });
         _commandManager.AddHandler("/ektchoice", new CommandInfo(OnCommand) { HelpMessage = "Toggles choice voicing" });
-        _commandManager.AddHandler("/ek", new CommandInfo(OnCommand) { HelpMessage = "Opens the configuration window" });
+        _commandManager.AddHandler("/ek", new CommandInfo(OnCommand) { HelpMessage = "Opens the Voice Clip Manager" });
+        _commandManager.AddHandler("/ekconfig", new CommandInfo(OnCommand) { HelpMessage = "Opens the configuration window" });
         _commandManager.AddHandler("/ekid", new CommandInfo(OnCommand) { HelpMessage = "Echoes info about current target" });
         _commandManager.AddHandler("/ekdb", new CommandInfo(OnCommand) { HelpMessage = "Echoes current debug info" });
         _commandManager.AddHandler("/ekdel", new CommandInfo(OnCommand) { HelpMessage = "/ekdel n -> Deletes last 'n' local saved files. Default 10" });
@@ -65,6 +67,7 @@ public class CommandService : ICommandService
         _commandManager.AddHandler("/ekfirst", new CommandInfo(OnCommand) { HelpMessage = "Opens the first-time setup window" });
         _commandManager.AddHandler("/ekhistory", new CommandInfo(OnCommand) { HelpMessage = "Opens the voice clip history window" });
         _commandManager.AddHandler("/ekdump", new CommandInfo(OnCommand) { HelpMessage = "Dumps all Lumina sheets to TSV files" });
+        _commandManager.AddHandler("/eksearchid", new CommandInfo(OnCommand) { HelpMessage = "/eksearchid <value> -> Searches every sheet for a uint32 column value and writes hits to sheet_dump/search_<value>.tsv" });
 
         CommandKeys = _commandManager.Commands.Keys.ToList().FindAll(p => p.StartsWith("/ek"));
         CommandKeys.Sort();
@@ -79,8 +82,10 @@ public class CommandService : ICommandService
         switch (command)
         {
             case "/ek":
-                if (!_config.FirstTime)
-                    ToggleConfigUi();
+                ToggleVoiceClipManagerUi();
+                break;
+            case "/ekconfig":
+                ToggleConfigUi();
                 break;
             case "/ekfirst":
                 ToggleFirstTimeUi();
@@ -90,6 +95,17 @@ public class CommandService : ICommandService
                 break;
             case "/ekdump":
                 DumpSheetsRequested?.Invoke();
+                break;
+            case "/eksearchid":
+                if (uint.TryParse(args.Trim(), out var searchValue))
+                {
+                    PrintText("", $"Searching all sheets for value {searchValue}…");
+                    SearchSheetIdRequested?.Invoke(searchValue);
+                }
+                else
+                {
+                    PrintText("", "Usage: /eksearchid <uint value>");
+                }
                 break;
             case "/ekid":
                 PrintTargetInfo();
@@ -106,7 +122,7 @@ public class CommandService : ICommandService
                 }
                 catch (Exception ex)
                 {
-                    _log.Error(nameof(OnCommand), $"Command failed: {ex.Message}", new EKEventId(0, TextSource.None));
+                    _log.Warning(nameof(OnCommand), $"Command failed: {ex.Message}", new EKEventId(0, TextSource.None));
                     errorText = "Please enter a valid number or leave empty";
                 }
                 break;
@@ -119,7 +135,7 @@ public class CommandService : ICommandService
                 }
                 catch (Exception ex)
                 {
-                    _log.Error(nameof(OnCommand), $"Command failed: {ex.Message}", new EKEventId(0, TextSource.None));
+                    _log.Warning(nameof(OnCommand), $"Command failed: {ex.Message}", new EKEventId(0, TextSource.None));
                     errorText = "Please enter a valid number or leave empty";
                 }
                 break;
@@ -185,6 +201,15 @@ public class CommandService : ICommandService
             ToggleFirstTimeRequested?.Invoke();
     }
 
+    public void ToggleVoiceClipManagerUi()
+    {
+        // Block until first-time setup is done — opening the manager before voices exist is useless.
+        if (_config.FirstTime)
+            ToggleFirstTimeRequested?.Invoke();
+        else
+            ToggleVoiceClipManagerRequested?.Invoke();
+    }
+
     public void ToggleFirstTimeUi() => ToggleFirstTimeRequested?.Invoke();
 
     private unsafe void PrintTargetInfo()
@@ -233,6 +258,7 @@ public class CommandService : ICommandService
     public void Dispose()
     {
         _commandManager.RemoveHandler("/ek");
+        _commandManager.RemoveHandler("/ekconfig");
         _commandManager.RemoveHandler("/ekt");
         _commandManager.RemoveHandler("/ekdb");
         _commandManager.RemoveHandler("/ekid");
@@ -246,5 +272,7 @@ public class CommandService : ICommandService
         _commandManager.RemoveHandler("/ektchat");
         _commandManager.RemoveHandler("/ekfirst");
         _commandManager.RemoveHandler("/ekhistory");
+        _commandManager.RemoveHandler("/ekdump");
+        _commandManager.RemoveHandler("/eksearchid");
     }
 }

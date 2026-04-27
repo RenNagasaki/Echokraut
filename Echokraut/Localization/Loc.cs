@@ -162,6 +162,12 @@ public static class Loc
         ["Create directory if it doesn't exist"] = new() { { DE, "Verzeichnis erstellen, falls nicht vorhanden" }, { FR, "Créer le dossier s'il n'existe pas" }, { JP, "ディレクトリが存在しない場合は作成" } },
         ["Create directory if missing"] = new() { { DE, "Verzeichnis erstellen, falls nicht vorhanden" }, { FR, "Créer le dossier s'il n'existe pas" }, { JP, "ディレクトリが存在しない場合は作成" } },
         ["Local audio directory path"] = new() { { DE, "Lokaler Audio-Verzeichnispfad" }, { FR, "Chemin du dossier audio local" }, { JP, "ローカル音声ディレクトリパス" } },
+        ["Auto-generate shareable alias variants for player-name dialog"] = new()
+        {
+            { DE, "Teilbare Alias-Varianten für Dialoge mit Spielernamen automatisch erzeugen" },
+            { FR, "Générer automatiquement des variantes partageables avec un alias pour les dialogues contenant le nom du joueur" },
+            { JP, "プレイヤー名を含むダイアログの共有可能な汎用名バージョンを自動生成" },
+        },
         ["Helping build a voice line database benefits everyone. Please consider opting in."] = new()
         {
             { DE, "Der Aufbau einer Sprachzeilen-Datenbank nützt allen. Bitte erwägen Sie teilzunehmen." },
@@ -474,6 +480,9 @@ public static class Loc
         // ── Encounter History ────────────────────────────────────────────
         ["Voice Clip Manager"] = new() { { DE, "Sprachaufnahmen-Verwaltung" }, { FR, "Gestionnaire de clips vocaux" }, { JP, "音声クリップ管理" } },
         ["Voice Clip Detail"] = new() { { DE, "Sprachaufnahmen-Details" }, { FR, "Détails du clip vocal" }, { JP, "音声クリップ詳細" } },
+        ["Open configuration window"] = new() { { DE, "Konfigurationsfenster öffnen" }, { FR, "Ouvrir la fenêtre de configuration" }, { JP, "設定ウィンドウを開く" } },
+        ["Open Voice Clip Manager"] = new() { { DE, "Sprachaufnahmen-Verwaltung öffnen" }, { FR, "Ouvrir le gestionnaire de clips vocaux" }, { JP, "音声クリップ管理を開く" } },
+        ["Edit Character"] = new() { { DE, "Charakter bearbeiten" }, { FR, "Modifier le personnage" }, { JP, "キャラクター編集" } },
         ["Generate All Unsaved"] = new() { { DE, "Alle nicht gespeicherten generieren" }, { FR, "Générer tous les non sauvegardés" }, { JP, "未保存をすべて生成" } },
         ["Delete All Saved"] = new() { { DE, "Alle gespeicherten löschen" }, { FR, "Supprimer tous les sauvegardés" }, { JP, "保存済みをすべて削除" } },
         ["Clear History"] = new() { { DE, "Verlauf löschen" }, { FR, "Effacer l'historique" }, { JP, "履歴をクリア" } },
@@ -509,6 +518,8 @@ public static class Loc
         ["Gen All"] = new() { { DE, "Alle gen." }, { FR, "Tout gén." }, { JP, "全生成" } },
         ["Del All"] = new() { { DE, "Alle lösch." }, { FR, "Tout suppr." }, { JP, "全削除" } },
         ["Cancel"] = new() { { DE, "Abbrechen" }, { FR, "Annuler" }, { JP, "キャンセル" } },
+        ["Save"] = new() { { DE, "Speichern" }, { FR, "Enregistrer" }, { JP, "保存" } },
+        ["(none)"] = new() { { DE, "(keine)" }, { FR, "(aucune)" }, { JP, "（なし）" } },
         ["Saved"] = new() { { DE, "Gespeichert" }, { FR, "Sauvegardé" }, { JP, "保存済み" } },
         ["Muted"] = new() { { DE, "Stumm" }, { FR, "Muet" }, { JP, "ミュート" } },
         ["Chat"] = new() { { DE, "Chat" }, { FR, "Chat" }, { JP, "チャット" } },

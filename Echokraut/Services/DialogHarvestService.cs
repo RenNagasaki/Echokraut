@@ -240,7 +240,7 @@ public class DialogHarvestService : IDialogHarvestService
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(RunAsync), $"Harvest failed: {ex}", eventId);
+            _log.Warning(nameof(RunAsync), $"Harvest failed: {ex}", eventId);
             BeginPhase(string.Format(Loc.S("Error: {0}"), ex.Message), 1);
         }
         finally
@@ -272,16 +272,16 @@ public class DialogHarvestService : IDialogHarvestService
         var defaultTalkTexts = LoadDialogSheet<DefaultTalk>("DefaultTalk", GetDefaultTalkTexts, ct, eventId);
         ct.ThrowIfCancellationRequested();
 
-        var balloonTexts = LoadDialogSheet<Balloon>("Balloon", GetBalloonTexts, ct, eventId);
-        ct.ThrowIfCancellationRequested();
+        // Balloon (Bubbles), ContentTalk and NpcYell (BattleTalks) are intentionally NOT harvested:
+        // their NPC attribution proved unreliable (cf. Alphinaud false-positive bubble bug, no static
+        // mapping for modern dungeon BattleTalks). They get captured live via AddonBubbleHelper /
+        // AddonBattleTalkHelper at runtime instead. Loading them as empty makes all downstream
+        // matching/scanning paths no-op without breaking the structure.
+        var balloonTexts = new Dictionary<uint, Dictionary<string, List<string>>>();
+        var contentTalkTexts = new Dictionary<uint, Dictionary<string, List<string>>>();
+        var npcYellTexts = new Dictionary<uint, Dictionary<string, List<string>>>();
 
         var instanceTexts = LoadDialogSheet<InstanceContentTextData>("InstanceContentTextData", GetSingleTextSheet, ct, eventId);
-        ct.ThrowIfCancellationRequested();
-
-        var contentTalkTexts = LoadDialogSheet<ContentTalk>("ContentTalk", GetSingleTextSheet, ct, eventId);
-        ct.ThrowIfCancellationRequested();
-
-        var npcYellTexts = LoadDialogSheet<NpcYell>("NpcYell", GetSingleTextSheet, ct, eventId);
         ct.ThrowIfCancellationRequested();
 
         var publicContentTexts = LoadDialogSheet<PublicContentTextData>("PublicContentTextData",
@@ -549,100 +549,88 @@ public class DialogHarvestService : IDialogHarvestService
         var npcBaseRaw = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, "ENpcBase");
         EndPhase();
 
-        // Pre-build NPC → Balloon ID lookup from:
-        // 1. ENpcBase col 105 (direct Balloon link)
-        // 2. ENpcBase col 64 (Behavior) → Behavior col 8 (Balloon link)
-        BeginPhase(Loc.S("Building Balloon lookup..."), 1);
+        // Balloon-specific lookups (Behavior chain, ENpcBase col 105, LGB scan) are skipped
+        // when the Balloon sheet wasn't loaded — see comment at the top of DoHarvest.
         var behaviorToBalloon = new Dictionary<uint, HashSet<uint>>();
-        var behaviorBalloonCount = 0;
-        try
+        var npcBalloonIds = new Dictionary<uint, HashSet<uint>>();
+        if (balloonTexts.Count > 0)
         {
-            // Behavior is a sub-row sheet. Balloon is at column 8 (SaintCoinach index 8).
-            var behaviorSheet = _dataManager.GetSubrowExcelSheet<RawSubrow>(
-                Dalamud.Game.ClientLanguage.English, "Behavior");
-            if (behaviorSheet != null)
+            BeginPhase(Loc.S("Building Balloon lookup..."), 1);
+            var behaviorBalloonCount = 0;
+            try
             {
-                foreach (var rowCollection in behaviorSheet)
+                var behaviorSheet = _dataManager.GetSubrowExcelSheet<RawSubrow>(
+                    Dalamud.Game.ClientLanguage.English, "Behavior");
+                if (behaviorSheet != null)
                 {
-                    foreach (var subrow in rowCollection)
+                    foreach (var rowCollection in behaviorSheet)
                     {
-                        try
+                        foreach (var subrow in rowCollection)
                         {
-                            var bId = subrow.ReadUInt32Column(8);
-                            if (bId == 0) continue;
-                            if (!behaviorToBalloon.TryGetValue(subrow.RowId, out var ids))
+                            try
                             {
-                                ids = new HashSet<uint>();
-                                behaviorToBalloon[subrow.RowId] = ids;
+                                var bId = subrow.ReadUInt32Column(8);
+                                if (bId == 0) continue;
+                                if (!behaviorToBalloon.TryGetValue(subrow.RowId, out var ids))
+                                {
+                                    ids = new HashSet<uint>();
+                                    behaviorToBalloon[subrow.RowId] = ids;
+                                }
+                                ids.Add(bId);
+                                behaviorBalloonCount++;
                             }
-                            ids.Add(bId);
-                            behaviorBalloonCount++;
+                            catch { }
                         }
-                        catch { }
                     }
                 }
             }
-        }
-        catch { }
-        _log.Debug(nameof(DoHarvest),
-            $"Behavior→Balloon: {behaviorToBalloon.Count} Behavior rows, {behaviorBalloonCount} sub-rows",
-            eventId);
+            catch { }
 
-        var npcBalloonIds = new Dictionary<uint, HashSet<uint>>();
-        if (npcBaseRaw != null)
-        {
-            foreach (var rawRow in npcBaseRaw)
+            if (npcBaseRaw != null)
             {
-                var ids = new HashSet<uint>();
-                // Direct Balloon field (col 105)
-                try { var v = rawRow.ReadUInt32Column(105); if (v != 0) ids.Add(v); } catch { }
-                // Behavior → Balloon chain (col 64 → Behavior sub-rows → col 8)
-                try
+                foreach (var rawRow in npcBaseRaw)
                 {
-                    var behaviorId = rawRow.ReadUInt32Column(64);
-                    if (behaviorId != 0 && behaviorToBalloon.TryGetValue(behaviorId, out var bIds))
-                        foreach (var bid in bIds) ids.Add(bid);
+                    var ids = new HashSet<uint>();
+                    try { var v = rawRow.ReadUInt32Column(105); if (v != 0) ids.Add(v); } catch { }
+                    try
+                    {
+                        var behaviorId = rawRow.ReadUInt32Column(64);
+                        if (behaviorId != 0 && behaviorToBalloon.TryGetValue(behaviorId, out var bIds))
+                            foreach (var bid in bIds) ids.Add(bid);
+                    }
+                    catch { }
+                    if (ids.Count > 0) npcBalloonIds[rawRow.RowId] = ids;
                 }
-                catch { }
-                if (ids.Count > 0) npcBalloonIds[rawRow.RowId] = ids;
             }
         }
 
-        var uniqueBalloonFromBehavior = npcBalloonIds.Values.SelectMany(s => s).Distinct()
-            .Count(id => allDialogSheets["Balloon"].ContainsKey(id));
-        _log.Debug(nameof(DoHarvest),
-            $"Balloon lookup: {behaviorToBalloon.Count} Behaviors with Balloon, " +
-            $"{npcBalloonIds.Count} NPCs with Balloon IDs, " +
-            $"{uniqueBalloonFromBehavior} unique IDs match Balloon sheet", eventId);
         var matchedDialogIds = new Dictionary<string, HashSet<uint>>();
         foreach (var sheetName in allDialogSheets.Keys)
             matchedDialogIds[sheetName] = new HashSet<uint>();
 
-        // Extract Balloon → ENpcBase mappings from LGB territory files.
-        // Two-pass hybrid: (1) scan within each entry's own bounds for accurate matches,
-        // (2) for remaining unmatched Balloon IDs, find them anywhere in LGB and attribute
-        // to the nearest ENpc entry.
-        EndPhase();
-        var ttSheetCount = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>()?.Count ?? 1;
-        BeginPhase(Loc.S("Scanning LGB territory files..."), ttSheetCount);
+        // LGB Balloon scan is skipped entirely when Balloon harvest is disabled.
+        // The scan iterates every territory's planevent.lgb (1000+ files) — pure waste otherwise.
         var lgbBalloonToNpc = new Dictionary<uint, uint>(); // Balloon ID → ENpcBase ID
-        var lgbTerritoriesScanned = 0;
-        var lgbEntriesTotal = 0;
-        var lgbBoundsMapped = 0;
-        var lgbNearestMapped = 0;
-        var balloonSheetIds = new HashSet<uint>(allDialogSheets["Balloon"].Keys);
-
-        // Store per-file data for the second pass
-        var lgbFileCache = new List<(byte[] data, List<LgbParser.ENpcEntry> entries)>();
-        try
+        if (balloonTexts.Count > 0)
         {
-            var ttSheet = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>();
-            if (ttSheet != null)
+            EndPhase();
+            var ttSheetCount = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>()?.Count ?? 1;
+            BeginPhase(Loc.S("Scanning LGB territory files..."), ttSheetCount);
+            var lgbTerritoriesScanned = 0;
+            var lgbEntriesTotal = 0;
+            var lgbBoundsMapped = 0;
+            var balloonSheetIds = new HashSet<uint>(balloonTexts.Keys);
+
+            var lgbFileCache = new List<(byte[] data, List<LgbParser.ENpcEntry> entries)>();
+            try
             {
-                foreach (var territory in ttSheet)
+                var ttSheet = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>();
+                if (ttSheet != null)
                 {
-                    ct.ThrowIfCancellationRequested();
-                    var bgPath = territory.Bg.ExtractText();
+                    foreach (var territory in ttSheet)
+                    {
+                        ct.ThrowIfCancellationRequested();
+                        var bgPath = territory.Bg.ExtractText();
                     if (string.IsNullOrEmpty(bgPath)) continue;
 
                     var lastSlash = bgPath.LastIndexOf('/');
@@ -697,40 +685,17 @@ public class DialogHarvestService : IDialogHarvestService
                 }
             }
         }
-        catch (Exception ex)
-        {
-            _log.Debug(nameof(DoHarvest), $"LGB scan error: {ex.Message}", eventId);
-        }
-
-        // Pass 2: for remaining unmatched Balloon IDs, search all LGB files and attribute
-        // to the nearest ENpc entry
-        var unmatchedBalloonIds = new HashSet<uint>(
-            balloonSheetIds.Where(id => !lgbBalloonToNpc.ContainsKey(id)));
-        if (unmatchedBalloonIds.Count > 0)
-        {
-            EndPhase();
-            BeginPhase(string.Format(Loc.S("LGB pass 2: searching for {0} unmatched Balloon IDs..."), unmatchedBalloonIds.Count), 1);
-            foreach (var (data, entries) in lgbFileCache)
+            catch (Exception ex)
             {
-                ct.ThrowIfCancellationRequested();
-                if (unmatchedBalloonIds.Count == 0) break;
-
-                var nearestResults = LgbParser.FindNearestEntryForIds(
-                    data, entries, unmatchedBalloonIds);
-                foreach (var (balloonId, npcId) in nearestResults)
-                {
-                    if (lgbBalloonToNpc.TryAdd(balloonId, npcId))
-                        lgbNearestMapped++;
-                }
+                _log.Debug(nameof(DoHarvest), $"LGB scan error: {ex.Message}", eventId);
             }
+
+            lgbFileCache.Clear(); // free memory
+            _log.Info(nameof(DoHarvest),
+                $"LGB Balloon scan: {lgbBalloonToNpc.Count} unique Balloon IDs mapped " +
+                $"({lgbBoundsMapped} within bounds). " +
+                $"{lgbEntriesTotal} ENpc entries across {lgbTerritoriesScanned} territories", eventId);
         }
-
-        lgbFileCache.Clear(); // free memory
-
-        _log.Info(nameof(DoHarvest),
-            $"LGB Balloon scan: {lgbBalloonToNpc.Count} unique Balloon IDs mapped " +
-            $"({lgbBoundsMapped} within bounds, {lgbNearestMapped} nearest-entry). " +
-            $"{lgbEntriesTotal} ENpc entries across {lgbTerritoriesScanned} territories", eventId);
 
         var linkedDialogs = new List<LinkedDialog>();
         var npcCount = 0;
@@ -948,105 +913,97 @@ public class DialogHarvestService : IDialogHarvestService
 
         ct.ThrowIfCancellationRequested();
 
-        // Diagnostic: count non-zero Balloon field values across ALL named NPCs
-        var balloonFieldNonZero = 0;
-        var balloonFieldMatched = 0;
-        if (npcBaseRaw != null)
+        // Balloon diagnostics + unnamed-NPC appearance match are skipped when Balloon harvest is off.
+        if (balloonTexts.Count > 0)
         {
-            foreach (var nb in npcBaseSheet)
+            var balloonFieldNonZero = 0;
+            var balloonFieldMatched = 0;
+            if (npcBaseRaw != null)
             {
-                if (!npcNames.TryGetValue(nb.RowId, out var nn) || nn.Values.All(string.IsNullOrEmpty))
-                    continue;
-                var rr3 = npcBaseRaw.GetRowOrDefault(nb.RowId);
-                if (rr3 is not { } raw3) continue;
-                try
+                foreach (var nb in npcBaseSheet)
                 {
-                    var bVal = raw3.ReadUInt32Column(105);
-                    if (bVal != 0)
+                    if (!npcNames.TryGetValue(nb.RowId, out var nn) || nn.Values.All(string.IsNullOrEmpty))
+                        continue;
+                    var rr3 = npcBaseRaw.GetRowOrDefault(nb.RowId);
+                    if (rr3 is not { } raw3) continue;
+                    try
                     {
-                        balloonFieldNonZero++;
-                        if (allDialogSheets["Balloon"].ContainsKey(bVal))
-                            balloonFieldMatched++;
-                    }
-                }
-                catch { }
-            }
-        }
-        // Count unique Balloon IDs that are in allDialogSheets
-        var uniqueBalloonIdsInSheet = npcBalloonIds
-            .Where(kvp => npcNames.TryGetValue(kvp.Key, out var n) && n.Values.Any(v => !string.IsNullOrEmpty(v)))
-            .SelectMany(kvp => kvp.Value)
-            .Where(bId => allDialogSheets["Balloon"].ContainsKey(bId))
-            .Distinct()
-            .Count();
-        var uniqueBalloonIdsNotMatched = npcBalloonIds
-            .Where(kvp => npcNames.TryGetValue(kvp.Key, out var n) && n.Values.Any(v => !string.IsNullOrEmpty(v)))
-            .SelectMany(kvp => kvp.Value)
-            .Where(bId => allDialogSheets["Balloon"].ContainsKey(bId) && !matchedDialogIds["Balloon"].Contains(bId))
-            .Distinct()
-            .Count();
-
-        _log.Info(nameof(DoHarvest),
-            $"Balloon: {balloonFieldNonZero} NPCs non-zero, {balloonFieldMatched} NPCs match sheet, " +
-            $"{uniqueBalloonIdsInSheet} unique IDs in sheet, {uniqueBalloonIdsNotMatched} unique not yet matched. " +
-            $"matchedDialogIds Balloon={matchedDialogIds["Balloon"].Count}, DT={matchedDialogIds["DefaultTalk"].Count}", eventId);
-
-        // Count unnamed NPCs with unmatched Balloon fields
-        var unnamedWithBalloon = 0;
-        var unnamedBalloonMatched = 0;
-        if (npcBaseRaw != null)
-        {
-            foreach (var npcBase2 in npcBaseSheet)
-            {
-                var nid = npcBase2.RowId;
-                if (npcNames.TryGetValue(nid, out var n2) && n2.Values.Any(v => !string.IsNullOrEmpty(v)))
-                    continue; // skip named
-
-                var rr2 = npcBaseRaw.GetRowOrDefault(nid);
-                if (rr2 is not { } raw2) continue;
-
-                try
-                {
-                    var bId = raw2.ReadUInt32Column(105);
-                    if (bId != 0 && !matchedDialogIds["Balloon"].Contains(bId)
-                        && allDialogSheets["Balloon"].ContainsKey(bId))
-                    {
-                        unnamedWithBalloon++;
-
-                        // Try appearance match for Balloon too
-                        var ak = $"{npcBase2.Race.RowId}_{npcBase2.Gender}_{npcBase2.Face}_{npcBase2.HairStyle}";
-                        if (appearanceToNamedNpc.TryGetValue(ak, out var namedNpc2))
+                        var bVal = raw3.ReadUInt32Column(105);
+                        if (bVal != 0)
                         {
-                            unnamedBalloonMatched++;
-
-                            foreach (var texts in FlattenTexts(allDialogSheets["Balloon"][bId]))
-                            {
-                                if (texts.Values.All(string.IsNullOrEmpty)) continue;
-                                linkedDialogs.Add(new LinkedDialog
-                                {
-                                    NpcId = namedNpc2.npcId,
-                                    NpcName = namedNpc2.names,
-                                    Race = namedNpc2.raceStr,
-                                    Gender = namedNpc2.gender.ToString(),
-                                    Sheet = "Balloon",
-                                    DialogId = bId,
-                                    MatchSource = DialogMatchSource.Direct.ToString(),
-                                    Texts = texts
-                                });
-                            }
-                            matchedDialogIds["Balloon"].Add(bId);
+                            balloonFieldNonZero++;
+                            if (balloonTexts.ContainsKey(bVal))
+                                balloonFieldMatched++;
                         }
                     }
+                    catch { }
                 }
-                catch { }
+            }
+            var uniqueBalloonIdsInSheet = npcBalloonIds
+                .Where(kvp => npcNames.TryGetValue(kvp.Key, out var n) && n.Values.Any(v => !string.IsNullOrEmpty(v)))
+                .SelectMany(kvp => kvp.Value)
+                .Where(bId => balloonTexts.ContainsKey(bId))
+                .Distinct()
+                .Count();
+            var uniqueBalloonIdsNotMatched = npcBalloonIds
+                .Where(kvp => npcNames.TryGetValue(kvp.Key, out var n) && n.Values.Any(v => !string.IsNullOrEmpty(v)))
+                .SelectMany(kvp => kvp.Value)
+                .Where(bId => balloonTexts.ContainsKey(bId) && !matchedDialogIds["Balloon"].Contains(bId))
+                .Distinct()
+                .Count();
+
+            _log.Info(nameof(DoHarvest),
+                $"Balloon: {balloonFieldNonZero} NPCs non-zero, {balloonFieldMatched} NPCs match sheet, " +
+                $"{uniqueBalloonIdsInSheet} unique IDs in sheet, {uniqueBalloonIdsNotMatched} unique not yet matched. " +
+                $"matchedDialogIds Balloon={matchedDialogIds["Balloon"].Count}, DT={matchedDialogIds["DefaultTalk"].Count}", eventId);
+
+            if (npcBaseRaw != null)
+            {
+                foreach (var npcBase2 in npcBaseSheet)
+                {
+                    var nid = npcBase2.RowId;
+                    if (npcNames.TryGetValue(nid, out var n2) && n2.Values.Any(v => !string.IsNullOrEmpty(v)))
+                        continue;
+
+                    var rr2 = npcBaseRaw.GetRowOrDefault(nid);
+                    if (rr2 is not { } raw2) continue;
+
+                    try
+                    {
+                        var bId = raw2.ReadUInt32Column(105);
+                        if (bId != 0 && !matchedDialogIds["Balloon"].Contains(bId)
+                            && balloonTexts.ContainsKey(bId))
+                        {
+                            var ak = $"{npcBase2.Race.RowId}_{npcBase2.Gender}_{npcBase2.Face}_{npcBase2.HairStyle}";
+                            if (appearanceToNamedNpc.TryGetValue(ak, out var namedNpc2))
+                            {
+                                foreach (var texts in FlattenTexts(balloonTexts[bId]))
+                                {
+                                    if (texts.Values.All(string.IsNullOrEmpty)) continue;
+                                    linkedDialogs.Add(new LinkedDialog
+                                    {
+                                        NpcId = namedNpc2.npcId,
+                                        NpcName = namedNpc2.names,
+                                        Race = namedNpc2.raceStr,
+                                        Gender = namedNpc2.gender.ToString(),
+                                        Sheet = "Balloon",
+                                        DialogId = bId,
+                                        MatchSource = DialogMatchSource.Direct.ToString(),
+                                        Texts = texts
+                                    });
+                                }
+                                matchedDialogIds["Balloon"].Add(bId);
+                            }
+                        }
+                    }
+                    catch { }
+                }
             }
         }
 
         _log.Info(nameof(DoHarvest),
             $"Pass 2: {pass2UnnamedWithDialog} unnamed NPCs with new dialog, " +
-            $"{pass2AppearanceMatched} appearance matched, " +
-            $"{unnamedWithBalloon} unnamed with unmatched Balloon, " +
-            $"{unnamedBalloonMatched} Balloon appearance matched", eventId);
+            $"{pass2AppearanceMatched} appearance matched", eventId);
 
         EndPhase();
         // Diagnostic: check where unmatched DefaultTalk IDs live
@@ -1402,6 +1359,7 @@ public class DialogHarvestService : IDialogHarvestService
                 continue;
 
             npcName = _jsonData.GetNpcName(npcName).Trim();
+            npcName = NormalizeNpcName(npcName);
 
             if (bestIdentity.TryGetValue(npcName, out var best))
             {
@@ -1809,6 +1767,21 @@ public class DialogHarvestService : IDialogHarvestService
     /// whether [p] adds "in": Pronoun 1 = sie (feminine noun) → [p] is empty since the name
     /// is already feminine. Pronoun 0 = er (masculine) → [p] adds "in" for feminine NPC gender.
     /// </summary>
+    /// <summary>
+    /// Capitalize the first character so harvest stems like "stille Druidin" — German
+    /// adjective declensions land lowercase after [a]→"e" substitution — match the runtime
+    /// title-cased display name "Stille Druidin". Without this, a single NPC could end up
+    /// as two distinct character rows (the case-insensitive unique index added in v12 catches
+    /// existing collisions; this prevents the harvester from creating new ones).
+    /// </summary>
+    internal static string NormalizeNpcName(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return name;
+        var first = name[0];
+        if (!char.IsLetter(first) || char.IsUpper(first)) return name;
+        return char.ToUpperInvariant(first) + name.Substring(1);
+    }
+
     private static Dictionary<string, string> ResolveGenderTags(Dictionary<string, string> names, Genders gender, int dePronoun = 0)
     {
         var resolved = new Dictionary<string, string>(names.Count);
@@ -2904,6 +2877,92 @@ public class DialogHarvestService : IDialogHarvestService
     }
 
     /// <summary>
+    /// Search every Lumina sheet for rows whose uint32 columns contain a given value.
+    /// Used to reverse-engineer where a known id (e.g. a vo_line file id observed at runtime) is referenced.
+    /// Output: sheet_dump/search_&lt;value&gt;.tsv with columns Sheet | RowId[.SubrowId] | ColumnIndex.
+    /// </summary>
+    public async Task SearchSheetsForValueAsync(uint value, CancellationToken ct)
+    {
+        if (IsRunning) return;
+        IsRunning = true;
+
+        try
+        {
+            await Task.Run(() =>
+            {
+                var baseDir = _config.SaveToLocal ? _config.LocalSaveLocation : @"C:\alltalk_tts";
+                var outputDir = Path.Combine(baseDir, "sheet_dump");
+                Directory.CreateDirectory(outputDir);
+
+                var hits = new List<string> { "Sheet\tRowId\tSubrowId\tColumnIndex" };
+                var sheetNames = _dataManager.Excel.SheetNames;
+                ReportProgress($"Searching {sheetNames.Count} sheets for {value}…");
+                int scanned = 0;
+
+                foreach (var sheetName in sheetNames)
+                {
+                    if (ct.IsCancellationRequested) break;
+                    scanned++;
+                    if (scanned % 50 == 0) ReportProgress($"Searched {scanned}/{sheetNames.Count} sheets, {hits.Count - 1} hits…");
+
+                    // Try as flat sheet first, then as subrow sheet.
+                    try
+                    {
+                        var raw = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.English, sheetName);
+                        if (raw != null)
+                        {
+                            foreach (var row in raw)
+                            {
+                                for (int col = 0; col < 80; col++)
+                                {
+                                    try
+                                    {
+                                        if (row.ReadUInt32Column(col) == value)
+                                            hits.Add($"{sheetName}\t{row.RowId}\t\t{col}");
+                                    }
+                                    catch { break; } // out of columns
+                                }
+                            }
+                            continue;
+                        }
+                    }
+                    catch { }
+
+                    try
+                    {
+                        var rawSub = _dataManager.GetSubrowExcelSheet<RawSubrow>(Dalamud.Game.ClientLanguage.English, sheetName);
+                        if (rawSub != null)
+                        {
+                            foreach (var rowCollection in rawSub)
+                            {
+                                foreach (var subrow in rowCollection)
+                                {
+                                    for (int col = 0; col < 80; col++)
+                                    {
+                                        try
+                                        {
+                                            if (subrow.ReadUInt32Column(col) == value)
+                                                hits.Add($"{sheetName}\t{subrow.RowId}\t{subrow.SubrowId}\t{col}");
+                                        }
+                                        catch { break; }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    catch { }
+                }
+
+                File.WriteAllLines(Path.Combine(outputDir, $"search_{value}.tsv"), hits);
+                ReportProgress($"Done. {hits.Count - 1} hits for {value} written to search_{value}.tsv");
+            }, ct);
+        }
+        catch (OperationCanceledException) { ReportProgress("Search cancelled."); }
+        catch (Exception ex) { ReportProgress($"Search error: {ex.Message}"); }
+        finally { IsRunning = false; }
+    }
+
+    /// <summary>
     /// Dump all Lumina Excel sheets to TSV files in the harvest directory.
     /// Each sheet gets one file with RowId + all string columns extracted in German.
     /// </summary>
@@ -3148,8 +3207,163 @@ public class DialogHarvestService : IDialogHarvestService
                 $"Dumped {lines.Count - 1} battle talk entries to battle_talk_speakers.tsv",
                 new EKEventId(0, TextSource.None));
 
+            // Full ContentDirectorBattleTalk subrow dump: every uint32 column 0..MaxCols + resolved text.
+            // Used to inspect manually which column might encode voiced-status / vo_line-id etc.
+            const int MaxCols = 30;
+            var fullDump = new List<string>();
+            var headerCols = new List<string> { "RowId", "SubrowId", "DutyName_DE" };
+            for (int c = 0; c < MaxCols; c++) headerCols.Add($"Col{c}");
+            headerCols.AddRange(new[] { "TextRefRead", "Text_DE", "Text_EN" });
+            fullDump.Add(string.Join("\t", headerCols));
+
+            try
+            {
+                var cdbtFullSheet = _dataManager.GetSubrowExcelSheet<RawSubrow>(
+                    Dalamud.Game.ClientLanguage.English, "ContentDirectorBattleTalk");
+                _log.Info(nameof(DumpBattleTalkMapping),
+                    $"Full dump: cdbtFullSheet null={cdbtFullSheet == null}",
+                    new EKEventId(0, TextSource.None));
+
+                if (cdbtFullSheet != null)
+                {
+                    // Iterate the sheet directly instead of joining via InstanceContent —
+                    // avoids skipping subrows whose RowId isn't an InstanceContent.
+                    foreach (var rowCollection in cdbtFullSheet)
+                    {
+                        var rowId = 0u;
+                        try { rowId = rowCollection.RowId; } catch { }
+
+                        var dutyName = "";
+                        try
+                        {
+                            var ic = icSheet.GetRowOrDefault(rowId);
+                            var cfcRef = ic?.ContentFinderCondition;
+                            if (cfcRef.HasValue && cfcRef.Value.RowId != 0 && cfcSheet != null)
+                                dutyName = cfcSheet.GetRowOrDefault(cfcRef.Value.RowId)?.Name.ExtractText() ?? "";
+                        }
+                        catch { }
+                        if (string.IsNullOrEmpty(dutyName)) dutyName = $"#{rowId}";
+
+                        foreach (var sr in rowCollection)
+                        {
+                            try
+                            {
+                                var cols = new List<string>
+                                    { rowId.ToString(), sr.SubrowId.ToString(), dutyName.Replace("\t", " ") };
+                                for (int c = 0; c < MaxCols; c++)
+                                {
+                                    try { cols.Add(sr.ReadUInt32Column(c).ToString()); }
+                                    catch { cols.Add(""); }
+                                }
+                                uint textRef = 0;
+                                try { textRef = sr.ReadUInt32Column(2); } catch { }
+                                var tDe = textRef != 0 ? textSheetDe?.GetRowOrDefault(textRef)?.Text.ExtractText() ?? "" : "";
+                                var tEn = textRef != 0 ? textSheetEn?.GetRowOrDefault(textRef)?.Text.ExtractText() ?? "" : "";
+                                cols.Add(textRef.ToString());
+                                cols.Add(tDe.Replace("\t", " ").Replace("\n", "\\n"));
+                                cols.Add(tEn.Replace("\t", " ").Replace("\n", "\\n"));
+                                fullDump.Add(string.Join("\t", cols));
+                            }
+                            catch { }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _log.Warning(nameof(DumpBattleTalkMapping),
+                    $"Full sheet dump iteration failed: {ex.Message}", new EKEventId(0, TextSource.None));
+            }
+
+            // Always write whatever we collected, even if iteration partially failed.
+            try
+            {
+                File.WriteAllLines(Path.Combine(outputDir, "content_director_battle_talk_full.tsv"), fullDump);
+                _log.Info(nameof(DumpBattleTalkMapping),
+                    $"Full sheet dump: {fullDump.Count - 1} rows → content_director_battle_talk_full.tsv",
+                    new EKEventId(0, TextSource.None));
+            }
+            catch (Exception ex)
+            {
+                _log.Warning(nameof(DumpBattleTalkMapping),
+                    $"Full sheet dump write failed: {ex.Message}", new EKEventId(0, TextSource.None));
+            }
+
+            // Standalone "BattleTalk" sheet — separate from the ContentDirectorBattleTalk director events.
+            // This is where actual battle dialogue text (e.g., "Da sind die Unruhestifter...") most likely lives.
+            // Dump all uint + string columns to let user identify which holds text/speaker.
+            DumpRawSheetFull("BattleTalk", "battle_talk_sheet_full.tsv", outputDir);
+            // ContentTalk and NpcYell as full dumps too — same investigation purpose.
+            DumpRawSheetFull("ContentTalk", "content_talk_full.tsv", outputDir);
+            DumpRawSheetFull("NpcYell", "npc_yell_full.tsv", outputDir);
+
+            // Enumerate sound/voice/vo_battle/vo_npc<XX>_battle_<lang>.scd for XX 01..99 across de/en/fr/ja.
+            // XX is a battle-NPC catalog index (not BattleTalk.RowId / BNpcName.RowId). Listing what exists
+            // lets us correlate XX → speaker manually; once the mapping is known we can skip TTS at runtime.
+            var battleVoLines = new List<string> { "Index\tLang\tPath" };
+            foreach (var xx in Enumerable.Range(1, 99))
+            {
+                var idx = xx.ToString("D2");
+                foreach (var lang in new[] { "de", "en", "fr", "ja" })
+                {
+                    var path = $"sound/voice/vo_battle/vo_npc{idx}_battle_{lang}.scd";
+                    if (_dataManager.GetFile(path) != null)
+                        battleVoLines.Add($"{idx}\t{lang}\t{path}");
+                }
+            }
+            File.WriteAllLines(Path.Combine(outputDir, "battle_voice_files.tsv"), battleVoLines);
+            _log.Info(nameof(DumpBattleTalkMapping),
+                $"Found {battleVoLines.Count - 1} vo_battle file entries (battle_voice_files.tsv)",
+                new EKEventId(0, TextSource.None));
+
             // Probe for instance content scripts
             var scriptLines = new List<string> { "DutyName\tTerritoryId\tBgPath\tScriptPath\tScriptSize" };
+            var foundCount = 0;
+
+            // First, dump well-known system scripts that drive global behavior (BattleTalk, ContentTalk, NPC AI).
+            // These are not per-dungeon — they're loaded once by the engine.
+            var systemScripts = new[]
+            {
+                "game_script/system/contenttalk.luab",
+                "game_script/system/battlenpc.luab",
+                "game_script/system/balloon.luab",
+                "game_script/system/cutscene.luab",
+                "game_script/system/director.luab",
+                "game_script/system/main.luab",
+                "game_script/system/system.luab",
+                "game_script/system/event.luab",
+            };
+            foreach (var sysPath in systemScripts)
+            {
+                var sysFile = _dataManager.GetFile(sysPath);
+                if (sysFile != null)
+                {
+                    var scriptDirSys = Path.Combine(outputDir, "content_scripts");
+                    Directory.CreateDirectory(scriptDirSys);
+                    var safeNameSys = sysPath.Replace("/", "_").Replace("\\", "_");
+                    File.WriteAllBytes(Path.Combine(scriptDirSys, safeNameSys), sysFile.Data);
+
+                    // Also produce a textual disassembly for human inspection.
+                    try
+                    {
+                        var disasm = new LuabParser(sysFile.Data).Disassemble();
+                        File.WriteAllText(Path.Combine(scriptDirSys, safeNameSys + ".disasm.txt"), disasm);
+                    }
+                    catch (Exception ex)
+                    {
+                        _log.Warning(nameof(DumpBattleTalkMapping),
+                            $"Disassembly failed for {sysPath}: {ex.Message}",
+                            new EKEventId(0, TextSource.None));
+                    }
+
+                    scriptLines.Add($"<system>\t0\t<system>\t{sysPath}\t{sysFile.Data.Length}");
+                    foundCount++;
+                }
+                else
+                {
+                    scriptLines.Add($"<system>\t0\t<system>\t{sysPath} (NOT FOUND)\t0");
+                }
+            }
             var cfcSheetEn = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.ContentFinderCondition>(
                 Dalamud.Game.ClientLanguage.English);
             var ttSheet = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.TerritoryType>();
@@ -3166,35 +3380,37 @@ public class DialogHarvestService : IDialogHarvestService
                     var bg = tt?.Bg.ExtractText() ?? "";
                     if (string.IsNullOrEmpty(bg)) continue;
 
-                    // Extract the instance code from Bg path (e.g., "ffxiv/sea_s1/dun/s1d1/level/s1d1" → "s1d1")
+                    // BgPath structure: "<expansion>/<region>/<type>/<code>/level/<code>"
+                    // e.g. "ffxiv/sea_s1/dun/s1d1/level/s1d1" → expansion="ffxiv", code="s1d1"
+                    // The matching script archive mirrors this path under game_script/.
                     var parts = bg.Split('/');
                     var code = parts.Length >= 4 ? parts[3] : parts[^1];
-                    // Also try the last segment and the territory name
                     var lastPart = parts[^1];
                     var ttName = tt?.Name.ExtractText() ?? "";
 
-                    // Try various script paths — content scripts are in game_script/content/
-                    // Also try raid/, public_content/, party_content/, massive_pc_content/
+                    // Strip "/level/<code>" from the bg to get the script directory base.
+                    var bgBase = bg;
+                    var levelIdx = bg.LastIndexOf("/level/", StringComparison.Ordinal);
+                    if (levelIdx > 0) bgBase = bg.Substring(0, levelIdx);
+
                     var pathsToTry = new[]
                     {
+                        // Mirror the BG layout under game_script/
+                        $"game_script/{bgBase}/{code}.luab",
+                        $"game_script/{bgBase}.luab",
+                        $"game_script/{bgBase}/director.luab",
+                        $"game_script/{bgBase}/battletalk.luab",
+                        $"game_script/{bgBase}/{lastPart}.luab",
+                        // Legacy fallbacks (unlikely but harmless to try)
                         $"game_script/content/{code}.luab",
                         $"game_script/content/{code}/{code}.luab",
                         $"game_script/content/{code}/director.luab",
-                        $"game_script/content/{code}/battletalk.luab",
                         $"game_script/raid/{code}.luab",
                         $"game_script/raid/{code}/{code}.luab",
                         $"game_script/public_content/{code}.luab",
-                        $"game_script/public_content/{code}/{code}.luab",
                         $"game_script/party_content/{code}.luab",
-                        $"game_script/party_content/{code}/{code}.luab",
                         $"game_script/massive_pc_content/{code}.luab",
                         $"game_script/story/{code}.luab",
-                        $"game_script/story/{code}/{code}.luab",
-                        $"game_script/content/{lastPart}.luab",
-                        $"game_script/content/{lastPart}/{lastPart}.luab",
-                        $"game_script/content/{ttName}.luab",
-                        $"game_script/raid/{lastPart}.luab",
-                        $"game_script/raid/{lastPart}/{lastPart}.luab",
                     };
 
                     var found = false;
@@ -3216,17 +3432,93 @@ public class DialogHarvestService : IDialogHarvestService
                         }
                     }
                     if (!found)
-                        scriptLines.Add($"{name}\t{ttId}\t{bg}\tNOT FOUND (tried: {code})\t0");
+                    {
+                        var tried = string.Join("|", pathsToTry);
+                        scriptLines.Add($"{name}\t{ttId}\t{bg}\tNOT FOUND (tried: {tried})\t0");
+                    }
+                    else
+                    {
+                        foundCount++;
+                    }
                 }
             }
             File.WriteAllLines(Path.Combine(outputDir, "instance_scripts.tsv"), scriptLines);
             _log.Info(nameof(DumpBattleTalkMapping),
-                $"Found {scriptLines.Count - 1} instance content scripts",
+                $"Instance scripts: {foundCount} dumped, {scriptLines.Count - 1 - foundCount} not found",
                 new EKEventId(0, TextSource.None));
         }
         catch (Exception ex)
         {
-            _log.Error(nameof(DumpBattleTalkMapping), $"Error dumping battle talks: {ex.Message}",
+            _log.Warning(nameof(DumpBattleTalkMapping), $"Error dumping battle talks: {ex.Message}",
+                new EKEventId(0, TextSource.None));
+        }
+    }
+
+    /// <summary>
+    /// Generic full-sheet dump of any flat (non-subrow) Lumina sheet via RawRow.
+    /// Writes RowId + uint32 cols 0..29 + string cols 0..9 (DE) to the given TSV.
+    /// Used to inspect unfamiliar sheets and locate text/id columns by eye.
+    /// </summary>
+    private void DumpRawSheetFull(string sheetName, string outFile, string outputDir)
+    {
+        const int MaxUintCols = 30;
+        const int MaxStrCols = 10;
+        var lines = new List<string>();
+        var header = new List<string> { "RowId" };
+        for (int c = 0; c < MaxUintCols; c++) header.Add($"U{c}");
+        for (int c = 0; c < MaxStrCols; c++) header.Add($"S{c}_DE");
+        lines.Add(string.Join("\t", header));
+
+        try
+        {
+            var sheet = _dataManager.GetExcelSheet<RawRow>(Dalamud.Game.ClientLanguage.German, sheetName);
+            if (sheet == null)
+            {
+                _log.Warning(nameof(DumpRawSheetFull), $"Sheet '{sheetName}' not found", new EKEventId(0, TextSource.None));
+            }
+            else
+            {
+                foreach (var row in sheet)
+                {
+                    try
+                    {
+                        var cols = new List<string> { row.RowId.ToString() };
+                        for (int c = 0; c < MaxUintCols; c++)
+                        {
+                            try { cols.Add(row.ReadUInt32Column(c).ToString()); }
+                            catch { cols.Add(""); }
+                        }
+                        for (int c = 0; c < MaxStrCols; c++)
+                        {
+                            try
+                            {
+                                var s = row.ReadStringColumn(c).ExtractText() ?? "";
+                                cols.Add(s.Replace("\t", " ").Replace("\n", "\\n").Replace("\r", ""));
+                            }
+                            catch { cols.Add(""); }
+                        }
+                        lines.Add(string.Join("\t", cols));
+                    }
+                    catch { }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(DumpRawSheetFull), $"'{sheetName}' iteration failed: {ex.Message}",
+                new EKEventId(0, TextSource.None));
+        }
+
+        try
+        {
+            File.WriteAllLines(Path.Combine(outputDir, outFile), lines);
+            _log.Info(nameof(DumpRawSheetFull),
+                $"{sheetName}: {lines.Count - 1} rows → {outFile}",
+                new EKEventId(0, TextSource.None));
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(DumpRawSheetFull), $"'{sheetName}' write failed: {ex.Message}",
                 new EKEventId(0, TextSource.None));
         }
     }

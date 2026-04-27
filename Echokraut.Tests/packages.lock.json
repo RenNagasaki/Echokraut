@@ -113,6 +113,11 @@
           "Google.Apis.Auth": "1.73.0"
         }
       },
+      "HtmlAgilityPack": {
+        "type": "Transitive",
+        "resolved": "1.11.65",
+        "contentHash": "Skse4MVlRcHHyP88x+v/uQrMxTPaBIwQodiQ/y59jxs8vHlqTR5M3jt5Wk+csYFnR4rX6I4ndqDji2M8p9kAzw=="
+      },
       "Humanizer.Core": {
         "type": "Transitive",
         "resolved": "2.14.1",
@@ -141,11 +146,6 @@
         "dependencies": {
           "Humanizer.Core": "[2.14.1]"
         }
-      },
-      "JetBrains.Annotations": {
-        "type": "Transitive",
-        "resolved": "2024.3.0",
-        "contentHash": "ox5pkeLQXjvJdyAB4b2sBYAlqZGLh3PjSnP1bQNVx72ONuTJ9+34/+Rq91Fc0dG29XG9RgZur9+NcP4riihTug=="
       },
       "ManagedBass": {
         "type": "Transitive",
@@ -415,6 +415,7 @@
           "Echotools.UI": "[1.0.0, )",
           "Google.Apis.Auth": "[1.73.0, )",
           "Google.Apis.Drive.v3": "[1.73.0.3996, )",
+          "HtmlAgilityPack": "[1.11.65, )",
           "Humanizer.Core": "[2.14.1, )",
           "Humanizer.Core.de": "[2.14.1, )",
           "Humanizer.Core.fr": "[2.14.1, )",
@@ -422,7 +423,6 @@
           "KamiToolKit": "[1.0.0, )",
           "ManagedBass": "[4.0.1, )",
           "Microsoft.EntityFrameworkCore.Sqlite": "[9.0.3, )",
-          "OtterGui": "[1.0.0, )",
           "R3": "[1.1.13, )",
           "Reloaded.Memory": "[7.1.0, )"
         }
@@ -440,13 +440,6 @@
         "type": "Project",
         "dependencies": {
           "SixLabors.ImageSharp": "[3.1.12, )"
-        }
-      },
-      "ottergui": {
-        "type": "Project",
-        "dependencies": {
-          "JetBrains.Annotations": "[2024.3.0, )",
-          "Microsoft.Extensions.DependencyInjection": "[9.0.2, )"
         }
       }
     }

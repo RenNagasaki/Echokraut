@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace Echokraut.Services;
 
@@ -193,13 +194,25 @@ public class LgbParser
         if (data == null || entries == null || validIds == null || validIds.Count == 0)
             return result;
 
+        // Sort entries by offset so we can tightly bound the scan to "up to but not into the next entry".
+        // Without this bound the 100-byte scan spills into neighboring entries and causes false attributions
+        // (e.g. balloons of NPC B getting attributed to NPC A when their LGB entries sit close together).
+        var sortedOffsets = entries.Select(e => e.EntryOffset).OrderBy(o => o).ToList();
+
         foreach (var entry in entries)
         {
-            // BaseId is at entryStart + CommonHeaderSize (0x30)
             var baseIdPos = entry.EntryOffset + CommonHeaderSize;
 
-            // Scan forward within entry bounds only
-            for (var off = 4; off <= scanForward; off += 4)
+            // Find the next entry's offset to bound the scan; if this is the last entry, use end-of-file.
+            var idx = sortedOffsets.BinarySearch(entry.EntryOffset);
+            int nextEntryOffset = (idx >= 0 && idx + 1 < sortedOffsets.Count)
+                ? sortedOffsets[idx + 1]
+                : data.Length;
+
+            var maxOffsetWithinEntry = Math.Max(0, nextEntryOffset - baseIdPos);
+            var actualScan = Math.Min(scanForward, maxOffsetWithinEntry);
+
+            for (var off = 4; off <= actualScan; off += 4)
             {
                 var pos = baseIdPos + off;
                 if (pos + 4 > data.Length) break;

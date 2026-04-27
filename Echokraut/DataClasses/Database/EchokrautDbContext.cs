@@ -13,6 +13,7 @@ public class EchokrautDbContext : DbContext
     public DbSet<VoiceAllowedRaceEntity> VoiceAllowedRaces => Set<VoiceAllowedRaceEntity>();
     public DbSet<PhoneticCorrectionEntity> PhoneticCorrections => Set<PhoneticCorrectionEntity>();
     public DbSet<VoiceClipGenerationEntity> VoiceClipGenerations => Set<VoiceClipGenerationEntity>();
+    public DbSet<LodestoneLookupEntity> LodestoneLookups => Set<LodestoneLookupEntity>();
 
     private readonly string _dbPath = "";
 
@@ -92,9 +93,11 @@ public class EchokrautDbContext : DbContext
             .HasForeignKey(vc => vc.CharacterId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // VoiceClipGeneration: unique on (voice_clip_id, player_content_id)
+        // VoiceClipGeneration: unique on (voice_clip_id, player_content_id, alias_gender).
+        // alias_gender lets one clip carry the player's own generation (alias_gender=0) plus
+        // shareable male (1) and female (2) variants without colliding on the unique index.
         modelBuilder.Entity<VoiceClipGenerationEntity>()
-            .HasIndex(g => new { g.VoiceClipId, g.PlayerContentId })
+            .HasIndex(g => new { g.VoiceClipId, g.PlayerContentId, g.AliasGender })
             .IsUnique();
         modelBuilder.Entity<VoiceClipGenerationEntity>()
             .HasIndex(g => g.PlayerContentId);

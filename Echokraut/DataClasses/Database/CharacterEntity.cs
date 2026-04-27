@@ -35,14 +35,15 @@ public class CharacterEntity
     [Column("voice_key")]
     public string VoiceKey { get; set; } = ""; // BackendVoice string
 
-    [Column("do_not_delete")]
-    public bool DoNotDelete { get; set; }
-
     [Column("language")]
     public int Language { get; set; } = 1; // ClientLanguage enum (0=JP, 1=EN, 2=DE, 3=FR)
 
     [Column("object_kind")]
     public int ObjectKind { get; set; } // Dalamud ObjectKind enum
+
+    /// <summary>FFXIV world (server) name in English (resolved via World sheet). Empty for non-Player characters.</summary>
+    [Column("world")]
+    public string World { get; set; } = "";
 
     // Navigation properties
     public List<CharacterContextEntity> Contexts { get; set; } = new();

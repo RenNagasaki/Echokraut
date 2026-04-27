@@ -14,4 +14,5 @@ public interface IDialogHarvestService : IDisposable
     Task RunAsync(ClientLanguage language, CancellationToken ct);
     string? ExportQuestLuaDebug(uint questRowId);
     Task DumpAllSheetsAsync(CancellationToken ct);
+    Task SearchSheetsForValueAsync(uint value, CancellationToken ct);
 }

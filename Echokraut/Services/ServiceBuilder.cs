@@ -61,6 +61,17 @@ public static class ServiceBuilder
             clientState,
             dataManager));
 
+        container.RegisterFactory<ILodestoneService>(c => new LodestoneService(
+            c.GetService<ILogService>(),
+            c.GetService<IDatabaseService>()));
+
+        container.RegisterFactory<IPlayerLodestoneEnricher>(c => new PlayerLodestoneEnricher(
+            c.GetService<ILogService>(),
+            c.GetService<INpcDataService>(),
+            c.GetService<ILodestoneService>(),
+            c.GetService<ILuminaService>(),
+            clientState));
+
         container.RegisterFactory<ICharacterDataService>(c => new CharacterDataService(
             c.GetService<ILogService>(),
             c.GetService<IJsonDataService>(),
@@ -168,7 +179,8 @@ public static class ServiceBuilder
             c.GetService<IJsonDataService>(),
             c.GetService<INpcDataService>(),
             c.GetService<IGameObjectService>(),
-            c.GetService<IDatabaseService>()));
+            c.GetService<IDatabaseService>(),
+            c.GetService<ILodestoneService>()));
 
         container.RegisterFactory<IAddonCancelService>(c => new AddonCancelService(
             c.GetService<IAudioPlaybackService>(),
@@ -188,6 +200,8 @@ public static class ServiceBuilder
 
         container.RegisterFactory<ISoundHelper>(c => new SoundHelper(
             c.GetService<ILogService>(), sigScanner, gameInteropProvider));
+
+        container.RegisterFactory<IEchokrautIpc>(c => new EchokrautIpc(pluginInterface));
 
         container.RegisterFactory<IAddonTalkHelper>(c => new AddonTalkHelper(
             c.GetService<IVoiceMessageProcessor>(),
@@ -248,7 +262,8 @@ public static class ServiceBuilder
             c.GetService<ILogService>(),
             configuration,
             c.GetService<IGameObjectService>(),
-            c.GetService<ITextProcessingService>()));
+            c.GetService<ITextProcessingService>(),
+            c.GetService<ILuminaService>()));
 
         return container;
     }

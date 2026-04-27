@@ -8,6 +8,7 @@ using Echotools.Logging.Enums;
 using System;
 using System.IO;
 using System.Threading;
+using System.Threading.Tasks;
 using Echokraut.DataClasses;
 using Echotools.Logging.DataClasses;
 using Dalamud.Game.Text.SeStringHandling;
@@ -127,13 +128,13 @@ public partial class Plugin : IDalamudPlugin
             KamiToolKit.KamiToolKitLibrary.Initialize(_pluginInterface, $"Echokraut {PluginVersion}");
             _kamiToolKitInitialized = true;
         }
-        _windowManager = new NativeWindowManager(_services, _configuration, _addonLifecycle, _commandManager, _clientState);
+        _windowManager = new NativeWindowManager(_services, _configuration, _addonLifecycle, _commandManager, _clientState, _framework);
         WireEvents();
 
         _framework.Update += OnFrameworkUpdate;
         _pluginInterface.UiBuilder.Draw += _windowManager.Draw;
         _pluginInterface.UiBuilder.OpenConfigUi += _commands.ToggleConfigUi;
-        _pluginInterface.UiBuilder.OpenMainUi += _commands.ToggleConfigUi;
+        _pluginInterface.UiBuilder.OpenMainUi += _commands.ToggleVoiceClipManagerUi;
         _clientState.Login += OnLogin;
 
         HandleStartup();
@@ -155,6 +156,11 @@ public partial class Plugin : IDalamudPlugin
             var harvest = _services.GetService<IDialogHarvestService>();
             _ = harvest.DumpAllSheetsAsync(CancellationToken.None);
         };
+        _commands.SearchSheetIdRequested += value =>
+        {
+            var harvest = _services.GetService<IDialogHarvestService>();
+            _ = harvest.SearchSheetsForValueAsync(value, CancellationToken.None);
+        };
     }
 
     private void HandleStartup()
@@ -170,9 +176,28 @@ public partial class Plugin : IDalamudPlugin
             _alltalkInstance.StartInstance();
             _backend.RefreshBackend();
         }
- 
+
         if (_configuration.GoogleDriveDownloadPeriodically)
             _googleDrive.StartSync();
+
+        // Run Lodestone enrichment for player records with Race=Unknown.
+        // Requires login (HomeWorld lookup needs LocalPlayer); if not logged in yet, OnLogin runs it.
+        if (_clientState.IsLoggedIn)
+            StartPlayerEnrichment();
+    }
+
+    private void StartPlayerEnrichment()
+    {
+        try
+        {
+            var enricher = _services.GetService<IPlayerLodestoneEnricher>();
+            _ = Task.Run(() => enricher.RunAsync(CancellationToken.None));
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(StartPlayerEnrichment), $"Failed to start enrichment: {ex.Message}",
+                new EKEventId(0, TextSource.None));
+        }
     }
 
     private void OnLogin()
@@ -190,10 +215,13 @@ public partial class Plugin : IDalamudPlugin
                 && _configuration.Alltalk.InstanceType == Echokraut.Enums.AlltalkInstanceType.Local
                 && !_alltalkInstance.InstanceRunning
                 && !_alltalkInstance.InstanceStarting)
-            { 
+            {
                 _alltalkInstance.StartInstance();
                 _backend.RefreshBackend();
-            }   
+            }
+
+            // Lodestone enrichment runs once per session — HomeWorld is now available.
+            StartPlayerEnrichment();
         }
         catch (Exception e)
         { 
@@ -226,7 +254,7 @@ public partial class Plugin : IDalamudPlugin
         _framework.Update -= OnFrameworkUpdate;
         _pluginInterface.UiBuilder.Draw -= _windowManager.Draw;
         _pluginInterface.UiBuilder.OpenConfigUi -= _commands.ToggleConfigUi;
-        _pluginInterface.UiBuilder.OpenMainUi -= _commands.ToggleConfigUi;
+        _pluginInterface.UiBuilder.OpenMainUi -= _commands.ToggleVoiceClipManagerUi;
         _clientState.Login -= OnLogin;
         _googleDrive.StopSync();
 

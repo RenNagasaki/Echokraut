@@ -40,6 +40,13 @@ public class Configuration : IPluginConfiguration
     public bool LoadFromLocalFirst { get; set; } = false;
     public string LocalSaveLocation { get; set; } = @"C:\alltalk_tts\LocalSaves";
     public bool CreateMissingLocalSaveLocation { get; set; } = false;
+    /// <summary>
+    /// When true, every time a voice clip with player-name placeholders is generated for the
+    /// local player, additional male + female alias variants are auto-generated using a
+    /// localized generic noun (Adventurer / Abenteurer / Aventurier / 冒険者). These variants
+    /// are shareable with other users via export/import.
+    /// </summary>
+    public bool AutoGenerateShareableAliases { get; set; } = false;
     public bool VoiceRetainers { get; set; } = false;
     public bool VoiceBubble { get; set; } = false;
     public bool VoiceBubblesInCity { get; set; } = false;

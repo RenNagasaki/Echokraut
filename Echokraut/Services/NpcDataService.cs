@@ -273,8 +273,9 @@ public class NpcDataService : INpcDataService
 
     public void SaveCharacterWithOldIdentity(NpcMapData data, string oldName, Genders oldGender, NpcRaces oldRace)
     {
-        // Delete old character record (identity changed)
-        var oldChar = _db.FindCharacter(oldName, oldGender, oldRace);
+        // Delete old character record (identity changed). Language stays the same across an
+        // identity change — must be passed explicitly because FindCharacter defaults to English.
+        var oldChar = _db.FindCharacter(oldName, oldGender, oldRace, (int)data.Language);
         if (oldChar != null)
             _db.DeleteCharacter(oldChar.Id);
 
@@ -297,7 +298,7 @@ public class NpcDataService : INpcDataService
 
     public void RemoveCharacter(NpcMapData data)
     {
-        var existing = _db.FindCharacter(data.Name, data.Gender, data.Race);
+        var existing = _db.FindCharacter(data.Name, data.Gender, data.Race, (int)data.Language);
         if (existing != null)
             _db.DeleteCharacter(existing.Id);
     }
@@ -340,7 +341,7 @@ public class NpcDataService : INpcDataService
             BodyType = (BodyType)entity.BodyType,
             Language = (ClientLanguage)entity.Language,
             voice = entity.VoiceKey,
-            DoNotDelete = entity.DoNotDelete,
+            World = entity.World,
         };
 
         // Load context-specific settings
@@ -373,8 +374,8 @@ public class NpcDataService : INpcDataService
             BodyType = (int)data.BodyType,
             Language = (int)data.Language,
             VoiceKey = data.voice ?? "",
-            DoNotDelete = data.DoNotDelete,
-            ObjectKind = (int)data.ObjectKind
+            ObjectKind = (int)data.ObjectKind,
+            World = data.World ?? "",
         };
     }
 

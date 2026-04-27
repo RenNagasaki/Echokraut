@@ -17,6 +17,7 @@ public class NativeWindowManager : IWindowManager
     private readonly NativeFirstTimeWindow _firstTimeWindow;
     private readonly NativeVoiceClipManagerWindow _voiceClipManagerWindow;
     private readonly NativeVoiceClipDetailWindow _voiceClipDetailWindow;
+    private readonly IFramework _framework;
 
     public bool IsFirstTimeOpen => _firstTimeWindow.IsOpen;
 
@@ -25,8 +26,10 @@ public class NativeWindowManager : IWindowManager
         Configuration config,
         IAddonLifecycle addonLifecycle,
         ICommandManager commandManager,
-        IClientState clientState)
+        IClientState clientState,
+        IFramework framework)
     {
+        _framework = framework;
         var addonTalk = services.GetService<IAddonTalkHelper>();
 
         _dialogController = new DialogTalkController(
@@ -34,10 +37,11 @@ public class NativeWindowManager : IWindowManager
             services.GetService<IAudioPlaybackService>(),
             services.GetService<ILipSyncHelper>(),
             () => addonTalk.RecreateInference(),
-            () => _configWindow.Toggle(),
+            () => _voiceClipManagerWindow.Toggle(),
             addonLifecycle,
             services.GetService<ILogService>(),
-            services.GetService<INpcDataService>());
+            services.GetService<INpcDataService>(),
+            services.GetService<IEchokrautIpc>());
 
         _configWindow = new NativeConfigWindow(
             config,
@@ -83,7 +87,10 @@ public class NativeWindowManager : IWindowManager
             services.GetService<INpcDataService>(),
             services.GetService<IDialogHarvestService>(),
             services.GetService<IGameObjectService>(),
-            clientState)
+            clientState,
+            services.GetService<ILogService>(),
+            services.GetService<IBackendService>(),
+            ToggleConfig)
         {
             InternalName = "EchokrautEncounters",
             Title = Loc.S("Voice Clip Manager"),
@@ -128,10 +135,43 @@ public class NativeWindowManager : IWindowManager
 
     public void Dispose()
     {
+        // Close all native windows first to start the (async, framework-thread) ATK detach,
+        // THEN dispose. NativeAddon.Dispose() internally calls Close() too but immediately
+        // continues with managed cleanup — without explicit close-first, a still-attached
+        // ATK addon can dangle a pointer into freed managed memory and crash later in
+        // AtkUldManager.UpdateDrawNodeList when the game tries to tear down the addon.
+        SafeClose(_configWindow);
+        SafeClose(_firstTimeWindow);
+        SafeClose(_voiceClipManagerWindow);
+        SafeClose(_voiceClipDetailWindow);
+
+        // Give the framework thread a chance to actually process the queued ATK Close calls
+        // BEFORE we free our managed handles. We can only block when we're NOT on the
+        // framework thread ourselves — otherwise we'd deadlock the very thread that needs
+        // to drain the queue. Plugin.Dispose is sometimes on the framework thread (manual
+        // toggle in /xlplugins) and sometimes on a thread-pool thread (file-watcher hot
+        // reload via LocalDevPlugin) — we have to handle both.
+        if (!_framework.IsInFrameworkUpdateThread)
+        {
+            try { _framework.DelayTicks(2).Wait(300); } catch { }
+        }
+
         _dialogController.Dispose();
-        _configWindow.Dispose();
-        _firstTimeWindow.Dispose();
-        _voiceClipManagerWindow.Dispose();
-        _voiceClipDetailWindow.Dispose();
+        SafeDispose(_configWindow);
+        SafeDispose(_firstTimeWindow);
+        SafeDispose(_voiceClipManagerWindow);
+        SafeDispose(_voiceClipDetailWindow);
+    }
+
+    private static void SafeClose(KamiToolKit.NativeAddon? addon)
+    {
+        if (addon == null) return;
+        try { if (addon.IsOpen) addon.Close(); } catch { }
+    }
+
+    private static void SafeDispose(KamiToolKit.NativeAddon? addon)
+    {
+        if (addon == null) return;
+        try { addon.Dispose(); } catch { }
     }
 }

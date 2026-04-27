@@ -562,7 +562,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             {
                 _deleteNpcsArmed = false;
                 _clearNpcsButton!.String = Loc.S("Clear mapped NPCs");
-                foreach (var npc in _npcData.MappedNpcs.FindAll(p => !p.Name.StartsWith("BB") && !p.DoNotDelete))
+                foreach (var npc in _npcData.MappedNpcs.FindAll(p => !p.Name.StartsWith("BB")))
                 {
                     _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation, npc.Name);
                     _npcData.RemoveCharacter(npc);
@@ -582,7 +582,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             {
                 _deletePlayersArmed = false;
                 _clearPlayersButton!.String = Loc.S("Clear mapped players");
-                foreach (var p in _npcData.MappedPlayers.FindAll(p => !p.DoNotDelete))
+                foreach (var p in _npcData.MappedPlayers)
                 {
                     _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation, p.Name);
                     _npcData.RemoveCharacter(p);
@@ -602,7 +602,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             {
                 _deleteBubblesArmed = false;
                 _clearBubblesButton!.String = Loc.S("Clear mapped bubbles");
-                foreach (var npc in _npcData.MappedNpcs.FindAll(p => p.Name.StartsWith("BB") && !p.DoNotDelete))
+                foreach (var npc in _npcData.MappedNpcs.FindAll(p => p.Name.StartsWith("BB")))
                 {
                     _audioFiles.RemoveSavedNpcFiles(_config.LocalSaveLocation, npc.Name);
                     _npcData.RemoveCharacter(npc);
@@ -881,6 +881,9 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             v => { _config.CreateMissingLocalSaveLocation = v; _config.Save(); });
         _localPathInput = Input(Loc.S("Local audio directory path"), w, 260, _config.LocalSaveLocation,
             v => { _config.LocalSaveLocation = v; _config.Save(); });
+        var autoAlias = Check(Loc.S("Auto-generate shareable alias variants for player-name dialog"), w,
+            _config.AutoGenerateShareableAliases,
+            v => { _config.AutoGenerateShareableAliases = v; _config.Save(); });
 
         // Google Drive
         var gdRequestVoiceLine = Check(
@@ -912,6 +915,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         list.AddNode(saveLocally);
         list.AddNode(_createMissingDirCheck);
         list.AddNode(_localPathInput);
+        list.AddNode(autoAlias);
 
         CreateCollapsibleSection(list, Loc.S("Google Drive"), w, false,
             [gdRequestVoiceLine, _gdUploadCheck, gdDownload,

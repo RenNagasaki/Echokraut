@@ -25,5 +25,6 @@ public interface ITextProcessingService
     string CleanUpName(string name);
     bool TryGetEntityName(SeString seString, out string entityName);
     string StripWorldFromNames(SeString message);
+    string StripWorldFromNames(SeString message, out uint worldRowId);
     string GetBubbleName(Lumina.Excel.Sheets.TerritoryType? territory, IGameObject? speaker, string text);
 }

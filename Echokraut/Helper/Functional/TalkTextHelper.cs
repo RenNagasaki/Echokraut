@@ -183,8 +183,16 @@ namespace Echokraut.Helper.Functional
         }
 
         public static string StripWorldFromNames(SeString message)
+            => StripWorldFromNames(message, out _);
+
+        /// <summary>
+        /// Strips the world suffix from player names in the message body.
+        /// Also returns the localized world name (from PlayerPayload) and the world's Lumina row id
+        /// so callers can resolve the English server name via the World sheet.
+        /// </summary>
+        public static string StripWorldFromNames(SeString message, out uint worldRowId)
         {
-            // Remove world from all names in message body
+            worldRowId = 0;
             var world = "";
             var cleanString = new SeStringBuilder();
             foreach (var p in message.Payloads)
@@ -193,6 +201,7 @@ namespace Echokraut.Helper.Functional
                 {
                     case PlayerPayload pp:
                         world = pp.World.Value.Name.ToString();
+                        if (worldRowId == 0) worldRowId = pp.World.RowId;
                         break;
                     case TextPayload tp when world != "" && tp.Text != null && tp.Text.Contains(world):
                         cleanString.AddText(tp.Text.Replace(world, ""));
@@ -610,6 +619,21 @@ namespace Echokraut.Helper.Functional
         public const string PlaceholderFirstName = "-PlayerFirstName-";
         public const string PlaceholderLastName = "-PlayerLastName-";
         public const string PlaceholderFullName = "-PlayerName-";
+
+        /// <summary>
+        /// Returns a localized generic noun for the player ("Adventurer" / "Abenteurer(in)" /
+        /// "Aventurier(ière)" / "冒険者") used when generating shareable alias variants of a clip.
+        /// EN/JP have no gendered form — male and female callers get the same string.
+        /// </summary>
+        public static string GetPlayerAlias(ClientLanguage lang, bool isMale) => (lang, isMale) switch
+        {
+            (ClientLanguage.German, true)  => "Abenteurer",
+            (ClientLanguage.German, false) => "Abenteurerin",
+            (ClientLanguage.French, true)  => "Aventurier",
+            (ClientLanguage.French, false) => "Aventurière",
+            (ClientLanguage.Japanese, _)   => "冒険者",
+            _                               => "Adventurer",
+        };
 
         public static bool ContainsPlayerPlaceholder(string text)
         {

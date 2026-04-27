@@ -103,10 +103,15 @@ namespace Echokraut.DataClasses
 
         public bool IsSelectable(string npcName, Genders gender, NpcRaces race, BodyType bodyType)
         {
+            // Use the VoiceName property (not the raw voiceNameShort field) so the lazy-init
+            // strips Gender/Race/BodyType prefixes the first time it's called. Otherwise a voice
+            // like "Male_Elezen_Alphinaud" wouldn't match an "Alphinaud" NPC the very first time
+            // the dropdown is built. Match is case-insensitive to align with BackendService.PickVoice.
             return IsEnabled && (
                 IsDefault ||
                 (AllowedGenders.Contains(gender) && AllowedRaces.Contains(race) && FitsBodyType(bodyType)) ||
-                voiceNameShort.Contains(npcName)
+                (!string.IsNullOrEmpty(npcName) &&
+                 VoiceName.Contains(npcName, StringComparison.OrdinalIgnoreCase))
             );
         }
 

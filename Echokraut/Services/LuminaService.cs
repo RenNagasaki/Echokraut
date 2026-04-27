@@ -55,6 +55,9 @@ public class LuminaService : ILuminaService
     {
         try
         {
+            // Default sheet → client language. Used for display strings (RaceStr) so the UI keeps
+            // showing localized race names. For enum parsing, use GetRaceEnglishName instead — the
+            // NpcRaces enum values are English-only and would not parse on non-English clients.
             return _dataManager.GetExcelSheet<Race>()?.GetRow(speakerRace) ?? null;
         }
         catch (Exception ex)
@@ -63,5 +66,37 @@ public class LuminaService : ILuminaService
         }
 
         return null;
+    }
+
+    public string GetRaceEnglishName(byte speakerRace, EKEventId eventId)
+    {
+        try
+        {
+            var race = _dataManager.GetExcelSheet<Race>(Dalamud.Game.ClientLanguage.English)?.GetRow(speakerRace);
+            return race?.Masculine.ExtractText() ?? "";
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(GetRaceEnglishName), $"Error while getting English Race: {ex}", eventId);
+            return "";
+        }
+    }
+
+    public string GetWorldEnglishName(uint worldRowId)
+    {
+        if (worldRowId == 0) return "";
+        try
+        {
+            // World names are not localized in FFXIV (server names are global).
+            // We pull from the default sheet; ExtractText on the InternalName / Name column gives the English value.
+            var world = _dataManager.GetExcelSheet<World>(Dalamud.Game.ClientLanguage.English)?.GetRow(worldRowId);
+            return world?.Name.ExtractText() ?? "";
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(GetWorldEnglishName), $"Failed to resolve world {worldRowId}: {ex.Message}",
+                new EKEventId(0, TextSource.None));
+            return "";
+        }
     }
 }

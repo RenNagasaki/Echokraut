@@ -1,3 +1,4 @@
+using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Text;
 using Dalamud.Game.Text.SeStringHandling;
@@ -24,6 +25,7 @@ namespace Echokraut.Services
         private readonly Configuration _configuration;
         private readonly IGameObjectService _gameObjects;
         private readonly ITextProcessingService _textProcessing;
+        private readonly ILuminaService _lumina;
 
         private readonly Conditions* conditions;
         private IChatGui.OnMessageDelegate handler = null!;
@@ -34,7 +36,8 @@ namespace Echokraut.Services
             ILogService log,
             Configuration configuration,
             IGameObjectService gameObjects,
-            ITextProcessingService textProcessing)
+            ITextProcessingService textProcessing,
+            ILuminaService lumina)
         {
             _voiceProcessor = voiceProcessor ?? throw new ArgumentNullException(nameof(voiceProcessor));
             _chatGui = chatGui ?? throw new ArgumentNullException(nameof(chatGui));
@@ -42,6 +45,7 @@ namespace Echokraut.Services
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
             _gameObjects = gameObjects ?? throw new ArgumentNullException(nameof(gameObjects));
             _textProcessing = textProcessing ?? throw new ArgumentNullException(nameof(textProcessing));
+            _lumina = lumina ?? throw new ArgumentNullException(nameof(lumina));
 
             this.conditions = Conditions.Instance();
 
@@ -69,7 +73,15 @@ namespace Echokraut.Services
             {
                 var (type, sender, message) = chatMessage;
                 var text = message.TextValue;
-                var realSender = _textProcessing.StripWorldFromNames(sender);
+                var realSender = _textProcessing.StripWorldFromNames(sender, out var worldRowId);
+                if (worldRowId == 0 && _gameObjects.LocalPlayer is IPlayerCharacter localPlayer)
+                {
+                    // Chat senders without an explicit world suffix (e.g. /say, /shout, own messages)
+                    // are always on the local player's home world — fall back so Lodestone enrichment
+                    // has a world to query.
+                    worldRowId = localPlayer.HomeWorld.RowId;
+                }
+                var worldEnglish = worldRowId != 0 ? _lumina.GetWorldEnglishName(worldRowId) : "";
                 text = _textProcessing.NormalizePunctuation(text);
 
                 switch ((ushort)type)
@@ -165,7 +177,7 @@ namespace Echokraut.Services
 
                 if (!_configuration.VoiceChatPlayer && _gameObjects.LocalPlayer != null && _gameObjects.LocalPlayer.Name.TextValue == realSender) return;
 
-                _ = _voiceProcessor.ProcessSpeechAsync(eventId, speaker ?? null, speaker?.Name ?? "", text);
+                _ = _voiceProcessor.ProcessSpeechAsync(eventId, speaker ?? null, speaker?.Name ?? "", text, worldEnglish);
             }
             catch (Exception ex)
             {

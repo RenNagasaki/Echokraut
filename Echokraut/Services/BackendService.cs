@@ -10,6 +10,7 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net.Http;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -195,6 +196,76 @@ public class BackendService : IBackendService, IDisposable
         return false;
     }
 
+    // ── Reachability (real health check, 30s TTL cache) ──────────────────────
+
+    private static readonly TimeSpan ReachabilityCacheTtl = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ReachabilityRequestTimeout = TimeSpan.FromSeconds(3);
+    private DateTime _lastReachabilityCheck = DateTime.MinValue;
+    private bool _lastReachabilityResult;
+    private readonly SemaphoreSlim _reachabilityLock = new(1, 1);
+
+    public bool? CachedReachability =>
+        DateTime.UtcNow - _lastReachabilityCheck < ReachabilityCacheTtl
+            ? _lastReachabilityResult
+            : (bool?)null;
+
+    public void InvalidateReachabilityCache() => _lastReachabilityCheck = DateTime.MinValue;
+
+    public async Task<bool> IsBackendReachableAsync()
+    {
+        if (DateTime.UtcNow - _lastReachabilityCheck < ReachabilityCacheTtl)
+            return _lastReachabilityResult;
+
+        await _reachabilityLock.WaitAsync();
+        try
+        {
+            // Re-check inside the lock — another caller may have populated the cache while we waited.
+            if (DateTime.UtcNow - _lastReachabilityCheck < ReachabilityCacheTtl)
+                return _lastReachabilityResult;
+
+            var reachable = await PingBackendAsync();
+            _lastReachabilityResult = reachable;
+            _lastReachabilityCheck = DateTime.UtcNow;
+            return reachable;
+        }
+        finally
+        {
+            _reachabilityLock.Release();
+        }
+    }
+
+    private async Task<bool> PingBackendAsync()
+    {
+        // First gate on the config-only availability check.
+        if (!IsBackendAvailable()) return false;
+        if (_config.BackendSelection != TTSBackends.Alltalk) return false;
+
+        // "None" instance type means no local generation is expected — treat as reachable so
+        // GoogleDriveRequestVoiceLine flows aren't blocked by this check.
+        if (_config.Alltalk.InstanceType == AlltalkInstanceType.None) return true;
+
+        // Local install — trust the instance-running flag maintained by AlltalkInstanceService.
+        if (_config.Alltalk.InstanceType == AlltalkInstanceType.Local)
+            return _alltalkInstance.InstanceRunning;
+
+        // Remote — actual HTTP GET on AllTalk's ready endpoint.
+        try
+        {
+            var baseUrl = (_config.Alltalk.BaseUrl ?? "").TrimEnd('/');
+            var readyPath = _config.Alltalk.ReadyPath ?? "/api/ready";
+            if (!readyPath.StartsWith('/')) readyPath = "/" + readyPath;
+            var url = baseUrl + readyPath;
+
+            using var http = new HttpClient { Timeout = ReachabilityRequestTimeout };
+            var resp = await http.GetAsync(url);
+            return resp.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public void ProcessVoiceMessage(VoiceMessage voiceMessage)
     {
         if (voiceMessage == null) throw new ArgumentNullException(nameof(voiceMessage));
@@ -321,6 +392,58 @@ public class BackendService : IBackendService, IDisposable
             _log.Error(nameof(GetVoiceOrRandom), $"Couldn't find voice for NPC: {npcData.Name}", eventId);
     }
 
+    /// <summary>
+    /// True if the voice is enabled, default-marked, OR matches the NPC's race/gender/body-type
+    /// constraints. Used to gate the PickVoice short-circuit so unfitting assignments get re-picked.
+    /// </summary>
+    public bool IsVoiceFittingForNpc(EchokrautVoice? voice, NpcMapData npc)
+    {
+        if (voice == null || !voice.IsEnabled) return false;
+        if (voice.IsDefault) return true;
+
+        var isGenderedRace = _npcData.IsGenderedRace(npc.Race);
+        if (isGenderedRace && voice.AllowedGenders.Count > 0 && !voice.AllowedGenders.Contains(npc.Gender))
+            return false;
+        if (voice.AllowedRaces.Count > 0 && !voice.AllowedRaces.Contains(npc.Race))
+            return false;
+
+        return npc.BodyType switch
+        {
+            BodyType.Child => voice.IsChildVoice,
+            BodyType.Elder => voice.IsElderVoice,
+            _ => voice.IsAdultVoice,
+        };
+    }
+
+    /// <summary>
+    /// If the NPC's currently-assigned voice doesn't fit (race/gender/body-type mismatch, disabled,
+    /// or none assigned), re-pick via PickVoice and persist the new assignment to the character.
+    /// Returns true if a change was made.
+    /// </summary>
+    public bool EnsureFittingVoice(NpcMapData npcData, EKEventId eventId)
+    {
+        if (IsVoiceFittingForNpc(npcData.Voice, npcData)) return false;
+
+        var oldVoiceKey = npcData.voice ?? "";
+        npcData.voice = ""; // clear so PickVoice's short-circuit doesn't keep the bad assignment
+        var voices = _db.GetVoices().Select(VoiceEntityToEchokrautVoice).ToList();
+        var picked = PickVoice(npcData, voices);
+
+        if (picked == null)
+        {
+            npcData.voice = oldVoiceKey; // restore so callers see the original key in their warnings
+            return false;
+        }
+
+        npcData.Voice = picked;
+        _npcData.SaveCharacter(npcData);
+        _log.Info(nameof(EnsureFittingVoice),
+            $"Auto-assigned voice '{picked.BackendVoice}' for {npcData.Name} ({npcData.Gender} {npcData.Race}, {npcData.BodyType})" +
+            (string.IsNullOrEmpty(oldVoiceKey) ? "" : $" — replaced unfitting '{oldVoiceKey}'"),
+            eventId);
+        return true;
+    }
+
     public EchokrautVoice? PickVoice(NpcMapData npcData, IList<EchokrautVoice> voices)
     {
         var voiceItem = npcData.Voice;
@@ -332,7 +455,12 @@ public class BackendService : IBackendService, IDisposable
             if (voices[i].IsDefault) { defaultVoice = voices[i]; break; }
         }
 
-        if (voiceItem != null && (defaultVoice == null || voiceItem.BackendVoice != defaultVoice.BackendVoice))
+        // Short-circuit only if the existing voice still fits the NPC. After a Race/Gender
+        // edit (e.g. via NPC edit window) the previously assigned voice may no longer match;
+        // falling through forces a re-pick by name → race/gender → default.
+        if (voiceItem != null
+            && (defaultVoice == null || voiceItem.BackendVoice != defaultVoice.BackendVoice)
+            && IsVoiceFittingForNpc(voiceItem, npcData))
             return voiceItem;
 
         var npcName = npcData.Name ?? string.Empty;

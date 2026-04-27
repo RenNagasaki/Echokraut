@@ -52,6 +52,20 @@ internal class VoiceTestService : IVoiceTestService
 
     public void TestVoice(EchokrautVoice voice)
     {
+        // Pre-check: if we've recently confirmed the backend is unreachable, abort fast.
+        // Null cache (no recent check) is treated optimistically — a single test is cheap to fail.
+        // Kick off an async refresh in the background so the next call has fresh info.
+        if (_backend.CachedReachability == false)
+        {
+            _log.Warning(nameof(TestVoice),
+                "Backend not reachable — voice test aborted. Check AllTalk connection.",
+                new EKEventId(0, TextSource.AddonTalk));
+            _ = _backend.IsBackendReachableAsync();
+            return;
+        }
+        if (_backend.CachedReachability == null)
+            _ = _backend.IsBackendReachableAsync();
+
         StopVoice();
         TestingVoice = voice;
 

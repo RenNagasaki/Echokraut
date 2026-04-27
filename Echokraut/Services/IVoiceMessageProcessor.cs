@@ -12,7 +12,10 @@ namespace Echokraut.Services;
 public interface IVoiceMessageProcessor
 {
     /// <summary>
-    /// Process a speech event and queue it for voice generation
+    /// Process a speech event and queue it for voice generation.
     /// </summary>
-    Task ProcessSpeechAsync(EKEventId eventId, IGameObject? speaker, SeString speakerName, string textValue);
+    /// <param name="worldEnglish">Optional English world name (server) for player speakers from chat,
+    /// used to enrich Race/Gender via Lodestone lookup when the player isn't currently visible.</param>
+    Task ProcessSpeechAsync(EKEventId eventId, IGameObject? speaker, SeString speakerName, string textValue,
+        string worldEnglish = "");
 }

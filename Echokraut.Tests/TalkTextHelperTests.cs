@@ -401,4 +401,28 @@ public class TalkTextHelperTests
         var result = TalkTextHelper.SubstitutePlaceholders("Hello -PlayerFirstName-!", "");
         Assert.Equal("Hello -PlayerFirstName-!", result);
     }
+
+    // ── GetPlayerAlias ──────────────────────────────────────
+
+    [Theory]
+    [InlineData(Dalamud.Game.ClientLanguage.German,    true,  "Abenteurer")]
+    [InlineData(Dalamud.Game.ClientLanguage.German,    false, "Abenteurerin")]
+    [InlineData(Dalamud.Game.ClientLanguage.French,    true,  "Aventurier")]
+    [InlineData(Dalamud.Game.ClientLanguage.French,    false, "Aventurière")]
+    [InlineData(Dalamud.Game.ClientLanguage.Japanese,  true,  "冒険者")]
+    [InlineData(Dalamud.Game.ClientLanguage.Japanese,  false, "冒険者")]
+    [InlineData(Dalamud.Game.ClientLanguage.English,   true,  "Adventurer")]
+    [InlineData(Dalamud.Game.ClientLanguage.English,   false, "Adventurer")]
+    public void GetPlayerAlias_ReturnsLocalizedGenderedNoun(Dalamud.Game.ClientLanguage lang, bool isMale, string expected)
+    {
+        Assert.Equal(expected, TalkTextHelper.GetPlayerAlias(lang, isMale));
+    }
+
+    [Fact]
+    public void SubstitutePlaceholders_AcceptsAliasAsPlayerName()
+    {
+        var result = TalkTextHelper.SubstitutePlaceholders(
+            "Hallo -PlayerName-!", "Abenteurerin", isMale: false);
+        Assert.Equal("Hallo Abenteurerin!", result);
+    }
 }

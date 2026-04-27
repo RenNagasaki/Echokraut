@@ -20,6 +20,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="Echokraut.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Google.Apis.Auth" Version="1.73.0" />
     <PackageReference Include="Google.Apis.Drive.v3" Version="1.73.0.3996" />
     <PackageReference Include="Humanizer.Core" Version="2.14.1" />
@@ -29,6 +33,7 @@
     <PackageReference Include="ManagedBass" Version="4.0.1" />
     <PackageReference Include="R3" Version="1.1.13" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.3" />
+    <PackageReference Include="HtmlAgilityPack" Version="1.11.65" />
     <PackageReference Include="Reloaded.Memory" Version="7.1.0" />
     <PackageReference Remove="DalamudPackager" />
   </ItemGroup>

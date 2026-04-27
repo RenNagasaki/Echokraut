@@ -6,3 +6,7 @@ ApiKeys.json
 *.Secrets.cs
 CLAUDE.md
 .sonarqube/
+
+# Local test secrets — copy .example.env to .env and fill in values.
+.env
+!.example.env

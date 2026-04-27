@@ -55,7 +55,7 @@ public class DatabaseService : IDatabaseService
         RefreshAllCaches();
     }
 
-    private const int CurrentSchemaVersion = 9;
+    private const int CurrentSchemaVersion = 12;
 
     private void InitializeDatabase(Configuration config)
     {
@@ -292,6 +292,183 @@ public class DatabaseService : IDatabaseService
             catch { /* already exists */ }
             SetSchemaVersion(9);
         }
+
+        if (version < 10)
+        {
+            _log.Info(nameof(RunSchemaMigrations), "Applying schema v10: drop do_not_delete column from characters",
+                new EKEventId(0, TextSource.None));
+            try { _context.Database.ExecuteSqlRaw(
+                "ALTER TABLE characters DROP COLUMN do_not_delete"); }
+            catch { /* already dropped on fresh install or pre-v9 install never had it persisted */ }
+            SetSchemaVersion(10);
+        }
+
+        if (version < 11)
+        {
+            _log.Info(nameof(RunSchemaMigrations), "Applying schema v11: world column on characters + lodestone_lookups cache table",
+                new EKEventId(0, TextSource.None));
+            try { _context.Database.ExecuteSqlRaw(
+                "ALTER TABLE characters ADD COLUMN world TEXT NOT NULL DEFAULT ''"); }
+            catch { /* already exists on fresh install */ }
+            try { _context.Database.ExecuteSqlRaw(
+                @"CREATE TABLE IF NOT EXISTS lodestone_lookups (
+                    name TEXT NOT NULL,
+                    world TEXT NOT NULL,
+                    race INTEGER NOT NULL DEFAULT 0,
+                    gender INTEGER NOT NULL DEFAULT 0,
+                    fetched_at TEXT NOT NULL,
+                    found INTEGER NOT NULL DEFAULT 0,
+                    PRIMARY KEY (name, world)
+                )"); }
+            catch { /* already exists */ }
+            SetSchemaVersion(11);
+        }
+
+        if (version < 12)
+        {
+            _log.Info(nameof(RunSchemaMigrations),
+                "Applying schema v12: merge case-duplicate character rows, recreate name index COLLATE NOCASE",
+                new EKEventId(0, TextSource.None));
+            MergeCaseDuplicateCharacters();
+            try { _context.Database.ExecuteSqlRaw(
+                "DROP INDEX IF EXISTS IX_characters_name_gender_race_language"); }
+            catch { /* not present */ }
+            try { _context.Database.ExecuteSqlRaw(
+                "CREATE UNIQUE INDEX IX_characters_name_gender_race_language ON characters (name COLLATE NOCASE, gender, race, language)"); }
+            catch { /* already created with NOCASE on fresh install */ }
+            SetSchemaVersion(12);
+        }
+
+        if (version < 13)
+        {
+            _log.Info(nameof(RunSchemaMigrations),
+                "Applying schema v13: alias_gender column on voice_clip_generations + recreate unique index",
+                new EKEventId(0, TextSource.None));
+            try { _context.Database.ExecuteSqlRaw(
+                "ALTER TABLE voice_clip_generations ADD COLUMN alias_gender INTEGER NOT NULL DEFAULT 0"); }
+            catch { /* already exists on fresh install */ }
+            try { _context.Database.ExecuteSqlRaw(
+                "DROP INDEX IF EXISTS IX_voice_clip_generations_VoiceClipId_PlayerContentId"); }
+            catch { /* not present */ }
+            try { _context.Database.ExecuteSqlRaw(
+                "CREATE UNIQUE INDEX IX_voice_clip_generations_VoiceClipId_PlayerContentId_AliasGender ON voice_clip_generations (voice_clip_id, player_content_id, alias_gender)"); }
+            catch { /* already created on fresh install */ }
+            SetSchemaVersion(13);
+        }
+    }
+
+    /// <summary>
+    /// Pre-v12 the characters unique index was case-sensitive on (name, gender, race, language),
+    /// so harvested German adjective stems like "stille Druidin" coexisted with the runtime
+    /// display "Stille Druidin" as two distinct rows. Merges them: voice clips, instances,
+    /// contexts get re-parented to the winner; conflicting child rows on the loser side are
+    /// dropped. Winner = row with non-empty voice_key, then the one whose name already starts
+    /// uppercase, then highest object_kind, then lowest id. After merge the winner's name is
+    /// title-cased so the final state is canonical.
+    /// </summary>
+    internal void MergeCaseDuplicateCharacters()
+    {
+        // 1. Collect (winnerId, loserId) pairs and the canonical name to apply to the winner.
+        var merges = new List<(int winnerId, int loserId, string canonicalName)>();
+        var winnerNames = new Dictionary<int, string>();
+        var conn = _context.Database.GetDbConnection();
+        if (conn.State != System.Data.ConnectionState.Open) conn.Open();
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.CommandText = @"
+WITH grouped AS (
+    SELECT id, name, gender, race, language, voice_key, object_kind,
+           ROW_NUMBER() OVER (
+               PARTITION BY LOWER(name), gender, race, language
+               ORDER BY CASE WHEN voice_key != '' THEN 0 ELSE 1 END,
+                        CASE WHEN substr(name, 1, 1) = upper(substr(name, 1, 1)) THEN 0 ELSE 1 END,
+                        object_kind DESC,
+                        id ASC
+           ) AS rnk,
+           COUNT(*) OVER (PARTITION BY LOWER(name), gender, race, language) AS grp_size
+      FROM characters
+)
+SELECT g.id AS loser_id, g.name AS loser_name,
+       w.id AS winner_id, w.name AS winner_name
+  FROM grouped g
+  JOIN grouped w
+    ON LOWER(w.name) = LOWER(g.name)
+   AND w.gender = g.gender AND w.race = g.race AND w.language = g.language
+   AND w.rnk = 1
+ WHERE g.grp_size > 1 AND g.rnk > 1";
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+            {
+                var loserId = reader.GetInt32(0);
+                var winnerId = reader.GetInt32(2);
+                var winnerName = reader.GetString(3);
+                merges.Add((winnerId, loserId, winnerName));
+                winnerNames[winnerId] = winnerName;
+            }
+        }
+
+        if (merges.Count == 0) return;
+
+        foreach (var (winnerId, loserId, _) in merges)
+        {
+            // voice_clips: move when winner has no entry for the same (npc_base_id, original_text);
+            //              drop the rest (they would violate the composite index).
+            _context.Database.ExecuteSqlInterpolated(
+                $@"UPDATE voice_clips
+                      SET character_id = {winnerId}
+                    WHERE character_id = {loserId}
+                      AND NOT EXISTS (
+                        SELECT 1 FROM voice_clips v2
+                         WHERE v2.character_id = {winnerId}
+                           AND v2.npc_base_id = voice_clips.npc_base_id
+                           AND v2.original_text = voice_clips.original_text
+                      )");
+            _context.Database.ExecuteSqlInterpolated(
+                $"DELETE FROM voice_clips WHERE character_id = {loserId}");
+
+            // character_instances: composite PK (character_id, npc_base_id) — same conflict rule.
+            _context.Database.ExecuteSqlInterpolated(
+                $@"UPDATE character_instances
+                      SET character_id = {winnerId}
+                    WHERE character_id = {loserId}
+                      AND NOT EXISTS (
+                        SELECT 1 FROM character_instances ci2
+                         WHERE ci2.character_id = {winnerId}
+                           AND ci2.npc_base_id = character_instances.npc_base_id
+                      )");
+            _context.Database.ExecuteSqlInterpolated(
+                $"DELETE FROM character_instances WHERE character_id = {loserId}");
+
+            // character_contexts: unique (character_id, context_type).
+            _context.Database.ExecuteSqlInterpolated(
+                $@"UPDATE character_contexts
+                      SET character_id = {winnerId}
+                    WHERE character_id = {loserId}
+                      AND NOT EXISTS (
+                        SELECT 1 FROM character_contexts cc2
+                         WHERE cc2.character_id = {winnerId}
+                           AND cc2.context_type = character_contexts.context_type
+                      )");
+            _context.Database.ExecuteSqlInterpolated(
+                $"DELETE FROM character_contexts WHERE character_id = {loserId}");
+
+            _context.Database.ExecuteSqlInterpolated(
+                $"DELETE FROM characters WHERE id = {loserId}");
+        }
+
+        // Force the winner's name to title case so the canonical form survives.
+        foreach (var (winnerId, currentName) in winnerNames)
+        {
+            if (string.IsNullOrEmpty(currentName)) continue;
+            var titled = char.ToUpperInvariant(currentName[0]) + currentName.Substring(1);
+            if (titled == currentName) continue;
+            _context.Database.ExecuteSqlInterpolated(
+                $"UPDATE characters SET name = {titled} WHERE id = {winnerId}");
+        }
+
+        _log.Info(nameof(MergeCaseDuplicateCharacters),
+            $"Merged {merges.Count} case-duplicate character row(s)",
+            new EKEventId(0, TextSource.None));
     }
 
     private void SetSchemaVersion(int version)
@@ -429,7 +606,6 @@ public class DatabaseService : IDatabaseService
                 Gender = (int)npc.Gender,
                 BodyType = (int)npc.BodyType,
                 VoiceKey = npc.voice ?? "",
-                DoNotDelete = npc.DoNotDelete,
                 ObjectKind = (int)npc.ObjectKind
             };
             _context.Characters.Add(character);
@@ -473,13 +649,17 @@ public class DatabaseService : IDatabaseService
         }
     }
 
-    public CharacterEntity? FindCharacter(string name, Genders gender, NpcRaces race, int language = 1)
+    public CharacterEntity? FindCharacter(string name, Genders gender, NpcRaces race, int language)
     {
         lock (_writeLock)
         {
+            // Match the unique index's COLLATE NOCASE so harvest stems ("stille") and runtime
+            // display names ("Stille") resolve to the same row.
             return _context.Characters
                 .Include(c => c.Contexts)
-                .FirstOrDefault(c => c.Name == name && c.Gender == (int)gender && c.Race == (int)race && c.Language == language);
+                .FirstOrDefault(c =>
+                    EF.Functions.Collate(c.Name, "NOCASE") == name
+                    && c.Gender == (int)gender && c.Race == (int)race && c.Language == language);
         }
     }
 
@@ -488,10 +668,11 @@ public class DatabaseService : IDatabaseService
         lock (_writeLock)
         {
             var existing = _context.Characters
-                .FirstOrDefault(c => c.Name == character.Name
-                                     && c.Gender == character.Gender
-                                     && c.Race == character.Race
-                                     && c.Language == character.Language);
+                .FirstOrDefault(c =>
+                    EF.Functions.Collate(c.Name, "NOCASE") == character.Name
+                    && c.Gender == character.Gender
+                    && c.Race == character.Race
+                    && c.Language == character.Language);
 
             if (existing != null)
             {
@@ -500,7 +681,6 @@ public class DatabaseService : IDatabaseService
                 // Don't overwrite an existing voice with an empty one
                 if (!string.IsNullOrEmpty(character.VoiceKey))
                     existing.VoiceKey = character.VoiceKey;
-                existing.DoNotDelete = character.DoNotDelete;
                 existing.ObjectKind = character.ObjectKind;
             }
             else
@@ -981,6 +1161,19 @@ public class DatabaseService : IDatabaseService
         }
     }
 
+    public void UpdateVoiceClipVoiceKey(int voiceClipId, string voiceKey)
+    {
+        lock (_writeLock)
+        {
+            var entity = _context.VoiceClips.Find(voiceClipId);
+            if (entity != null && entity.VoiceKey != voiceKey)
+            {
+                entity.VoiceKey = voiceKey;
+                _context.SaveChanges();
+            }
+        }
+    }
+
     public void DeleteVoiceClip(int voiceClipId)
     {
         lock (_writeLock)
@@ -1028,12 +1221,14 @@ public class DatabaseService : IDatabaseService
 
     // ── Per-player generation tracking ──────────────────────────
 
-    public void LogVoiceClipGeneration(int voiceClipId, long playerContentId, string playerName, string savePath)
+    public void LogVoiceClipGeneration(int voiceClipId, long playerContentId, string playerName, string savePath, int aliasGender = 0)
     {
         lock (_writeLock)
         {
             var existing = _context.VoiceClipGenerations
-                .FirstOrDefault(g => g.VoiceClipId == voiceClipId && g.PlayerContentId == playerContentId);
+                .FirstOrDefault(g => g.VoiceClipId == voiceClipId
+                                  && g.PlayerContentId == playerContentId
+                                  && g.AliasGender == aliasGender);
             if (existing != null)
             {
                 existing.PlayerName = playerName;
@@ -1049,18 +1244,21 @@ public class DatabaseService : IDatabaseService
                     PlayerName = playerName,
                     SavePath = savePath,
                     GeneratedAt = DateTime.UtcNow,
+                    AliasGender = aliasGender,
                 });
             }
             _context.SaveChanges();
         }
     }
 
-    public void DeleteVoiceClipGeneration(int voiceClipId, long playerContentId)
+    public void DeleteVoiceClipGeneration(int voiceClipId, long playerContentId, int aliasGender = 0)
     {
         lock (_writeLock)
         {
             var existing = _context.VoiceClipGenerations
-                .FirstOrDefault(g => g.VoiceClipId == voiceClipId && g.PlayerContentId == playerContentId);
+                .FirstOrDefault(g => g.VoiceClipId == voiceClipId
+                                  && g.PlayerContentId == playerContentId
+                                  && g.AliasGender == aliasGender);
             if (existing != null)
             {
                 _context.VoiceClipGenerations.Remove(existing);
@@ -1069,12 +1267,14 @@ public class DatabaseService : IDatabaseService
         }
     }
 
-    public VoiceClipGenerationEntity? GetVoiceClipGeneration(int voiceClipId, long playerContentId)
+    public VoiceClipGenerationEntity? GetVoiceClipGeneration(int voiceClipId, long playerContentId, int aliasGender = 0)
     {
         lock (_writeLock)
         {
             return _context.VoiceClipGenerations
-                .FirstOrDefault(g => g.VoiceClipId == voiceClipId && g.PlayerContentId == playerContentId);
+                .FirstOrDefault(g => g.VoiceClipId == voiceClipId
+                                  && g.PlayerContentId == playerContentId
+                                  && g.AliasGender == aliasGender);
         }
     }
 
@@ -1188,6 +1388,48 @@ public class DatabaseService : IDatabaseService
             .Where(ci => ci.IsMuted)
             .Select(ci => (uint)ci.NpcBaseId)
             .ToHashSet();
+    }
+
+    // ── Lodestone lookup cache ──────────────────────────────
+
+    public LodestoneLookupEntity? GetLodestoneLookup(string name, string world)
+    {
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(world)) return null;
+        lock (_writeLock)
+        {
+            return _context.LodestoneLookups
+                .FirstOrDefault(l => l.Name == name && l.World == world);
+        }
+    }
+
+    public void UpsertLodestoneLookup(string name, string world, NpcRaces race, Genders gender, bool found)
+    {
+        if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(world)) return;
+        lock (_writeLock)
+        {
+            var existing = _context.LodestoneLookups
+                .FirstOrDefault(l => l.Name == name && l.World == world);
+            if (existing != null)
+            {
+                existing.Race = (int)race;
+                existing.Gender = (int)gender;
+                existing.FetchedAt = DateTime.UtcNow;
+                existing.Found = found;
+            }
+            else
+            {
+                _context.LodestoneLookups.Add(new LodestoneLookupEntity
+                {
+                    Name = name,
+                    World = world,
+                    Race = (int)race,
+                    Gender = (int)gender,
+                    FetchedAt = DateTime.UtcNow,
+                    Found = found,
+                });
+            }
+            _context.SaveChanges();
+        }
     }
 
     // ── Dispose ─────────────────────────────────────────────

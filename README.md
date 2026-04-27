@@ -135,3 +135,16 @@ Currently supports [AllTalk_TTS](https://github.com/erew123/alltalk_tts) (v2 bet
 - Some parts of the code are taken from/inspired by:
   [TextToTalk](https://github.com/karashiiro/TextToTalk),
   [XivVoices](https://github.com/arcsidian/XivVoices).
+
+## Third-Party Data
+
+### CSTR VCTK Corpus
+- **Creators:** Yamagishi, Junichi; Veaux, Christophe; MacDonald, Kirsten
+- **Publisher:** University of Edinburgh, CSTR (2019)
+- **DOI:** https://doi.org/10.7488/ds/2645
+- **License:** [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/legalcode)
+
+> Yamagishi, Junichi; Veaux, Christophe; MacDonald, Kirsten. (2019). CSTR VCTK Corpus:
+> English Multi-speaker Corpus for CSTR Voice Cloning Toolkit (version 0.92), [sound].
+> University of Edinburgh. The Centre for Speech Technology Research (CSTR).
+> https://doi.org/10.7488/ds/2645

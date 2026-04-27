@@ -118,7 +118,7 @@ public class SoundHelper : ISoundHelper
                     {
                         _log.Debug(nameof(LoadSoundFileDetour), $"Discovered voice line at address {resourceDataPtr:x}: {fileName}", new EKEventId(0, TextSource.None));
                         knownVoiceLinePtrs.Add(resourceDataPtr);
-                        knownVoiceLinesMap.Add(resourceDataPtr, fileName);
+                        knownVoiceLinesMap[resourceDataPtr] = fileName;
                     }
                     else
                     {
@@ -135,7 +135,7 @@ public class SoundHelper : ISoundHelper
         }
         catch (Exception exc)
         {
-            _log.Error(nameof(LoadSoundFileDetour), exc.ToString(), new EKEventId(0, TextSource.None));
+            _log.Warning(nameof(LoadSoundFileDetour), exc.ToString(), new EKEventId(0, TextSource.None));
         }
 
         return result;
@@ -148,28 +148,28 @@ public class SoundHelper : ISoundHelper
         try
         {
             var soundDataPtr = Marshal.ReadIntPtr(soundPtr + SoundDataOffset);
-            // Assume that a voice line will be played only once after it's loaded. Then the set can be pruned as voice
-            // lines are played.
-            if (knownVoiceLinePtrs.Remove(soundDataPtr))
+            // The same voice line may be replayed without being reloaded (game audio cache reuse).
+            // Don't prune on play — only on address reuse (handled in LoadSoundFileDetour).
+            // Otherwise the runtime skip in AddonBattleTalkHelper/AddonTalkHelper misfires on the 2nd+ play.
+            if (knownVoiceLinePtrs.Contains(soundDataPtr))
             {
                 knownVoiceLinesMap.TryGetValue(soundDataPtr, out var fileName);
-                knownVoiceLinesMap.Remove(soundDataPtr);
 
                 if (Path.GetFileNameWithoutExtension(fileName)?.Length == 10)
                 {
-                    _log.Debug(nameof(PlaySpecificSoundDetour), $"Battle/bubble voice line at {soundDataPtr:x}: {fileName}", new EKEventId(0, TextSource.AddonBattleTalk));
+                    _log.Info(nameof(PlaySpecificSoundDetour), $"VO PLAY (battle/bubble): {fileName}", new EKEventId(0, TextSource.AddonBattleTalk));
                     BattleBubbleVoiceLine?.Invoke();
                 }
                 else
                 {
-                    _log.Debug(nameof(PlaySpecificSoundDetour), $"Talk voice line at {soundDataPtr:x}: {fileName}", new EKEventId(0, TextSource.AddonTalk));
+                    _log.Info(nameof(PlaySpecificSoundDetour), $"VO PLAY (talk): {fileName}", new EKEventId(0, TextSource.AddonTalk));
                     TalkVoiceLine?.Invoke();
                 }
             }
         }
         catch (Exception exc)
         {
-            _log.Error(nameof(PlaySpecificSoundDetour), exc.ToString(), new EKEventId(0, TextSource.None));
+            _log.Warning(nameof(PlaySpecificSoundDetour), exc.ToString(), new EKEventId(0, TextSource.None));
         }
 
         return result;

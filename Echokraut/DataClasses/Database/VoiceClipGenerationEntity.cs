@@ -39,6 +39,15 @@ public class VoiceClipGenerationEntity
     [Column("generated_at")]
     public DateTime GeneratedAt { get; set; } = DateTime.UtcNow;
 
+    /// <summary>
+    /// 0 = normal generation tied to a real player (PlayerContentId).
+    /// 1 = shareable male alias variant (uses generic name like "Adventurer" / "Abenteurer").
+    /// 2 = shareable female alias variant (e.g. "Abenteurerin" / "Aventurière").
+    /// Alias variants always have PlayerContentId = 0 — they're not bound to any specific player.
+    /// </summary>
+    [Column("alias_gender")]
+    public int AliasGender { get; set; } = 0;
+
     // Navigation
     [ForeignKey(nameof(VoiceClipId))]
     public VoiceClipEntity? VoiceClip { get; set; }

@@ -76,6 +76,154 @@ public class LuabParser
         return result;
     }
 
+    /// <summary>
+    /// Produce a full textual disassembly of the bytecode — every function, every constant, every instruction.
+    /// Used to inspect unfamiliar scripts (e.g. game_script/system/battlenpc.luab) by eye.
+    /// </summary>
+    public string Disassemble()
+    {
+        _pos = 0;
+        _functionCounter = 0;
+        var sb = new StringBuilder();
+
+        if (!ReadHeader())
+        {
+            sb.AppendLine("Invalid Lua 5.1 bytecode header");
+            return sb.ToString();
+        }
+
+        sb.AppendLine($"Lua 5.1 bytecode  LE={_isLittleEndian}  sizeInt={_sizeInt}  sizeSizeT={_sizeSizeT}  sizeInst={_sizeInstruction}  sizeNumber={_sizeNumber}");
+        sb.AppendLine();
+
+        DisassembleFunction(sb, 0, "");
+        return sb.ToString();
+    }
+
+    private void DisassembleFunction(StringBuilder sb, int depth, string parentSource)
+    {
+        var funcIndex = _functionCounter++;
+        var indent = new string(' ', depth * 2);
+
+        var source = ReadString() ?? parentSource;
+        var lineDefined = ReadInt();
+        var lastLineDefined = ReadInt();
+        var nups = ReadByte();
+        var numparams = ReadByte();
+        var isVararg = ReadByte();
+        var maxStackSize = ReadByte();
+
+        sb.AppendLine($"{indent}=== Function #{funcIndex}  source={source}  params={numparams}  vararg={isVararg}  maxStack={maxStackSize}  lines={lineDefined}-{lastLineDefined} ===");
+
+        var numInstructions = ReadInt();
+        var instructions = new uint[numInstructions];
+        for (var i = 0; i < numInstructions; i++) instructions[i] = ReadInstruction();
+
+        var numConstants = ReadInt();
+        var constants = new object?[numConstants];
+        for (var i = 0; i < numConstants; i++)
+        {
+            var tag = ReadByte();
+            constants[i] = tag switch
+            {
+                0 => null,
+                1 => (object)(ReadByte() != 0),
+                3 => (object)ReadNumber(),
+                4 => (object?)ReadString(),
+                _ => null,
+            };
+        }
+
+        sb.AppendLine($"{indent}Constants ({numConstants}):");
+        for (var i = 0; i < numConstants; i++)
+        {
+            var c = constants[i];
+            string formatted = c switch
+            {
+                null => "nil",
+                string s => "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\n", "\\n").Replace("\r", "\\r").Replace("\t", "\\t") + "\"",
+                bool b => b.ToString().ToLowerInvariant(),
+                double d => d.ToString("G", System.Globalization.CultureInfo.InvariantCulture),
+                _ => c.ToString() ?? "?",
+            };
+            sb.AppendLine($"{indent}  K[{i:D3}] = {formatted}");
+        }
+
+        sb.AppendLine($"{indent}Instructions ({numInstructions}):");
+        for (var i = 0; i < numInstructions; i++)
+        {
+            sb.AppendLine($"{indent}  [{i:D4}] {DecodeInstruction(instructions[i], constants)}");
+        }
+
+        var numProtos = ReadInt();
+        sb.AppendLine($"{indent}Child Functions ({numProtos}):");
+        for (var i = 0; i < numProtos; i++)
+            DisassembleFunction(sb, depth + 1, source);
+
+        // Skip past debug info to keep _pos aligned.
+        ParseDebugInfo();
+        sb.AppendLine();
+    }
+
+    private static string DecodeInstruction(uint inst, object?[] constants)
+    {
+        var op = (int)(inst & 0x3F);
+        var a = (int)((inst >> 6) & 0xFF);
+        var c = (int)((inst >> 14) & 0x1FF);
+        var b = (int)((inst >> 23) & 0x1FF);
+        var bx = (int)((inst >> 14) & 0x3FFFF);
+        var sbx = bx - 131071;
+
+        // Resolve RK(B) and RK(C) constant references; in Lua 5.1, bit 256 set means "constant index".
+        string Rk(int v)
+        {
+            if ((v & 256) == 0) return $"R({v})";
+            var idx = v & 0xFF;
+            if (idx >= constants.Length) return $"K[{idx}=?]";
+            return $"K[{idx}]={Format(constants[idx])}";
+        }
+        string Format(object? c1) => c1 switch
+        {
+            null => "nil",
+            string s => "\"" + (s.Length > 60 ? s.Substring(0, 60) + "…" : s).Replace("\n", "\\n") + "\"",
+            bool b1 => b1.ToString().ToLowerInvariant(),
+            double d => d.ToString("G", System.Globalization.CultureInfo.InvariantCulture),
+            _ => c1.ToString() ?? "?",
+        };
+
+        var opName = OpName(op);
+        // Common operand layouts per opcode
+        return op switch
+        {
+            OP_LOADK => $"{opName,-12} R({a}) := K[{bx}]={Format(GetK(constants, bx))}",
+            OP_GETUPVAL => $"{opName,-12} R({a}) := Upval[{b}]",
+            OP_GETGLOBAL => $"{opName,-12} R({a}) := _G[{Format(GetK(constants, bx))}]",
+            OP_SETGLOBAL => $"{opName,-12} _G[{Format(GetK(constants, bx))}] := R({a})",
+            OP_GETTABLE => $"{opName,-12} R({a}) := R({b})[{Rk(c)}]",
+            OP_SETTABLE => $"{opName,-12} R({a})[{Rk(b)}] := {Rk(c)}",
+            OP_SELF => $"{opName,-12} R({a + 1}) := R({b}); R({a}) := R({b})[{Rk(c)}]",
+            OP_EQ => $"{opName,-12} if (({Rk(b)}=={Rk(c)}) ~= {a}) pc++",
+            OP_CALL => $"{opName,-12} R({a}), ... := R({a})(R({a + 1}), ...)  nargs={(b == 0 ? "all" : (b - 1).ToString())}  nret={(c == 0 ? "all" : (c - 1).ToString())}",
+            OP_CLOSURE => $"{opName,-12} R({a}) := closure(KPROTO[{bx}])",
+            _ => $"{opName,-12} A={a} B={b} C={c} Bx={bx} sBx={sbx}",
+        };
+    }
+
+    private static object? GetK(object?[] constants, int idx) =>
+        idx >= 0 && idx < constants.Length ? constants[idx] : null;
+
+    private static string OpName(int op) => op switch
+    {
+        0 => "MOVE", 1 => "LOADK", 2 => "LOADBOOL", 3 => "LOADNIL", 4 => "GETUPVAL",
+        5 => "GETGLOBAL", 6 => "GETTABLE", 7 => "SETGLOBAL", 8 => "SETUPVAL",
+        9 => "SETTABLE", 10 => "NEWTABLE", 11 => "SELF",
+        12 => "ADD", 13 => "SUB", 14 => "MUL", 15 => "DIV", 16 => "MOD", 17 => "POW",
+        18 => "UNM", 19 => "NOT", 20 => "LEN", 21 => "CONCAT", 22 => "JMP",
+        23 => "EQ", 24 => "LT", 25 => "LE", 26 => "TEST", 27 => "TESTSET",
+        28 => "CALL", 29 => "TAILCALL", 30 => "RETURN", 31 => "FORLOOP", 32 => "FORPREP",
+        33 => "TFORLOOP", 34 => "SETLIST", 35 => "CLOSE", 36 => "CLOSURE", 37 => "VARARG",
+        _ => $"OP{op}",
+    };
+
     public List<FunctionDebugData> ParseDebug()
     {
         _pos = 0;

@@ -16,7 +16,7 @@ public interface IDatabaseService : IDisposable
     List<CharacterEntity> GetNpcs();
     List<CharacterEntity> GetPlayers();
     List<CharacterEntity> GetAllCharacters();
-    CharacterEntity? FindCharacter(string name, Genders gender, NpcRaces race, int language = 1);
+    CharacterEntity? FindCharacter(string name, Genders gender, NpcRaces race, int language);
     CharacterEntity UpsertCharacter(CharacterEntity character);
     void DeleteCharacter(int characterId);
 
@@ -70,15 +70,18 @@ public interface IDatabaseService : IDisposable
     HashSet<int> GetCharacterIdsWithQuestType(int questType);
     int GetSavedVoiceClipCountForCharacter(int characterId);
     void UpdateVoiceClipSaved(int voiceClipId, bool savedToDisk, string savePath);
+    void UpdateVoiceClipVoiceKey(int voiceClipId, string voiceKey);
     void DeleteVoiceClip(int voiceClipId);
     void ClearVoiceClips();
     void WipeAll();
     void FlushChanges();
 
-    // Per-player generation tracking
-    void LogVoiceClipGeneration(int voiceClipId, long playerContentId, string playerName, string savePath);
-    void DeleteVoiceClipGeneration(int voiceClipId, long playerContentId);
-    VoiceClipGenerationEntity? GetVoiceClipGeneration(int voiceClipId, long playerContentId);
+    // Per-player generation tracking. aliasGender: 0 = real player generation,
+    // 1 = shareable male alias variant, 2 = shareable female alias variant.
+    // Alias variants always pass playerContentId = 0 — they're not bound to a specific player.
+    void LogVoiceClipGeneration(int voiceClipId, long playerContentId, string playerName, string savePath, int aliasGender = 0);
+    void DeleteVoiceClipGeneration(int voiceClipId, long playerContentId, int aliasGender = 0);
+    VoiceClipGenerationEntity? GetVoiceClipGeneration(int voiceClipId, long playerContentId, int aliasGender = 0);
     int GetGeneratedCountForCharacter(int characterId, long playerContentId, int? questTypeFilter = null);
     /// <summary>
     /// Aggregate count of voice clips and player-generated voice clips across all characters
@@ -87,4 +90,8 @@ public interface IDatabaseService : IDisposable
     /// </summary>
     (int totalClips, int generatedClips) GetClipTotalsForLanguage(
         int language, string contextType, long playerContentId, int? questTypeFilter = null);
+
+    // Lodestone lookup cache
+    LodestoneLookupEntity? GetLodestoneLookup(string name, string world);
+    void UpsertLodestoneLookup(string name, string world, NpcRaces race, Genders gender, bool found);
 }

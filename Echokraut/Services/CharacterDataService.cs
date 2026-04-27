@@ -7,6 +7,7 @@ using Echokraut.Enums;
 using Echotools.Logging.Enums;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Echokraut.Services;
 
@@ -93,12 +94,20 @@ public class CharacterDataService : ICharacterDataService
 
         if (race is not null)
         {
+            // Display string: client-language masculine name from the default sheet (e.g. "Hyuraner"
+            // on a German client, "Miqo'te" on EN). Stays in RaceStr for the UI.
             raceStr = GetRaceEng(race.Value.Masculine.ExtractText());
-            if (Enum.TryParse(raceStr, out raceEnum))
+
+            // Enum parse: always use the English name. Lumina English returns "Miqo'te" / "Au Ra" /
+            // "Mamool Ja" / "Vanu Vanu" with apostrophes and spaces — the NpcRaces enum has neither,
+            // so strip non-letters before parsing.
+            var raceEnglish = _lumina.GetRaceEnglishName(speakerRace, eventId);
+            var raceForParse = new string(raceEnglish.Where(char.IsLetter).ToArray());
+            if (Enum.TryParse(raceForParse, true, out raceEnum))
             {
                 modelId = charaStruct->ModelContainer.ModelSkeletonId;
                 _logService.Info(nameof(GetSpeakerRace),
-                    $"Race found on GameObject: {raceStr} with ModelId: {modelId}", eventId);
+                    $"Race found on GameObject: {raceStr} (en: {raceEnglish}) with ModelId: {modelId}", eventId);
             }
         }
         else

@@ -29,6 +29,12 @@
           "Google.Apis.Auth": "1.73.0"
         }
       },
+      "HtmlAgilityPack": {
+        "type": "Direct",
+        "requested": "[1.11.65, )",
+        "resolved": "1.11.65",
+        "contentHash": "Skse4MVlRcHHyP88x+v/uQrMxTPaBIwQodiQ/y59jxs8vHlqTR5M3jt5Wk+csYFnR4rX6I4ndqDji2M8p9kAzw=="
+      },
       "Humanizer.Core": {
         "type": "Direct",
         "requested": "[2.14.1, )",
@@ -110,11 +116,6 @@
         "dependencies": {
           "Newtonsoft.Json": "13.0.4"
         }
-      },
-      "JetBrains.Annotations": {
-        "type": "Transitive",
-        "resolved": "2024.3.0",
-        "contentHash": "ox5pkeLQXjvJdyAB4b2sBYAlqZGLh3PjSnP1bQNVx72ONuTJ9+34/+Rq91Fc0dG29XG9RgZur9+NcP4riihTug=="
       },
       "Microsoft.Data.Sqlite.Core": {
         "type": "Transitive",
@@ -311,13 +312,6 @@
         "type": "Project",
         "dependencies": {
           "SixLabors.ImageSharp": "[3.1.12, )"
-        }
-      },
-      "ottergui": {
-        "type": "Project",
-        "dependencies": {
-          "JetBrains.Annotations": "[2024.3.0, )",
-          "Microsoft.Extensions.DependencyInjection": "[9.0.2, )"
         }
       }
     }

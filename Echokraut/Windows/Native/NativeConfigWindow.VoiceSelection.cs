@@ -84,14 +84,13 @@ public sealed unsafe partial class NativeConfigWindow
 
     // Column widths (ColPlay computed at setup from localized Play/Stop text)
     private float _colPlay = 40f;
-    private const float ColLock   = 40f;
     private const float ColUse    = 40f;
     private const float ColGender = 70f;
     private const float ColRace   = 90f;
     private const float ColName   = 140f;
     private const float ColVoice  = 180f;
 
-    private float VsVolWidth => _contentWidth - ScrollbarWidth - _colPlay - ColLock - ColUse - ColGender - ColRace - ColName - ColVoice - 2 * _colDel - 9 * 4;
+    private float VsVolWidth => _contentWidth - ScrollbarWidth - _colPlay - ColUse - ColGender - ColRace - ColName - ColVoice - 2 * _colDel - 8 * 4;
 
     private void SetupVoiceSelection()
     {
@@ -139,14 +138,13 @@ public sealed unsafe partial class NativeConfigWindow
 
         // Header/filter rows must match the ScrollingListNode content width (minus scrollbar)
         var hw = w - ScrollbarWidth;
-        var headerVolWidth = hw - _colPlay - ColLock - ColUse - ColGender - ColRace - ColName - ColVoice - 2 * _colDel - 9 * 4;
+        var headerVolWidth = hw - _colPlay - ColUse - ColGender - ColRace - ColName - ColVoice - 2 * _colDel - 8 * 4;
 
         // Create header rows, filter rows, separators, pagination bars for NPCs/Players/Bubbles (indices 0-2)
         for (var i = 0; i < 3; i++)
         {
             _vsHeaders[i] = new HorizontalListNode { Size = new Vector2(hw, 20), ItemSpacing = 4, Position = new Vector2(_innerContentPos.X, headerY) };
             _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Test"), _colPlay));
-            _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Lock"), ColLock));
             _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Use"), ColUse));
             _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Gender"), ColGender));
             _vsHeaders[i]!.AddNode(HeaderLabel(Loc.S("Race"), ColRace));
@@ -158,7 +156,6 @@ public sealed unsafe partial class NativeConfigWindow
 
             _vsFilterRows[i] = new HorizontalListNode { Size = new Vector2(hw, 28), ItemSpacing = 4, Position = new Vector2(_innerContentPos.X, headerY + 20) };
             _vsFilterRows[i]!.AddNode(Spacer(_colPlay, 28));
-            _vsFilterRows[i]!.AddNode(Spacer(ColLock, 28));
             _vsFilterRows[i]!.AddNode(Spacer(ColUse, 28));
             _vsFilterRows[i]!.AddNode(Input(Loc.S("Filter"), ColGender, 20, "", v => { _vsFilterGender = v; TriggerActiveRebuild(); }));
             _vsFilterRows[i]!.AddNode(Input(Loc.S("Filter"), ColRace, 20, "", v => { _vsFilterRace = v; TriggerActiveRebuild(); }));
@@ -433,10 +430,6 @@ public sealed unsafe partial class NativeConfigWindow
             }
         });
 
-        TextButtonNode? delMapBtnRef = null;
-        var lockCheck = Check("   ", ColLock, npc.DoNotDelete, v =>
-        { npc.DoNotDelete = v; _config.Save(); Dim(delMapBtnRef, !v); });
-
         var isEnabled = isBubble ? npc.IsEnabledBubble : npc.IsEnabled;
         var useCheck = Check("   ", ColUse, isEnabled, v =>
         {
@@ -468,7 +461,6 @@ public sealed unsafe partial class NativeConfigWindow
             if (newVoice != null)
             {
                 capturedNpc.Voice = newVoice;
-                capturedNpc.DoNotDelete = true;
                 _config.Save();
             }
         };
@@ -486,7 +478,6 @@ public sealed unsafe partial class NativeConfigWindow
         {
             if (isBubble) capturedNpc.VolumeBubble = v / 100.0f;
             else capturedNpc.Volume = v / 100.0f;
-            capturedNpc.DoNotDelete = true;
             _config.Save();
         };
 
@@ -514,12 +505,11 @@ public sealed unsafe partial class NativeConfigWindow
             }
         });
 
-        // Delete mapping button (only functional when not locked)
+        // Delete mapping button
         var capturedNpcForDelMap = npc;
         TextButtonNode? delMapBtn = null;
         delMapBtn = Button(Loc.S("Delete mapping"), _colDel, () =>
         {
-            if (capturedNpcForDelMap.DoNotDelete) return;
             if (_vsDelMappingArmed && _vsDelTarget == capturedNpcForDelMap)
             {
                 _vsDelMappingArmed = false;
@@ -537,11 +527,8 @@ public sealed unsafe partial class NativeConfigWindow
                 delMapBtn!.String = Loc.S("OK?");
             }
         });
-        Dim(delMapBtn, !npc.DoNotDelete);
-        delMapBtnRef = delMapBtn;
 
         row.AddNode(playBtn);
-        row.AddNode(lockCheck);
         row.AddNode(useCheck);
         row.AddNode(genderLabel);
         row.AddNode(raceLabel);
