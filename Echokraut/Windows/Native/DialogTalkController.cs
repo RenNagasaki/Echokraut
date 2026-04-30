@@ -13,6 +13,7 @@ using Echotools.UI.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Classes;
+using KamiToolKit.Premade.Node.Simple;
 using KamiToolKit.Controllers;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
@@ -88,10 +89,13 @@ public sealed unsafe class DialogTalkController : IDisposable
         _addonLifecycle = addonLifecycle;
         _ipc = ipc;
 
-        _talkController = new AddonController("Talk");
-        _talkController.OnAttach += OnAttach;
-        _talkController.OnUpdate += OnUpdate;
-        _talkController.OnDetach += OnDetach;
+        _talkController = new AddonController
+        {
+            AddonName = "Talk",
+            OnSetup = OnAttach,
+            OnUpdate = OnUpdate,
+            OnFinalize = OnDetach,
+        };
         _talkController.Enable();
 
         _addonLifecycle.RegisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
@@ -445,7 +449,7 @@ public sealed unsafe class DialogTalkController : IDisposable
         var eventType = (AtkEventType)eventArgs.AtkEventType;
         var isDialogueAdvancing =
             (eventType == AtkEventType.MouseClick && ((byte)eventData->MouseData.Modifier & 0b0001_0000) == 0) ||
-            eventArgs.AtkEventType == (byte)AtkEventType.InputReceived;
+            (AtkEventType)eventArgs.AtkEventType == AtkEventType.InputReceived;
 
         if (!isDialogueAdvancing) return;
 

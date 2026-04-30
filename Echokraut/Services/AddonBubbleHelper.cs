@@ -109,7 +109,7 @@ namespace Echokraut.Services
                 if (pString != nint.Zero && !_clientState.IsPvPExcludingDen)
                 {
                     //	Idk if the actor can ever be null, but if it can, assume that we should print the bubble just in case.  Otherwise, only don't print if the actor is a player.
-                    if (pActor == null && !voiceNext || (byte)pActor->ObjectKind != (byte)Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player && !voiceNext)
+                    if (pActor == null && !voiceNext || (byte)pActor->ObjectKind != (byte)Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Pc && !voiceNext)
                     {
                         var _baseId = _log.Start(nameof(OpenChatBubbleDetour), TextSource.AddonBubble);
         var eventId = new EKEventId(_baseId.Id, _baseId.TextSource);

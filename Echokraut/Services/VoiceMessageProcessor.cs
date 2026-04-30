@@ -294,7 +294,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         npcData.World = worldEnglish ?? "";
 
         // Handle NPC name mapping
-        if (npcData.ObjectKind != ObjectKind.Player)
+        if (npcData.ObjectKind != ObjectKind.Pc)
             npcData.Name = _jsonData.GetNpcName(npcData.Name);
 
         if (npcData.Name == "PLAYER")
@@ -314,7 +314,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         // For Player characters with a World but unknown Race/Gender (e.g. chat sender not currently visible),
         // kick off an async Lodestone enrichment. Fire-and-forget — the first message is processed with what we have;
         // subsequent ones use the resolved values.
-        if (npcData.ObjectKind == ObjectKind.Player
+        if (npcData.ObjectKind == ObjectKind.Pc
             && !string.IsNullOrWhiteSpace(npcData.World)
             && (npcData.Race == NpcRaces.Unknown || npcData.Gender == Genders.None))
         {

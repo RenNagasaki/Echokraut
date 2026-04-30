@@ -43,7 +43,7 @@ public class CharacterDataService : ICharacterDataService
 
         _logService.Info(nameof(GetCharacterGender), $"Gender found on GameObject: {actorGender}", eventId);
 
-        if (speaker.ObjectKind is ObjectKind.Player)
+        if (speaker.ObjectKind is ObjectKind.Pc)
         {
             _logService.Debug(nameof(GetCharacterGender), $"Player \"{speaker.Name}\" mapped to gender: {actorGender}", eventId);
             return actorGender;

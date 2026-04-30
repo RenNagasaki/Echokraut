@@ -83,7 +83,7 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         _onComplete = onComplete;
     }
 
-    protected override void OnSetup(AtkUnitBase* addon)
+    protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValueSpan)
     {
         var pos = ContentStartPosition;
         var size = ContentSize;

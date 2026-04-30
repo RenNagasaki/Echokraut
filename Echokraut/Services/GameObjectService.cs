@@ -38,9 +38,9 @@ public class GameObjectService : IGameObjectService
                 {
                     var chara = (FFXIVClientStructs.FFXIV.Client.Game.Character.Character*)player.Address;
                     _localPlayerIsMale = chara->DrawData.CustomizeData.Sex == 0;
+                    _localPlayerContentId = chara->ContentId;
                 }
             }
-            _localPlayerContentId = _clientState.LocalContentId;
             return player;
         }
     }

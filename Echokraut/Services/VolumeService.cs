@@ -30,7 +30,7 @@ public class VolumeService : IVolumeService
         {
             var soundManager = instance->SoundManager;
             masterVolume = soundManager->MasterVolume;
-            voiceVolume = soundManager->GetEffectiveVolume(SoundManager.SoundChannel.Voice);
+            voiceVolume = soundManager->GetEffectiveVolume(FFXIVClientStructs.FFXIV.Client.Sound.SoundBus.Voice);
             
             _gameConfig.System.TryGetBool("IsSndMaster", out var isMasterMuted);
             _gameConfig.System.TryGetBool("IsSndVoice", out var isVoiceMuted);

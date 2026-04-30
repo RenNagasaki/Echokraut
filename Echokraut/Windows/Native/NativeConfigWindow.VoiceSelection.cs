@@ -288,7 +288,7 @@ public sealed unsafe partial class NativeConfigWindow
             _npcData.RemoveCharacter(npc);
             if (npc.Name.StartsWith("BB"))
                 _npcData.MappedNpcs.Remove(npc);
-            else if (npc.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Player)
+            else if (npc.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Pc)
                 _npcData.MappedPlayers.Remove(npc);
             else
                 _npcData.MappedNpcs.Remove(npc);

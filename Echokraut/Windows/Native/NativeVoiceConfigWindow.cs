@@ -10,6 +10,7 @@ using Echotools.Logging.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
+using KamiToolKit.Premade.Node.Simple;
 
 namespace Echokraut.Windows.Native;
 
@@ -42,7 +43,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
         _onChanged = onChanged;
     }
 
-    protected override void OnSetup(AtkUnitBase* addon)
+    protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValueSpan)
     {
         var pos = ContentStartPosition;
         var size = ContentSize;

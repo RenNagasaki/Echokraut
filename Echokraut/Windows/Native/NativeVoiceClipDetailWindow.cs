@@ -97,7 +97,7 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         try { _audioPlayback.CurrentMessageChanged -= _onCurrentMessageChanged; } catch { }
     }
 
-    protected override void OnSetup(AtkUnitBase* addon)
+    protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValueSpan)
     {
         // Shift content up to remove empty tab bar space
         ContentPadding = new Vector2(8.0f, -20.0f);

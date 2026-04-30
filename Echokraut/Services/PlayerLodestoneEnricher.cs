@@ -18,20 +18,20 @@ public class PlayerLodestoneEnricher : IPlayerLodestoneEnricher
     private readonly INpcDataService _npcData;
     private readonly ILodestoneService _lodestone;
     private readonly ILuminaService _lumina;
-    private readonly IClientState _clientState;
+    private readonly IObjectTable _objectTable;
 
     public PlayerLodestoneEnricher(
         ILogService log,
         INpcDataService npcData,
         ILodestoneService lodestone,
         ILuminaService lumina,
-        IClientState clientState)
+        IObjectTable objectTable)
     {
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _npcData = npcData ?? throw new ArgumentNullException(nameof(npcData));
         _lodestone = lodestone ?? throw new ArgumentNullException(nameof(lodestone));
         _lumina = lumina ?? throw new ArgumentNullException(nameof(lumina));
-        _clientState = clientState ?? throw new ArgumentNullException(nameof(clientState));
+        _objectTable = objectTable ?? throw new ArgumentNullException(nameof(objectTable));
     }
 
     public async Task RunAsync(CancellationToken ct = default)
@@ -44,7 +44,7 @@ public class PlayerLodestoneEnricher : IPlayerLodestoneEnricher
 
             // Resolve user's HomeWorld as fallback for entries that have no world stored.
             var homeWorld = "";
-            var localPlayer = _clientState.LocalPlayer;
+            var localPlayer = _objectTable.LocalPlayer;
             if (localPlayer != null)
                 homeWorld = _lumina.GetWorldEnglishName(localPlayer.HomeWorld.RowId);
 

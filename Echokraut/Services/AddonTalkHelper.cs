@@ -106,7 +106,7 @@ public unsafe class AddonTalkHelper : IAddonTalkHelper
         var isControllerButtonClick = eventType == AtkEventType.InputReceived && eventData->InputData.InputId == 1;
         var isDialogueAdvancing = 
             (eventType == AtkEventType.MouseClick && ((byte)eventData->MouseData.Modifier & 0b0001_0000) == 0) || 
-            eventArgs.AtkEventType == (byte)AtkEventType.InputReceived;
+            (AtkEventType)eventArgs.AtkEventType == AtkEventType.InputReceived;
 
         // Check if click is inside an owned Echokraut window — don't cancel speech
         if (eventType == AtkEventType.MouseClick && DialogState.IsInsideOwnedWindow != null

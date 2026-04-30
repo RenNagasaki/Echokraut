@@ -252,7 +252,7 @@ public class NpcDataService : INpcDataService
                 backend.GetVoiceOrRandom(eventId, data);
                 backend.NotifyCharacterMapped();
                 SaveCharacter(data);
-                var mapping = data.ObjectKind == ObjectKind.Player ? "player" : "npc";
+                var mapping = data.ObjectKind == ObjectKind.Pc ? "player" : "npc";
                 _log.Debug(nameof(GetAddCharacterMapData), $"Added new {mapping} to mapping: {data.ToString()}", eventId);
                 result = data;
             }
@@ -289,7 +289,7 @@ public class NpcDataService : INpcDataService
         var saved = _db.UpsertCharacter(entity);
 
         // Upsert contexts
-        var contextType = data.ObjectKind == ObjectKind.Player ? "player" : "npc";
+        var contextType = data.ObjectKind == ObjectKind.Pc ? "player" : "npc";
         _db.UpsertContext(saved.Id, contextType, data.IsEnabled, data.Volume);
 
         if (data.HasBubbles && contextType == "npc")

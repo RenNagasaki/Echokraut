@@ -57,7 +57,7 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
         _pendingEnabled = _npc.IsEnabled;
     }
 
-    protected override void OnSetup(AtkUnitBase* addon)
+    protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValueSpan)
     {
         var pos = ContentStartPosition;
         var size = ContentSize;

@@ -382,7 +382,7 @@ public class DatabaseServiceTests : IDisposable
             },
             MappedPlayers = new List<NpcMapData>
             {
-                new(ObjectKind.Player)
+                new(ObjectKind.Pc)
                 {
                     Name = "Player",
                     Race = NpcRaces.Miqote,

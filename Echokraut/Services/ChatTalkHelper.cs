@@ -1,3 +1,4 @@
+using Dalamud.Game.Chat;
 using Dalamud.Game.ClientState.Objects.SubKinds;
 using Dalamud.Game.ClientState.Objects.Types;
 using Dalamud.Game.Text;
@@ -28,7 +29,7 @@ namespace Echokraut.Services
         private readonly ILuminaService _lumina;
 
         private readonly Conditions* conditions;
-        private IChatGui.OnMessageDelegate handler = null!;
+        private IChatGui.OnHandleableChatMessageDelegate handler = null!;
 
         public ChatTalkHelper(
             IVoiceMessageProcessor voiceProcessor,
@@ -54,16 +55,16 @@ namespace Echokraut.Services
 
         private void HookIntoChat()
         {
-            handler = new IChatGui.OnMessageDelegate(Handle);
+            handler = new IChatGui.OnHandleableChatMessageDelegate(Handle);
             _chatGui.ChatMessage += handler;
         }
-        void Handle(XivChatType type, int timestamp, ref SeString sender, ref SeString message, ref bool handled)
+        void Handle(IHandleableChatMessage chatMsg)
         {
             if (!_configuration.Enabled) return;
             if (!_configuration.VoiceChat) return;
             if (conditions->WatchingCutscene78 || conditions->WatchingCutscene || conditions->OccupiedInCutSceneEvent || conditions->DutyRecorderPlayback) return;
 
-            var messageObj = new ChatMessage(type, sender, message);
+            var messageObj = new ChatMessage(chatMsg.LogKind, chatMsg.Sender, chatMsg.Message);
             ProcessChatMessage(messageObj);
         }
 

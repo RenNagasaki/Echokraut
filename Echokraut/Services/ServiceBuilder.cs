@@ -70,7 +70,7 @@ public static class ServiceBuilder
             c.GetService<INpcDataService>(),
             c.GetService<ILodestoneService>(),
             c.GetService<ILuminaService>(),
-            clientState));
+            objectTable));
 
         container.RegisterFactory<ICharacterDataService>(c => new CharacterDataService(
             c.GetService<ILogService>(),

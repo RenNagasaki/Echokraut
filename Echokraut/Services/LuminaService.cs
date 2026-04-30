@@ -15,7 +15,7 @@ public class LuminaService : ILuminaService
     private readonly IClientState _clientState;
     private readonly IDataManager _dataManager;
 
-    private ushort _territoryRow;
+    private uint _territoryRow;
     private TerritoryType? _territory;
 
     public LuminaService(ILogService log, IClientState clientState, IDataManager dataManager)

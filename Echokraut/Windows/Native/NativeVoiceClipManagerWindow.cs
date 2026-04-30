@@ -184,7 +184,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
 
     private static readonly string[] LangLabels = { "Japanese", "English", "German", "French" };
 
-    protected override void OnSetup(AtkUnitBase* addon)
+    protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValueSpan)
     {
         var pos = ContentStartPosition;
         var size = ContentSize;
