@@ -38,6 +38,24 @@ namespace Echokraut.DataClasses
         public Stream Stream { get; set; } = null!;
         public Guid StreamId { get; set; }
 
+        /// <summary>
+        /// Id of the matching <c>voice_clips</c> row, set by <c>VoiceMessageProcessor</c> after
+        /// the clip is upserted. Used by <c>AudioPlaybackService.OnSourceEnded</c> to log a
+        /// <c>voice_clip_generations</c> row once the audio has been written to disk.
+        /// 0 means "no DB row" (e.g. VoiceTest playback).
+        /// </summary>
+        public int VoiceClipId { get; set; }
+
+        /// <summary>
+        /// Mirrors <c>VoiceClipEntity.HasPlayerPlaceholder</c>. Read by
+        /// <c>LiveGenerationLogger</c> so live-path generations are stored with the same
+        /// <c>player_content_id</c> the UI uses when querying via
+        /// <c>VoiceClipManagerService.GetEffectivePlayerId</c> (0 for shareable clips,
+        /// the local player's content id for placeholder clips). Without this the rows are
+        /// written but invisible to the manager UI.
+        /// </summary>
+        public bool HasPlayerPlaceholder { get; set; }
+
         public string GetDebugInfo()
         {
             return $"SpeakerFollowObj: {SpeakerFollowObj}, SpeakerObj: {SpeakerObj}, Speaker: {Speaker}, IsLastInDialogue: {IsLastInDialogue}, LoadedLocally: {LoadedLocally}, Source: {Source}, ChatType: {ChatType}, Language: {Language}";

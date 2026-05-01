@@ -57,8 +57,20 @@ public interface IDatabaseService : IDisposable
     void NotifyVoiceClipLogged();
     void ClearChangeTracker();
     event Action? VoiceClipLogged;
+
+    /// <summary>
+    /// Fires after <see cref="WipeAll"/> has cleared all rows. Subscribers can repopulate
+    /// data they're responsible for (e.g. <c>BackendService</c> re-discovers voices from
+    /// the running TTS backend).
+    /// </summary>
+    event Action? DatabaseWiped;
     void LogVoiceClip(VoiceClipEntity voiceClip);
-    void LogOrUpdateVoiceClip(VoiceClipEntity voiceClip);
+    /// <summary>
+    /// Upserts a voice clip and returns the persisted entity. In live mode the returned
+    /// entity has its <see cref="VoiceClipEntity.Id"/> populated; in batch mode (SuppressEvents)
+    /// the Id may still be 0 until the caller flushes.
+    /// </summary>
+    VoiceClipEntity LogOrUpdateVoiceClip(VoiceClipEntity voiceClip);
     List<VoiceClipEntity> GetVoiceClips(int limit = 1000, int offset = 0,
         string? npcNameFilter = null, string? textFilter = null,
         int? textSourceFilter = null, bool? savedFilter = null);

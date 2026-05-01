@@ -337,6 +337,118 @@ public class DatabaseServiceTests : IDisposable
     }
 
     [Fact]
+    public void LogOrUpdateVoiceClip_ReturnsPersistedEntityWithId_OnInsert()
+    {
+        // Live path needs the Id back so AudioPlaybackService can later log a generation row.
+        // Without this, live generations are invisible to the Voice Clip Manager.
+        var character = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Y'shtola",
+            Race = (int)NpcRaces.Miqote,
+            Gender = (int)Genders.Female
+        });
+
+        var result = _db.LogOrUpdateVoiceClip(new VoiceClipEntity
+        {
+            CharacterId = character.Id,
+            NpcBaseId = 2002000,
+            Timestamp = DateTime.UtcNow,
+            TextSource = 2,
+            Language = 1,
+            OriginalText = "Stay your hand!",
+            CleanedText = "Stay your hand"
+        });
+
+        Assert.NotNull(result);
+        Assert.True(result.Id > 0);
+        Assert.Equal("Stay your hand!", result.OriginalText);
+    }
+
+    [Fact]
+    public void LogOrUpdateVoiceClip_ReturnsSameEntityWithId_OnUpdate()
+    {
+        var character = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Urianger",
+            Race = (int)NpcRaces.Elezen,
+            Gender = (int)Genders.Male
+        });
+
+        var first = _db.LogOrUpdateVoiceClip(new VoiceClipEntity
+        {
+            CharacterId = character.Id,
+            NpcBaseId = 3003000,
+            Timestamp = DateTime.UtcNow,
+            TextSource = 2,
+            Language = 1,
+            OriginalText = "By thy leave."
+        });
+
+        var second = _db.LogOrUpdateVoiceClip(new VoiceClipEntity
+        {
+            CharacterId = character.Id,
+            NpcBaseId = 3003000,
+            Timestamp = DateTime.UtcNow,
+            TextSource = 2,
+            Language = 1,
+            OriginalText = "By thy leave.",
+            CleanedText = "By thy leave"
+        });
+
+        Assert.Equal(first.Id, second.Id);
+        Assert.Equal(1, _db.GetVoiceClipCount());
+    }
+
+    [Fact]
+    public void LogOrUpdateVoiceClip_FollowedByLogGeneration_RoundTrips()
+    {
+        // Mirrors the live path: VoiceMessageProcessor logs the clip, AudioPlaybackService
+        // later writes the audio file and logs the generation row using the returned Id.
+        var character = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Estinien",
+            Race = (int)NpcRaces.Elezen,
+            Gender = (int)Genders.Male
+        });
+
+        var clip = _db.LogOrUpdateVoiceClip(new VoiceClipEntity
+        {
+            CharacterId = character.Id,
+            NpcBaseId = 4004000,
+            Timestamp = DateTime.UtcNow,
+            TextSource = 2,
+            Language = 1,
+            OriginalText = "The Azure Dragoon stands ready."
+        });
+
+        const long playerContentId = 0x1122334455667788L;
+        const string playerName = "Test Player";
+        const string savePath = "C:/audio/test.wav";
+
+        _db.LogVoiceClipGeneration(clip.Id, playerContentId, playerName, savePath);
+
+        var gen = _db.GetVoiceClipGeneration(clip.Id, playerContentId);
+        Assert.NotNull(gen);
+        Assert.Equal(savePath, gen!.SavePath);
+        Assert.Equal(playerName, gen.PlayerName);
+        Assert.Equal(0, gen.AliasGender);
+    }
+
+    [Fact]
+    public void WipeAll_FiresDatabaseWipedEvent()
+    {
+        // BackendService subscribes to this event to re-discover voices from the running TTS
+        // backend after a wipe. Without it, the voices table stays empty until the user
+        // restarts the plugin.
+        var wipedFired = false;
+        _db.DatabaseWiped += () => wipedFired = true;
+
+        _db.WipeAll();
+
+        Assert.True(wipedFired);
+    }
+
+    [Fact]
     public void ClearVoiceClips_RemovesAll()
     {
         var character = _db.UpsertCharacter(new CharacterEntity

@@ -75,9 +75,10 @@ public class AudioFileService : IAudioFileService
 
     public async Task<bool> WriteStreamToFile(EKEventId eventId, VoiceMessage voiceMessage, Stream stream, string localSaveLocation, bool googleDriveUpload)
     {
+        string filePath;
         try
         {
-            var filePath = GetLocalAudioPath(localSaveLocation, voiceMessage);
+            filePath = GetLocalAudioPath(localSaveLocation, voiceMessage);
             _log.Debug(nameof(WriteStreamToFile), $"Saving audio locally: {filePath}", eventId);
 
             var parentDirectory = Path.GetDirectoryName(filePath);
@@ -86,18 +87,36 @@ public class AudioFileService : IAudioFileService
             stream.Seek(0, SeekOrigin.Begin);
             await RawPcmToWav.CreateWaveFileAsync(filePath, stream, sampleRate: 24000, bitsPerSample: 16, channels: 1);
             _savedFiles.Add(DateTime.Now, filePath);
-
-            if (googleDriveUpload)
-                await _googleDrive.UploadFile(GetParentFolderPath(string.Empty, voiceMessage), $"{VoiceMessageToFileName(RemovePlayerNameInText(voiceMessage.OriginalText))}.wav", filePath, eventId);
-
-            return true;
         }
         catch (Exception ex)
         {
             _log.Error(nameof(WriteStreamToFile), $"Error while saving audio locally: {ex}", eventId);
+            return false;
         }
 
-        return false;
+        // Fire-and-forget the optional drive upload. Awaiting it would delay the live-path
+        // generation log (it runs in a continuation off this Task) — and a failed upload
+        // is not a reason to lose the on-disk file's DB row.
+        if (googleDriveUpload)
+        {
+            var driveFilePath = filePath;
+            var parentFolder = GetParentFolderPath(string.Empty, voiceMessage);
+            var driveFileName = $"{VoiceMessageToFileName(RemovePlayerNameInText(voiceMessage.OriginalText))}.wav";
+            _ = Task.Run(async () =>
+            {
+                try
+                {
+                    await _googleDrive.UploadFile(parentFolder, driveFileName, driveFilePath, eventId);
+                }
+                catch (Exception ex)
+                {
+                    _log.Warning(nameof(WriteStreamToFile),
+                        $"GoogleDrive upload failed for {driveFilePath}: {ex.Message}", eventId);
+                }
+            });
+        }
+
+        return true;
     }
 
     public int DeleteLastNFiles(int nFilesToDelete = 10)

@@ -85,24 +85,51 @@ public class VoiceClipManagerService : IVoiceClipManagerService
         var gender = character != null ? (Genders)character.Gender : Genders.None;
         var bodyType = (BodyType)voiceClip.BodyType;
         var objectKind = character != null ? (ObjectKind)character.ObjectKind : ObjectKind.None;
+        var language = (Dalamud.Game.ClientLanguage)voiceClip.Language;
 
-        // Voice resolution: prefer the clip's own snapshot (preserves history if a clip was
-        // generated under a specific voice), but fall back to the character's current VoiceKey
-        // when the snapshot is empty — handles the case where the character's voice was assigned
-        // *after* the line was first logged (e.g. via Edit Character).
-        var resolvedVoice = !string.IsNullOrEmpty(voiceClip.VoiceKey)
-            ? voiceClip.VoiceKey
-            : (character?.VoiceKey ?? "");
+        // Reuse the live NpcDataService cache entry when available so EnsureFittingVoice's
+        // mutations land on the same NpcMapData instance the Edit window reads from. Building
+        // a fresh transient (the original behaviour) lost the auto-assigned voice for the
+        // user's view: Edit kept showing "(none)" and the next clip's BuildVoiceMessage
+        // started over from an empty resolvedVoice, retriggering the auto-pick on every dialog.
+        var liveCache = objectKind == ObjectKind.Pc ? _npcData.MappedPlayers : _npcData.MappedNpcs;
+        var npcData = liveCache.Find(n =>
+            n.Name == name && n.Gender == gender && n.Race == race && n.Language == language);
 
-        var npcData = new NpcMapData(objectKind)
+        if (npcData == null)
         {
-            Name = name,
-            Race = race,
-            RaceStr = character?.RaceStr ?? "",
-            Gender = gender,
-            BodyType = bodyType,
-            voice = resolvedVoice
-        };
+            // No live entry yet — fall back to a transient. The voice resolution mirrors the
+            // original: clip snapshot first (preserves history if regenerated under a specific
+            // voice), then character row (handles voice assigned via Edit Character after the
+            // clip was first logged).
+            var resolvedVoice = !string.IsNullOrEmpty(voiceClip.VoiceKey)
+                ? voiceClip.VoiceKey
+                : (character?.VoiceKey ?? "");
+
+            npcData = new NpcMapData(objectKind)
+            {
+                Name = name,
+                Race = race,
+                RaceStr = character?.RaceStr ?? "",
+                Gender = gender,
+                BodyType = bodyType,
+                Language = language,
+                voice = resolvedVoice,
+            };
+        }
+        else
+        {
+            // Body type can vary per clip even for the same character (a child line for an
+            // adult NPC, etc.). Don't write it back onto the shared cache entry — clone the
+            // surface for this message instead, but keep the voice/voiceList aliasing so
+            // EnsureFittingVoice still updates the cache.
+            npcData.BodyType = bodyType;
+            // If the clip's own snapshot pins a specific voice (e.g. regenerate-under-voice
+            // workflow), prefer that for the message but don't overwrite the cache's current
+            // voice — only write back if the cache is empty so we still get a valid pick.
+            if (string.IsNullOrEmpty(npcData.voice) && !string.IsNullOrEmpty(voiceClip.VoiceKey))
+                npcData.voice = voiceClip.VoiceKey;
+        }
 
         // Resolve voice list so Voice property can look up by BackendVoice
         npcData.Voices = _npcData.GetEchokrautVoices();

@@ -39,6 +39,15 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
     // race/gender/bodyType — the user re-opens the window after a race/gender change to refresh.
     private List<EchokrautVoice> _selectableVoices = new();
 
+    // Voice dropdown + state for live sync of code-driven voice changes (e.g. when
+    // BackendService.EnsureFittingVoice auto-reassigns the NPC's voice while this window
+    // is open). Without this, the dropdown stays stuck at the open-time value and Save
+    // would silently overwrite the auto-assigned voice with the stale captured key.
+    private TextDropDownNode? _voiceDropDown;
+    private string _noVoiceLabel = string.Empty;
+    private bool _userPickedVoice;
+    private string _lastSyncedVoiceKey = string.Empty;
+
     public NativeNpcEditWindow(
         NpcMapData npc,
         INpcDataService npcData,
@@ -137,7 +146,11 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
         });
         y += 20;
 
-        var allVoices = _npc.Voices ?? _npcData.GetEchokrautVoices();
+        // Always pull fresh from the service — _npc.Voices is set once at first encounter and
+        // can go stale after a DB wipe + repopulate or when EnsureFittingVoice picks a voice
+        // that wasn't loaded into _npc.Voices at the time the NPC was cached. Falling back on
+        // the stale cache used to leave the assigned voice missing from the dropdown.
+        var allVoices = _npcData.GetEchokrautVoices();
         _selectableVoices = allVoices
             .FindAll(v => v.IsSelectable(_npc.Name, _npc.Gender, _npc.Race, _npc.BodyType));
 
@@ -157,26 +170,28 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
         // Build option list. Empty option = "no voice" (lets user clear assignment).
         // The same localized string is used for display AND comparison, so option matching
         // still works across languages.
-        var noVoiceLabel = Loc.S("(none)");
-        var voiceOptions = new List<string> { noVoiceLabel };
+        _noVoiceLabel = Loc.S("(none)");
+        var voiceOptions = new List<string> { _noVoiceLabel };
         voiceOptions.AddRange(_selectableVoices.Select(v => v.VoiceName));
 
-        var voiceDropDown = new TextDropDownNode
+        _voiceDropDown = new TextDropDownNode
         {
             Position = new Vector2(pos.X, pos.Y + y),
             Size = new Vector2(w, 26),
             Options = [],
         };
-        voiceDropDown.OptionListNode.Options = voiceOptions;
+        _voiceDropDown.OptionListNode.Options = voiceOptions;
         var currentVoiceLabel = string.IsNullOrEmpty(_npc.voice)
-            ? noVoiceLabel
-            : _selectableVoices.Find(v => v.BackendVoice == _npc.voice)?.VoiceName ?? noVoiceLabel;
-        voiceDropDown.OptionListNode.SelectedOption = currentVoiceLabel;
-        if (voiceDropDown.LabelNode.Node != null)
-            voiceDropDown.LabelNode.String = currentVoiceLabel;
-        voiceDropDown.OnOptionSelected = option =>
+            ? _noVoiceLabel
+            : _selectableVoices.Find(v => v.BackendVoice == _npc.voice)?.VoiceName ?? _noVoiceLabel;
+        _voiceDropDown.OptionListNode.SelectedOption = currentVoiceLabel;
+        if (_voiceDropDown.LabelNode.Node != null)
+            _voiceDropDown.LabelNode.String = currentVoiceLabel;
+        _lastSyncedVoiceKey = _npc.voice ?? "";
+        _voiceDropDown.OnOptionSelected = option =>
         {
-            if (option == noVoiceLabel)
+            _userPickedVoice = true;
+            if (option == _noVoiceLabel)
             {
                 _pendingVoiceKey = "";
                 return;
@@ -184,7 +199,7 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
             var match = _selectableVoices.Find(v => v.VoiceName == option);
             if (match != null) _pendingVoiceKey = match.BackendVoice;
         };
-        AddNode(voiceDropDown);
+        AddNode(_voiceDropDown);
         y += 36;
 
         // ── Volume slider ────────────────────────────────────────────
@@ -243,6 +258,42 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
         };
         cancelBtn.OnClick = Close;
         AddNode(cancelBtn);
+    }
+
+    protected override void OnUpdate(AtkUnitBase* addon)
+    {
+        if (_voiceDropDown is null) return;
+
+        // Pick up code-driven voice changes (e.g. BackendService.EnsureFittingVoice
+        // auto-reassignment) while the window is open. Only sync if the user hasn't
+        // manually picked something — once they do, their choice owns the dropdown.
+        var live = _npc.voice ?? "";
+        if (_userPickedVoice || live == _lastSyncedVoiceKey) return;
+
+        _lastSyncedVoiceKey = live;
+        _pendingVoiceKey = live;
+
+        // If the new voice isn't in our cached _selectableVoices (race/gender filter
+        // mismatch, or DB voice list grew since OnSetup), pull it in dynamically and
+        // rebuild the option list so the dropdown can display the actual selection.
+        if (!string.IsNullOrEmpty(live) && !_selectableVoices.Any(v => v.BackendVoice == live))
+        {
+            var match = _npcData.GetEchokrautVoices().Find(v => v.BackendVoice == live);
+            if (match != null)
+            {
+                _selectableVoices.Add(match);
+                var newOptions = new List<string> { _noVoiceLabel };
+                newOptions.AddRange(_selectableVoices.Select(v => v.VoiceName));
+                _voiceDropDown.OptionListNode.Options = newOptions;
+            }
+        }
+
+        var newLabel = string.IsNullOrEmpty(live)
+            ? _noVoiceLabel
+            : _selectableVoices.Find(v => v.BackendVoice == live)?.VoiceName ?? live;
+        _voiceDropDown.OptionListNode.SelectedOption = newLabel;
+        if (_voiceDropDown.LabelNode.Node != null)
+            _voiceDropDown.LabelNode.String = newLabel;
     }
 
     private void SaveClicked()

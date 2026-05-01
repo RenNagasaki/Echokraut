@@ -94,13 +94,19 @@ public static class ServiceBuilder
         // Register queue system
         container.RegisterFactory<IVoiceMessageQueue>(c => new VoiceMessageQueue());
 
+        container.RegisterFactory<ILiveGenerationLogger>(c => new LiveGenerationLogger(
+            c.GetService<IDatabaseService>(),
+            c.GetService<IGameObjectService>(),
+            c.GetService<ILogService>()));
+
         container.RegisterFactory<IAudioPlaybackService>(c => new AudioPlaybackService(
             c.GetService<IVoiceMessageQueue>(),
             c.GetService<ILogService>(),
             configuration,
             framework,
             c.GetService<ILipSyncHelper>(),
-            c.GetService<IAudioFileService>()));
+            c.GetService<IAudioFileService>(),
+            c.GetService<ILiveGenerationLogger>()));
 
         // AlltalkInstance must be registered before BackendService (BackendService depends on it)
         container.RegisterFactory<IAlltalkInstanceService>(c => new AlltalkInstanceService(

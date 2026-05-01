@@ -1008,7 +1008,7 @@ SELECT g.id AS loser_id, g.name AS loser_name,
         }
     }
 
-    public void LogOrUpdateVoiceClip(VoiceClipEntity voiceClip)
+    public VoiceClipEntity LogOrUpdateVoiceClip(VoiceClipEntity voiceClip)
     {
         lock (_writeLock)
         {
@@ -1017,6 +1017,7 @@ SELECT g.id AS loser_id, g.name AS loser_name,
                     && vc.NpcBaseId == voiceClip.NpcBaseId
                     && vc.OriginalText == voiceClip.OriginalText);
 
+            VoiceClipEntity result;
             if (existing != null)
             {
                 existing.Timestamp = voiceClip.Timestamp;
@@ -1035,10 +1036,12 @@ SELECT g.id AS loser_id, g.name AS loser_name,
                     existing.SavedToDisk = voiceClip.SavedToDisk;
                     existing.SavePath = voiceClip.SavePath;
                 }
+                result = existing;
             }
             else
             {
                 _context.VoiceClips.Add(voiceClip);
+                result = voiceClip;
             }
 
             // In batch mode (SuppressEvents), skip per-item SaveChanges — caller flushes in batches
@@ -1047,6 +1050,8 @@ SELECT g.id AS loser_id, g.name AS loser_name,
                 _context.SaveChanges();
                 VoiceClipLogged?.Invoke();
             }
+
+            return result;
         }
     }
 
@@ -1196,6 +1201,8 @@ SELECT g.id AS loser_id, g.name AS loser_name,
         }
     }
 
+    public event Action? DatabaseWiped;
+
     public void WipeAll()
     {
         lock (_writeLock)
@@ -1216,7 +1223,11 @@ SELECT g.id AS loser_id, g.name AS loser_name,
             _cachedPhonetics = new List<PhoneticCorrectionEntity>();
             _cachedMutedBaseIds = new HashSet<uint>();
         }
-        if (!SuppressEvents) VoiceClipLogged?.Invoke();
+        if (!SuppressEvents)
+        {
+            VoiceClipLogged?.Invoke();
+            DatabaseWiped?.Invoke();
+        }
     }
 
     // ── Per-player generation tracking ──────────────────────────

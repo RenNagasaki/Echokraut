@@ -412,6 +412,22 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         var playBtn = new DynamicIconButtonNode { Size = new Vector2(28, 28) };
         playBtn.Icon = ButtonIcon.Volume;
         playBtn.Tooltip = playTooltip;
+        // Hover highlight + manual tooltip drive — see NativeVoiceClipManagerWindow for the
+        // pattern. The Tooltip setter's auto-wired MouseOver fires on the wrapping component
+        // which never gets events here, so we re-fire ShowTooltip from the ImageNode.
+        var playNormalTint = new Vector3(1f, 1f, 1f);
+        var playHoverTint = new Vector3(1.4f, 1.4f, 1.4f);
+        playBtn.ImageNode.MultiplyColor = playNormalTint;
+        playBtn.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
+        {
+            playBtn.ImageNode.MultiplyColor = playHoverTint;
+            playBtn.ShowTooltip();
+        });
+        playBtn.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
+        {
+            playBtn.ImageNode.MultiplyColor = playNormalTint;
+            playBtn.HideTooltip();
+        });
         playBtn.OnClick = () =>
         {
             _pendingAction = () =>
@@ -450,6 +466,19 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         var genBtn = new DynamicIconButtonNode { Size = new Vector2(28, 28) };
         genBtn.Icon = hasSaved ? ButtonIcon.Refresh : ButtonIcon.MusicNote;
         genBtn.Tooltip = genTooltip;
+        var genNormalTint = new Vector3(1f, 1f, 1f);
+        var genHoverTint = new Vector3(1.4f, 1.4f, 1.4f);
+        genBtn.ImageNode.MultiplyColor = genNormalTint;
+        genBtn.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
+        {
+            genBtn.ImageNode.MultiplyColor = genHoverTint;
+            genBtn.ShowTooltip();
+        });
+        genBtn.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
+        {
+            genBtn.ImageNode.MultiplyColor = genNormalTint;
+            genBtn.HideTooltip();
+        });
         genBtn.OnClick = () =>
         {
             if (_voiceClipManager.IsGenerating) return;

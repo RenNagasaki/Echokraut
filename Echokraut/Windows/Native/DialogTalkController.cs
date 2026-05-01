@@ -53,6 +53,16 @@ public sealed unsafe class DialogTalkController : IDisposable
     private CheckboxNode?     _autoAdvanceCheckbox;
     private TextDropDownNode? _voiceDropDown;
 
+    // Custom tooltip rendered as children of the Talk addon. AtkTooltipManager places its
+    // tooltip in a separate addon layer that ends up below Talk during NPC dialog, so the
+    // built-in tooltip path was unusable here. Rendering our own nodes inside Talk's tree
+    // inherits Talk's depth and lands above the dialog background — without changing Talk
+    // itself. Background uses ui/uld/ToolTipS.tex (same NineGrid layout as KamiToolKit's
+    // TextNineGridNode) so the appearance matches the standard FFXIV tooltip.
+    private SimpleNineGridNode? _tooltipBg;
+    private TextNode? _tooltipText;
+    private string _playStopTooltipText = string.Empty;
+
     // Advance suppression: set by OnCollapsed, consumed by the next PreReceiveEvent check.
     private bool _suppressNextAdvance;
     // Owned open/closed state — set in OnUncollapsed, cleared in OnCollapsed.
@@ -144,6 +154,10 @@ public sealed unsafe class DialogTalkController : IDisposable
         _background = null;
         _layout?.Dispose();
         _layout = null;
+        _tooltipBg?.Dispose();
+        _tooltipBg = null;
+        _tooltipText?.Dispose();
+        _tooltipText = null;
         _playStopButton = null;
         _settingsButton = null;
         _muteCheckbox = null;
@@ -157,12 +171,66 @@ public sealed unsafe class DialogTalkController : IDisposable
         _pendingVoiceSelection = null;
     }
 
+    /// <summary>
+    /// Show the custom tooltip above the given anchor button. Anchor's <c>Position</c> is
+    /// expected to be set by the parent <see cref="HorizontalListNode"/> layout.
+    /// </summary>
+    private void ShowToolbarTooltip(string text, NodeBase anchor)
+    {
+        if (_tooltipBg is null || _tooltipText is null || _layout is null || string.IsNullOrEmpty(text)) return;
+
+        _tooltipText.String = text;
+        // Add room for the NineGrid border (≈14px each side) on top of the measured text width.
+        var textW = _tooltipText.GetTextDrawSize(text).X + 28f;
+        var bgH = 24f;
+
+        var x = _layout.Position.X + anchor.Position.X + (anchor.Size.X - textW) / 2f;
+        var y = _layout.Position.Y - bgH - 4f;
+
+        _tooltipBg.Size = new Vector2(textW, bgH);
+        _tooltipBg.Position = new Vector2(x, y);
+        _tooltipText.Size = new Vector2(textW, bgH);
+        _tooltipText.Position = new Vector2(x, y);
+        _tooltipBg.IsVisible = true;
+        _tooltipText.IsVisible = true;
+    }
+
+    private void HideToolbarTooltip()
+    {
+        if (_tooltipBg != null) _tooltipBg.IsVisible = false;
+        if (_tooltipText != null) _tooltipText.IsVisible = false;
+    }
+
     private void OnAttach(AtkUnitBase* addon)
     {
+        // Hover highlight + tooltip are wired on each button's ImageNode (not the wrapping
+        // ComponentNode). Reasons:
+        // - DynamicIconButtonNode gives ImageNode RespondToMouse/HasCollision/EmitsEvents in
+        //   its ctor, so MouseOver fires reliably here.
+        // - AtkTooltipManager places its tooltip in a separate addon layer that ends up below
+        //   Talk during NPC dialog, so we render a custom tooltip via ShowToolbarTooltip
+        //   instead — see _tooltipBg / _tooltipText below.
+        var normalTint = new Vector3(1f, 1f, 1f);
+        var hoverTint = new Vector3(1.4f, 1.4f, 1.4f);
+
+        _playStopTooltipText = Loc.S("Play");
         _playStopButton = new DynamicIconButtonNode { Size = new Vector2(28, 28), Position = new Vector2(0, 2) };
         _playStopButton.Icon = ButtonIcon.Volume;
-        _playStopButton.Tooltip = Loc.S("Play");
         _playStopButton.OnClick = OnPlayStopClick;
+        _playStopButton.ImageNode.AddNodeFlags(NodeFlags.HasCollision);
+        _playStopButton.ImageNode.MultiplyColor = normalTint;
+        _playStopButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
+        {
+            if (_playStopButton == null) return;
+            _playStopButton.ImageNode.MultiplyColor = hoverTint;
+            ShowToolbarTooltip(_playStopTooltipText, _playStopButton);
+        });
+        _playStopButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
+        {
+            if (_playStopButton == null) return;
+            _playStopButton.ImageNode.MultiplyColor = normalTint;
+            HideToolbarTooltip();
+        });
 
         _muteCheckbox = new CheckboxNode { Size = new Vector2(60, 24), String = Loc.S("Mute"), Position = new Vector2(0, 5) };
         _muteCheckbox.OnClick = OnMuteClick;
@@ -172,26 +240,23 @@ public sealed unsafe class DialogTalkController : IDisposable
 
         _voiceDropDown = new TextDropDownNode { Size = new Vector2(185, 24), Options = [], Position = new Vector2(0, 5) };
 
+        var settingsTooltipText = Loc.S("Open Voice Clip Manager");
         _settingsButton = new DynamicIconButtonNode { Size = new Vector2(28, 28), Position = new Vector2(0, 2) };
         _settingsButton.Icon = ButtonIcon.GearCog;
         _settingsButton.OnClick = () => _openVoiceClipManager();
-
-        // Tooltip + hover highlight on the ImageNode — DynamicIconButtonNode gives ImageNode
-        // RespondToMouse/HasCollision/EmitsEvents in its ctor, so MouseOver fires reliably here.
-        // Setting TextTooltip on the ImageNode itself auto-registers ShowTooltip/HideTooltip
-        // bound to that node (which actually has the collision flag, unlike the wrapping
-        // ComponentNode whose tooltip flow ToggleCollisionFlag deliberately skips).
-        _settingsButton.ImageNode.TextTooltip = Loc.S("Open Voice Clip Manager");
-        var normalTint = new Vector3(1f, 1f, 1f);
-        var hoverTint = new Vector3(1.4f, 1.4f, 1.4f);
+        _settingsButton.ImageNode.AddNodeFlags(NodeFlags.HasCollision);
         _settingsButton.ImageNode.MultiplyColor = normalTint;
         _settingsButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
         {
-            if (_settingsButton != null) _settingsButton.ImageNode.MultiplyColor = hoverTint;
+            if (_settingsButton == null) return;
+            _settingsButton.ImageNode.MultiplyColor = hoverTint;
+            ShowToolbarTooltip(settingsTooltipText, _settingsButton);
         });
         _settingsButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
         {
-            if (_settingsButton != null) _settingsButton.ImageNode.MultiplyColor = normalTint;
+            if (_settingsButton == null) return;
+            _settingsButton.ImageNode.MultiplyColor = normalTint;
+            HideToolbarTooltip();
         });
 
         // OnOptionSelected fires as the first line of OptionSelectedHandler, before UpdateLabel.
@@ -252,6 +317,38 @@ public sealed unsafe class DialogTalkController : IDisposable
 
         _layout.Position = new Vector2(bgX + (bgW - _layout.Size.X) / 2f - 25, addonH - overlap + (bgH - buttonH) / 2f - 5);
         _layout.AttachNode(addon);
+
+        // Tooltip nodes — attached AFTER the layout so they render on top within Talk's
+        // hierarchy. Sized/positioned dynamically by ShowToolbarTooltip; hidden by default.
+        // Background settings mirror KamiToolKit.TextNineGridNode so the look matches the
+        // standard FFXIV tooltip used in our other native windows.
+        _tooltipBg = new SimpleNineGridNode
+        {
+            TexturePath = "ui/uld/ToolTipS.tex",
+            TextureCoordinates = new Vector2(0f, 0f),
+            TextureSize = new Vector2(32f, 24f),
+            TopOffset = 10,
+            BottomOffset = 10,
+            LeftOffset = 15,
+            RightOffset = 15,
+            Size = new Vector2(140, 24),
+            IsVisible = false,
+        };
+        _tooltipBg.AttachNode(addon);
+
+        _tooltipText = new TextNode
+        {
+            Size = new Vector2(140, 24),
+            FontType = FontType.Axis,
+            FontSize = 12,
+            TextColor = new Vector4(1f, 1f, 1f, 1f),
+            TextOutlineColor = new Vector4(0f, 0f, 0f, 1f),
+            TextFlags = TextFlags.Edge,
+            AlignmentType = AlignmentType.Center,
+            String = string.Empty,
+            IsVisible = false,
+        };
+        _tooltipText.AttachNode(addon);
     }
 
     private void OnUpdate(AtkUnitBase* addon)
@@ -332,7 +429,7 @@ public sealed unsafe class DialogTalkController : IDisposable
 
         // Play/Stop — always visible, dimmed when not in actionable dialogue.
         _playStopButton!.Icon = isActive ? ButtonIcon.Mute : ButtonIcon.Volume;
-        _playStopButton.Tooltip = isActive ? Loc.S("Stop") : Loc.S("Play");
+        _playStopTooltipText = isActive ? Loc.S("Stop") : Loc.S("Play");
         SetEnabled(_playStopButton, inDialog && notVoiced && !isMuted && (isActive || !_audioPlayback.RecreationStarted));
 
         // Mute — always visible, dimmed when no speaker / dialogue inactive.

@@ -6,6 +6,7 @@ using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echokraut.Helper.Functional;
 using Echotools.Logging.Enums;
 using System;
 using System.Linq;
@@ -391,7 +392,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
             var npcBaseId = message.SpeakerObj != null ? (long)message.SpeakerObj.BaseId : 0;
             var originalText = message.OriginalText ?? "";
 
-            _db.LogOrUpdateVoiceClip(new DataClasses.Database.VoiceClipEntity
+            var persisted = _db.LogOrUpdateVoiceClip(new DataClasses.Database.VoiceClipEntity
             {
                 CharacterId = character.Id,
                 NpcBaseId = npcBaseId,
@@ -401,12 +402,18 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
                 VoiceKey = speaker?.voice ?? "",
                 OriginalText = originalText,
                 CleanedText = message.Text ?? "",
+                // Read-side (VoiceClipManagerService.GetEffectivePlayerId) keys generation rows on
+                // this flag, so it must be set in the live path too — otherwise generations are
+                // logged with the wrong player_content_id and the UI shows clips as "not generated".
+                HasPlayerPlaceholder = TalkTextHelper.ContainsPlayerPlaceholder(originalText),
                 SavedToDisk = false,
                 BodyType = (int)(speaker?.BodyType ?? BodyType.Adult),
                 ZoneName = zoneName,
                 MapX = mapX,
                 MapY = mapY
             });
+            message.VoiceClipId = persisted.Id;
+            message.HasPlayerPlaceholder = persisted.HasPlayerPlaceholder;
         }
         catch (Exception ex)
         {

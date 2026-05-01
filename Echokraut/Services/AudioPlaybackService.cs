@@ -30,6 +30,7 @@ public class AudioPlaybackService : IAudioPlaybackService, IDisposable
 
     private readonly ILipSyncHelper _lipSync;
     private readonly IAudioFileService _audioFiles;
+    private readonly ILiveGenerationLogger _generationLogger;
 
     private bool _inDialog;
     private bool _isPlaying;
@@ -53,7 +54,7 @@ public class AudioPlaybackService : IAudioPlaybackService, IDisposable
 
     public PlaybackState GetStreamState(Guid streamId) => _audioEngine.GetState(streamId);
 
-    public AudioPlaybackService(IVoiceMessageQueue queue, ILogService log, EKConfiguration configuration, IFramework framework, ILipSyncHelper lipSync, IAudioFileService audioFiles)
+    public AudioPlaybackService(IVoiceMessageQueue queue, ILogService log, EKConfiguration configuration, IFramework framework, ILipSyncHelper lipSync, IAudioFileService audioFiles, ILiveGenerationLogger generationLogger)
     {
         _queue = queue ?? throw new ArgumentNullException(nameof(queue));
         _log = log ?? throw new ArgumentNullException(nameof(log));
@@ -61,6 +62,7 @@ public class AudioPlaybackService : IAudioPlaybackService, IDisposable
         _framework = framework ?? throw new ArgumentNullException(nameof(framework));
         _lipSync = lipSync ?? throw new ArgumentNullException(nameof(lipSync));
         _audioFiles = audioFiles ?? throw new ArgumentNullException(nameof(audioFiles));
+        _generationLogger = generationLogger ?? throw new ArgumentNullException(nameof(generationLogger));
 
         _audioEngine = new Live3DAudioEngine(_log);
         _audioEngine.ConfigureListener(new Vector3D(0, 0, 0), new Vector3D(0, 0, 1), new Vector3D(0, 1, 0));
@@ -144,7 +146,25 @@ public class AudioPlaybackService : IAudioPlaybackService, IDisposable
                 {
                     _log.Debug(nameof(OnSourceEnded), $"Text: {message.Text}", eventId);
                     if (!string.IsNullOrWhiteSpace(message.Text) && !message.LoadedLocally)
-                        _ = _audioFiles.WriteStreamToFile(eventId, message, message.Stream, _configuration.LocalSaveLocation, _configuration.GoogleDriveUpload);
+                    {
+                        var savePath = _audioFiles.GetLocalAudioPath(_configuration.LocalSaveLocation, message);
+                        var voiceClipId = message.VoiceClipId;
+                        var hasPlayerPlaceholder = message.HasPlayerPlaceholder;
+                        _ = _audioFiles.WriteStreamToFile(eventId, message, message.Stream, _configuration.LocalSaveLocation, _configuration.GoogleDriveUpload)
+                            .ContinueWith(t =>
+                            {
+                                if (t.Status == TaskStatus.RanToCompletion && t.Result)
+                                {
+                                    _generationLogger.LogIfApplicable(voiceClipId, hasPlayerPlaceholder, savePath, eventId);
+                                }
+                                else
+                                {
+                                    _log.Warning(nameof(OnSourceEnded),
+                                        $"WriteStreamToFile did not complete successfully (status={t.Status}, result={(t.Status == TaskStatus.RanToCompletion ? t.Result.ToString() : "n/a")}); skipping generation log",
+                                        eventId);
+                                }
+                            }, TaskScheduler.Default);
+                    }
                 }
                 else
                 {

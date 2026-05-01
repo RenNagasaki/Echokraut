@@ -61,6 +61,7 @@ public class BackendService : IBackendService, IDisposable
         _cancellationTokenSource = new CancellationTokenSource();
         _generationTask = Task.Run(() => GenerationLoopAsync(_cancellationTokenSource.Token));
         _alltalkInstance.OnInstanceReady += RefreshBackend;
+        _db.DatabaseWiped += RefreshBackend;
         Task.Run(RefreshBackend);
     }
 
@@ -602,6 +603,7 @@ public class BackendService : IBackendService, IDisposable
     public void Dispose()
     {
         _alltalkInstance.OnInstanceReady -= RefreshBackend;
+        _db.DatabaseWiped -= RefreshBackend;
         try
         {
             _cancellationTokenSource.Cancel();
