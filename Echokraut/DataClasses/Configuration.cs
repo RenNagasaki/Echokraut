@@ -82,6 +82,10 @@ public class Configuration : IPluginConfiguration
     public void Initialize(IDalamudPluginInterface pluginInterface)
     {
         PluginInterface = pluginInterface;
+
+        // One-shot migrations from older config schemas. Each call must be idempotent —
+        // it runs every time the plugin starts.
+        Alltalk?.MigrateLegacyInstanceTypeFields();
     }
 
     public void Save()

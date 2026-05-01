@@ -33,6 +33,7 @@ public class DialogHarvestService : IDialogHarvestService
     private readonly IDatabaseService _db;
     private readonly IBackendService _backend;
     private readonly INpcDataService _npcData;
+    private readonly IRemoteUrlService _remoteUrls;
 
     /// <summary>Sheets excluded from /ekdump — already harvested or clearly non-dialog.</summary>
     private static readonly HashSet<string> DumpExcludedSheets = new(StringComparer.OrdinalIgnoreCase)
@@ -199,7 +200,8 @@ public class DialogHarvestService : IDialogHarvestService
         Configuration config,
         IDatabaseService db,
         IBackendService backend,
-        INpcDataService npcData)
+        INpcDataService npcData,
+        IRemoteUrlService remoteUrls)
     {
         _dataManager = dataManager ?? throw new ArgumentNullException(nameof(dataManager));
         _jsonData = jsonData ?? throw new ArgumentNullException(nameof(jsonData));
@@ -208,6 +210,7 @@ public class DialogHarvestService : IDialogHarvestService
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _backend = backend ?? throw new ArgumentNullException(nameof(backend));
         _npcData = npcData ?? throw new ArgumentNullException(nameof(npcData));
+        _remoteUrls = remoteUrls ?? throw new ArgumentNullException(nameof(remoteUrls));
     }
 
     public async Task RunAsync(Dalamud.Game.ClientLanguage language, CancellationToken ct)
@@ -1206,7 +1209,7 @@ public class DialogHarvestService : IDialogHarvestService
 
         // Step 5: Harvest quest dialogs (HarvestQuestDialogs drives its own phase)
         ct.ThrowIfCancellationRequested();
-        var (linkedQuests, unmatchedQuests) = HarvestQuestDialogs(npcNames, bnpcNames, npcBaseSheet, npcTerritories, npcZoneNames, language, ct, eventId);
+        var (linkedQuests, unmatchedQuests, parenCandidates) = HarvestQuestDialogs(npcNames, bnpcNames, npcBaseSheet, npcTerritories, npcZoneNames, language, ct, eventId);
 
         // Log unmapped ModelChara IDs before persist (so it's visible early)
         if (_unmappedModels.Count > 0)
@@ -1269,6 +1272,12 @@ public class DialogHarvestService : IDialogHarvestService
             if (unmatchedQuests.Count > 0)
                 File.WriteAllText(Path.Combine(outputDir, "unmatched_quest_dialogs.json"),
                     JsonSerializer.Serialize(unmatchedQuests, jsonOptions));
+
+            // Multi-candidate paren-prefix entries — user resolves these manually by copying
+            // entries into <configDir>/quest_npc_aliases.json with the chosen npcId/npcName.
+            if (parenCandidates.Count > 0)
+                File.WriteAllText(Path.Combine(outputDir, "quest_alias_candidates.json"),
+                    JsonSerializer.Serialize(parenCandidates, jsonOptions));
         }
 
         var linkedDtCount = linkedDialogs.Count(d => d.Sheet == "DefaultTalk");
@@ -1873,12 +1882,25 @@ public class DialogHarvestService : IDialogHarvestService
     }
 
     /// <summary>
+    /// Bundle of Lua-side data for a single quest: the textKey → NPC ID mapping resolved by the
+    /// existing 5-priority bytecode analysis, the raw Talk() calls (in extraction order, grouped
+    /// by FunctionIndex), and the ACTOR name → NPC ID table from QuestParams. The latter two are
+    /// used by the silent-actor paren-prefix heuristic in the harvest main loop.
+    /// </summary>
+    internal record LuaQuestMapping(
+        Dictionary<string, uint> TextKeyToNpcId,
+        List<LuabParser.TalkCall> TalkCalls,
+        Dictionary<string, uint> ActorNameToNpcId);
+
+    /// <summary>
     /// Parse the quest's Lua script to build a textKey → ENpcBase ID mapping.
     /// Uses QuestParams ACTOR definitions + Lua bytecode analysis.
     /// </summary>
-    private Dictionary<string, uint> BuildLuaTextKeyMapping(Quest quest, string questId, string subdir, EKEventId eventId)
+    private LuaQuestMapping BuildLuaTextKeyMapping(Quest quest, string questId, string subdir, EKEventId eventId)
     {
         var result = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        var emptyTalkCalls = new List<LuabParser.TalkCall>();
+        var emptyActorMap = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
 
         try
         {
@@ -1915,12 +1937,14 @@ public class DialogHarvestService : IDialogHarvestService
                 }
             }
 
-            if (actorNameToNpcId.Count == 0) return result;
+            if (actorNameToNpcId.Count == 0)
+                return new LuaQuestMapping(result, emptyTalkCalls, emptyActorMap);
 
             // Load the Lua script file
             var scriptPath = $"game_script/quest/{subdir}/{questId}.luab";
             var file = _dataManager.GetFile(scriptPath);
-            if (file == null) return result;
+            if (file == null)
+                return new LuaQuestMapping(result, emptyTalkCalls, actorNameToNpcId);
 
             // Parse bytecode — extracts Talk() calls, dispatch mapping, and scene name→funcIndex
             var parser = new LuabParser(file.Data);
@@ -2019,13 +2043,258 @@ public class DialogHarvestService : IDialogHarvestService
                         result[call.TextKey] = npcId.Value;
                 }
             }
+
+            return new LuaQuestMapping(result, talkCalls, actorNameToNpcId);
         }
         catch (Exception ex)
         {
             _log.Debug(nameof(BuildLuaTextKeyMapping), $"Failed to parse Lua script for {questId}: {ex.Message}", eventId);
         }
 
+        return new LuaQuestMapping(result, emptyTalkCalls, emptyActorMap);
+    }
+
+    // ── Quest NPC aliases: embedded ← remote ← user-local (priority-1 override) ──
+    /// <summary>
+    /// Build the (QuestId, NpcNameKey) → NPC ID mapping from up to three sources, layered:
+    /// embedded resource <c>QuestNpcAliases.json</c> (always), remote URL via
+    /// <see cref="IRemoteUrlService"/> (if reachable), and local user file
+    /// <c>&lt;localSaveLocation&gt;/harvest/quest_npc_aliases.json</c> (if present). Later
+    /// sources override earlier ones for the same (QuestId, NpcNameKey).
+    /// <para>
+    /// Each entry resolves to an NPC by explicit <c>NpcId</c> (wins) or by <c>NpcName</c>
+    /// (cross-language, case-insensitive, with normalization: strip spaces/apostrophes/
+    /// hyphens, uppercase). Ambiguous or unknown names log a warning and the entry is
+    /// skipped — user must set <c>NpcId</c> for those.
+    /// </para>
+    /// </summary>
+    private Dictionary<(uint questId, string npcNameKey), uint> LoadUserAliases(
+        Dictionary<uint, Dictionary<string, string>> npcNames,
+        Dictionary<uint, Dictionary<string, string>> bnpcNames,
+        EKEventId eventId)
+    {
+        var result = new Dictionary<(uint, string), uint>();
+
+        // Build name index once for resolving NpcName entries.
+        var nameToIds = BuildAliasNameIndex(npcNames, bnpcNames);
+
+        // 1) Embedded fallback (always available)
+        var embeddedFile = LoadAliasFileFromEmbedded(eventId);
+        ApplyAliasEntries(embeddedFile, "embedded", result, nameToIds, eventId);
+
+        // 2) Remote URL (community-curated; overrides embedded)
+        var remoteFile = LoadAliasFileFromRemote(eventId);
+        ApplyAliasEntries(remoteFile, "remote", result, nameToIds, eventId);
+
+        // 3) Local user file (per-user; overrides remote+embedded)
+        var localFile = LoadAliasFileFromLocal(eventId, out var localPath);
+        ApplyAliasEntries(localFile, $"local ({localPath})", result, nameToIds, eventId);
+
+        _log.Info(nameof(LoadUserAliases),
+            $"Quest NPC aliases loaded: {result.Count} effective entries (embedded+remote+local merged)",
+            eventId);
         return result;
+    }
+
+    private static Dictionary<string, List<uint>> BuildAliasNameIndex(
+        Dictionary<uint, Dictionary<string, string>> npcNames,
+        Dictionary<uint, Dictionary<string, string>> bnpcNames)
+    {
+        var nameToIds = new Dictionary<string, List<uint>>(StringComparer.OrdinalIgnoreCase);
+        const uint bnpcIdOffset = 0x40000000;
+        void Index(uint id, Dictionary<string, string> names)
+        {
+            foreach (var nm in names.Values)
+            {
+                if (string.IsNullOrEmpty(nm)) continue;
+                var norm = nm.Replace(" ", "").Replace("'", "").Replace("-", "").ToUpperInvariant();
+                if (!nameToIds.TryGetValue(norm, out var ids))
+                    nameToIds[norm] = ids = new List<uint>();
+                if (!ids.Contains(id)) ids.Add(id);
+            }
+        }
+        foreach (var (id, nm) in npcNames) Index(id, nm);
+        foreach (var (id, nm) in bnpcNames) Index(id + bnpcIdOffset, nm);
+        return nameToIds;
+    }
+
+    private QuestNpcAliasFile? LoadAliasFileFromEmbedded(EKEventId eventId)
+    {
+        try
+        {
+            using var stream = typeof(DialogHarvestService).Assembly
+                .GetManifestResourceStream("Echokraut.Resources.QuestNpcAliases.json");
+            if (stream == null) return null;
+            using var reader = new StreamReader(stream);
+            var json = reader.ReadToEnd();
+            return JsonSerializer.Deserialize<QuestNpcAliasFile>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(LoadUserAliases),
+                $"Failed to read embedded QuestNpcAliases.json: {ex.Message}", eventId);
+            return null;
+        }
+    }
+
+    private QuestNpcAliasFile? LoadAliasFileFromRemote(EKEventId eventId)
+    {
+        var url = _remoteUrls.Urls.QuestNpcAliasesUrl;
+        if (string.IsNullOrWhiteSpace(url)) return null;
+        try
+        {
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var json = http.GetStringAsync(url).GetAwaiter().GetResult();
+            return JsonSerializer.Deserialize<QuestNpcAliasFile>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(LoadUserAliases),
+                $"Failed to fetch remote quest NPC aliases ({url}): {ex.Message} — using embedded+local only",
+                eventId);
+            return null;
+        }
+    }
+
+    private QuestNpcAliasFile? LoadAliasFileFromLocal(EKEventId eventId, out string path)
+    {
+        var baseDir = _config.SaveToLocal ? _config.LocalSaveLocation : @"C:\alltalk_tts";
+        path = Path.Combine(baseDir, "harvest", "quest_npc_aliases.json");
+        if (!File.Exists(path)) return null;
+        try
+        {
+            var json = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<QuestNpcAliasFile>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(LoadUserAliases),
+                $"Failed to parse {path}: {ex.Message} — local aliases ignored", eventId);
+            return null;
+        }
+    }
+
+    private void ApplyAliasEntries(
+        QuestNpcAliasFile? file,
+        string sourceLabel,
+        Dictionary<(uint questId, string npcNameKey), uint> result,
+        Dictionary<string, List<uint>> nameToIds,
+        EKEventId eventId)
+    {
+        if (file?.Aliases == null) return;
+
+        var loaded = 0;
+        var overridden = 0;
+        var skippedAmbiguous = 0;
+        var skippedUnknown = 0;
+        foreach (var entry in file.Aliases)
+        {
+            if (string.IsNullOrEmpty(entry.NpcNameKey)) continue;
+
+            uint? resolved = null;
+            if (entry.NpcId.HasValue && entry.NpcId.Value > 0)
+            {
+                resolved = entry.NpcId.Value;
+            }
+            else if (!string.IsNullOrEmpty(entry.NpcName))
+            {
+                var norm = entry.NpcName.Replace(" ", "").Replace("'", "").Replace("-", "").ToUpperInvariant();
+                if (nameToIds.TryGetValue(norm, out var ids))
+                {
+                    if (ids.Count == 1)
+                    {
+                        resolved = ids[0];
+                    }
+                    else
+                    {
+                        _log.Warning(nameof(LoadUserAliases),
+                            $"[{sourceLabel}] Quest {entry.QuestId} alias '{entry.NpcNameKey}' → name '{entry.NpcName}' " +
+                            $"resolves to {ids.Count} candidates [{string.Join(",", ids)}] — set npcId explicitly",
+                            eventId);
+                        skippedAmbiguous++;
+                    }
+                }
+                else
+                {
+                    _log.Warning(nameof(LoadUserAliases),
+                        $"[{sourceLabel}] Quest {entry.QuestId} alias '{entry.NpcNameKey}' → name '{entry.NpcName}' " +
+                        $"not found in any language's NPC list — entry ignored", eventId);
+                    skippedUnknown++;
+                }
+            }
+
+            if (resolved.HasValue)
+            {
+                var k = (entry.QuestId, entry.NpcNameKey.ToUpperInvariant());
+                if (result.ContainsKey(k)) overridden++;
+                result[k] = resolved.Value;
+                loaded++;
+            }
+        }
+
+        _log.Info(nameof(LoadUserAliases),
+            $"[{sourceLabel}] {loaded} aliases applied ({overridden} overrides, {skippedAmbiguous} ambiguous, {skippedUnknown} unknown)",
+            eventId);
+    }
+
+    // ── Silent-actor paren-prefix heuristic ──────────────────────────────────────
+    // FFXIV Lua cutscenes pre-spawn ALL their ACTORs at scene start (default position, no model
+    // change). When a scene opens with "(-???-)Hello" or "(-Sylvie-)..." (text-side speaker hint)
+    // and the bytecode-resolution priorities (1..5 in BuildLuaTextKeyMapping) couldn't pin down
+    // an ACTOR, the speaker is almost always the actor that:
+    //   - hasn't been resolved to any prior call in the *same scene/function*, and
+    //   - does speak in at least one *later* call in the same scene/function.
+    // 1 such actor → auto-attribute. ≥2 → emit a candidate JSON entry for manual disambiguation.
+    // Trigger is purely text-based (starts with "(-X-)") — independent of NpcNameKey value.
+    private static readonly Regex ParenSpeakerPrefixRegex = new(@"^\(-[^-]+-\)", RegexOptions.Compiled);
+
+    internal static bool HasParenSpeakerPrefix(Dictionary<string, string> texts)
+    {
+        foreach (var text in texts.Values)
+            if (!string.IsNullOrEmpty(text) && ParenSpeakerPrefixRegex.IsMatch(text))
+                return true;
+        return false;
+    }
+
+    /// <summary>
+    /// Per-scene candidate analysis. Returns the ACTOR NPC IDs that satisfy the silent-before /
+    /// speaks-after pattern within the SAME Lua function as the unresolved call.
+    /// </summary>
+    internal static List<uint> ComputeSilentActorCandidates(string textKey, LuaQuestMapping luaMapping)
+    {
+        if (luaMapping.TalkCalls.Count == 0 || luaMapping.ActorNameToNpcId.Count == 0)
+            return new List<uint>();
+
+        var firstCall = luaMapping.TalkCalls.FirstOrDefault(c => c.TextKey == textKey);
+        if (firstCall == null) return new List<uint>();
+
+        var sceneCalls = luaMapping.TalkCalls
+            .Where(c => c.FunctionIndex == firstCall.FunctionIndex)
+            .ToList();
+        var unresolvedIdx = sceneCalls.IndexOf(firstCall);
+        if (unresolvedIdx < 0) return new List<uint>();
+
+        var candidates = new List<uint>();
+        var actorIds = luaMapping.ActorNameToNpcId.Values.Distinct().ToList();
+        foreach (var actorId in actorIds)
+        {
+            var silentBefore = true;
+            var speaksAfter = false;
+            for (var i = 0; i < sceneCalls.Count; i++)
+            {
+                if (i == unresolvedIdx) continue;
+                if (!luaMapping.TextKeyToNpcId.TryGetValue(sceneCalls[i].TextKey, out var resolved)) continue;
+                if (resolved != actorId) continue;
+                if (i < unresolvedIdx) { silentBefore = false; break; }
+                speaksAfter = true;
+            }
+            if (silentBefore && speaksAfter)
+                candidates.Add(actorId);
+        }
+        return candidates;
     }
 
     // Text key pattern: TEXT_{QUESTID}_{NPCNAME}_{SCENE}_{LINE}
@@ -2078,7 +2347,7 @@ public class DialogHarvestService : IDialogHarvestService
         return normalized;
     }
 
-    private (List<LinkedQuestDialog> linked, List<UnmatchedQuestDialog> unmatched) HarvestQuestDialogs(
+    private (List<LinkedQuestDialog> linked, List<UnmatchedQuestDialog> unmatched, List<ParenCandidateEntry> parenCandidates) HarvestQuestDialogs(
         Dictionary<uint, Dictionary<string, string>> npcNames,
         Dictionary<uint, Dictionary<string, string>> bnpcNames,
         ExcelSheet<ENpcBase> npcBaseSheet,
@@ -2090,6 +2359,10 @@ public class DialogHarvestService : IDialogHarvestService
     {
         var linked = new List<LinkedQuestDialog>();
         var unmatched = new List<UnmatchedQuestDialog>();
+        var parenCandidates = new List<ParenCandidateEntry>();
+
+        // User-supplied per-quest aliases — priority-1 override (wins over Lua mapping etc.)
+        var userAliases = LoadUserAliases(npcNames, bnpcNames, eventId);
 
         // Load localized PlaceName sheet for quest zone fallback
         var placeNameSheet = _dataManager.GetExcelSheet<Lumina.Excel.Sheets.PlaceName>(language);
@@ -2129,7 +2402,7 @@ public class DialogHarvestService : IDialogHarvestService
 
         // Read all quests
         var questSheet = _dataManager.GetExcelSheet<Quest>();
-        if (questSheet == null) return (linked, unmatched);
+        if (questSheet == null) return (linked, unmatched, parenCandidates);
 
         var questCount = 0;
         var questTotal = questSheet.Count();
@@ -2158,8 +2431,13 @@ public class DialogHarvestService : IDialogHarvestService
             var subdir = (suffix / 100).ToString("D3");
             var sheetPath = $"quest/{subdir}/{questId}";
 
-            // Parse Lua script to get textKey → actor register mapping
-            var luaTextKeyToNpcId = BuildLuaTextKeyMapping(quest, questId, subdir, eventId);
+            // Parse Lua script to get textKey → actor register mapping (plus the raw Talk()
+            // calls and ACTOR table — needed for the silent-actor paren-prefix heuristic below).
+            var luaMapping = BuildLuaTextKeyMapping(quest, questId, subdir, eventId);
+            var luaTextKeyToNpcId = luaMapping.TextKeyToNpcId;
+            // Track keys auto-resolved by the silent-actor heuristic so the main loop can label
+            // them with the correct MatchSource (instead of plain LuaScript).
+            var heuristicResolvedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
             // Collect all text keys and their translations
             var keyTexts = new Dictionary<string, Dictionary<string, string>>(); // textKey → lang → text
@@ -2206,6 +2484,32 @@ public class DialogHarvestService : IDialogHarvestService
 
             questsWithDialog += keyTexts.Count;
 
+            // Silent-actor paren-prefix heuristic — runs ONCE before the main match loop.
+            // 1-candidate cases are auto-attributed (flow through the existing LuaScript path).
+            // 0/≥2-candidate cases are remembered so the main loop can emit a candidates JSON
+            // entry IF the key ends up unmatched (entries that get rescued by name-fallback
+            // matching later are NOT emitted — they're correctly attributed).
+            var paramCandidatesPerKey = new Dictionary<string, List<uint>>(StringComparer.OrdinalIgnoreCase);
+            foreach (var (paKey, paTexts) in keyTexts)
+            {
+                if (luaTextKeyToNpcId.ContainsKey(paKey)) continue;
+                if (!HasParenSpeakerPrefix(paTexts)) continue;
+
+                var candidates = ComputeSilentActorCandidates(paKey, luaMapping);
+                if (candidates.Count == 1)
+                {
+                    luaTextKeyToNpcId[paKey] = candidates[0];
+                    heuristicResolvedKeys.Add(paKey);
+                }
+                else
+                {
+                    // Defer JSON emission — this key may still be matched by name-fallback in
+                    // the main loop. paramCandidatesPerKey tracks the candidate list so the
+                    // unmatched branch can pick it up if the key really stays unmatched.
+                    paramCandidatesPerKey[paKey] = candidates;
+                }
+            }
+
             // Process collected text entries
             foreach (var (key, texts) in keyTexts)
             {
@@ -2248,14 +2552,23 @@ public class DialogHarvestService : IDialogHarvestService
                     continue;
                 }
 
-                // Try Lua script mapping first (most accurate — from actual game scripts)
                 List<uint>? matchedIds = null;
                 var matchSource = DialogMatchSource.NameExact;
 
-                if (luaTextKeyToNpcId.TryGetValue(key, out var luaNpcId))
+                // Priority 1: user-supplied per-quest alias (overrides everything else).
+                if (userAliases.TryGetValue((quest.RowId, npcNameKey.ToUpperInvariant()), out var userNpcId))
+                {
+                    matchedIds = new List<uint> { userNpcId };
+                    matchSource = DialogMatchSource.UserAlias;
+                }
+
+                // Priority 2: Lua script mapping (5 sub-priorities) or silent-actor heuristic.
+                if (matchedIds == null && luaTextKeyToNpcId.TryGetValue(key, out var luaNpcId))
                 {
                     matchedIds = new List<uint> { luaNpcId };
-                    matchSource = DialogMatchSource.LuaScript;
+                    matchSource = heuristicResolvedKeys.Contains(key)
+                        ? DialogMatchSource.SilentActorHeuristic
+                        : DialogMatchSource.LuaScript;
                 }
 
                 // Check cutscene NPC alias map (for dialog played by native cutscene system)
@@ -2333,16 +2646,47 @@ public class DialogHarvestService : IDialogHarvestService
                         NpcNameKey = npcNameKey,
                         Texts = texts
                     });
+
+                    // Paren-prefix entries that stayed unmatched: emit a candidates JSON entry
+                    // so the user can manually map them. Candidates = heuristic narrow-down
+                    // (may be empty); AllActors = the full QuestParams ACTOR list so the user
+                    // can pick any cutscene cast member when the heuristic didn't help.
+                    if (HasParenSpeakerPrefix(texts))
+                    {
+                        var heuristicCandidates = paramCandidatesPerKey.TryGetValue(key, out var hc) ? hc : new List<uint>();
+                        var allActorIds = luaMapping.ActorNameToNpcId.Values.Distinct().ToList();
+                        parenCandidates.Add(new ParenCandidateEntry
+                        {
+                            QuestId = quest.RowId,
+                            QuestName = questName,
+                            TextKey = key,
+                            NpcNameKey = npcNameKey,
+                            Texts = texts,
+                            Candidates = heuristicCandidates.Select(id => new ParenCandidateOption
+                            {
+                                NpcId = id,
+                                Names = npcNames.TryGetValue(id, out var nm) ? nm : new Dictionary<string, string>()
+                            }).ToList(),
+                            AllActors = allActorIds.Select(id => new ParenCandidateOption
+                            {
+                                NpcId = id,
+                                Names = npcNames.TryGetValue(id, out var nm) ? nm : new Dictionary<string, string>()
+                            }).ToList()
+                        });
+                    }
                 }
             }
         }
 
         _log.Info(nameof(HarvestQuestDialogs),
             $"Quest harvest: {linked.Count} linked, {unmatched.Count} unmatched, " +
-            $"{questCount} quests scanned ({questsWithDialog} text entries)", eventId);
+            $"{questCount} quests scanned ({questsWithDialog} text entries), " +
+            $"{linked.Count(d => d.MatchSource == DialogMatchSource.SilentActorHeuristic.ToString())} via silent-actor heuristic, " +
+            $"{parenCandidates.Count} multi-candidate paren-prefix entries needing manual mapping",
+            eventId);
 
         EndPhase();
-        return (linked, unmatched);
+        return (linked, unmatched, parenCandidates);
     }
 
     /// <summary>
@@ -2765,7 +3109,7 @@ public class DialogHarvestService : IDialogHarvestService
 
         // Also show what BuildLuaTextKeyMapping would produce
         var eventId = new EKEventId(0, TextSource.None);
-        var mapping = BuildLuaTextKeyMapping(q, questId, subdir, eventId);
+        var mapping = BuildLuaTextKeyMapping(q, questId, subdir, eventId).TextKeyToNpcId;
         sb.AppendLine("=== Final textKey → NPC ID mapping ===");
         foreach (var (key, npcId) in mapping)
             sb.AppendLine($"  {key} → {npcId}");

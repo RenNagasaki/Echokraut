@@ -37,4 +37,13 @@ public class RemoteUrlsData
 
     [JsonPropertyName("voiceNameUrls")]
     public Dictionary<string, string> VoiceNameUrls { get; set; } = new();
+
+    /// <summary>
+    /// Optional URL for the community-curated quest NPC alias mapping (paren-prefix dialogs).
+    /// Loaded by <c>DialogHarvestService</c> with the embedded <c>QuestNpcAliases.json</c> as
+    /// fallback. Per-user overrides live in <c>&lt;localSaveLocation&gt;/harvest/quest_npc_aliases.json</c>
+    /// and stack on top of remote+embedded.
+    /// </summary>
+    [JsonPropertyName("questNpcAliasesUrl")]
+    public string QuestNpcAliasesUrl { get; set; } = string.Empty;
 }

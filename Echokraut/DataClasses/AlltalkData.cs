@@ -1,3 +1,4 @@
+using System;
 using Echokraut.Enums;
 using Echotools.Logging.Enums;
 
@@ -21,30 +22,45 @@ namespace Echokraut.DataClasses
         public bool IsWindows11 { get; set; } = true;
         public bool CpuMode { get; set; } = false;
 
-        // TODO: Remove LocalInstance, RemoteInstance, NoInstance fields in a future update
-        //       once all users have migrated to InstanceType. Keep for deserialization compat.
+        /// <summary>
+        /// The canonical instance type. Persisted directly as an enum since
+        /// <see cref="MigrateLegacyInstanceTypeFields"/> ran on first load after this migration
+        /// landed. Old configs are still readable: the legacy booleans below stay deserializable
+        /// for one cycle and the migration derives the enum from them.
+        /// </summary>
+        public AlltalkInstanceType InstanceType { get; set; } = AlltalkInstanceType.None;
+
+        // Legacy boolean fields — kept for one release so older configs can be deserialized
+        // and migrated to <see cref="InstanceType"/>. After migration runs they're forced
+        // back to false, so future Save() calls write inert values. Remove after enough time
+        // has passed for active users to have loaded + saved at least once on the new code.
+        [Obsolete("Use InstanceType. Kept for legacy config deserialization.", false)]
         public bool LocalInstance { get; set; } = false;
+        [Obsolete("Use InstanceType. Kept for legacy config deserialization.", false)]
         public bool RemoteInstance { get; set; } = false;
+        [Obsolete("Use InstanceType. Kept for legacy config deserialization.", false)]
         public bool NoInstance { get; set; } = false;
 
         /// <summary>
-        /// The canonical instance type. Reads from InstanceType if set, otherwise migrates
-        /// from the legacy boolean fields. Setter updates both the enum and the legacy fields.
+        /// Translate legacy <c>LocalInstance</c>/<c>RemoteInstance</c>/<c>NoInstance</c> booleans
+        /// into <see cref="InstanceType"/> if the enum is still at its default and a boolean is
+        /// set. After the call the legacy booleans are forced to false so subsequent Save() calls
+        /// don't carry redundant data. Idempotent — safe to call repeatedly. Should be called once
+        /// during plugin initialization, before any code reads <see cref="InstanceType"/>.
         /// </summary>
-        public AlltalkInstanceType InstanceType
+        public void MigrateLegacyInstanceTypeFields()
         {
-            get
+#pragma warning disable CS0618 // Migration intentionally reads obsolete fields.
+            if (InstanceType == AlltalkInstanceType.None)
             {
-                if (LocalInstance) return AlltalkInstanceType.Local;
-                if (RemoteInstance) return AlltalkInstanceType.Remote;
-                return AlltalkInstanceType.None;
+                if (LocalInstance) InstanceType = AlltalkInstanceType.Local;
+                else if (RemoteInstance) InstanceType = AlltalkInstanceType.Remote;
+                // No legacy boolean (or NoInstance=true) → InstanceType stays None, the default.
             }
-            set
-            {
-                LocalInstance  = value == AlltalkInstanceType.Local;
-                RemoteInstance = value == AlltalkInstanceType.Remote;
-                NoInstance     = value == AlltalkInstanceType.None;
-            }
+            LocalInstance = false;
+            RemoteInstance = false;
+            NoInstance = false;
+#pragma warning restore CS0618
         }
 
         public override string ToString()

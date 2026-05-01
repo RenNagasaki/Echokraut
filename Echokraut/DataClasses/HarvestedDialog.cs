@@ -26,6 +26,11 @@ public enum DialogMatchSource
     BNpc,
     /// <summary>SYSTEM/narrator entry — not a real NPC.</summary>
     Narrator,
+    /// <summary>Silent-actor heuristic for paren-prefix dialogs ((-???-) or (-Name-)): the
+    /// only ACTOR in the same Lua scene that hadn't spoken before but does speak after.</summary>
+    SilentActorHeuristic,
+    /// <summary>User-supplied per-quest alias from quest_npc_aliases.json.</summary>
+    UserAlias,
 }
 
 public class LinkedDialog
@@ -68,4 +73,61 @@ public class UnmatchedQuestDialog
     public string QuestName { get; set; } = "";
     public string NpcNameKey { get; set; } = "";
     public Dictionary<string, string> Texts { get; set; } = new();
+}
+
+/// <summary>
+/// Emitted by the harvester for paren-prefix dialogs (text starts with <c>(-...-)</c>) that
+/// stayed unmatched after all match priorities ran. The user resolves these manually by
+/// copying the entry into <c>quest_npc_aliases.json</c> with the chosen <c>npcId</c>/<c>npcName</c>.
+/// <para>
+/// <see cref="Candidates"/> may be empty (heuristic found 0 — user picks freely from
+/// <see cref="AllActors"/>) or contain ≥2 entries (heuristic narrowed to multiple). Single-
+/// candidate cases are auto-attributed and never reach this list.
+/// </para>
+/// <para>
+/// <see cref="AllActors"/> contains every ACTOR0..N defined in the quest's <c>QuestParams</c>
+/// — the full cutscene cast. Always available when the Lua script was loaded; the user can
+/// pick any of them when the heuristic gave up.
+/// </para>
+/// </summary>
+public class ParenCandidateEntry
+{
+    public uint QuestId { get; set; }
+    public string QuestName { get; set; } = "";
+    public string TextKey { get; set; } = "";
+    public string NpcNameKey { get; set; } = "";
+    /// <summary>Full multilingual text dict (en/de/fr/ja) — makes manual searching easy.</summary>
+    public Dictionary<string, string> Texts { get; set; } = new();
+    /// <summary>Heuristic-narrowed candidates (silent-before, speaks-after). Subset of <see cref="AllActors"/>.</summary>
+    public List<ParenCandidateOption> Candidates { get; set; } = new();
+    /// <summary>Every ACTOR in the quest's cutscene cast. Pick from here when <see cref="Candidates"/> is empty.</summary>
+    public List<ParenCandidateOption> AllActors { get; set; } = new();
+}
+
+public class ParenCandidateOption
+{
+    public uint NpcId { get; set; }
+    public Dictionary<string, string> Names { get; set; } = new();
+}
+
+/// <summary>
+/// Schema for the user-edited <c>quest_npc_aliases.json</c> file. Each entry maps a
+/// (QuestId, NpcNameKey) pair to a specific NPC, either by <c>NpcName</c> (resolved
+/// against the harvester's cross-language name lookup with normalization) or by
+/// <c>NpcId</c> directly when the name is ambiguous. <c>NpcId</c> wins when both are set.
+/// </summary>
+public class QuestNpcAliasFile
+{
+    public int Version { get; set; } = 1;
+    public List<QuestNpcAliasEntry> Aliases { get; set; } = new();
+}
+
+public class QuestNpcAliasEntry
+{
+    public uint QuestId { get; set; }
+    public string? QuestName { get; set; }
+    public string NpcNameKey { get; set; } = "";
+    public string? NpcName { get; set; }
+    public uint? NpcId { get; set; }
+    public string? Comment { get; set; }
 }

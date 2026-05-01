@@ -23,5 +23,6 @@
     "English": "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesEN.json",
     "French": "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesFR.json",
     "Japanese": "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/VoiceNamesJA.json"
-  }
+  },
+  "questNpcAliasesUrl": "https://raw.githubusercontent.com/RenNagasaki/Echokraut/master/Echokraut/Resources/QuestNpcAliases.json"
 }

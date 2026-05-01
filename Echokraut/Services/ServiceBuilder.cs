@@ -84,7 +84,8 @@ public static class ServiceBuilder
             configuration,
             c.GetService<IDatabaseService>(),
             c.GetService<IBackendService>(),
-            c.GetService<INpcDataService>()));
+            c.GetService<INpcDataService>(),
+            c.GetService<IRemoteUrlService>()));
 
         container.RegisterFactory<ILipSyncHelper>(c => new LipSyncHelper(
             c.GetService<ILogService>(),
