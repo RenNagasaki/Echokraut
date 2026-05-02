@@ -157,15 +157,9 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private bool _prevShowService;
 
     internal Action? OnToggleVoiceClipManager;
+    internal Action? OnToggleGameDataTools;
 
     private readonly IDatabaseService _db;
-
-    // Data Harvest
-    private readonly IDialogHarvestService _dialogHarvest;
-    private TextButtonNode? _harvestButton;
-    private CancellationTokenSource? _harvestCts;
-    private TextInputNode? _debugQuestIdInput;
-    private TextButtonNode? _debugExportButton;
 
     public NativeConfigWindow(
         EKConfig config,
@@ -183,7 +177,6 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         IVolumeService volumeService,
         IGameObjectService gameObjects,
         IVoiceTestService voiceTest,
-        IDialogHarvestService dialogHarvest,
         IDatabaseService db)
     {
         _config = config;
@@ -201,7 +194,6 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _volumeService = volumeService;
         _gameObjects = gameObjects;
         _voiceTest = voiceTest;
-        _dialogHarvest = dialogHarvest;
         _db = db;
 
         _backend.CharacterMapped += OnCharacterMapped;
@@ -210,8 +202,6 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
 
     public override void Dispose()
     {
-        _harvestCts?.Cancel();
-        _harvestCts?.Dispose();
         _backend.CharacterMapped -= OnCharacterMapped;
         _backend.VoicesMapped -= OnVoicesMapped;
         base.Dispose();
@@ -694,47 +684,14 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         CreateCollapsibleSection(list, Loc.S("Available commands"), w, true,
             commandNodes.Where(n => n != null).Cast<NodeBase>().ToArray());
 
-        // Encounter History button
+        // Tool windows: Voice Clip Manager + Game Data Tools (harvest, voice extraction).
         list.AddNode(Separator(w));
-        list.AddNode(Button(Loc.S("Voice Clip Manager"), 200, () => OnToggleVoiceClipManager?.Invoke()));
-
-        // Data Harvest section
-        _harvestButton = Button(Loc.S("Start Harvest"), 160, OnHarvestClick);
-        _debugQuestIdInput = Input("Quest ID", 120, 10, "65614", _ => { });
-        _debugExportButton = Button(Loc.S("Export Quest Lua Debug"), 200, OnDebugExportClick);
-        CreateCollapsibleSection(list, Loc.S("Data Harvest"), w, true,
-            [_harvestButton, _debugQuestIdInput, _debugExportButton]);
+        var toolsRow = new HorizontalListNode { Size = new Vector2(w, 28), ItemSpacing = 6 };
+        toolsRow.AddNode(Button(Loc.S("Voice Clip Manager"), 200, () => OnToggleVoiceClipManager?.Invoke()));
+        toolsRow.AddNode(Button(Loc.S("Game Data Tools"), 200, () => OnToggleGameDataTools?.Invoke()));
+        list.AddNode(toolsRow);
 
         return list;
-    }
-
-    private void OnHarvestClick()
-    {
-        if (_dialogHarvest.IsRunning)
-        {
-            _harvestCts?.Cancel();
-            if (_harvestButton != null)
-                _harvestButton.String = Loc.S("Start Harvest");
-        }
-        else
-        {
-            _harvestCts?.Dispose();
-            _harvestCts = new CancellationTokenSource();
-            if (_harvestButton != null)
-                _harvestButton.String = Loc.S("Stop Harvest");
-            _ = _dialogHarvest.RunAsync(_clientState.ClientLanguage, _harvestCts.Token).ContinueWith(_ =>
-            {
-                if (_harvestButton != null)
-                    _harvestButton.String = Loc.S("Start Harvest");
-            });
-        }
-    }
-
-    private void OnDebugExportClick()
-    {
-        var questIdStr = _debugQuestIdInput?.String ?? "";
-        if (uint.TryParse(questIdStr, out var qid))
-            _dialogHarvest.ExportQuestLuaDebug(qid);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

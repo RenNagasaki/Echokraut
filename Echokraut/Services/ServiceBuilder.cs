@@ -87,6 +87,13 @@ public static class ServiceBuilder
             c.GetService<INpcDataService>(),
             c.GetService<IRemoteUrlService>()));
 
+        container.RegisterFactory<IVoiceSampleExtractorService>(c => new VoiceSampleExtractorService(
+            dataManager,
+            clientState,
+            c.GetService<ILogService>(),
+            c.GetService<IJsonDataService>(),
+            configuration));
+
         container.RegisterFactory<ILipSyncHelper>(c => new LipSyncHelper(
             c.GetService<ILogService>(),
             framework,

@@ -577,6 +577,35 @@ public static class Loc
         // ── Misc ──────────────────────────────────────────────────────────
         ["Configuration"] = new() { { DE, "Konfiguration" }, { FR, "Configuration" }, { JP, "設定" } },
         ["First Time Setup"] = new() { { DE, "Ersteinrichtung" }, { FR, "Configuration initiale" }, { JP, "初回セットアップ" } },
+
+        // ── Game Data Tools window ────────────────────────────────────────
+        ["Game Data Tools"] = new() { { DE, "Spieldaten-Werkzeuge" }, { FR, "Outils de données du jeu" }, { JP, "ゲームデータツール" } },
+        ["Quest Dialog Harvest"] = new() { { DE, "Quest-Dialog-Sammlung" }, { FR, "Récolte de dialogues de quête" }, { JP, "クエスト会話の取得" } },
+        ["Voice Starter Set"] = new() { { DE, "Stimmen-Starterset" }, { FR, "Pack de démarrage vocal" }, { JP, "ボイス・スターターセット" } },
+        ["Import / Export"] = new() { { DE, "Import / Export" }, { FR, "Import / Export" }, { JP, "インポート / エクスポート" } },
+        ["Scan game data for NPC dialog text and persist linked entries to the database. Use this to populate or refresh your voice clip catalog after a game patch."]
+            = new() {
+                { DE, "Spieldaten nach NPC-Dialogtexten durchsuchen und verknüpfte Einträge in der Datenbank ablegen. Damit füllst oder aktualisierst du deinen Sprachclip-Katalog nach einem Spielpatch." },
+                { FR, "Analyse les données du jeu pour les dialogues NPC et enregistre les entrées liées en base. Utile pour peupler ou rafraîchir le catalogue de clips vocaux après un patch." },
+                { JP, "ゲームデータから NPC のセリフテキストを取得し、関連付けてデータベースに保存します。ゲームパッチ後にボイスクリップのカタログを更新するのに使います。" } },
+        ["Extract voice samples from the game's built-in voice acting and write them to FF14-Voices/ inside your local save location. AllTalk-compatible (22050 Hz). Always overwrites previous output."]
+            = new() {
+                { DE, "Sprachaufnahmen aus den eingebauten Spieldaten extrahieren und nach FF14-Voices/ unter deinem lokalen Speicherort schreiben. AllTalk-kompatibel (22050 Hz). Überschreibt vorherige Ergebnisse." },
+                { FR, "Extrait les échantillons vocaux du doublage intégré du jeu et les écrit dans FF14-Voices/ de votre dossier local. Compatible AllTalk (22050 Hz). Écrase toujours les sorties précédentes." },
+                { JP, "ゲーム内蔵のボイス収録から音声サンプルを抽出し、ローカル保存先の FF14-Voices/ に書き出します。AllTalk 互換（22050 Hz）。実行ごとに既存の出力を上書きします。" } },
+        ["Coming soon: backup / restore of database + configuration, and import/export of community voice sets."]
+            = new() {
+                { DE, "Bald verfügbar: Sicherung / Wiederherstellung von Datenbank + Konfiguration sowie Im-/Export von Community-Stimmensets." },
+                { FR, "Bientôt : sauvegarde / restauration de la base et de la configuration, et import/export de packs vocaux communautaires." },
+                { JP, "近日公開：データベース＋設定のバックアップ／復元、およびコミュニティ・ボイスセットのインポート／エクスポート。" } },
+        ["Samples per NPC (1-5):"] = new() { { DE, "Samples pro NPC (1-5):" }, { FR, "Échantillons par NPC (1-5) :" }, { JP, "NPC ごとのサンプル数 (1-5):" } },
+        ["Build Starter Set"] = new() { { DE, "Starterset erstellen" }, { FR, "Créer le pack de démarrage" }, { JP, "スターターセットを作成" } },
+        ["Stop"] = new() { { DE, "Stopp" }, { FR, "Arrêter" }, { JP, "停止" } },
+        ["Starting..."] = new() { { DE, "Wird gestartet…" }, { FR, "Démarrage…" }, { JP, "開始中…" } },
+        ["Failed — see logs"] = new() { { DE, "Fehlgeschlagen — siehe Logs" }, { FR, "Échec — voir les journaux" }, { JP, "失敗 — ログを参照" } },
+        ["Cancelled"] = new() { { DE, "Abgebrochen" }, { FR, "Annulé" }, { JP, "キャンセル済み" } },
+        ["Done"] = new() { { DE, "Fertig" }, { FR, "Terminé" }, { JP, "完了" } },
+
         ["Select a directory via dialog."] = new() { { DE, "Verzeichnis über Dialog auswählen." }, { FR, "Sélectionner un dossier via le dialogue." }, { JP, "ダイアログでフォルダを選択。" } },
         ["Choose audio files directory"] = new() { { DE, "Audiodateien-Verzeichnis wählen" }, { FR, "Choisir le dossier des fichiers audio" }, { JP, "音声ファイルディレクトリを選択" } },
         ["Choose alltalk instance directory"] = new() { { DE, "Alltalk-Instanzverzeichnis wählen" }, { FR, "Choisir le dossier de l'instance Alltalk" }, { JP, "Alltalkインスタンスディレクトリを選択" } },

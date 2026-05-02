@@ -17,6 +17,7 @@ public class NativeWindowManager : IWindowManager
     private readonly NativeFirstTimeWindow _firstTimeWindow;
     private readonly NativeVoiceClipManagerWindow _voiceClipManagerWindow;
     private readonly NativeVoiceClipDetailWindow _voiceClipDetailWindow;
+    private readonly NativeGameDataToolsWindow _gameDataToolsWindow;
     private readonly IFramework _framework;
 
     public bool IsFirstTimeOpen => _firstTimeWindow.IsOpen;
@@ -59,7 +60,6 @@ public class NativeWindowManager : IWindowManager
             services.GetService<IVolumeService>(),
             services.GetService<IGameObjectService>(),
             services.GetService<IVoiceTestService>(),
-            services.GetService<IDialogHarvestService>(),
             services.GetService<IDatabaseService>())
         {
             InternalName = "EchokrautSettings",
@@ -111,10 +111,27 @@ public class NativeWindowManager : IWindowManager
             RespectCloseAll = false,
         };
 
+        _gameDataToolsWindow = new NativeGameDataToolsWindow(
+            services.GetService<IDialogHarvestService>(),
+            services.GetService<IVoiceSampleExtractorService>(),
+            clientState,
+            services.GetService<ILogService>())
+        {
+            InternalName = "EchokrautGameTools",
+            Title = Loc.S("Game Data Tools"),
+            Size = new Vector2(720, 540),
+            RespectCloseAll = false,
+        };
+
         _configWindow.OnToggleVoiceClipManager = () => _voiceClipManagerWindow.Toggle();
+        _configWindow.OnToggleGameDataTools = () => _gameDataToolsWindow.Toggle();
 
         // Suppress Talk advance when clicking inside our native windows
-        _dialogController.SetWindowHitTest(pos => IsInsideWindow(_configWindow, pos) || IsInsideWindow(_firstTimeWindow, pos) || IsInsideWindow(_voiceClipManagerWindow, pos) || IsInsideWindow(_voiceClipDetailWindow, pos));
+        _dialogController.SetWindowHitTest(pos => IsInsideWindow(_configWindow, pos)
+            || IsInsideWindow(_firstTimeWindow, pos)
+            || IsInsideWindow(_voiceClipManagerWindow, pos)
+            || IsInsideWindow(_voiceClipDetailWindow, pos)
+            || IsInsideWindow(_gameDataToolsWindow, pos));
     }
 
     private static unsafe bool IsInsideWindow(NativeAddon window, Vector2 pos)
@@ -131,6 +148,7 @@ public class NativeWindowManager : IWindowManager
     public void ToggleConfig() => _configWindow.Toggle();
     public void ToggleFirstTime() => _firstTimeWindow.Toggle();
     public void ToggleVoiceClipManager() => _voiceClipManagerWindow.Toggle();
+    public void ToggleGameDataTools() => _gameDataToolsWindow.Toggle();
     public void Draw() { }
 
     public void Dispose()
@@ -144,6 +162,7 @@ public class NativeWindowManager : IWindowManager
         SafeClose(_firstTimeWindow);
         SafeClose(_voiceClipManagerWindow);
         SafeClose(_voiceClipDetailWindow);
+        SafeClose(_gameDataToolsWindow);
 
         // Give the framework thread a chance to actually process the queued ATK Close calls
         // BEFORE we free our managed handles. We can only block when we're NOT on the
@@ -161,6 +180,7 @@ public class NativeWindowManager : IWindowManager
         SafeDispose(_firstTimeWindow);
         SafeDispose(_voiceClipManagerWindow);
         SafeDispose(_voiceClipDetailWindow);
+        SafeDispose(_gameDataToolsWindow);
     }
 
     private static void SafeClose(KamiToolKit.NativeAddon? addon)

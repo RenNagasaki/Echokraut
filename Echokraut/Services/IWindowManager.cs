@@ -8,5 +8,6 @@ public interface IWindowManager : IDisposable
     void ToggleConfig();
     void ToggleFirstTime();
     void ToggleVoiceClipManager();
+    void ToggleGameDataTools();
     void Draw();
 }
