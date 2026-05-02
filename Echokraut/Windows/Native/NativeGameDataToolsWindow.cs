@@ -9,6 +9,7 @@ using Echotools.Logging.Enums;
 using Echokraut.Localization;
 using Echokraut.Services;
 using Echotools.Logging.Services;
+using Echotools.UI.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Classes;
@@ -39,29 +40,56 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
     private TextNode? _samplesValueLabel;
     private TextButtonNode? _starterSetButton;
     private CancellationTokenSource? _starterCts;
-    private TextNode? _starterStatusLabel;
 
-    private string _starterStatusText = string.Empty;
-    private bool _starterStatusDirty;
+    // ── Shared progress bar (harvest + starter set) ──────────────────────────
+    // Mirrors the StatusProgressBar pattern from NativeVoiceClipManagerWindow but lives
+    // separately: VCM's bar is now reserved for generation progress only, this one drives
+    // harvest + voice-extractor progress and idle status.
+    private StatusProgressBar? _progressBar;
+
+    // ── Bottom row: shortcuts to other plugin windows ────────────────────────
+    private DynamicIconButtonNode? _configButton;
+    private DynamicIconButtonNode? _voiceClipManagerButton;
+    private readonly Action _toggleConfig;
+    private readonly Action _toggleVoiceClipManager;
+
+    // Volatile snapshots written by event handlers (any thread) and drained in OnUpdate.
+    private string _harvestLabel = string.Empty;
+    private volatile int _harvestCurrent;
+    private volatile int _harvestTotal = 1;
+    private string _extractLabel = string.Empty;
+    private volatile int _extractCurrent;
+    private volatile int _extractTotal = 1;
+    /// <summary>One-shot terminal status (Done/Cancelled/Failed) shown once the active run ends.</summary>
+    private string _terminalStatus = string.Empty;
+    private bool _terminalStatusDirty;
     private readonly object _statusLock = new();
 
     public NativeGameDataToolsWindow(
         IDialogHarvestService dialogHarvest,
         IVoiceSampleExtractorService voiceExtract,
         IClientState clientState,
-        ILogService log)
+        ILogService log,
+        Action toggleConfig,
+        Action toggleVoiceClipManager)
     {
         _dialogHarvest = dialogHarvest;
         _voiceExtract = voiceExtract;
         _clientState = clientState;
         _log = log;
+        _toggleConfig = toggleConfig;
+        _toggleVoiceClipManager = toggleVoiceClipManager;
 
         _voiceExtract.ProgressChanged += OnExtractProgress;
+        _dialogHarvest.ProgressChanged += OnHarvestLabel;
+        _dialogHarvest.ProgressCountChanged += OnHarvestCount;
     }
 
     public override void Dispose()
     {
-        _voiceExtract.ProgressChanged -= OnExtractProgress;
+        try { _voiceExtract.ProgressChanged -= OnExtractProgress; } catch { }
+        try { _dialogHarvest.ProgressChanged -= OnHarvestLabel; } catch { }
+        try { _dialogHarvest.ProgressCountChanged -= OnHarvestCount; } catch { }
         _harvestCts?.Cancel();
         _harvestCts?.Dispose();
         _starterCts?.Cancel();
@@ -75,10 +103,21 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
         var size = ContentSize;
         var w = size.X;
 
+        // Layout: progress bar pinned at the very top, action sections in a scrollable
+        // middle area, shortcut buttons pinned at the bottom-left. The progress bar is
+        // primary feedback, so it gets the most prominent slot.
+        const float progressBarHeight = 28f;
+        const float gap = 4f;
+        const float bottomBtnSize = 28f;
+        var progressBarY = pos.Y;
+        var listY = pos.Y + progressBarHeight + gap;
+        var bottomRowY = pos.Y + size.Y - bottomBtnSize;
+        var listHeight = size.Y - progressBarHeight - gap - bottomBtnSize - gap;
+
         var list = new ScrollingListNode
         {
-            Position = pos,
-            Size = size,
+            Position = new Vector2(pos.X, listY),
+            Size = new Vector2(size.X, listHeight),
             FitWidth = true,
             ItemSpacing = 4,
         };
@@ -131,10 +170,9 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
         sliderRow.AddNode(_samplesValueLabel);
 
         _starterSetButton = Button(Loc.S("Build Starter Set"), 200, OnStarterSetClick);
-        _starterStatusLabel = Label(string.Empty, w);
 
         CreateCollapsibleSection(list, Loc.S("Voice Starter Set"), w, false,
-            [starterDesc, sliderRow, _starterSetButton, _starterStatusLabel]);
+            [starterDesc, sliderRow, _starterSetButton]);
 
         list.AddNode(Separator(w));
 
@@ -146,26 +184,125 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
         CreateCollapsibleSection(list, Loc.S("Import / Export"), w, true, [importDesc]);
 
         AddNode(list);
+
+        // ── Progress bar (harvest + starter set) — pinned at the very top ────
+        _progressBar = new StatusProgressBar
+        {
+            Position = new Vector2(pos.X, progressBarY),
+            Size = new Vector2(size.X, progressBarHeight),
+        };
+        _progressBar.ActionText = Loc.S("Idle");
+        _progressBar.SetProgress(0f, string.Empty);
+        AddNode(_progressBar);
+
+        // ── Bottom row: Config + Voice Clip Manager shortcuts ────────────────
+        // Same DynamicIconButtonNode pattern as the VCM window so the visual language is
+        // shared across plugin windows. ImageNode-routed events are mandatory in NativeAddon
+        // contexts (only those fire reliably; ButtonClick is silent here).
+        var normalTint = new Vector3(1f, 1f, 1f);
+        var hoverTint = new Vector3(1.4f, 1.4f, 1.4f);
+
+        _configButton = new DynamicIconButtonNode
+        {
+            Position = new Vector2(pos.X, bottomRowY),
+            Size = new Vector2(bottomBtnSize, bottomBtnSize),
+            Icon = ButtonIcon.GearCog,
+            Tooltip = Loc.S("Open configuration window"),
+            OnClick = () => _toggleConfig(),
+        };
+        _configButton.ImageNode.MultiplyColor = normalTint;
+        _configButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
+        {
+            if (_configButton == null) return;
+            _configButton.ImageNode.MultiplyColor = hoverTint;
+            _configButton.ShowTooltip();
+        });
+        _configButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
+        {
+            if (_configButton == null) return;
+            _configButton.ImageNode.MultiplyColor = normalTint;
+            _configButton.HideTooltip();
+        });
+        AddNode(_configButton);
+
+        // Voice Clip Manager button — UV (112, 28) on Character.tex = ButtonIcon.MusicNote.
+        _voiceClipManagerButton = new DynamicIconButtonNode
+        {
+            Position = new Vector2(pos.X + bottomBtnSize + gap, bottomRowY),
+            Size = new Vector2(bottomBtnSize, bottomBtnSize),
+            Icon = ButtonIcon.MusicNote,
+            Tooltip = Loc.S("Open Voice Clip Manager"),
+            OnClick = () => _toggleVoiceClipManager(),
+        };
+        _voiceClipManagerButton.ImageNode.MultiplyColor = normalTint;
+        _voiceClipManagerButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
+        {
+            if (_voiceClipManagerButton == null) return;
+            _voiceClipManagerButton.ImageNode.MultiplyColor = hoverTint;
+            _voiceClipManagerButton.ShowTooltip();
+        });
+        _voiceClipManagerButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
+        {
+            if (_voiceClipManagerButton == null) return;
+            _voiceClipManagerButton.ImageNode.MultiplyColor = normalTint;
+            _voiceClipManagerButton.HideTooltip();
+        });
+        AddNode(_voiceClipManagerButton);
     }
 
     protected override void OnUpdate(AtkUnitBase* addon)
     {
         _log.UpdateMainThreadLogs();
+        UpdateProgressBar();
+        ClampToScreen(addon);
+    }
 
-        // Drain pending status text into the label on the main thread.
-        if (_starterStatusDirty)
+    /// <summary>
+    /// Drive the shared progress bar from the active run state. Harvest takes priority over
+    /// extractor (they shouldn't run concurrently in practice but if both flags are set we
+    /// favour harvest since its events are more granular). Idle state shows the last terminal
+    /// status (Done/Cancelled/Failed) until the next run starts.
+    /// </summary>
+    private void UpdateProgressBar()
+    {
+        if (_progressBar == null) return;
+
+        if (_dialogHarvest.IsRunning)
+        {
+            string label;
+            lock (_statusLock) label = _harvestLabel;
+            _progressBar.ActionText = label;
+            var hc = _harvestCurrent;
+            var ht = _harvestTotal;
+            var hf = ht > 0 ? (float)hc / ht : 0f;
+            _progressBar.SetProgress(hf, ht > 0 ? $"{hc}/{ht}" : string.Empty);
+            return;
+        }
+
+        if (_voiceExtract.IsRunning)
+        {
+            string label;
+            lock (_statusLock) label = _extractLabel;
+            _progressBar.ActionText = label;
+            var ec = _extractCurrent;
+            var et = _extractTotal;
+            var ef = et > 0 ? (float)ec / et : 0f;
+            _progressBar.SetProgress(ef, et > 0 ? $"{ec}/{et}" : string.Empty);
+            return;
+        }
+
+        // Idle: surface the most recent terminal status (or default Idle text) and freeze the
+        // bar at its last value so the user sees what the last run accomplished.
+        if (_terminalStatusDirty)
         {
             string text;
             lock (_statusLock)
             {
-                text = _starterStatusText;
-                _starterStatusDirty = false;
+                text = _terminalStatus;
+                _terminalStatusDirty = false;
             }
-            if (_starterStatusLabel != null)
-                _starterStatusLabel.String = text;
+            _progressBar.ActionText = string.IsNullOrEmpty(text) ? Loc.S("Idle") : text;
         }
-
-        ClampToScreen(addon);
     }
 
     private static unsafe void ClampToScreen(AtkUnitBase* addon)
@@ -202,10 +339,17 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
             _harvestCts = new CancellationTokenSource();
             if (_harvestButton != null)
                 _harvestButton.String = Loc.S("Stop Harvest");
-            _ = _dialogHarvest.RunAsync(_clientState.ClientLanguage, _harvestCts.Token).ContinueWith(_ =>
+            // Reset bar so we don't start with stale extract counts.
+            lock (_statusLock) _harvestLabel = Loc.S("Starting...");
+            _harvestCurrent = 0;
+            _harvestTotal = 1;
+            _ = _dialogHarvest.RunAsync(_clientState.ClientLanguage, _harvestCts.Token).ContinueWith(t =>
             {
                 if (_harvestButton != null)
                     _harvestButton.String = Loc.S("Start Harvest");
+                SetTerminalStatus(t.IsFaulted ? Loc.S("Failed — see logs")
+                    : t.IsCanceled ? Loc.S("Cancelled")
+                    : Loc.S("Done"));
             });
         }
     }
@@ -235,33 +379,46 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
 
         if (_starterSetButton != null)
             _starterSetButton.String = Loc.S("Stop");
-        SetStatus(Loc.S("Starting..."));
+        // Reset the bar at run start; live progress events take over from here.
+        SetExtractProgress(Loc.S("Starting..."), 0, 0);
 
         _ = _voiceExtract.RunAsync(_clientState.ClientLanguage, samples, _starterCts.Token).ContinueWith(t =>
         {
             if (_starterSetButton != null)
                 _starterSetButton.String = Loc.S("Build Starter Set");
-            if (t.IsFaulted)
-                SetStatus(Loc.S("Failed — see logs"));
-            else if (t.IsCanceled)
-                SetStatus(Loc.S("Cancelled"));
-            else
-                SetStatus(Loc.S("Done"));
+            SetTerminalStatus(t.IsFaulted ? Loc.S("Failed — see logs")
+                : t.IsCanceled ? Loc.S("Cancelled")
+                : Loc.S("Done"));
         });
     }
 
     private void OnExtractProgress(string label, int current, int total)
+        => SetExtractProgress(label, current, total);
+
+    private void SetExtractProgress(string label, int current, int total)
     {
-        var text = total > 0 ? $"{label}  {current}/{total}" : label;
-        SetStatus(text);
+        lock (_statusLock) _extractLabel = label;
+        _extractCurrent = current;
+        _extractTotal = total > 0 ? total : 1;
     }
 
-    private void SetStatus(string text)
+    private void OnHarvestLabel(string label)
+    {
+        lock (_statusLock) _harvestLabel = label;
+    }
+
+    private void OnHarvestCount(int current, int total)
+    {
+        _harvestCurrent = current;
+        _harvestTotal = total > 0 ? total : 1;
+    }
+
+    private void SetTerminalStatus(string text)
     {
         lock (_statusLock)
         {
-            _starterStatusText = text;
-            _starterStatusDirty = true;
+            _terminalStatus = text;
+            _terminalStatusDirty = true;
         }
     }
 

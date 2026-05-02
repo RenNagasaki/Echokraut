@@ -32,28 +32,26 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     private readonly ILogService _log;
     private readonly IBackendService _backend;
     private readonly Action _toggleConfig;
+    private readonly Action _toggleGameDataTools;
 
     // Harvest
     private CancellationTokenSource? _harvestCts;
     private TextButtonNode? _harvestButton;
-    private TextDropDownNode? _langDropDown;
     private StatusProgressBar? _statusBar;
     private TextNode? _backendStatusLabel;
     private DynamicIconButtonNode? _settingsButton;
+    private DynamicIconButtonNode? _gameDataToolsButton;
     private TextButtonNode? _genAllToggleButton;
     private CancellationTokenSource? _genAllCts;
     private bool _genAllRunning;
     private int _genAllDone;
     private int _genAllTotal;
-    private ClientLanguage _selectedLanguage;
-    private string _harvestProgress = "";
     private int _statusUpdateCounter;
     private bool _statusForceRecompute;
     private volatile bool _statusCalcRunning;
     private volatile int _statusTotalClips;
     private volatile int _statusTotalSaved;
     private bool _pendingHarvestClick;
-    private int _pendingLangSelection = -1;
 
     // Layout
     private float _contentWidth;
@@ -134,7 +132,8 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         IClientState clientState,
         ILogService log,
         IBackendService backend,
-        Action toggleConfig)
+        Action toggleConfig,
+        Action toggleGameDataTools)
     {
         _db = db;
         _voiceClipManager = voiceClipManager;
@@ -146,43 +145,27 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _log = log;
         _backend = backend;
         _toggleConfig = toggleConfig;
-        _selectedLanguage = clientState.ClientLanguage;
+        _toggleGameDataTools = toggleGameDataTools;
 
         _onVoiceClipUpdated = () => _countsNeedRefresh = true;
         _onVoiceClipLogged = () => _needsRebuild = true;
-        _onHarvestProgress = msg => _harvestProgress = msg;
-        _onHarvestCount = (current, total) =>
-        {
-            _harvestProgressCurrent = current;
-            _harvestProgressTotal = total;
-        };
         _voiceClipManager.VoiceClipUpdated += _onVoiceClipUpdated;
         _db.VoiceClipLogged += _onVoiceClipLogged;
-        _dialogHarvest.ProgressChanged += _onHarvestProgress;
-        _dialogHarvest.ProgressCountChanged += _onHarvestCount;
     }
 
     private readonly Action _onVoiceClipUpdated;
     private readonly Action _onVoiceClipLogged;
-    private readonly Action<string> _onHarvestProgress;
-    private readonly Action<int, int> _onHarvestCount;
-    private volatile int _harvestProgressCurrent;
-    private volatile int _harvestProgressTotal = 1;
 
     protected override void OnFinalize(AtkUnitBase* addon)
     {
         try { _voiceClipManager.VoiceClipUpdated -= _onVoiceClipUpdated; } catch { }
         try { _db.VoiceClipLogged -= _onVoiceClipLogged; } catch { }
-        try { _dialogHarvest.ProgressChanged -= _onHarvestProgress; } catch { }
-        try { _dialogHarvest.ProgressCountChanged -= _onHarvestCount; } catch { }
     }
 
     public void SetDetailWindow(NativeVoiceClipDetailWindow detailWindow)
     {
         _detailWindow = detailWindow;
     }
-
-    private static readonly string[] LangLabels = { "Japanese", "English", "German", "French" };
 
     protected override void OnSetup(AtkUnitBase* addon, Span<AtkValue> atkValueSpan)
     {
@@ -191,7 +174,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _contentWidth = size.X;
         const float harvestRowH = 28f;
 
-        // Harvest button + language dropdown row
+        // Harvest button — language always follows the running client locale, so no dropdown.
         _harvestButton = new TextButtonNode
         {
             Size = new Vector2(120, harvestRowH),
@@ -200,19 +183,6 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
             OnClick = () => _pendingHarvestClick = true,
         };
         AddNode(_harvestButton);
-
-        _langDropDown = new TextDropDownNode
-        {
-            Size = new Vector2(130, harvestRowH),
-            Position = pos + new Vector2(124, 0),
-            Options = [],
-        };
-        _langDropDown.OptionListNode.Options = new List<string>(LangLabels);
-        _langDropDown.OptionListNode.SelectedOption = LangLabels[(int)_selectedLanguage];
-        if (_langDropDown.LabelNode.Node != null)
-            _langDropDown.LabelNode.String = LangLabels[(int)_selectedLanguage];
-        _langDropDown.OnOptionSelected = selected => _pendingLangSelection = Array.IndexOf(LangLabels, selected);
-        AddNode(_langDropDown);
 
         _questTypeLabels = new[]
         {
@@ -223,7 +193,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _questTypeDropDown = new TextDropDownNode
         {
             Size = new Vector2(180, harvestRowH),
-            Position = pos + new Vector2(258, 0),
+            Position = pos + new Vector2(124, 0),
             Options = [],
         };
         _questTypeDropDown.OptionListNode.Options = new List<string>(_questTypeLabels);
@@ -271,7 +241,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
 
             // Gather ALL clips matching current language + quest type filter for active tab
             var allClips = new List<VoiceClipEntity>();
-            var langInt = (int)_selectedLanguage;
+            var langInt = (int)_clientState.ClientLanguage;
             var chars = _activeTab == 0 ? _db.GetNpcs() : _db.GetPlayers();
             foreach (var c in chars)
             {
@@ -363,11 +333,38 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         });
         AddNode(_settingsButton);
 
-        // Backend reachability indicator — to the right of the settings button, on the pagination row.
+        // Game Data Tools button — opens the bulk-data window (harvest + voice starter set).
+        // Same DynamicIconButtonNode pattern as the settings button; sits one slot to its right.
+        // Icon UV (168, 84) on Character.tex matches ButtonIcon.GearCogWithChatBubble — a gear
+        // wedded to a speech bubble, fitting for "data + dialog tooling".
+        _gameDataToolsButton = new DynamicIconButtonNode
+        {
+            Position = new Vector2(pos.X + settingsBtnSize + settingsBtnGap, pagY),
+            Size = new Vector2(settingsBtnSize, settingsBtnSize),
+            Icon = ButtonIcon.GearCogWithChatBubble,
+            Tooltip = Loc.S("Open Game Data Tools window"),
+            OnClick = () => _toggleGameDataTools(),
+        };
+        _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
+        _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
+        {
+            if (_gameDataToolsButton == null) return;
+            _gameDataToolsButton.ImageNode.MultiplyColor = hoverTint;
+            _gameDataToolsButton.ShowTooltip();
+        });
+        _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
+        {
+            if (_gameDataToolsButton == null) return;
+            _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
+            _gameDataToolsButton.HideTooltip();
+        });
+        AddNode(_gameDataToolsButton);
+
+        // Backend reachability indicator — to the right of both icon buttons, on the pagination row.
         // Narrow (180px) so it doesn't fight the pagination buttons which sit further right.
         _backendStatusLabel = new TextNode
         {
-            Position = new Vector2(pos.X + settingsBtnSize + settingsBtnGap, pagY + 5),
+            Position = new Vector2(pos.X + 2 * (settingsBtnSize + settingsBtnGap), pagY + 5),
             Size = new Vector2(backendStatusW, paginationH - 10),
             String = "",
             FontType = FontType.Axis,
@@ -418,20 +415,11 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
                 _harvestCts?.Dispose();
                 _harvestCts = new CancellationTokenSource();
                 if (_harvestButton != null) _harvestButton.String = Loc.S("Stop Harvest");
-                _ = _dialogHarvest.RunAsync(_selectedLanguage, _harvestCts.Token).ContinueWith(_ =>
+                _ = _dialogHarvest.RunAsync(_clientState.ClientLanguage, _harvestCts.Token).ContinueWith(_ =>
                 {
                     if (_harvestButton != null) _harvestButton.String = Loc.S("Start Harvest");
                 });
             }
-        }
-
-        // Process deferred language selection
-        if (_pendingLangSelection >= 0)
-        {
-            _selectedLanguage = (ClientLanguage)_pendingLangSelection;
-            _pendingLangSelection = -1;
-            _needsRebuild = true;
-            _statusForceRecompute = true;
         }
 
         // Process deferred quest type selection
@@ -510,12 +498,12 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         var hasFilter = !string.IsNullOrEmpty(filter);
 
         _npcList = _npcData.MappedNpcs
-            .FindAll(n => n.Language == _selectedLanguage
+            .FindAll(n => n.Language == _clientState.ClientLanguage
                 && (!hasFilter || n.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)))
             .OrderBy(n => n.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
         _playerList = _npcData.MappedPlayers
-            .FindAll(n => n.Language == _selectedLanguage
+            .FindAll(n => n.Language == _clientState.ClientLanguage
                 && (!hasFilter || n.Name.Contains(filter, StringComparison.OrdinalIgnoreCase)))
             .OrderBy(n => n.Name, StringComparer.OrdinalIgnoreCase)
             .ToList();
@@ -685,16 +673,8 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
                 : new System.Numerics.Vector4(0.6f, 0.85f, 0.6f, 1f); // greenish for online/checking
         }
 
-        if (_dialogHarvest.IsRunning)
-        {
-            _statusBar.ActionText = _harvestProgress;
-            var hc = _harvestProgressCurrent;
-            var ht = _harvestProgressTotal;
-            var hf = ht > 0 ? (float)hc / ht : 0f;
-            _statusBar.SetProgress(hf, $"{hc}/{ht}");
-            return;
-        }
-
+        // Harvest progress lives in the Game Data Tools window now; this status bar is
+        // reserved for voice clip generation totals.
         var isGenerating = _genAllRunning || _voiceClipManager.IsGenerating;
         var questLabel = _questTypeLabels != null && _selectedQuestType >= 0
             ? _questTypeLabels[Array.IndexOf(QuestTypeValues, _selectedQuestType)]
@@ -711,7 +691,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
             _statusUpdateCounter = 0;
             _statusForceRecompute = false;
             _statusCalcRunning = true;
-            var langInt = (int)_selectedLanguage;
+            var langInt = (int)_clientState.ClientLanguage;
             var playerId = (long)_gameObjects.LocalPlayerContentId;
             int? questFilter = _selectedQuestType >= 0 ? _selectedQuestType : null;
             var contextType = _activeTab == 0 ? "npc" : "player";

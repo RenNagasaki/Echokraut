@@ -99,12 +99,6 @@ public static class Loc
             { FR, "Afficher les boutons Lecture/Pause, Arrêt et Muet dans les dialogues" },
             { JP, "ダイアログに再生/一時停止、停止、ミュートボタンを表示" },
         },
-        ["Show extended options (voice selector, auto-advance)"] = new()
-        {
-            { DE, "Erweiterte Optionen anzeigen (Stimmenwahl, Auto-Weiter)" },
-            { FR, "Afficher les options avancées (sélection vocale, avance auto)" },
-            { JP, "拡張オプションを表示（ボイス選択、自動進行）" },
-        }, 
 
         // ── Dialogue settings ─────────────────────────────────────────────
         ["Voice dialogue"] = new() { { DE, "Dialog vertonen" }, { FR, "Dialogues vocaux" }, { JP, "ダイアログをボイス化" } },
@@ -481,6 +475,7 @@ public static class Loc
         ["Voice Clip Manager"] = new() { { DE, "Sprachaufnahmen-Verwaltung" }, { FR, "Gestionnaire de clips vocaux" }, { JP, "音声クリップ管理" } },
         ["Voice Clip Detail"] = new() { { DE, "Sprachaufnahmen-Details" }, { FR, "Détails du clip vocal" }, { JP, "音声クリップ詳細" } },
         ["Open configuration window"] = new() { { DE, "Konfigurationsfenster öffnen" }, { FR, "Ouvrir la fenêtre de configuration" }, { JP, "設定ウィンドウを開く" } },
+        ["Open Game Data Tools window"] = new() { { DE, "Game-Data-Tools-Fenster öffnen" }, { FR, "Ouvrir la fenêtre Outils de données" }, { JP, "ゲームデータツールウィンドウを開く" } },
         ["Open Voice Clip Manager"] = new() { { DE, "Sprachaufnahmen-Verwaltung öffnen" }, { FR, "Ouvrir le gestionnaire de clips vocaux" }, { JP, "音声クリップ管理を開く" } },
         ["Edit Character"] = new() { { DE, "Charakter bearbeiten" }, { FR, "Modifier le personnage" }, { JP, "キャラクター編集" } },
         ["Generate All Unsaved"] = new() { { DE, "Alle nicht gespeicherten generieren" }, { FR, "Générer tous les non sauvegardés" }, { JP, "未保存をすべて生成" } },
@@ -605,6 +600,13 @@ public static class Loc
         ["Failed — see logs"] = new() { { DE, "Fehlgeschlagen — siehe Logs" }, { FR, "Échec — voir les journaux" }, { JP, "失敗 — ログを参照" } },
         ["Cancelled"] = new() { { DE, "Abgebrochen" }, { FR, "Annulé" }, { JP, "キャンセル済み" } },
         ["Done"] = new() { { DE, "Fertig" }, { FR, "Terminé" }, { JP, "完了" } },
+        ["Idle"] = new() { { DE, "Bereit" }, { FR, "Inactif" }, { JP, "待機中" } },
+        ["Building NPC name index"] = new() { { DE, "NPC-Namensindex wird erstellt" }, { FR, "Construction de l'index des noms PNJ" }, { JP, "NPC名インデックスを構築中" } },
+        ["Scanning voice text sheets"] = new() { { DE, "Voice-Text-Tabellen werden durchsucht" }, { FR, "Analyse des feuilles de texte vocal" }, { JP, "ボイステキストシートを走査中" } },
+        ["Scanning voice text {0} keys"] = new() { { DE, "Voice-Text wird durchsucht ({0} Einträge)" }, { FR, "Analyse du texte vocal ({0} clés)" }, { JP, "ボイステキストを走査中 ({0} 件)" } },
+        ["Extracting samples for NPC {0}"] = new() { { DE, "Samples für NPC {0} werden extrahiert" }, { FR, "Extraction des échantillons pour le PNJ {0}" }, { JP, "NPC {0} のサンプルを抽出中" } },
+        ["Done — {0} files written"] = new() { { DE, "Fertig — {0} Dateien geschrieben" }, { FR, "Terminé — {0} fichiers écrits" }, { JP, "完了 — {0} ファイル書き込み済み" } },
+        ["Open Voice Clip Manager"] = new() { { DE, "Voice-Clip-Manager öffnen" }, { FR, "Ouvrir le Gestionnaire de clips vocaux" }, { JP, "ボイスクリップマネージャーを開く" } },
 
         ["Select a directory via dialog."] = new() { { DE, "Verzeichnis über Dialog auswählen." }, { FR, "Sélectionner un dossier via le dialogue." }, { JP, "ダイアログでフォルダを選択。" } },
         ["Choose audio files directory"] = new() { { DE, "Audiodateien-Verzeichnis wählen" }, { FR, "Choisir le dossier des fichiers audio" }, { JP, "音声ファイルディレクトリを選択" } },

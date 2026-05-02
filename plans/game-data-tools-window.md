@@ -347,31 +347,27 @@ Tools uses `NAudio.Wave.WaveFileReader`. NAudio is large (~1 MB DLL). Alternativ
 **Vote: read the WAV header manually**. 30 lines of code, no new dependency. Length =
 `dataChunkSize / (sampleRate * channels * bytesPerSample) * 1000` ms.
 
-### Resampling backend (22050 Hz output)
+### Resampling backend (22050 Hz output) — DECIDED
 
-Tools ships `ffmpeg/ffmpeg.exe` and shells out per file: `ffmpeg -codec:a adpcm_ms -i in.wav
--ar 22050 -f wav out.wav`. For the plugin, three options:
+Investigation against the SCD format (Ioncannon / xivapi research) showed that FFXIV uses
+OGG only for music; voice content under `cut/*/sound/` is overwhelmingly MS-ADPCM. Tools'
+ffmpeg pipeline only handles MS-ADPCM and silently loses OGG entries via NAudio's
+`WaveFileReader` exception. We replicate the MS-ADPCM scope explicitly and skip OGG with a
+counted log line.
 
-- **A — Bundle ffmpeg.exe**: matches Tools exactly. ~80 MB binary in the plugin distribution
-  (or ~25 MB stripped build). Antivirus + plugin-manifest concerns; users may already have
-  AllTalk's ffmpeg locally and we'd be duplicating. Slowest (Process spawn per file).
+**Decision: pure-C# pipeline, no ffmpeg, no BASS-Mix addon.** Three new helpers live under
+`Helper/Functional/`:
 
-- **B — Use existing BASS for resampling**: Echokraut already loads `bass.dll` for playback.
-  BASS has built-in sample-rate conversion via `BASS_FX` or by setting the sample-rate on
-  decode. In-process, no new dependency, no per-file process spawn. Quality is good (BASS's
-  resampler is a windowed-sinc, comparable to ffmpeg's `swr` default).
+- `MsAdpcmDecoder` — RIFF/WAVE → int16 PCM. Standard 7-coef MS-ADPCM (matches ffmpeg's
+  `adpcm_ms`). Handles mono and stereo.
+- `WavResampler` — windowed-sinc (Hann, 16 taps default), anti-aliased on downsampling.
+  Plus a `DownmixToMono` helper.
+- `PcmWavWriter` — uncompressed 16-bit PCM RIFF/WAVE byte buffer.
 
-- **C — Use external ffmpeg if present, fall back to BASS**: detect `ffmpeg.exe` on PATH or
-  in AllTalk install dir; use it if found, else use BASS. Best of both — but more code paths
-  to test and document.
-
-**Vote: B (BASS resampling)**. Single dependency we already have, in-process, no shell-out.
-Quality is more than enough for AllTalk voice-cloning input (which itself resamples again
-internally during fine-tuning). Worst case if BASS resampling turns out poor: switch to C.
-
-If BASS doesn't expose a clean resample API, the fallback is to read raw PCM, run a
-windowed-sinc resampler ourselves (~150 lines, well-known algorithm). Document inside the
-service.
+Quality is more than enough for AllTalk voice-cloning input (the network re-extracts
+spectrograms internally). If a real run shows substantial OGG skip counts, the fallback is
+to wire BASS as in-process decoder (`bass.dll` already ships) and reuse `WavResampler`/
+`PcmWavWriter` unchanged.
 
 ### Slider semantics
 

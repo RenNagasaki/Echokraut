@@ -90,7 +90,8 @@ public class NativeWindowManager : IWindowManager
             clientState,
             services.GetService<ILogService>(),
             services.GetService<IBackendService>(),
-            ToggleConfig)
+            ToggleConfig,
+            ToggleGameDataTools)
         {
             InternalName = "EchokrautEncounters",
             Title = Loc.S("Voice Clip Manager"),
@@ -115,7 +116,9 @@ public class NativeWindowManager : IWindowManager
             services.GetService<IDialogHarvestService>(),
             services.GetService<IVoiceSampleExtractorService>(),
             clientState,
-            services.GetService<ILogService>())
+            services.GetService<ILogService>(),
+            ToggleConfig,
+            ToggleVoiceClipManager)
         {
             InternalName = "EchokrautGameTools",
             Title = Loc.S("Game Data Tools"),

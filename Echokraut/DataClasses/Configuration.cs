@@ -29,7 +29,6 @@ public class Configuration : IPluginConfiguration
     public bool VoicePlayerChoices { get; set; } = true;
     public bool RemovePunctuation { get; set; } = false;
     public bool ShowExtraOptionsInDialogue { get; set; } = true;
-    public bool ShowExtraExtraOptionsInDialogue { get; set; } = true;
     public bool CancelSpeechOnTextAdvance { get; set; } = true;
     public bool GenerateBySentence { get; set; } = false;
     public bool AutoAdvanceTextAfterSpeechCompleted { get; set; } = true;
@@ -73,15 +72,6 @@ public class Configuration : IPluginConfiguration
     public bool GoogleDriveDownloadPeriodically { get; set; } = false;
     public bool GoogleDriveRequestVoiceLine { get; set; } = false;
     public string GoogleDriveShareLink { get; set; } = "";
-    public bool UseNativeUI { get; set; } = false;
-
-    /// <summary>
-    /// Diagnostic switch: when true, the dialog harvester runs as normal (parses sheets, runs
-    /// the Lua/heuristic match flow, emits JSON outputs) but SKIPS the SQLite persistence step
-    /// (PersistLinkedDialogs + PersistLinkedQuestDialogs). Use during alias-mapping iteration
-    /// to dramatically speed up harvest cycles. Reset to <c>false</c> for a real run.
-    /// </summary>
-    public bool HarvestSkipDbPersist { get; set; } = false;
 
     // the below exist just to make saving less cumbersome
     [NonSerialized]

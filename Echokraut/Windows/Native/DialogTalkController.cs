@@ -242,7 +242,9 @@ public sealed unsafe class DialogTalkController : IDisposable
 
         var settingsTooltipText = Loc.S("Open Voice Clip Manager");
         _settingsButton = new DynamicIconButtonNode { Size = new Vector2(28, 28), Position = new Vector2(0, 2) };
-        _settingsButton.Icon = ButtonIcon.GearCog;
+        // UV (112, 28) on Character.tex = ButtonIcon.MusicNote — visually distinct from the
+        // gear icon (which now lives on the config-window opener buttons).
+        _settingsButton.Icon = ButtonIcon.MusicNote;
         _settingsButton.OnClick = () => _openVoiceClipManager();
         _settingsButton.ImageNode.AddNodeFlags(NodeFlags.HasCollision);
         _settingsButton.ImageNode.MultiplyColor = normalTint;
@@ -380,10 +382,10 @@ public sealed unsafe class DialogTalkController : IDisposable
 
         var msg = DialogState.CurrentVoiceMessage;
 
-        // Master toggle — ONLY ShowExtraOptionsInDialogue hides the whole row.
-        // Every other condition (speaker missing, dialogue voiced, "extra extra" sub-setting)
-        // only dims individual buttons via SetEnabled, so the row layout stays stable and
-        // no button ever disappears unexpectedly.
+        // Master toggle — ShowExtraOptionsInDialogue hides the whole row. Every other
+        // condition (speaker missing, dialogue voiced, etc.) only dims individual buttons
+        // via SetEnabled, so the row layout stays stable and no button ever disappears
+        // unexpectedly.
         var visible = _config.ShowExtraOptionsInDialogue;
         _layout!.IsVisible = visible;
         if (_background != null) _background.IsVisible = visible;
@@ -437,14 +439,14 @@ public sealed unsafe class DialogTalkController : IDisposable
         _muteCheckbox.IsChecked = hasSpeakerObj && isMuted;
         SetEnabled(_muteCheckbox, hasSpeakerObj && inDialog && notVoiced);
 
-        // ShowExtraExtraOptionsInDialogue is a sub-setting; per spec it only dims, never hides.
-        var showExtra = _config.ShowExtraExtraOptionsInDialogue;
-
+        // The row's master toggle (ShowExtraOptionsInDialogue) already gates visibility above,
+        // so once we get here the auto-advance + voice picker are unconditionally enabled
+        // (further dimming only happens via the per-control hasSpeaker / inDialog checks).
         _autoAdvanceCheckbox!.IsVisible = true;
         _autoAdvanceCheckbox.IsChecked = _config.AutoAdvanceTextAfterSpeechCompleted;
-        SetEnabled(_autoAdvanceCheckbox, showExtra);
+        SetEnabled(_autoAdvanceCheckbox, true);
 
-        var voiceUsable = showExtra && hasSpeaker;
+        var voiceUsable = hasSpeaker;
 
         // Force-collapse if currently open but disabled — otherwise the floating option list
         // dangles with no way for the user to dismiss it (clicks are inert at low alpha).
@@ -502,6 +504,10 @@ public sealed unsafe class DialogTalkController : IDisposable
                 _pausedForDropDown = false;
 
                 msg.Speaker.Voice = newVoice;
+                // Persist to SQLite (voice assignments live in the DB since v5+); without
+                // this the user's pick survives only the current session and the next
+                // generation pipeline re-resolves the voice from the stale DB row.
+                _npcData.SaveCharacter(msg.Speaker);
                 _config.Save();
 
                 // Force dropdown label refresh on next frame.

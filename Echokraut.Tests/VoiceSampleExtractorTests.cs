@@ -15,10 +15,17 @@ public class VoiceSampleExtractorTests
     // ── VoiceExtractKey.TryParse ─────────────────────────────────────────────
 
     [Theory]
-    [InlineData("TEXT_GAIUSA308_00740_BUSCARRON_000_058", true, "058", "vo_gaiusa308_00740_buscarron_000")]
-    [InlineData("TEXT_VOICEMAN_00100_010_001_ALPHINAUD", true, "alphinaud", "vo_voiceman_00100_010_001")]
-    [InlineData("TEXT_NOT_ENOUGH_PARTS", false, "", "")]
-    [InlineData("VOICE_GAIUSA308_00740_BUSCARRON_000_058", false, "", "")] // doesn't start with TEXT
+    // Real-world VOICEMAN keys: TEXT_VOICEMAN_<cutscene>_<line>_<character> (5 tokens).
+    [InlineData("TEXT_VOICEMAN_06006_000010_YSHTOLA", true, "yshtola", "vo_voiceman_06006_000010")]
+    [InlineData("TEXT_VOICEMAN_07000_000010_WUKLAMAT", true, "wuklamat", "vo_voiceman_07000_000010")]
+    // Real-world MANFST keys follow the same 5-token shape.
+    [InlineData("TEXT_MANFST_00100_000010_ALPHINAUD", true, "alphinaud", "vo_manfst_00100_000010")]
+    // System markers — speaker name carries underscores → 7 tokens → reject (Tools also skips).
+    [InlineData("TEXT_VOICEMAN_06005_000010_SYSTEM_NONE_VOICE", false, "", "")]
+    // Older 6-token quest-name keys whose trailing token is a line number, not a speaker — reject.
+    [InlineData("TEXT_GAIUSA308_00740_BUSCARRON_000_058", false, "", "")]
+    [InlineData("TEXT_NOT_ENOUGH", false, "", "")]
+    [InlineData("VOICE_VOICEMAN_06006_000010_YSHTOLA", false, "", "")] // doesn't start with TEXT
     [InlineData("", false, "", "")]
     public void TryParse_HandlesValidAndInvalidShapes(string textKey, bool ok, string speaker, string audioBase)
     {
@@ -148,6 +155,29 @@ public class VoiceSampleExtractorTests
         Assert.Equal(expected, VoiceExtractFileNames.Sanitize(input));
     }
 
+    [Theory]
+    // Alias map (matches DialogHarvestService.RaceNameMap so voice resolution agrees).
+    [InlineData("Hyuran", "Hyur")]
+    [InlineData("Au Ra", "AuRa")]
+    [InlineData("Miqo'te", "Miqote")]
+    // Strip-separator fallback for races without an alias entry.
+    [InlineData("Hyur", "Hyur")]
+    [InlineData("Hrothgar", "Hrothgar")]
+    [InlineData("Lalafell", "Lalafell")]
+    [InlineData("Hyur-Highlander", "HyurHighlander")]
+    [InlineData("", "")]
+    public void NormalizeRace_MapsAliasesAndStripsSeparators(string input, string expected)
+    {
+        Assert.Equal(expected, VoiceExtractFileNames.NormalizeRace(input));
+    }
+
+    [Fact]
+    public void CanonicalNamePart_NormalizesRaceButKeepsNameSpaces()
+    {
+        var part = VoiceExtractFileNames.CanonicalNamePart("Female", "Au Ra", "Y'shtola Rhul");
+        Assert.Equal("Female_AuRa_Y'shtola Rhul", part);
+    }
+
     [Fact]
     public void GetNamedTargetPath_SingleSample_IsFlat()
     {
@@ -155,6 +185,18 @@ public class VoiceSampleExtractorTests
         Assert.Contains("FF14-Voices", path);
         Assert.EndsWith("Female_Hyur_Tataru.wav", path);
         Assert.DoesNotContain("Tataru" + System.IO.Path.DirectorySeparatorChar, path);
+    }
+
+    [Fact]
+    public void GetNamedTargetPath_NormalizesRaceInFilenameButNotInSubfolder()
+    {
+        // Race "Miqo'te" → "Miqote" in the canonical filename. Name "Y'shtola Rhul" keeps
+        // its apostrophe + space in both the filename and the subfolder.
+        var path = VoiceExtractFileNames.GetNamedTargetPath(
+            @"C:\save", "Female", "Miqo'te", "Y'shtola Rhul", 2, 3);
+        Assert.EndsWith("Female_Miqote_Y'shtola Rhul_2.wav", path);
+        Assert.Contains("Y'shtola Rhul" + System.IO.Path.DirectorySeparatorChar, path);
+        Assert.DoesNotContain("Miqo'te", path);
     }
 
     [Fact]
@@ -167,18 +209,35 @@ public class VoiceSampleExtractorTests
     }
 
     [Fact]
-    public void GetCatalogTargetPath_FormatsId_With3Digits()
+    public void GetCatalogTargetPath_MultiSample_FormatsIdWith3Digits_AndUsesPerNpcSubfolder()
     {
-        var path = VoiceExtractFileNames.GetCatalogTargetPath(@"C:\save", "Male", 7, 2);
+        var path = VoiceExtractFileNames.GetCatalogTargetPath(@"C:\save", "Male", 7, sampleIndex: 2, totalSamplesPerNpc: 5);
+        var sep = System.IO.Path.DirectorySeparatorChar;
         Assert.EndsWith("Male_All_NPC007_2.wav", path);
-        Assert.Contains("FF14-Voices" + System.IO.Path.DirectorySeparatorChar + "NPC", path);
+        Assert.Contains($"FF14-Voices{sep}NPC007{sep}", path);
+        // No legacy "NPC/NPC007/" double-folder layout.
+        Assert.DoesNotContain($"FF14-Voices{sep}NPC{sep}", path);
+    }
+
+    [Fact]
+    public void GetCatalogTargetPath_SingleSample_FlatNoSubfolder_NoIndexSuffix()
+    {
+        // totalSamplesPerNpc == 1 → flat filename directly under FF14-Voices/, no per-NPC
+        // subfolder and no _1 suffix. Mirrors GetNamedTargetPath's single-sample behavior.
+        var path = VoiceExtractFileNames.GetCatalogTargetPath(@"C:\save", "Female", 12, sampleIndex: 1, totalSamplesPerNpc: 1);
+        var sep = System.IO.Path.DirectorySeparatorChar;
+        Assert.EndsWith($"FF14-Voices{sep}Female_All_NPC012.wav", path);
+        Assert.DoesNotContain("NPC012_", path);
+        Assert.DoesNotContain($"NPC012{sep}", path);
     }
 
     [Fact]
     public void GetCatalogTargetPath_AutoWidens_To4DigitsAt1000()
     {
-        var path = VoiceExtractFileNames.GetCatalogTargetPath(@"C:\save", "Male", 1234, 1);
+        var path = VoiceExtractFileNames.GetCatalogTargetPath(@"C:\save", "Male", 1234, sampleIndex: 1, totalSamplesPerNpc: 3);
+        var sep = System.IO.Path.DirectorySeparatorChar;
         Assert.EndsWith("Male_All_NPC1234_1.wav", path);
+        Assert.Contains($"FF14-Voices{sep}NPC1234{sep}", path);
     }
 
     // ── VoiceExtractSampleSelector.ApplyLengthFilter ─────────────────────────

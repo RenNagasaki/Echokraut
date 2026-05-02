@@ -394,13 +394,22 @@ public class BackendService : IBackendService, IDisposable
     }
 
     /// <summary>
-    /// True if the voice is enabled, default-marked, OR matches the NPC's race/gender/body-type
-    /// constraints. Used to gate the PickVoice short-circuit so unfitting assignments get re-picked.
+    /// True if the voice is enabled, default-marked, name-matched to the NPC, OR matches the
+    /// NPC's race/gender/body-type constraints. Mirrors <see cref="EchokrautVoice.IsSelectable"/>
+    /// so the dropdown's offerings are honoured by the backend — without the name-match clause,
+    /// a user pick like "Male_Elezen_Alphinaud" for an "Alphinaud" NPC whose formal race/gender
+    /// doesn't match would be silently overruled by <see cref="EnsureFittingVoice"/>.
     /// </summary>
     public bool IsVoiceFittingForNpc(EchokrautVoice? voice, NpcMapData npc)
     {
         if (voice == null || !voice.IsEnabled) return false;
         if (voice.IsDefault) return true;
+
+        // Name-substring match — accept any voice whose name contains the NPC's name regardless
+        // of the formal race/gender/body-type filter, matching IsSelectable.
+        if (!string.IsNullOrEmpty(npc.Name) &&
+            voice.VoiceName.Contains(npc.Name, StringComparison.OrdinalIgnoreCase))
+            return true;
 
         var isGenderedRace = _npcData.IsGenderedRace(npc.Race);
         if (isGenderedRace && voice.AllowedGenders.Count > 0 && !voice.AllowedGenders.Contains(npc.Gender))

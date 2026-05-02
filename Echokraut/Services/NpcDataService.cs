@@ -294,6 +294,31 @@ public class NpcDataService : INpcDataService
 
         if (data.HasBubbles && contextType == "npc")
             _db.UpsertContext(saved.Id, "bubble", data.IsEnabledBubble, data.VolumeBubble);
+
+        // Sync the in-memory canonical entry. LoadFromDatabase is subscribed to
+        // VoiceClipLogged and rebuilds _mappedNpcs on every dialog line — that means callers
+        // mutating an orphaned reference (e.g. DialogTalkController's voice dropdown writing
+        // to msg.Speaker, where msg was built before the most recent reload) would persist
+        // to the DB but the next pipeline run would fetch the stale in-memory canonical with
+        // the old voice. Without this sync, voice picks were observed "one behind".
+        var list = data.ObjectKind == ObjectKind.Pc ? _mappedPlayers : _mappedNpcs;
+        var canonical = list.Find(p => MatchesIdentity(p, data));
+        if (canonical == null)
+        {
+            list.Add(data);
+        }
+        else if (!ReferenceEquals(canonical, data))
+        {
+            canonical.voice = data.voice;
+            canonical.IsEnabled = data.IsEnabled;
+            canonical.IsEnabledBubble = data.IsEnabledBubble;
+            canonical.Volume = data.Volume;
+            canonical.VolumeBubble = data.VolumeBubble;
+            canonical.HasBubbles = data.HasBubbles;
+            canonical.BodyType = data.BodyType;
+            canonical.RaceStr = data.RaceStr;
+            canonical.World = data.World;
+        }
     }
 
     public void RemoveCharacter(NpcMapData data)

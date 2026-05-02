@@ -12,6 +12,7 @@ using Echokraut.Helper.Functional;
 using Echokraut.Localization;
 using Echokraut.Services;
 using Echotools.Logging.Services;
+using Echotools.UI.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
@@ -51,6 +52,11 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private readonly ScrollingListNode?[] _settingsPanels = new ScrollingListNode?[5];
     private TabBarNode? _settingsTabBar;
 
+    // Tab-spanning shortcut buttons pinned at the bottom-left of the window. Always visible
+    // regardless of which top-level tab is active (they live outside the tab content area).
+    private DynamicIconButtonNode? _voiceClipManagerButton;
+    private DynamicIconButtonNode? _gameDataToolsButton;
+
     // Positions cached from OnSetup for partial-class builders
     private Vector2 _topContentPos;
     private Vector2 _topContentSize;
@@ -86,7 +92,6 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private CheckboxNode? _generateBySentenceCheck;
     private CheckboxNode? _hideUiCheck;
     private CheckboxNode? _showExtraOptionsCheck;
-    private CheckboxNode? _showExtraExtraCheck;
     private CheckboxNode? _removePunctuationCheck;
 
     // Dialogue
@@ -228,13 +233,18 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var pos  = ContentStartPosition;
         var size = ContentSize;
         const float tabH = 32f;
+        const float bottomBtnSize = 28f;
+        const float bottomBtnGap = 4f;
+        const float bottomRowMargin = 4f;
+        var bottomRowY = pos.Y + size.Y - bottomBtnSize;
 
         // ── Top-level tab bar ────────────────────────────────────────────────
         var topTabBar = new TabBarNode { Size = new Vector2(size.X, tabH), Position = pos };
 
-        // Content area below top tab bar
+        // Content area below top tab bar — height shrunk so the tab-spanning bottom button
+        // row gets its own dedicated strip and never overlaps tab content on any tab.
         _topContentPos  = pos  + new Vector2(0, tabH + 2);
-        _topContentSize = size - new Vector2(0, tabH + 2);
+        _topContentSize = size - new Vector2(0, tabH + 2 + bottomBtnSize + bottomRowMargin);
 
         // Inner content area (below inner tab bar, used by Settings / Voice Sel / Logs)
         _innerContentPos  = _topContentPos  + new Vector2(0, tabH + 2);
@@ -303,6 +313,61 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
 
         // Logs nodes
         AddLogsNodes();
+
+        // ── Bottom row: tab-spanning shortcut buttons ────────────────────────
+        // Always visible regardless of active tab; mirrors the pattern in
+        // NativeVoiceClipManagerWindow / NativeGameDataToolsWindow. ImageNode-routed events
+        // are mandatory in NativeAddon contexts (only those fire reliably).
+        var normalTint = new Vector3(1f, 1f, 1f);
+        var hoverTint = new Vector3(1.4f, 1.4f, 1.4f);
+
+        // Voice Clip Manager — UV (112, 28) on Character.tex = ButtonIcon.MusicNote.
+        _voiceClipManagerButton = new DynamicIconButtonNode
+        {
+            Position = new Vector2(pos.X, bottomRowY),
+            Size = new Vector2(bottomBtnSize, bottomBtnSize),
+            Icon = ButtonIcon.MusicNote,
+            Tooltip = Loc.S("Open Voice Clip Manager"),
+            OnClick = () => OnToggleVoiceClipManager?.Invoke(),
+        };
+        _voiceClipManagerButton.ImageNode.MultiplyColor = normalTint;
+        _voiceClipManagerButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
+        {
+            if (_voiceClipManagerButton == null) return;
+            _voiceClipManagerButton.ImageNode.MultiplyColor = hoverTint;
+            _voiceClipManagerButton.ShowTooltip();
+        });
+        _voiceClipManagerButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
+        {
+            if (_voiceClipManagerButton == null) return;
+            _voiceClipManagerButton.ImageNode.MultiplyColor = normalTint;
+            _voiceClipManagerButton.HideTooltip();
+        });
+        AddNode(_voiceClipManagerButton);
+
+        // Game Data Tools — UV (168, 84) on Character.tex = ButtonIcon.GearCogWithChatBubble.
+        _gameDataToolsButton = new DynamicIconButtonNode
+        {
+            Position = new Vector2(pos.X + bottomBtnSize + bottomBtnGap, bottomRowY),
+            Size = new Vector2(bottomBtnSize, bottomBtnSize),
+            Icon = ButtonIcon.GearCogWithChatBubble,
+            Tooltip = Loc.S("Open Game Data Tools window"),
+            OnClick = () => OnToggleGameDataTools?.Invoke(),
+        };
+        _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
+        _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
+        {
+            if (_gameDataToolsButton == null) return;
+            _gameDataToolsButton.ImageNode.MultiplyColor = hoverTint;
+            _gameDataToolsButton.ShowTooltip();
+        });
+        _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
+        {
+            if (_gameDataToolsButton == null) return;
+            _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
+            _gameDataToolsButton.HideTooltip();
+        });
+        AddNode(_gameDataToolsButton);
 
         ShowTopPanel(0);
     }
@@ -393,7 +458,6 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         Dim(_generateBySentenceCheck, enabled);
         Dim(_hideUiCheck,             enabled);
         Dim(_showExtraOptionsCheck,   enabled);
-        Dim(_showExtraExtraCheck,     enabled && _config.ShowExtraOptionsInDialogue);
         Dim(_removePunctuationCheck,  enabled);
 
         Dim(_voiceDialogueIn3DCheck, _config.VoiceDialogue);
@@ -535,11 +599,6 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             _config.ShowExtraOptionsInDialogue,
             v => { _config.ShowExtraOptionsInDialogue = v; _config.Save(); });
 
-        _showExtraExtraCheck = Check(
-            Loc.S("Show extended options (voice selector, auto-advance)"), w,
-            _config.ShowExtraExtraOptionsInDialogue,
-            v => { _config.ShowExtraExtraOptionsInDialogue = v; _config.Save(); });
-
         _removePunctuationCheck = Check(
             Loc.S("Remove punctuation (may reduce speech hallucinations)"), w,
             _config.RemovePunctuation,
@@ -677,20 +736,15 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         list.AddNode(_hideUiCheck);
 
         CreateCollapsibleSection(list, Loc.S("In-Game Controls"), w, true,
-            [_showExtraOptionsCheck, _showExtraExtraCheck]);
+            [_showExtraOptionsCheck]);
 
         CreateCollapsibleSection(list, Loc.S("Reset Data"), w, true, [row1, row2, _wipeAllButton]);
 
         CreateCollapsibleSection(list, Loc.S("Available commands"), w, true,
             commandNodes.Where(n => n != null).Cast<NodeBase>().ToArray());
 
-        // Tool windows: Voice Clip Manager + Game Data Tools (harvest, voice extraction).
-        list.AddNode(Separator(w));
-        var toolsRow = new HorizontalListNode { Size = new Vector2(w, 28), ItemSpacing = 6 };
-        toolsRow.AddNode(Button(Loc.S("Voice Clip Manager"), 200, () => OnToggleVoiceClipManager?.Invoke()));
-        toolsRow.AddNode(Button(Loc.S("Game Data Tools"), 200, () => OnToggleGameDataTools?.Invoke()));
-        list.AddNode(toolsRow);
-
+        // Voice Clip Manager + Game Data Tools moved to tab-spanning circle buttons at the
+        // bottom-left of the window — same affordance as the other plugin windows.
         return list;
     }
 

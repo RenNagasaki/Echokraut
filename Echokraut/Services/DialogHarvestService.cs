@@ -1229,39 +1229,23 @@ public class DialogHarvestService : IDialogHarvestService
         // BulkMode disables per-Upsert cache refreshes — we refresh once at the end.
         int persisted = 0;
         int persistedQuest = 0;
-        // TODO: REMOVE BEFORE RELEASE — hardcoded skip for alias-mapping iteration.
-        // Drop this branch and the HarvestSkipDbPersist config field once the alias work is done.
-#pragma warning disable CS0162 // Unreachable code (intentional during alias-mapping phase)
-        if (true)
+        _db.SuppressEvents = true;
+        _db.BulkMode = true;
+        try
         {
-            _log.Info(nameof(DoHarvest),
-                "[TEMP] DB persistence is hardcoded-skipped for alias-mapping iteration " +
-                $"({linkedDialogs.Count} linked dialogs + {linkedQuests.Count} quest dialogs would have been written). " +
-                "JSON outputs (unmatched_*, quest_alias_candidates) are still produced. " +
-                "REMOVE this branch before release.",
-                eventId);
-        }
-        else
-        {
-            _db.SuppressEvents = true;
-            _db.BulkMode = true;
-            try
-            {
-                ct.ThrowIfCancellationRequested();
-                persisted = PersistLinkedDialogs(linkedDialogs, npcBaseSheet, language, npcZoneNames, ct, eventId);
+            ct.ThrowIfCancellationRequested();
+            persisted = PersistLinkedDialogs(linkedDialogs, npcBaseSheet, language, npcZoneNames, ct, eventId);
 
-                ct.ThrowIfCancellationRequested();
-                persistedQuest = PersistLinkedQuestDialogs(linkedQuests, npcBaseSheet, language, npcZoneNames, ct, eventId);
-            }
-            finally
-            {
-                _db.BulkMode = false;
-                _db.RefreshCaches();
-                _db.SuppressEvents = false;
-                _db.NotifyVoiceClipLogged();
-            }
+            ct.ThrowIfCancellationRequested();
+            persistedQuest = PersistLinkedQuestDialogs(linkedQuests, npcBaseSheet, language, npcZoneNames, ct, eventId);
         }
-#pragma warning restore CS0162
+        finally
+        {
+            _db.BulkMode = false;
+            _db.RefreshCaches();
+            _db.SuppressEvents = false;
+            _db.NotifyVoiceClipLogged();
+        }
 
         // Write unmatched dialogs to JSON (no NPC link — can't go in DB)
         ct.ThrowIfCancellationRequested();
@@ -1800,48 +1784,19 @@ public class DialogHarvestService : IDialogHarvestService
     /// existing collisions; this prevents the harvester from creating new ones).
     /// </summary>
     internal static string NormalizeNpcName(string name)
-    {
-        if (string.IsNullOrEmpty(name)) return name;
-        var first = name[0];
-        if (!char.IsLetter(first) || char.IsUpper(first)) return name;
-        return char.ToUpperInvariant(first) + name.Substring(1);
-    }
+        => Echokraut.Helper.Functional.NpcNameNormalizer.Capitalize(name);
 
     private static Dictionary<string, string> ResolveGenderTags(Dictionary<string, string> names, Genders gender, int dePronoun = 0)
     {
         var resolved = new Dictionary<string, string>(names.Count);
+        var isFemale = gender == Genders.Female;
         foreach (var (lang, name) in names)
         {
-            var n = name;
-            if (n.Contains('['))
-            {
-                switch (lang)
-                {
-                    case "de":
-                        if (gender == Genders.Female)
-                        {
-                            n = n.Replace("[a]", "e");
-                            // [p] adds "in" only when the noun is grammatically masculine (Pronoun 0).
-                            // Pronoun 1 = "sie" = already feminine noun → [p] should be empty.
-                            n = dePronoun == 1
-                                ? n.Replace("[p]", "")
-                                : n.Replace("[p]", "in");
-                        }
-                        else
-                        {
-                            n = n.Replace("[a]", "er").Replace("[p]", "");
-                        }
-                        break;
-                    case "fr":
-                        n = gender == Genders.Female
-                            ? n.Replace("[a]", "e").Replace("[p]", "e")
-                            : n.Replace("[a]", "").Replace("[p]", "");
-                        break;
-                }
-                // Strip any remaining unknown bracket tags
-                n = System.Text.RegularExpressions.Regex.Replace(n, @"\[[a-z]\]", "");
-            }
-            resolved[lang] = n;
+            // Helper resolves [a]/[p] tags + strips unknown bracket tags + capitalizes;
+            // we strip the trailing capitalization here because callers expect the raw
+            // resolved form (existing harvest pipeline applies NormalizeNpcName separately).
+            var resolvedName = Echokraut.Helper.Functional.NpcNameNormalizer.Resolve(name, lang, isFemale, dePronoun);
+            resolved[lang] = resolvedName;
         }
         return resolved;
     }

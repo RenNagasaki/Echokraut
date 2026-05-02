@@ -9,10 +9,14 @@ namespace Echokraut.Helper.Functional;
 public static class VoiceExtractKey
 {
     /// <summary>
-    /// Parses a TextKey of the form <c>TEXT_&lt;EXP&gt;_&lt;QUEST&gt;_&lt;SCENE&gt;_&lt;LINE&gt;_&lt;CHARACTER&gt;</c>
-    /// (six underscore-separated segments after <c>TEXT</c>; Tools' <c>audioFileSplit.Length == 5</c>
-    /// check refers to the segments after the leading <c>TEXT</c>). Returns the speaker
-    /// shortname (lowercased) plus the audio-file base used to build the SCD path.
+    /// Parses a TextKey of the form
+    /// <c>TEXT_&lt;PREFIX&gt;_&lt;CUTSCENE&gt;_&lt;LINE&gt;_&lt;CHARACTER&gt;</c> — five
+    /// underscore-separated tokens total (e.g. <c>TEXT_VOICEMAN_06006_000010_YSHTOLA</c> or
+    /// <c>TEXT_MANFST_..._..._..._CHARACTER</c>). Mirrors Tools' <c>audioFileSplit.Length == 5</c>
+    /// gate. Keys with any other shape (system markers like
+    /// <c>TEXT_VOICEMAN_..._SYSTEM_NONE_VOICE</c>, older 6-segment quest-name keys whose final
+    /// token is a line number not a speaker, etc.) are intentionally rejected — Tools skips
+    /// them too.
     /// </summary>
     public static bool TryParse(string textKey, out string speakerShortName, out string audioFileBase)
     {
@@ -21,16 +25,14 @@ public static class VoiceExtractKey
         if (string.IsNullOrEmpty(textKey)) return false;
 
         var parts = textKey.Split('_');
-        // Tools matches when the post-TEXT split has 5 segments → so total parts incl. the
-        // leading TEXT marker is 6.
-        if (parts.Length != 6) return false;
+        if (parts.Length != 5) return false;
         if (!parts[0].Equals("TEXT", StringComparison.OrdinalIgnoreCase)) return false;
 
-        speakerShortName = parts[5].ToLowerInvariant();
+        speakerShortName = parts[4].ToLowerInvariant();
         // audioFileBase = same key with TEXT→vo and minus the speaker-name suffix, lowercased.
         // Matches Tools: audioFile.Substring(0, audioFile.Length - character.Length - 1)
         //                .Replace("TEXT", "vo").ToLower()
-        var withoutSpeaker = textKey.Substring(0, textKey.Length - parts[5].Length - 1);
+        var withoutSpeaker = textKey.Substring(0, textKey.Length - parts[4].Length - 1);
         audioFileBase = withoutSpeaker.Replace("TEXT", "vo").ToLowerInvariant();
         return true;
     }
