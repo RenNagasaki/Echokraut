@@ -1,4 +1,65 @@
 {
   "version": 1,
-  "aliases": []
+  "aliases": [
+      {
+          "QuestId": 0,
+          "NpcNameKey": "ORTHRUS",
+          "NpcName": "Ultros"
+      },
+      {
+          "QuestId": 65646,
+          "NpcNameKey": "OYABUN00110",
+          "NpcName": "Jacke"
+      },
+      {
+          "QuestId": 65646,
+          "NpcNameKey": "KOBUNAB00110",
+          "NpcName": "Perimu Haurimu"
+      },
+      {
+          "QuestId": 65770,
+          "NpcNameKey": "HATENA",
+          "NpcName": "Perimu Haurimu"
+      },
+      {
+          "QuestId": 66047,
+          "NpcNameKey": "THREEOFFICER",
+          "NpcName": "flame officer"
+      },
+      {
+          "QuestId": 65799,
+          "NpcNameKey": "REHWOLDT",
+          "NpcName": "Leavold"
+      },
+      {
+          "QuestId": 65955,
+          "NpcNameKey": "HEISHI",
+          "NpcName": "Chaunollet"
+      },
+      {
+          "QuestId": 66027,
+          "NpcNameKey": "HATENAC",
+          "NpcName": "Nashu Mhakaracca"
+      },
+      {
+          "QuestId": 66027,
+          "NpcNameKey": "HATENAJ",
+          "NpcName": "Gilgamesh"
+      },
+      {
+          "QuestId": 66029,
+          "NpcNameKey": "HATENA",
+          "NpcName": "Julyan"
+      },
+      {
+          "QuestId": 66094,
+          "NpcNameKey": "ZANTOU",
+          "NpcName": "Servant Of The Alacran"
+      },
+      {
+          "QuestId": 66196,
+          "NpcNameKey": "POORDRESS",
+          "NpcName": "Alianne"
+      }
+  ]
 }

@@ -1227,25 +1227,41 @@ public class DialogHarvestService : IDialogHarvestService
         // Suppress events for the entire persist phase to prevent concurrent DbContext access.
         // NpcDataService.LoadFromDatabase skips while SuppressEvents is true.
         // BulkMode disables per-Upsert cache refreshes — we refresh once at the end.
-        _db.SuppressEvents = true;
-        _db.BulkMode = true;
-        int persisted;
-        int persistedQuest;
-        try
+        int persisted = 0;
+        int persistedQuest = 0;
+        // TODO: REMOVE BEFORE RELEASE — hardcoded skip for alias-mapping iteration.
+        // Drop this branch and the HarvestSkipDbPersist config field once the alias work is done.
+#pragma warning disable CS0162 // Unreachable code (intentional during alias-mapping phase)
+        if (true)
         {
-            ct.ThrowIfCancellationRequested();
-            persisted = PersistLinkedDialogs(linkedDialogs, npcBaseSheet, language, npcZoneNames, ct, eventId);
+            _log.Info(nameof(DoHarvest),
+                "[TEMP] DB persistence is hardcoded-skipped for alias-mapping iteration " +
+                $"({linkedDialogs.Count} linked dialogs + {linkedQuests.Count} quest dialogs would have been written). " +
+                "JSON outputs (unmatched_*, quest_alias_candidates) are still produced. " +
+                "REMOVE this branch before release.",
+                eventId);
+        }
+        else
+        {
+            _db.SuppressEvents = true;
+            _db.BulkMode = true;
+            try
+            {
+                ct.ThrowIfCancellationRequested();
+                persisted = PersistLinkedDialogs(linkedDialogs, npcBaseSheet, language, npcZoneNames, ct, eventId);
 
-            ct.ThrowIfCancellationRequested();
-            persistedQuest = PersistLinkedQuestDialogs(linkedQuests, npcBaseSheet, language, npcZoneNames, ct, eventId);
+                ct.ThrowIfCancellationRequested();
+                persistedQuest = PersistLinkedQuestDialogs(linkedQuests, npcBaseSheet, language, npcZoneNames, ct, eventId);
+            }
+            finally
+            {
+                _db.BulkMode = false;
+                _db.RefreshCaches();
+                _db.SuppressEvents = false;
+                _db.NotifyVoiceClipLogged();
+            }
         }
-        finally
-        {
-            _db.BulkMode = false;
-            _db.RefreshCaches();
-            _db.SuppressEvents = false;
-            _db.NotifyVoiceClipLogged();
-        }
+#pragma warning restore CS0162
 
         // Write unmatched dialogs to JSON (no NPC link — can't go in DB)
         ct.ThrowIfCancellationRequested();
@@ -2096,6 +2112,11 @@ public class DialogHarvestService : IDialogHarvestService
         return result;
     }
 
+    /// <summary>
+    /// English-name-only index (matches the convention in <c>HarvestQuestDialogs.npcNameLookup</c>).
+    /// Aliases are author-curated, so enforcing a single canonical language prevents subtle
+    /// mismatches when an NPC has differently-spelled names across locales.
+    /// </summary>
     private static Dictionary<string, List<uint>> BuildAliasNameIndex(
         Dictionary<uint, Dictionary<string, string>> npcNames,
         Dictionary<uint, Dictionary<string, string>> bnpcNames)
@@ -2104,14 +2125,11 @@ public class DialogHarvestService : IDialogHarvestService
         const uint bnpcIdOffset = 0x40000000;
         void Index(uint id, Dictionary<string, string> names)
         {
-            foreach (var nm in names.Values)
-            {
-                if (string.IsNullOrEmpty(nm)) continue;
-                var norm = nm.Replace(" ", "").Replace("'", "").Replace("-", "").ToUpperInvariant();
-                if (!nameToIds.TryGetValue(norm, out var ids))
-                    nameToIds[norm] = ids = new List<uint>();
-                if (!ids.Contains(id)) ids.Add(id);
-            }
+            if (!names.TryGetValue("en", out var enName) || string.IsNullOrEmpty(enName)) return;
+            var norm = enName.Replace(" ", "").Replace("'", "").Replace("-", "").ToUpperInvariant();
+            if (!nameToIds.TryGetValue(norm, out var ids))
+                nameToIds[norm] = ids = new List<uint>();
+            if (!ids.Contains(id)) ids.Add(id);
         }
         foreach (var (id, nm) in npcNames) Index(id, nm);
         foreach (var (id, nm) in bnpcNames) Index(id + bnpcIdOffset, nm);
@@ -2188,7 +2206,6 @@ public class DialogHarvestService : IDialogHarvestService
 
         var loaded = 0;
         var overridden = 0;
-        var skippedAmbiguous = 0;
         var skippedUnknown = 0;
         foreach (var entry in file.Aliases)
         {
@@ -2204,24 +2221,25 @@ public class DialogHarvestService : IDialogHarvestService
                 var norm = entry.NpcName.Replace(" ", "").Replace("'", "").Replace("-", "").ToUpperInvariant();
                 if (nameToIds.TryGetValue(norm, out var ids))
                 {
-                    if (ids.Count == 1)
+                    // Take the first match. All NPCs with the same (name, gender, race, language)
+                    // funnel into the same DB character row anyway, so "which specific NpcId"
+                    // only matters for per-spawn npc_base_id tracking — picking any one works
+                    // for voice attribution. Caller can set an explicit NpcId if they need a
+                    // specific instance (rare).
+                    resolved = ids[0];
+                    if (ids.Count > 1)
                     {
-                        resolved = ids[0];
-                    }
-                    else
-                    {
-                        _log.Warning(nameof(LoadUserAliases),
+                        _log.Debug(nameof(LoadUserAliases),
                             $"[{sourceLabel}] Quest {entry.QuestId} alias '{entry.NpcNameKey}' → name '{entry.NpcName}' " +
-                            $"resolves to {ids.Count} candidates [{string.Join(",", ids)}] — set npcId explicitly",
+                            $"matches {ids.Count} NPCs [{string.Join(",", ids)}], using first ({ids[0]})",
                             eventId);
-                        skippedAmbiguous++;
                     }
                 }
                 else
                 {
                     _log.Warning(nameof(LoadUserAliases),
                         $"[{sourceLabel}] Quest {entry.QuestId} alias '{entry.NpcNameKey}' → name '{entry.NpcName}' " +
-                        $"not found in any language's NPC list — entry ignored", eventId);
+                        $"not found among English NPC names — entry ignored (use the English name)", eventId);
                     skippedUnknown++;
                 }
             }
@@ -2236,7 +2254,7 @@ public class DialogHarvestService : IDialogHarvestService
         }
 
         _log.Info(nameof(LoadUserAliases),
-            $"[{sourceLabel}] {loaded} aliases applied ({overridden} overrides, {skippedAmbiguous} ambiguous, {skippedUnknown} unknown)",
+            $"[{sourceLabel}] {loaded} aliases applied ({overridden} overrides, {skippedUnknown} unknown)",
             eventId);
     }
 
@@ -2257,6 +2275,65 @@ public class DialogHarvestService : IDialogHarvestService
             if (!string.IsNullOrEmpty(text) && ParenSpeakerPrefixRegex.IsMatch(text))
                 return true;
         return false;
+    }
+
+    /// <summary>
+    /// Build a small window of surrounding dialog lines for a paren-prefix entry: 1 preceding
+    /// line and up to 3 following lines from the SAME Lua function. Each entry includes the
+    /// resolved speaker (when known via <paramref name="luaTextKeyToNpcId"/>). The user uses this
+    /// context to identify who speaks the unresolved <c>(-...-)</c> line.
+    /// </summary>
+    private static List<ParenContextEntry> BuildContextWindow(
+        string textKey,
+        LuaQuestMapping luaMapping,
+        Dictionary<string, uint> luaTextKeyToNpcId,
+        Dictionary<string, Dictionary<string, string>> keyTexts,
+        IList<string> orderedKeys,
+        Dictionary<uint, Dictionary<string, string>> npcNames)
+    {
+        // Pick the ordering source: Lua scene order is most accurate (groups by FunctionIndex,
+        // strict bytecode-linear ordering). For quests without Lua data (no .luab or no
+        // QuestParams ACTORn), fall back to dialog-sheet row order — less precise (mixes
+        // multiple scenes) but still useful for surrounding-text identification.
+        List<string>? orderingFromLua = null;
+        var firstCall = luaMapping.TalkCalls.FirstOrDefault(c => c.TextKey == textKey);
+        if (firstCall != null)
+        {
+            orderingFromLua = luaMapping.TalkCalls
+                .Where(c => c.FunctionIndex == firstCall.FunctionIndex)
+                .Select(c => c.TextKey)
+                .ToList();
+        }
+
+        var ordering = orderingFromLua ?? orderedKeys.ToList();
+        var idx = ordering.IndexOf(textKey);
+        if (idx < 0) return new List<ParenContextEntry>();
+
+        var result = new List<ParenContextEntry>();
+        var positions = new (int offset, string label)[]
+        {
+            (-1, "before"),
+            (1, "after+1"),
+            (2, "after+2"),
+            (3, "after+3"),
+        };
+        foreach (var (offset, label) in positions)
+        {
+            var ni = idx + offset;
+            if (ni < 0 || ni >= ordering.Count) continue;
+            var ncKey = ordering[ni];
+            if (!keyTexts.TryGetValue(ncKey, out var ncTexts)) continue;
+            luaTextKeyToNpcId.TryGetValue(ncKey, out var npcId);
+            result.Add(new ParenContextEntry
+            {
+                Position = label,
+                TextKey = ncKey,
+                Texts = ncTexts,
+                NpcId = npcId,
+                NpcNames = npcId != 0 && npcNames.TryGetValue(npcId, out var nm) ? nm : new Dictionary<string, string>(),
+            });
+        }
+        return result;
     }
 
     /// <summary>
@@ -2409,11 +2486,18 @@ public class DialogHarvestService : IDialogHarvestService
         var questsWithDialog = 0;
 
         BeginPhase(Loc.S("Scanning for quest dialogs..."), questTotal);
+        _log.Info(nameof(HarvestQuestDialogs),
+            $"Beginning quest scan: {questTotal} quests to process", eventId);
 
         foreach (var quest in questSheet)
         {
             ct.ThrowIfCancellationRequested();
             questCount++;
+            // Periodic progress so the harvest doesn't go silent for minutes during the loop.
+            if (questCount % 500 == 0)
+                _log.Info(nameof(HarvestQuestDialogs),
+                    $"Quest scan progress: {questCount}/{questTotal} ({linked.Count} linked so far)",
+                    eventId);
 
             var questId = quest.Id.ExtractText();
             if (string.IsNullOrEmpty(questId)) continue;
@@ -2483,6 +2567,10 @@ public class DialogHarvestService : IDialogHarvestService
             }
 
             questsWithDialog += keyTexts.Count;
+            // Cache the key ordering once per quest — used as a fallback ordering source in
+            // BuildContextWindow when Lua data is missing. Computed lazily so quests without
+            // any unmatched paren-prefix entries don't pay the allocation.
+            List<string>? cachedOrderedKeys = null;
 
             // Silent-actor paren-prefix heuristic — runs ONCE before the main match loop.
             // 1-candidate cases are auto-attributed (flow through the existing LuaScript path).
@@ -2555,8 +2643,12 @@ public class DialogHarvestService : IDialogHarvestService
                 List<uint>? matchedIds = null;
                 var matchSource = DialogMatchSource.NameExact;
 
-                // Priority 1: user-supplied per-quest alias (overrides everything else).
-                if (userAliases.TryGetValue((quest.RowId, npcNameKey.ToUpperInvariant()), out var userNpcId))
+                // Priority 1a: user-supplied per-quest alias (most specific — wins everything).
+                // Priority 1b: user-supplied global alias (QuestId=0 — same NpcNameKey always
+                // maps to the same NPC across quests, e.g. ORTHRUS → Ultros).
+                var npcKeyUpper = npcNameKey.ToUpperInvariant();
+                if (userAliases.TryGetValue((quest.RowId, npcKeyUpper), out var userNpcId)
+                    || userAliases.TryGetValue((0u, npcKeyUpper), out userNpcId))
                 {
                     matchedIds = new List<uint> { userNpcId };
                     matchSource = DialogMatchSource.UserAlias;
@@ -2655,6 +2747,8 @@ public class DialogHarvestService : IDialogHarvestService
                     {
                         var heuristicCandidates = paramCandidatesPerKey.TryGetValue(key, out var hc) ? hc : new List<uint>();
                         var allActorIds = luaMapping.ActorNameToNpcId.Values.Distinct().ToList();
+                        cachedOrderedKeys ??= keyTexts.Keys.ToList();
+                        var context = BuildContextWindow(key, luaMapping, luaTextKeyToNpcId, keyTexts, cachedOrderedKeys, npcNames);
                         parenCandidates.Add(new ParenCandidateEntry
                         {
                             QuestId = quest.RowId,
@@ -2671,7 +2765,8 @@ public class DialogHarvestService : IDialogHarvestService
                             {
                                 NpcId = id,
                                 Names = npcNames.TryGetValue(id, out var nm) ? nm : new Dictionary<string, string>()
-                            }).ToList()
+                            }).ToList(),
+                            Context = context,
                         });
                     }
                 }

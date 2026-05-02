@@ -48,7 +48,10 @@ public class SilentActorHeuristicTests
         var talkCalls = new List<LuabParser.TalkCall>();
         foreach (var (fi, key) in calls)
             talkCalls.Add(new LuabParser.TalkCall { FunctionIndex = fi, TextKey = key });
-        return new DialogHarvestService.LuaQuestMapping(resolvedTextKeyToNpcId, talkCalls, actorNameToNpcId);
+        return new DialogHarvestService.LuaQuestMapping(
+            resolvedTextKeyToNpcId,
+            talkCalls,
+            actorNameToNpcId);
     }
 
     [Fact]

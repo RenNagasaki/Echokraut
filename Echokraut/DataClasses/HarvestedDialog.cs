@@ -102,12 +102,31 @@ public class ParenCandidateEntry
     public List<ParenCandidateOption> Candidates { get; set; } = new();
     /// <summary>Every ACTOR in the quest's cutscene cast. Pick from here when <see cref="Candidates"/> is empty.</summary>
     public List<ParenCandidateOption> AllActors { get; set; } = new();
+    /// <summary>Up to one preceding line and three following lines from the same Lua scene,
+    /// each with their own resolved speaker (when known). Helps the user identify the speaker
+    /// by surrounding context.</summary>
+    public List<ParenContextEntry> Context { get; set; } = new();
 }
 
 public class ParenCandidateOption
 {
     public uint NpcId { get; set; }
     public Dictionary<string, string> Names { get; set; } = new();
+}
+
+/// <summary>
+/// One surrounding-dialog line emitted with a paren-prefix candidate entry. <see cref="Position"/>
+/// is e.g. <c>"before"</c> or <c>"after+2"</c>. <see cref="NpcId"/> is 0 when the surrounding line
+/// itself wasn't resolved (typical for unresolved paren-prefix neighbours); otherwise it's the
+/// NPC whose voice spoke that line.
+/// </summary>
+public class ParenContextEntry
+{
+    public string Position { get; set; } = "";
+    public string TextKey { get; set; } = "";
+    public Dictionary<string, string> Texts { get; set; } = new();
+    public uint NpcId { get; set; }
+    public Dictionary<string, string> NpcNames { get; set; } = new();
 }
 
 /// <summary>
