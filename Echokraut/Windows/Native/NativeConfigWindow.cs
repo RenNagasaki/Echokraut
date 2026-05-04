@@ -104,11 +104,19 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     // Dialogue
     private CheckboxNode? _voiceDialogueIn3DCheck;
     private SliderNode?   _dialogue3DSlider;
+    // Player choices + retainer dialogue: live-only (route through TTS backend), so they
+    // dim in None mode. Player choices have no audio-file fallback path — they're prompts
+    // generated on the fly. Retainers likewise.
+    private CheckboxNode? _voicePlayerCutsceneCheck;
+    private CheckboxNode? _voicePlayerChoicesCheck;
+    private CheckboxNode? _voiceRetainersCheck;
 
     // Battle
     private CheckboxNode? _voiceBattleQueuedCheck;
 
-    // Chat
+    // Chat — master toggle dims in None mode (chat TTS has no audio-file pipeline,
+    // it's pure live generation per incoming chat line)
+    private CheckboxNode?  _voiceChatCheck;
     private CheckboxNode?  _voiceChatIn3DCheck;
     private SliderNode?    _chat3DSlider;
     private TextInputNode? _chatApiKeyInput;
@@ -130,6 +138,9 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private SliderNode?   _bubbles3DSlider;
 
     // Save/Load
+    // Auto-alias generation is live-only (each save triggers a backend call to produce the
+    // alias variant), so it dims in None mode.
+    private CheckboxNode?  _autoAliasCheck;
     private CheckboxNode?  _createMissingDirCheck;
     private TextInputNode? _localPathInput;
     private CheckboxNode?  _gdUploadCheck;
@@ -510,7 +521,22 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
 
         Dim(_voiceBattleQueuedCheck, _config.VoiceBattleDialogue);
 
-        var voiceChat = _config.VoiceChat;
+        // None-mode dim for live-only widgets — Battle dialogue + Bubble toggles deliberately
+        // stay interactive even without a backend (Echokraut will play whatever pre-existing
+        // audio the user has and silently skip the rest, so the toggles still control which
+        // categories play). Player-choice routing, retainer dialogue, voice chat, and alias
+        // auto-generation have no audio-file fallback path — they need a live backend.
+        var liveGen = _config.Alltalk.HasLiveGeneration;
+        Dim(_voicePlayerCutsceneCheck, liveGen);
+        Dim(_voicePlayerChoicesCheck,  liveGen);
+        Dim(_voiceRetainersCheck,      liveGen);
+        Dim(_voiceChatCheck,           liveGen);
+        Dim(_autoAliasCheck,           liveGen);
+
+        // Chat sub-widgets cascade off both the master VoiceChat toggle AND liveGen so the
+        // existing "dim when master off" behaviour also kicks in when the user is in None
+        // mode (master itself is dimmed in that case).
+        var voiceChat = _config.VoiceChat && liveGen;
         Dim(_voiceChatIn3DCheck,          voiceChat);
         Dim(_chat3DSlider,                voiceChat && _config.VoiceChatIn3D);
         Dim(_chatApiKeyInput,             voiceChat);
@@ -544,7 +570,6 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var isRemote  = instanceType == AlltalkInstanceType.Remote;
         var isNone    = instanceType == AlltalkInstanceType.None;
         var installing = _alltalkInstance.Installing;
-        var liveGen = _config.Alltalk.HasLiveGeneration;
 
         // Top tab bar follows live-generation availability. None mode → Voices + Phonetics
         // disappear (they only configure the routing for backend generation). Tab rebuild
@@ -826,11 +851,11 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _dialogue3DSlider = Slider(w, _config.Voice3DAudibleRange,
             v => { _config.Voice3DAudibleRange = v; _config.Save(); _audioPlayback.Update3DFactors(v); });
 
-        var voicePlayerCutsceneCheck = Check(
+        _voicePlayerCutsceneCheck = Check(
             Loc.S("Voice player choices in cutscenes"), w, _config.VoicePlayerChoicesCutscene,
             v => { _config.VoicePlayerChoicesCutscene = v; _config.Save(); });
 
-        var voicePlayerChoicesCheck = Check(
+        _voicePlayerChoicesCheck = Check(
             Loc.S("Voice player choices outside cutscenes"), w, _config.VoicePlayerChoices,
             v => { _config.VoicePlayerChoices = v; _config.Save(); });
 
@@ -842,7 +867,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             _config.AutoAdvanceTextAfterSpeechCompleted,
             v => { _config.AutoAdvanceTextAfterSpeechCompleted = v; _config.Save(); });
 
-        var voiceRetainersCheck = Check(Loc.S("Voice retainer dialogue"), w, _config.VoiceRetainers,
+        _voiceRetainersCheck = Check(Loc.S("Voice retainer dialogue"), w, _config.VoiceRetainers,
             v => { _config.VoiceRetainers = v; _config.Save(); });
 
         // Battle dialogue
@@ -869,12 +894,12 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         list.AddNode(_voiceDialogueIn3DCheck);
         list.AddNode(_dialogue3DSlider);
         list.AddNode(Separator(w));
-        list.AddNode(voicePlayerCutsceneCheck);
-        list.AddNode(voicePlayerChoicesCheck);
+        list.AddNode(_voicePlayerCutsceneCheck);
+        list.AddNode(_voicePlayerChoicesCheck);
         list.AddNode(Separator(w));
         list.AddNode(cancelAdvanceCheck);
         list.AddNode(autoAdvanceCheck);
-        list.AddNode(voiceRetainersCheck);
+        list.AddNode(_voiceRetainersCheck);
 
         CreateCollapsibleSection(list, Loc.S("Battle Dialogue"), w, true,
             [voiceBattleCheck, _voiceBattleQueuedCheck]);
@@ -894,7 +919,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var w    = size.X;
         var list = Panel(pos, size);
 
-        var voiceChatCheck = Check(Loc.S("Voice chat"), w, _config.VoiceChat,
+        _voiceChatCheck = Check(Loc.S("Voice chat"), w, _config.VoiceChat,
             v => { _config.VoiceChat = v; _config.Save(); });
 
         _chatApiKeyInput = Input(Loc.S("Detect Language API key (detectlanguage.com)"), w, 32,
@@ -919,7 +944,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _voiceChatLinkshellCheck     = Check(Loc.S("Voice linkshells"),                         w, _config.VoiceChatLinkshell,      v => { _config.VoiceChatLinkshell      = v; _config.Save(); });
         _voiceChatCrossLinkshellCheck= Check(Loc.S("Voice cross-world linkshells"),   w, _config.VoiceChatCrossLinkshell, v => { _config.VoiceChatCrossLinkshell = v; _config.Save(); });
 
-        list.AddNode(voiceChatCheck);
+        list.AddNode(_voiceChatCheck);
         list.AddNode(_chatApiKeyInput);
 
         CreateCollapsibleSection(list, Loc.S("3D Space"), w, true,
@@ -952,7 +977,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             v => { _config.CreateMissingLocalSaveLocation = v; _config.Save(); });
         _localPathInput = Input(Loc.S("Local audio directory path"), w, 260, _config.LocalSaveLocation,
             v => { _config.LocalSaveLocation = v; _config.Save(); });
-        var autoAlias = Check(Loc.S("Auto-generate shareable alias variants for player-name dialog"), w,
+        _autoAliasCheck = Check(Loc.S("Auto-generate shareable alias variants for player-name dialog"), w,
             _config.AutoGenerateShareableAliases,
             v => { _config.AutoGenerateShareableAliases = v; _config.Save(); });
 
@@ -986,7 +1011,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         list.AddNode(saveLocally);
         list.AddNode(_createMissingDirCheck);
         list.AddNode(_localPathInput);
-        list.AddNode(autoAlias);
+        list.AddNode(_autoAliasCheck);
 
         CreateCollapsibleSection(list, Loc.S("Google Drive"), w, false,
             [gdRequestVoiceLine, _gdUploadCheck, gdDownload,
