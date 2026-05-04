@@ -1103,7 +1103,19 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         // Mode switcher — 3 buttons styled like FTU Step 0's choices. Click switches
         // InstanceType live; OnUpdate then dims the inactive buttons and toggles which
         // section (Local / Remote / None) is shown below.
-        var modeBtnW = (w - 8) / 3;
+        //
+        // Width = longest localized label + 36 chrome, applied uniformly. Earlier the
+        // row was stretched to full panel width with `(w-8)/3` per button, which both
+        // (a) wasted horizontal space on short labels and (b) when ScrollingListNode's
+        // FitWidth pass forced the row to `panelWidth - 16` (scrollbar reserve), the
+        // third button got pushed past the panel's clip rect — its right hitbox
+        // landed outside the scrolling viewport, so clicks there were silently dropped
+        // (visible bug: from None mode you could pick Local but then couldn't click
+        // back on None — None had become the third button and was clipped). Sizing
+        // exactly to content sidesteps both.
+        var labels = new[] { Loc.S("Local TTS"), Loc.S("Remote Server"), Loc.S("Audio Files Only") };
+        var sample = new TextButtonNode { Size = new Vector2(1, 28), String = labels[0] };
+        var modeBtnW = labels.Max(s => sample.LabelNode.GetTextDrawSize(s).X) + 36;
         _modeLocalBtn = ModeButton(Loc.S("Local TTS"), modeBtnW, () =>
         {
             _config.Alltalk.InstanceType = AlltalkInstanceType.Local;
@@ -1200,12 +1212,16 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     /// state is conveyed via Alpha (1.0 active, 0.4 inactive) — set per frame in OnUpdate
     /// since InstanceType is the source of truth and may flip from the FTU window or another
     /// code path. Cheaper than tracking transitions; Alpha writes are idempotent.
+    ///
+    /// Width is fixed at the caller-provided value — no auto-grow. The 3-button row is sized
+    /// to fit the panel; auto-growing past it would push the third button outside the
+    /// panel's clip region, which makes the right portion of its hitbox dead (you can see
+    /// the button but clicks there don't register). Long localized labels are clipped at
+    /// the button's right edge instead, which is preferable to broken click handling.
     /// </summary>
     private static TextButtonNode ModeButton(string label, float width, Action onClick)
     {
         var node = new TextButtonNode { Size = new Vector2(width, 28), String = label };
-        var textW = node.LabelNode.GetTextDrawSize(label).X + 36;
-        if (textW > width) node.Size = new Vector2(textW, 28);
         node.OnClick = onClick;
         return node;
     }
