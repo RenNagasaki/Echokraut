@@ -30,6 +30,15 @@ namespace Echokraut.DataClasses
         /// </summary>
         public AlltalkInstanceType InstanceType { get; set; } = AlltalkInstanceType.None;
 
+        /// <summary>
+        /// True when the plugin can produce new audio via a live TTS backend (Local or Remote).
+        /// False in <see cref="AlltalkInstanceType.None"/> — that mode plays only pre-existing
+        /// audio files and must NOT call generation, voice routing, voice tests, or any other
+        /// path that would hit a TTS backend. Single source of truth for "is generation
+        /// available" — services and UI both gate on this.
+        /// </summary>
+        public bool HasLiveGeneration => InstanceType != AlltalkInstanceType.None;
+
         // Legacy boolean fields — kept for one release so older configs can be deserialized
         // and migrated to <see cref="InstanceType"/>. After migration runs they're forced
         // back to false, so future Save() calls write inert values. Remove after enough time

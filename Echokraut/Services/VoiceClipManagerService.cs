@@ -225,6 +225,15 @@ public class VoiceClipManagerService : IVoiceClipManagerService
     public async Task<bool> GenerateForVoiceClip(VoiceClipEntity voiceClip)
     {
         EKEventId eventId = new EKEventId(0, TextSource.None);
+
+        // None-mode short-circuit — also guards against the (slightly costly) EnsureFittingVoice
+        // call below. BackendService.GenerateVoice has its own gate as defense in depth.
+        if (!_config.Alltalk.HasLiveGeneration)
+        {
+            _log.Debug(nameof(GenerateForVoiceClip), $"Skipping generation for clip {voiceClip.Id}: live generation disabled (InstanceType=None)", eventId);
+            return false;
+        }
+
         try
         {
             var message = BuildVoiceMessage(voiceClip);

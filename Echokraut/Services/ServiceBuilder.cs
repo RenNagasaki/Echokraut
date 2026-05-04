@@ -94,6 +94,10 @@ public static class ServiceBuilder
             c.GetService<IJsonDataService>(),
             configuration));
 
+        container.RegisterFactory<IBatchModeService>(c => new BatchModeService(
+            c.GetService<IDialogHarvestService>(),
+            c.GetService<IVoiceSampleExtractorService>()));
+
         container.RegisterFactory<ILipSyncHelper>(c => new LipSyncHelper(
             c.GetService<ILogService>(),
             framework,

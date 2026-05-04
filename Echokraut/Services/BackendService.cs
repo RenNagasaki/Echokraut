@@ -290,6 +290,16 @@ public class BackendService : IBackendService, IDisposable
 
     public async Task<bool> GenerateVoice(VoiceMessage message)
     {
+        // None-mode hard gate — the plugin's "Audio Files Only" setup must never hit a TTS
+        // backend. Today this only fires from VoiceClipManager actions and the runtime
+        // pipeline if the upstream NPC routing path slips through; either way we drop
+        // silently at Debug level (no warning spam — None mode is a valid configuration).
+        if (!_config.Alltalk.HasLiveGeneration)
+        {
+            _log.Debug(nameof(GenerateVoice), "Skipping generation: live generation disabled (InstanceType=None)", message.EventId);
+            return false;
+        }
+
         if (_backend == null)
         {
             _log.Error(nameof(GenerateVoice), "Backend not initialized", message.EventId);
