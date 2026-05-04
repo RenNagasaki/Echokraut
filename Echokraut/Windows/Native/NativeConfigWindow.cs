@@ -153,9 +153,13 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private string? _pendingBackendSelection;
 
     // Alltalk controls
-    private CheckboxNode? _atLocalCheck;
-    private CheckboxNode? _atRemoteCheck;
-    private CheckboxNode? _atNoInstanceCheck;
+    // Mode switcher — 3 mutually-exclusive buttons (Local / Remote / None) replacing the
+    // old 3-checkbox group. Selected button stays at full alpha; unselected ones dim. Click
+    // any to switch InstanceType live; the rest of the panel reacts via OnUpdate.
+    private TextButtonNode? _modeLocalBtn;
+    private TextButtonNode? _modeRemoteBtn;
+    private TextButtonNode? _modeNoneBtn;
+    private HorizontalListNode? _modeSwitcherRow;
     private NativeAlltalkBuilder.LocalInstanceNodes? _atLocalNodes;
     private NativeAlltalkBuilder.RemoteInstanceNodes? _atRemoteNodes;
     private CheckboxNode? _atStreamingCheck;
@@ -163,6 +167,14 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private TextButtonNode? _atReloadModelButton;
     private TextButtonNode? _atReloadVoicesButton;
     private HorizontalListNode? _atReloadRow;
+    // None-mode section content — audio path + Google Drive download settings duplicated from
+    // the Storage tab as a quick-edit, since "None" users mostly come here to configure those.
+    private TextNode? _noneInfoLabel;
+    private TextInputNode? _noneAudioPathInput;
+    private CheckboxNode? _noneGdDownloadCheck;
+    private TextInputNode? _noneGdLinkInput;
+    private NodeBase[]? _noneSectionContent;
+    private TextButtonNode? _noneSectionToggle;
     // Collapsible section toggle buttons + content arrays for per-frame visibility control
     private TextButtonNode? _localSectionToggle;
     private NodeBase[]? _localSectionContent;
@@ -178,6 +190,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private bool _prevShowLocal;
     private bool _prevShowRemote;
     private bool _prevShowService;
+    private bool _prevShowNone;
 
     internal Action? OnToggleVoiceClipManager;
     internal Action? OnToggleGameDataTools;
@@ -585,14 +598,18 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         // (defense in depth — the button can only do harm if both gates fail).
         Dim(_gameDataToolsButton, liveGen);
 
-        // Instance type — dim the already-selected option
-        Dim(_atLocalCheck,      !installing && !isLocal);
-        Dim(_atRemoteCheck,     !installing && !isRemote);
-        Dim(_atNoInstanceCheck, !installing && !isNone);
+        // Mode switcher — selected button stays bright, others dim. Block all clicks while
+        // an install is in progress (mid-install switch would race on alltalkFolder).
+        Dim(_modeLocalBtn,  !installing && isLocal);
+        Dim(_modeRemoteBtn, !installing && isRemote);
+        Dim(_modeNoneBtn,   !installing && isNone);
 
-        // Show/hide entire collapsible sections based on instance type
+        // Show/hide entire collapsible sections based on instance type. Service options
+        // (Streaming, ReloadModel, ReloadVoices) are Local-or-Remote only — None has no
+        // backend to talk to, so the runtime knobs don't apply.
         var showLocal   = isAlltalk && isLocal;
         var showRemote  = isAlltalk && isRemote;
+        var showNone    = isAlltalk && isNone;
         var showService = isAlltalk && (isLocal || isRemote);
 
         // Local section: toggle button + content
@@ -611,16 +628,25 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         if (!showRemote && _remoteSectionContent != null)
             foreach (var n in _remoteSectionContent) SetVisible(n, false);
 
+        // None section: toggle button + content (info text + audio path + GD link)
+        SetVisible(_noneSectionToggle, showNone);
+        if (!showNone && _noneSectionContent != null)
+            foreach (var n in _noneSectionContent) SetVisible(n, false);
+        // GD link follows GoogleDriveDownload toggle even within the None section
+        if (showNone) Dim(_noneGdLinkInput, _config.GoogleDriveDownload);
+
         // Service section: toggle button + content
         SetVisible(_serviceSectionToggle, showService);
         if (!showService && _serviceSectionContent != null)
             foreach (var n in _serviceSectionContent) SetVisible(n, false);
 
         // Recalculate backend panel layout when visibility changes
-        if (showLocal != _prevShowLocal || showRemote != _prevShowRemote || showService != _prevShowService)
+        if (showLocal != _prevShowLocal || showRemote != _prevShowRemote
+            || showNone != _prevShowNone || showService != _prevShowService)
         {
             _prevShowLocal = showLocal;
             _prevShowRemote = showRemote;
+            _prevShowNone = showNone;
             _prevShowService = showService;
             _settingsPanels[4]?.RecalculateLayout();
         }
@@ -1041,34 +1067,29 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         // Capture in OnOptionSelected (fires before UpdateLabel crash); process next frame.
         _backendDropDown.OnOptionSelected = option => _pendingBackendSelection = option;
 
-        // Alltalk instance type — radio-style mutual exclusion via enum
-        _atLocalCheck = Check(Loc.S("Local instance"), w, _config.Alltalk.InstanceType == AlltalkInstanceType.Local, v =>
+        // Mode switcher — 3 buttons styled like FTU Step 0's choices. Click switches
+        // InstanceType live; OnUpdate then dims the inactive buttons and toggles which
+        // section (Local / Remote / None) is shown below.
+        var modeBtnW = (w - 8) / 3;
+        _modeLocalBtn = ModeButton(Loc.S("Local TTS"), modeBtnW, () =>
         {
-            if (!v) return;
             _config.Alltalk.InstanceType = AlltalkInstanceType.Local;
             _config.Save();
-            _atLocalCheck!.IsChecked = true;
-            _atRemoteCheck!.IsChecked = false;
-            _atNoInstanceCheck!.IsChecked = false;
         });
-        _atRemoteCheck = Check(Loc.S("Remote instance"), w, _config.Alltalk.InstanceType == AlltalkInstanceType.Remote, v =>
+        _modeRemoteBtn = ModeButton(Loc.S("Remote Server"), modeBtnW, () =>
         {
-            if (!v) return;
             _config.Alltalk.InstanceType = AlltalkInstanceType.Remote;
             _config.Save();
-            _atLocalCheck!.IsChecked = false;
-            _atRemoteCheck!.IsChecked = true;
-            _atNoInstanceCheck!.IsChecked = false;
         });
-        _atNoInstanceCheck = Check(Loc.S("No instance"), w, _config.Alltalk.InstanceType == AlltalkInstanceType.None, v =>
+        _modeNoneBtn = ModeButton(Loc.S("Audio Files Only"), modeBtnW, () =>
         {
-            if (!v) return;
             _config.Alltalk.InstanceType = AlltalkInstanceType.None;
             _config.Save();
-            _atLocalCheck!.IsChecked = false;
-            _atRemoteCheck!.IsChecked = false;
-            _atNoInstanceCheck!.IsChecked = true;
         });
+        _modeSwitcherRow = new HorizontalListNode { Size = new Vector2(w, 30), ItemSpacing = 4 };
+        _modeSwitcherRow.AddNode(_modeLocalBtn);
+        _modeSwitcherRow.AddNode(_modeRemoteBtn);
+        _modeSwitcherRow.AddNode(_modeNoneBtn);
 
         // Local instance (shared builder)
         _atLocalNodes = NativeAlltalkBuilder.BuildLocalInstance(w, _config, _alltalkInstance);
@@ -1076,6 +1097,29 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         // Remote instance (shared builder)
         _atRemoteNodes = NativeAlltalkBuilder.BuildRemoteInstance(w, _config, _backend);
         _atRemoteNodes.TestConnectionButton.OnClick = () => TestConnection();
+
+        // None-mode section — info text + audio path + Google Drive download. The path
+        // input and GD widgets are intentionally duplicates of the same Configuration
+        // properties on the Storage tab; both edit the same backing fields, so a change
+        // in either tab syncs immediately. Surface them here too because users in None
+        // mode come to the Backend tab to configure their audio source.
+        _noneInfoLabel = new TextNode
+        {
+            Size = new Vector2(w, 36),
+            String = Loc.S("No live generation. Echokraut will only play pre-existing audio files."),
+            FontType = FontType.Axis,
+            FontSize = 12,
+        };
+        _noneInfoLabel.AddTextFlags(TextFlags.WordWrap | TextFlags.MultiLine);
+        _noneAudioPathInput = Input(Loc.S("Local audio directory"), w, 260,
+            _config.LocalSaveLocation,
+            v => { _config.LocalSaveLocation = v; _config.Save(); });
+        _noneGdDownloadCheck = Check(Loc.S("Download from Google Drive"), w,
+            _config.GoogleDriveDownload,
+            v => { _config.GoogleDriveDownload = v; _config.Save(); });
+        _noneGdLinkInput = Input(Loc.S("Google Drive share link"), w, 100,
+            _config.GoogleDriveShareLink,
+            v => { _config.GoogleDriveShareLink = v; _config.Save(); });
 
         // Service options (shared between local & remote)
         _atStreamingCheck = Check(Loc.S("Streaming generation (play audio before full text is generated)"), w,
@@ -1095,9 +1139,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _atReloadRow.AddNode(_atReloadVoicesButton);
 
         list.AddNode(_backendDropDown);
-
-        CreateCollapsibleSection(list, Loc.S("Instance type"), w, false,
-            [_atLocalCheck, _atRemoteCheck, _atNoInstanceCheck]);
+        list.AddNode(_modeSwitcherRow);
 
         _localSectionContent = _atLocalNodes.EssentialNodes;
         _localSectionToggle = CreateCollapsibleSection(list, Loc.S("Local instance"), w, false, _localSectionContent);
@@ -1111,10 +1153,28 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _remoteSectionContent = _atRemoteNodes.AllNodes;
         _remoteSectionToggle = CreateCollapsibleSection(list, Loc.S("Remote connection"), w, false, _remoteSectionContent);
 
+        _noneSectionContent = [_noneInfoLabel, _noneAudioPathInput, _noneGdDownloadCheck, _noneGdLinkInput];
+        _noneSectionToggle = CreateCollapsibleSection(list, Loc.S("Audio Files Only"), w, false, _noneSectionContent);
+
         _serviceSectionContent = [_atStreamingCheck, _atReloadModelInput, _atReloadRow];
         _serviceSectionToggle = CreateCollapsibleSection(list, Loc.S("Service options"), w, true, _serviceSectionContent);
 
         return list;
+    }
+
+    /// <summary>
+    /// Build a mode-switcher button styled to look like a small radio. The selected/active
+    /// state is conveyed via Alpha (1.0 active, 0.4 inactive) — set per frame in OnUpdate
+    /// since InstanceType is the source of truth and may flip from the FTU window or another
+    /// code path. Cheaper than tracking transitions; Alpha writes are idempotent.
+    /// </summary>
+    private static TextButtonNode ModeButton(string label, float width, Action onClick)
+    {
+        var node = new TextButtonNode { Size = new Vector2(width, 28), String = label };
+        var textW = node.LabelNode.GetTextDrawSize(label).X + 36;
+        if (textW > width) node.Size = new Vector2(textW, 28);
+        node.OnClick = onClick;
+        return node;
     }
 
     private void TestConnection()

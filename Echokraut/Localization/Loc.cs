@@ -420,6 +420,12 @@ public static class Loc
 
         // ── First-time wizard: Step 1 header + Step 2 finish summary ──────
         ["Configure your setup"] = new() { { DE, "Richte deine Konfiguration ein" }, { FR, "Configurez votre installation" }, { JP, "セットアップを構成" } },
+        ["No live generation. Echokraut will only play pre-existing audio files."] = new()
+        {
+            { DE, "Keine Live-Generierung. Echokraut spielt nur vorhandene Audiodateien ab." },
+            { FR, "Pas de génération en direct. Echokraut ne lit que les fichiers audio existants." },
+            { JP, "ライブ生成なし。Echokrautは既存の音声ファイルのみ再生します。" },
+        },
         ["Mode"] = new() { { DE, "Modus" }, { FR, "Mode" }, { JP, "モード" } },
         ["Install path"] = new() { { DE, "Installationspfad" }, { FR, "Chemin d'installation" }, { JP, "インストールパス" } },
         ["Install status"] = new() { { DE, "Installationsstatus" }, { FR, "État d'installation" }, { JP, "インストール状況" } },
