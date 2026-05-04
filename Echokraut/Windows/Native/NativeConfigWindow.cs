@@ -196,6 +196,11 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private bool _prevShowService;
     private bool _prevShowNone;
 
+    // Game-Data-Tools icon button "enabled" snapshot — used by SyncIconButton to gate
+    // NodeFlags toggles on transitions (per CLAUDE.md, AddNodeFlags/RemoveNodeFlags can
+    // crash if hit every frame; only transitions are safe).
+    private bool? _gameDataBtnEnabledState;
+
     internal Action? OnToggleVoiceClipManager;
     internal Action? OnToggleGameDataTools;
 
@@ -646,10 +651,12 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             BuildSettingsTabs(liveGen);
         }
 
-        // Game Data Tools button is visually dimmed when live generation is unavailable.
-        // The actual click is no-op-guarded at NativeWindowManager.ToggleGameDataTools()
-        // (defense in depth — the button can only do harm if both gates fail).
-        Dim(_gameDataToolsButton, liveGen);
+        // Game Data Tools button: dim + disable mouse interaction in None mode. Plain
+        // Alpha-only dim left RespondToMouse+HasCollision on, so the cursor still flipped
+        // to "click" on hover and the MouseOver handler still ran (brightening the icon
+        // and showing the tooltip). SyncIconButton additionally pulls the collision flags
+        // on transition so the dimmed button is fully inert.
+        SyncIconButton(_gameDataToolsButton, liveGen, ref _gameDataBtnEnabledState);
 
         // Mode switcher — selected button stays bright, others dim. Locked while an install
         // is in progress (mid-install switch would race on alltalkFolder) AND while a batch
@@ -737,6 +744,26 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private static void Dim(NodeBase? node, bool enabled)
     {
         if (node != null) node.Alpha = enabled ? 1.0f : 0.4f;
+    }
+
+    /// <summary>
+    /// Set Alpha + toggle <see cref="NodeFlags.RespondToMouse"/> / <see cref="NodeFlags.HasCollision"/>
+    /// on a DynamicIconButtonNode so it fully ignores mouse interaction when disabled (no
+    /// cursor flip, no hover effect, no tooltip, no click). Alpha is set every frame
+    /// (idempotent, cheap); the NodeFlags edits only fire on state transition because
+    /// AddNodeFlags/RemoveNodeFlags every frame can crash the game per the KamiToolKit
+    /// gotchas in CLAUDE.md.
+    /// </summary>
+    private static void SyncIconButton(DynamicIconButtonNode? btn, bool enabled, ref bool? lastState)
+    {
+        if (btn == null) return;
+        btn.Alpha = enabled ? 1.0f : 0.4f;
+        if (lastState == enabled) return;
+        lastState = enabled;
+        if (enabled)
+            btn.ImageNode.AddNodeFlags(NodeFlags.RespondToMouse | NodeFlags.HasCollision);
+        else
+            btn.ImageNode.RemoveNodeFlags(NodeFlags.RespondToMouse | NodeFlags.HasCollision);
     }
 
     private static void SetVisible(NodeBase? node, bool visible)

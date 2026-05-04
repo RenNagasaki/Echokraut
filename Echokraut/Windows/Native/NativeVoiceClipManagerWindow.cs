@@ -120,6 +120,10 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
 
     private readonly Configuration _config;
 
+    // Game-Data-Tools icon button "enabled" snapshot — gates NodeFlags toggles on
+    // transitions only (CLAUDE.md: AddNodeFlags every frame can crash the game).
+    private bool? _gameDataBtnEnabledState;
+
     public NativeVoiceClipManagerWindow(
         IDatabaseService db,
         IVoiceClipManagerService voiceClipManager,
@@ -395,8 +399,26 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         // Bulk Generate All Unsaved button — dim in None mode (no backend to call). The
         // per-clip Generate buttons in the detail window are handled by that window's own
         // OnUpdate dim pass; here we only own the bulk button at the top of VCM.
+        var liveGen = _config.Alltalk.HasLiveGeneration;
         if (_genAllToggleButton != null)
-            _genAllToggleButton.Alpha = _config.Alltalk.HasLiveGeneration ? 1.0f : 0.4f;
+            _genAllToggleButton.Alpha = liveGen ? 1.0f : 0.4f;
+
+        // Game Data Tools icon button — same pattern as in NativeConfigWindow: Alpha dim +
+        // collision flags off when None mode, so the button is fully inert (no cursor flip,
+        // no hover effect, no tooltip, no click). Transition-tracked because hitting
+        // AddNodeFlags / RemoveNodeFlags every frame can crash the game.
+        if (_gameDataToolsButton != null)
+        {
+            _gameDataToolsButton.Alpha = liveGen ? 1.0f : 0.4f;
+            if (_gameDataBtnEnabledState != liveGen)
+            {
+                _gameDataBtnEnabledState = liveGen;
+                if (liveGen)
+                    _gameDataToolsButton.ImageNode.AddNodeFlags(NodeFlags.RespondToMouse | NodeFlags.HasCollision);
+                else
+                    _gameDataToolsButton.ImageNode.RemoveNodeFlags(NodeFlags.RespondToMouse | NodeFlags.HasCollision);
+            }
+        }
 
         // Process deferred quest type selection
         if (_pendingQuestTypeSelection >= 0)
