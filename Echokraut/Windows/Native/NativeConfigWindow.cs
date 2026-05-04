@@ -166,11 +166,14 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private HorizontalListNode? _modeSwitcherRow;
     private NativeAlltalkBuilder.LocalInstanceNodes? _atLocalNodes;
     private NativeAlltalkBuilder.RemoteInstanceNodes? _atRemoteNodes;
+    // Streaming checkbox + Reload-Voices button used to live in the Backend tab's "Service
+    // options" section. Streaming moved to the General tab as a top-level generation toggle
+    // (dims in None mode); Reload-Voices moved into General → Reset Data alongside the
+    // other DB-affecting actions. Reload-Model + its input field were dropped entirely —
+    // it's a niche AllTalk re-init hook the average user never touches and could just as
+    // well be triggered via /api directly. The whole "Service options" collapsible is gone.
     private CheckboxNode? _atStreamingCheck;
-    private TextInputNode? _atReloadModelInput;
-    private TextButtonNode? _atReloadModelButton;
     private TextButtonNode? _atReloadVoicesButton;
-    private HorizontalListNode? _atReloadRow;
     // None-mode section content — audio path + Google Drive download settings duplicated from
     // the Storage tab as a quick-edit, since "None" users mostly come here to configure those.
     private TextNode? _noneInfoLabel;
@@ -187,13 +190,10 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private NodeBase[]? _localPostAdvancedContent;
     private TextButtonNode? _remoteSectionToggle;
     private NodeBase[]? _remoteSectionContent;
-    private TextButtonNode? _serviceSectionToggle;
-    private NodeBase[]? _serviceSectionContent;
 
     // Track previous backend visibility state to recalculate layout only on change
     private bool _prevShowLocal;
     private bool _prevShowRemote;
-    private bool _prevShowService;
     private bool _prevShowNone;
 
     // Game-Data-Tools icon button "enabled" snapshot — used by SyncIconButton to gate
@@ -689,14 +689,13 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         Dim(_modeRemoteBtn, !modeLocked && isRemote);
         Dim(_modeNoneBtn,   !modeLocked && isNone);
 
-        // Backend dropdown / streaming / reload buttons — all "talk to the live backend"
-        // and must not flip mid-batch. Streaming + reload are also already gated on
-        // showService (= isLocal || isRemote), so this is an additional batch-lock layer.
-        Dim(_backendDropDown,    !batchActive);
-        Dim(_atStreamingCheck,   !batchActive);
-        Dim(_atReloadModelInput, !batchActive);
-        Dim(_atReloadModelButton,!batchActive);
-        Dim(_atReloadVoicesButton,!batchActive);
+        // Backend dropdown — must not flip mid-batch.
+        Dim(_backendDropDown, !batchActive);
+        // Streaming + Reload-Voices live in the General tab now. Streaming dims when
+        // there's no backend to stream from (None mode) OR during batch. Reload-Voices
+        // same: no backend to reload from in None, and would race a running batch.
+        Dim(_atStreamingCheck,    liveGen && !batchActive);
+        Dim(_atReloadVoicesButton, liveGen && !batchActive);
         // None-mode panel: lock the path / GD widgets too — the user could change the
         // audio source mid-batch, but VoiceSampleExtractor writes to the same FF14-Voices
         // root and we don't want it pointed at a moving target.
@@ -704,13 +703,10 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         Dim(_noneGdDownloadCheck,!batchActive);
         // _noneGdLinkInput already dims via GoogleDriveDownload below; combine.
 
-        // Show/hide entire collapsible sections based on instance type. Service options
-        // (Streaming, ReloadModel, ReloadVoices) are Local-or-Remote only — None has no
-        // backend to talk to, so the runtime knobs don't apply.
+        // Show/hide entire collapsible sections based on instance type.
         var showLocal   = isAlltalk && isLocal;
         var showRemote  = isAlltalk && isRemote;
         var showNone    = isAlltalk && isNone;
-        var showService = isAlltalk && (isLocal || isRemote);
 
         // Local section: toggle button + content
         SetVisible(_localSectionToggle, showLocal);
@@ -742,19 +738,13 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         // GD link follows GoogleDriveDownload toggle even within the None section
         if (showNone) Dim(_noneGdLinkInput, _config.GoogleDriveDownload && !batchActive);
 
-        // Service section: toggle button + content
-        SetVisible(_serviceSectionToggle, showService);
-        if (!showService && _serviceSectionContent != null)
-            foreach (var n in _serviceSectionContent) SetVisible(n, false);
-
         // Recalculate backend panel layout when visibility changes
         if (showLocal != _prevShowLocal || showRemote != _prevShowRemote
-            || showNone != _prevShowNone || showService != _prevShowService)
+            || showNone != _prevShowNone)
         {
             _prevShowLocal = showLocal;
             _prevShowRemote = showRemote;
             _prevShowNone = showNone;
-            _prevShowService = showService;
             _settingsPanels[4]?.RecalculateLayout();
         }
 
@@ -806,6 +796,14 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             Loc.S("Generate per sentence (shorter latency, recommended for CPU inference)"), w,
             _config.GenerateBySentence,
             v => { _config.GenerateBySentence = v; _config.Save(); });
+
+        // Streaming generation moved here from the Backend tab's old Service-options
+        // section. It's an AllTalk-only knob, so it dims (and is no-op) in None mode but
+        // stays interactive on Local/Remote regardless of which Backend sub-tab is open.
+        _atStreamingCheck = Check(
+            Loc.S("Streaming generation (play audio before full text is generated)"), w,
+            _config.Alltalk.StreamingGeneration,
+            v => { _config.Alltalk.StreamingGeneration = v; _config.Save(); });
 
         var removeStuttersCheck = Check(Loc.S("Remove stutters"), w, _config.RemoveStutters,
             v => { _config.RemoveStutters = v; _config.Save(); });
@@ -924,6 +922,16 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var reloadRemoteButton = Button(Loc.S("Reload remote mappings"), 180,
             () => _jsonData.Reload(_clientState.ClientLanguage));
 
+        // "Reload voices" moved here from the Backend tab — same family as the other
+        // Reset-Data actions (DB / file-state refresh) and easier to find for users.
+        // Re-pulls the backend's voice list and re-runs character voice mapping. No-op
+        // in None mode (no backend), so it dims along with the Streaming checkbox.
+        _atReloadVoicesButton = Button(Loc.S("Reload voices"), 180, () =>
+        {
+            _backend.SetBackendType(_config.BackendSelection);
+            _backend.NotifyCharacterMapped();
+        });
+
         // Available commands
         var commandNodes = _commands.CommandKeys
             .Select(key => _commandManager.Commands.TryGetValue(key, out var cmd)
@@ -939,6 +947,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _clearPlayersButton!.Size = new Vector2(btnW, 24);
         _clearBubblesButton!.Size = new Vector2(btnW, 24);
         reloadRemoteButton.Size   = new Vector2(btnW, 24);
+        _atReloadVoicesButton!.Size = new Vector2(btnW, 24);
         _wipeAllButton!.Size      = new Vector2(innerW, 28);
 
         var row1 = new HorizontalListNode { Size = new Vector2(innerW, 28), ItemSpacing = 4 };
@@ -947,9 +956,14 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var row2 = new HorizontalListNode { Size = new Vector2(innerW, 28), ItemSpacing = 4 };
         row2.AddNode(_clearBubblesButton);
         row2.AddNode(reloadRemoteButton);
+        // Reload voices sits next to the other reload-style action (remote mappings) so
+        // both "refresh upstream-sourced data" buttons are paired visually.
+        var row3 = new HorizontalListNode { Size = new Vector2(innerW, 28), ItemSpacing = 4 };
+        row3.AddNode(_atReloadVoicesButton);
 
         list.AddNode(enabledRow);
         list.AddNode(_generateBySentenceCheck);
+        list.AddNode(_atStreamingCheck);
         list.AddNode(removeStuttersCheck);
         list.AddNode(_removePunctuationCheck);
         list.AddNode(_hideUiCheck);
@@ -957,7 +971,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         CreateCollapsibleSection(list, Loc.S("In-Game Controls"), w, true,
             [_showExtraOptionsCheck]);
 
-        CreateCollapsibleSection(list, Loc.S("Reset Data"), w, true, [row1, row2, _wipeAllButton]);
+        CreateCollapsibleSection(list, Loc.S("Reset Data"), w, true, [row1, row2, row3, _wipeAllButton]);
 
         CreateCollapsibleSection(list, Loc.S("Available commands"), w, true,
             commandNodes.Where(n => n != null).Cast<NodeBase>().ToArray());
@@ -1241,23 +1255,6 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             _config.GoogleDriveShareLink,
             v => { _config.GoogleDriveShareLink = v; _config.Save(); });
 
-        // Service options (shared between local & remote)
-        _atStreamingCheck = Check(Loc.S("Streaming generation (play audio before full text is generated)"), w,
-            _config.Alltalk.StreamingGeneration,
-            v => { _config.Alltalk.StreamingGeneration = v; _config.Save(); });
-        _atReloadModelInput = Input(Loc.S("Model name to reload"), w, 40, _config.Alltalk.ReloadModel,
-            v => { _config.Alltalk.ReloadModel = v; _config.Save(); });
-        _atReloadModelButton = Button(Loc.S("Reload model"), 100, () =>
-            _backend.ReloadService(_config.Alltalk.ReloadModel, new EKEventId(0, TextSource.None)));
-        _atReloadVoicesButton = Button(Loc.S("Reload voices"), 100, () =>
-        {
-            _backend.SetBackendType(_config.BackendSelection);
-            _backend.NotifyCharacterMapped();
-        });
-        _atReloadRow = new HorizontalListNode { Size = new Vector2(w, 26), ItemSpacing = 4 };
-        _atReloadRow.AddNode(_atReloadModelButton);
-        _atReloadRow.AddNode(_atReloadVoicesButton);
-
         list.AddNode(_backendDropDown);
         list.AddNode(_modeSwitcherRow);
 
@@ -1275,9 +1272,6 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
 
         _noneSectionContent = [_noneInfoLabel, _noneAudioPathInput, _noneGdDownloadCheck, _noneGdLinkInput];
         _noneSectionToggle = CreateCollapsibleSection(list, Loc.S("Audio Files Only"), w, false, _noneSectionContent);
-
-        _serviceSectionContent = [_atStreamingCheck, _atReloadModelInput, _atReloadRow];
-        _serviceSectionToggle = CreateCollapsibleSection(list, Loc.S("Service options"), w, true, _serviceSectionContent);
 
         return list;
     }
