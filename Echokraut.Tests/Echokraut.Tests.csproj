@@ -17,6 +17,11 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.3" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.InMemory" Version="9.0.3" />
     <PackageReference Include="Moq" Version="4.20.70" />
+    <!-- Newtonsoft.Json matches what Dalamud uses for plugin-config (de)serialization,
+         so the JSON-config migration tests load fixtures via the same code path real
+         users hit on plugin start (TypeNameHandling honoured, non-default constructors
+         on NpcMapData handled). -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
     <PackageReference Remove="DalamudPackager" />
   </ItemGroup>
 
@@ -29,6 +34,13 @@
     <None Include="..\Echokraut\bass.dll">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- JSON config fixtures used by migration tests. Embedded so the tests stay
+         self-contained — the JSON ships inside the test assembly and the loader reads
+         it via Assembly.GetManifestResourceStream, never touching on-disk paths. -->
+    <EmbeddedResource Include="Resources\Test-Config-WithMappings.json" />
   </ItemGroup>
 
   <!-- Copy managed Dalamud assemblies to test output so the runner can load Dalamud types at runtime -->

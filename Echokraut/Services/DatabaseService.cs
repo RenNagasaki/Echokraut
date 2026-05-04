@@ -71,12 +71,16 @@ public class DatabaseService : IDatabaseService
     /// Constructor for testing with a pre-configured DbContext. Runs the same schema-migration
     /// chain as the production constructor so tests against an in-memory SQLite exercise the
     /// real upgrade paths (and any v_n → v_{n+1} migration test can roll specific tables/columns
-    /// back manually before re-running).
+    /// back manually before re-running). Defaults to <see cref="ClientLanguage.English"/> for
+    /// the migration's per-row language stamp; tests that exercise non-English JSON-config
+    /// migration pass the matching language explicitly.
     /// </summary>
-    public DatabaseService(ILogService log, EchokrautDbContext context)
+    public DatabaseService(ILogService log, EchokrautDbContext context,
+        ClientLanguage clientLanguage = ClientLanguage.English)
     {
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        _clientLanguage = clientLanguage;
 
         _context.Database.EnsureCreated();
         RunSchemaMigrations();
