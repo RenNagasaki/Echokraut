@@ -46,6 +46,16 @@ public class Configuration : IPluginConfiguration
     /// are shareable with other users via export/import.
     /// </summary>
     public bool AutoGenerateShareableAliases { get; set; } = false;
+    /// <summary>
+    /// One-shot marker set by <see cref="Echokraut.Services.DatabaseService.MigrateFromConfig"/>
+    /// once the JSON-config import landed. The audio-file backfill (walks
+    /// <see cref="LocalSaveLocation"/> and creates voice_clip_generations rows for legacy
+    /// on-disk audio that has no matching DB record) reads this flag on the next plugin
+    /// start where the player is logged in, runs the scan, and clears the flag back to
+    /// false. Stays false on fresh installs (no JSON data to migrate from), so users
+    /// who arrive after the rewrite never trigger a useless filesystem walk.
+    /// </summary>
+    public bool AudioFilesBackfillPending { get; set; } = false;
     public bool VoiceRetainers { get; set; } = false;
     public bool VoiceBubble { get; set; } = false;
     public bool VoiceBubblesInCity { get; set; } = false;

@@ -98,16 +98,11 @@ public class DatabaseService : IDatabaseService
 
         RunSchemaMigrations();
 
-        // One-shot legacy import: pull MappedNpcs / MappedPlayers / EchokrautVoices /
-        // PhoneticCorrections / MutedNpcDialogues out of the JSON config into SQLite. Idempotent
-        // after the first successful run (the migration clears the source lists).
-        if (NeedsMigration(config))
-        {
-            _log.Info(nameof(InitializeDatabase),
-                "Migrating data from JSON config to SQLite...",
-                new EKEventId(0, TextSource.None));
-            MigrateFromConfig(config);
-        }
+        // JSON-config → SQLite legacy import is NOT triggered here anymore — it runs from
+        // Plugin.cs once the player is logged in (the audio-backfill step that follows the
+        // JSON import needs LocalPlayerName / LocalPlayerContentId for placeholder
+        // detection, neither of which is available during plugin bootstrap). InitializeDatabase
+        // keeps schema work only; data migration is the caller's problem.
 
         RefreshAllCaches();
     }
@@ -313,6 +308,9 @@ public class DatabaseService : IDatabaseService
                 config.EchokrautVoices.Clear();
                 config.PhoneticCorrections.Clear();
                 config.MutedNpcDialogues.Clear();
+                // Arm the audio backfill — Plugin.cs runs it on the next framework tick
+                // where the player is logged in (placeholder detection needs LocalPlayerName).
+                config.AudioFilesBackfillPending = true;
                 config.Save();
 
                 _log.Info(nameof(MigrateFromConfig), "Migration complete.",
@@ -328,6 +326,196 @@ public class DatabaseService : IDatabaseService
                 throw;
             }
         }
+    }
+
+    // ── Legacy audio-file backfill ──────────────────────────────────────
+
+    /// <summary>Tokens <c>AudioFileService.RemovePlayerNameInText</c> substitutes for the
+    /// player's name. After the substituted text passes through
+    /// <c>VoiceMessageToFileName</c> (lowercase + strip non-alphanumeric) the angle brackets
+    /// are gone and these become bare lowercase identifiers in the on-disk filename, so
+    /// "playername" / "playerfirstname" / "playerlastname" appearing in a normalised filename
+    /// is a near-certain signal that this clip carried a player-name placeholder.</summary>
+    private static readonly string[] PlaceholderNeedles =
+        { "playername", "playerfirstname", "playerlastname" };
+
+    /// <summary>
+    /// Walks <see cref="Configuration.LocalSaveLocation"/> and creates
+    /// <see cref="VoiceClipEntity"/> + <see cref="VoiceClipGenerationEntity"/> rows for every
+    /// on-disk audio file whose folder name matches a known character in the DB. Idempotent:
+    /// re-running over the same disk state hits the existing rows via the
+    /// <c>(character_id, wav_file_name)</c> lookup and updates their save_path/voice_key in
+    /// place rather than duplicating. Clears <see cref="Configuration.AudioFilesBackfillPending"/>
+    /// when the walk finishes successfully.
+    ///
+    /// Heuristics (per the user's spec):
+    /// - Folder → character match by <c>(name, language)</c>. Multi-match (e.g. multiple
+    ///   "???" rows) is skipped — those legacy entries aren't clean enough to match
+    ///   reliably from filename alone, and inventing a wrong attribution is worse than
+    ///   leaving the file an orphan.
+    /// - <c>voice_key</c> for the new generation row defaults to the character's current
+    ///   <see cref="CharacterEntity.VoiceKey"/> (the snapshot the JSON-config migration
+    ///   wrote). Empty when no voice was assigned to that character.
+    /// - Player-placeholder detection: the normalised filename is checked for the
+    ///   substitution tokens above (modern clips) AND for the current player's first/last
+    ///   name (legacy clips that pre-date the placeholder system, where the literal name
+    ///   was baked into the filename). Either match → <c>player_content_id</c> = the
+    ///   local player's content id, otherwise 0. False positives heuristically biased
+    ///   toward 0 — the user accepts the rare misclassification because clean-up is
+    ///   easier later than re-attributing rows after the fact.
+    /// </summary>
+    public void BackfillAudioFiles(Configuration config, IGameObjectService gameObjects, IAudioFileService audioFiles)
+    {
+        if (config == null) throw new ArgumentNullException(nameof(config));
+        if (gameObjects == null) throw new ArgumentNullException(nameof(gameObjects));
+        if (audioFiles == null) throw new ArgumentNullException(nameof(audioFiles));
+
+        var eventId = new EKEventId(0, TextSource.None);
+
+        if (string.IsNullOrWhiteSpace(config.LocalSaveLocation) ||
+            !Directory.Exists(config.LocalSaveLocation))
+        {
+            _log.Info(nameof(BackfillAudioFiles),
+                $"LocalSaveLocation '{config.LocalSaveLocation}' missing — nothing to back-fill",
+                eventId);
+            config.AudioFilesBackfillPending = false;
+            config.Save();
+            return;
+        }
+
+        var playerName = gameObjects.LocalPlayerName ?? "";
+        var playerContentId = (long)gameObjects.LocalPlayerContentId;
+
+        // Pre-compute normalised player name parts once. Empty parts skip the contains check
+        // so a player without first/last split doesn't accidentally match every empty file.
+        var nameParts = playerName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var nameNeedleFull = NormalizeForFilename(playerName);
+        var nameNeedleFirst = nameParts.Length > 0 ? NormalizeForFilename(nameParts[0]) : "";
+        var nameNeedleLast = nameParts.Length > 1 ? NormalizeForFilename(nameParts[nameParts.Length - 1]) : "";
+
+        int created = 0, updated = 0, skippedAmbiguous = 0, skippedNoCharacter = 0;
+
+        lock (_writeLock)
+        {
+            try
+            {
+                foreach (var speakerDir in Directory.EnumerateDirectories(config.LocalSaveLocation))
+                {
+                    var folderName = Path.GetFileName(speakerDir);
+                    // The audio writer uses "NOPERSON" when the speaker name was empty (Amon
+                    // entries, etc.). Normalise back so we can look the empty-name character up.
+                    var lookupName = folderName == "NOPERSON" ? "" : folderName;
+
+                    var matches = _context.Characters
+                        .Where(c => c.Name == lookupName && c.Language == (int)_clientLanguage)
+                        .ToList();
+                    if (matches.Count == 0)
+                    {
+                        skippedNoCharacter++;
+                        continue;
+                    }
+                    if (matches.Count > 1)
+                    {
+                        skippedAmbiguous++;
+                        _log.Debug(nameof(BackfillAudioFiles),
+                            $"Multi-match for folder '{folderName}' (lang={_clientLanguage}, candidates={matches.Count}) — skipping",
+                            eventId);
+                        continue;
+                    }
+
+                    var character = matches[0];
+                    foreach (var wavPath in Directory.EnumerateFiles(speakerDir, "*.wav", SearchOption.TopDirectoryOnly))
+                    {
+                        var wavFileName = Path.GetFileNameWithoutExtension(wavPath);
+
+                        var existing = _context.VoiceClips.FirstOrDefault(vc =>
+                            vc.CharacterId == character.Id && vc.WavFileName == wavFileName);
+                        if (existing == null)
+                        {
+                            existing = new VoiceClipEntity
+                            {
+                                CharacterId = character.Id,
+                                WavFileName = wavFileName,
+                                VoiceKey = character.VoiceKey,
+                                SavedToDisk = true,
+                                SavePath = wavPath,
+                                Language = character.Language,
+                            };
+                            _context.VoiceClips.Add(existing);
+                            _context.SaveChanges();
+                            created++;
+                        }
+                        else
+                        {
+                            existing.SavedToDisk = true;
+                            if (string.IsNullOrEmpty(existing.SavePath)) existing.SavePath = wavPath;
+                            updated++;
+                        }
+
+                        var hasPlaceholder = HasPlayerPlaceholder(wavFileName,
+                            nameNeedleFull, nameNeedleFirst, nameNeedleLast);
+                        var pcid = hasPlaceholder ? playerContentId : 0L;
+
+                        // LogVoiceClipGeneration is upsert-keyed on
+                        // (voice_clip_id, player_content_id, alias_gender) so re-running over
+                        // existing rows refreshes timestamp + save_path without duplicating.
+                        LogVoiceClipGeneration(
+                            existing.Id, pcid, playerName, wavPath,
+                            voiceKey: character.VoiceKey,
+                            aliasGender: 0);
+                    }
+                }
+
+                _context.SaveChanges();
+                config.AudioFilesBackfillPending = false;
+                config.Save();
+
+                _log.Info(nameof(BackfillAudioFiles),
+                    $"Audio backfill done. created={created} updated={updated} " +
+                    $"skipped_no_character={skippedNoCharacter} skipped_ambiguous={skippedAmbiguous}",
+                    eventId);
+
+                RefreshAllCaches();
+            }
+            catch (Exception ex)
+            {
+                // Don't clear the pending flag on failure — the user gets another shot on
+                // next plugin start. Errors are most likely transient (file lock, permission)
+                // or schema-related (the backfill predates a future migration).
+                _log.Error(nameof(BackfillAudioFiles), $"Backfill failed: {ex}", eventId);
+                throw;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Mirrors the normalisation <c>AudioFileService.VoiceMessageToFileName</c> applies when
+    /// it builds the on-disk filename: lowercase, strip non-alphanumeric. Identical
+    /// transformation on both sides means a name baked into a filename or a placeholder
+    /// token can be located via plain substring search.
+    /// </summary>
+    private static string NormalizeForFilename(string value)
+    {
+        if (string.IsNullOrEmpty(value)) return "";
+        var sb = new System.Text.StringBuilder(value.Length);
+        foreach (var ch in value)
+        {
+            if (char.IsLetterOrDigit(ch)) sb.Append(char.ToLowerInvariant(ch));
+        }
+        return sb.ToString();
+    }
+
+    private static bool HasPlayerPlaceholder(string wavFileName,
+        string nameNeedleFull, string nameNeedleFirst, string nameNeedleLast)
+    {
+        // wavFileName is already lowercase + alphanumeric-only because that's the format
+        // VoiceMessageToFileName produced when it was written.
+        foreach (var token in PlaceholderNeedles)
+            if (wavFileName.Contains(token, StringComparison.OrdinalIgnoreCase)) return true;
+        if (nameNeedleFull.Length > 2 && wavFileName.Contains(nameNeedleFull, StringComparison.OrdinalIgnoreCase)) return true;
+        if (nameNeedleFirst.Length > 2 && wavFileName.Contains(nameNeedleFirst, StringComparison.OrdinalIgnoreCase)) return true;
+        if (nameNeedleLast.Length > 2 && wavFileName.Contains(nameNeedleLast, StringComparison.OrdinalIgnoreCase)) return true;
+        return false;
     }
 
     /// <summary>

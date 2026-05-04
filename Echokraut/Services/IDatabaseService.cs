@@ -11,6 +11,14 @@ public interface IDatabaseService : IDisposable
     // Migration (one-shot JSON-config → SQLite import, idempotent after first run)
     bool NeedsMigration(Configuration config);
     void MigrateFromConfig(Configuration config);
+    /// <summary>
+    /// Walks <see cref="Configuration.LocalSaveLocation"/> and creates voice_clip_generations
+    /// rows for legacy on-disk audio files that have no matching DB record. One-shot
+    /// follow-up to <see cref="MigrateFromConfig"/>; the caller (Plugin.cs) gates the
+    /// invocation on <see cref="Configuration.AudioFilesBackfillPending"/> and the player
+    /// being logged in. Idempotent — safe to call repeatedly.
+    /// </summary>
+    void BackfillAudioFiles(Configuration config, IGameObjectService gameObjects, IAudioFileService audioFiles);
 
     // Characters
     List<CharacterEntity> GetNpcs();

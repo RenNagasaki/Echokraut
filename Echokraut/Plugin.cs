@@ -175,6 +175,51 @@ public partial class Plugin : IDalamudPlugin
         // Requires login (HomeWorld lookup needs LocalPlayer); if not logged in yet, OnLogin runs it.
         if (_clientState.IsLoggedIn)
             StartPlayerEnrichment();
+
+        // JSON-config + audio-file legacy migrations need a logged-in player (placeholder
+        // detection in the audio backfill reads LocalPlayerName / LocalPlayerContentId).
+        // If we caught a plugin reload mid-session run them now; otherwise OnLogin picks up.
+        if (_clientState.IsLoggedIn)
+            RunDataMigrationsIfLoggedIn();
+    }
+
+    /// <summary>
+    /// Runs the one-shot JSON-config → SQLite migration and the legacy audio-file
+    /// backfill, in that order. Both are gated on the player being logged in (needed
+    /// for the per-row Language stamp and the placeholder-detection heuristic). Both
+    /// guard themselves: <see cref="IDatabaseService.NeedsMigration"/> returns false
+    /// after the JSON lists are emptied; the backfill consults
+    /// <see cref="Configuration.AudioFilesBackfillPending"/> and clears it on success.
+    /// Idempotent — safe to call from both <see cref="HandleStartup"/> (plugin reload
+    /// while logged in) and <see cref="OnLogin"/> (cold login).
+    /// </summary>
+    private void RunDataMigrationsIfLoggedIn()
+    {
+        var eventId = new EKEventId(0, TextSource.None);
+        try
+        {
+            var db = _services.GetService<IDatabaseService>();
+            if (db.NeedsMigration(_configuration))
+            {
+                _log.Info(nameof(RunDataMigrationsIfLoggedIn),
+                    "Running JSON-config → SQLite migration", eventId);
+                db.MigrateFromConfig(_configuration);
+            }
+
+            if (_configuration.AudioFilesBackfillPending)
+            {
+                _log.Info(nameof(RunDataMigrationsIfLoggedIn),
+                    "Running legacy audio-file backfill", eventId);
+                var gameObjects = _services.GetService<IGameObjectService>();
+                var audioFiles = _services.GetService<IAudioFileService>();
+                db.BackfillAudioFiles(_configuration, gameObjects, audioFiles);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log.Error(nameof(RunDataMigrationsIfLoggedIn),
+                $"Data migration failed: {ex}", eventId);
+        }
     }
 
     private void StartPlayerEnrichment()
@@ -213,9 +258,15 @@ public partial class Plugin : IDalamudPlugin
 
             // Lodestone enrichment runs once per session — HomeWorld is now available.
             StartPlayerEnrichment();
+
+            // JSON-config + audio-file legacy migrations were deferred from plugin init
+            // because they need LocalPlayerName / LocalPlayerContentId. Run them now that
+            // we have both. Internally idempotent — safe even if HandleStartup already
+            // fired them on a hot reload.
+            RunDataMigrationsIfLoggedIn();
         }
         catch (Exception e)
-        { 
+        {
             _log.Error(nameof(OnLogin), $"Error while starting voice inference: {e}", new EKEventId(0, TextSource.None));
         }
     }
