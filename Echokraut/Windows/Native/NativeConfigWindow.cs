@@ -395,9 +395,13 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             OnClick = () => OnToggleGameDataTools?.Invoke(),
         };
         _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
+        // Hover handlers wired on ImageNode fire independently of the parent component's
+        // SetEnabledState pipeline — the icon node has its own RespondToMouse + EmitsEvents
+        // flags. Bail out when the button is disabled so None mode users get no tooltip
+        // and no icon-brightening when their cursor sweeps over the dimmed button.
         _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
         {
-            if (_gameDataToolsButton == null) return;
+            if (_gameDataToolsButton == null || !_gameDataToolsButton.IsEnabled) return;
             _gameDataToolsButton.ImageNode.MultiplyColor = hoverTint;
             _gameDataToolsButton.ShowTooltip();
         });
@@ -651,20 +655,26 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             BuildSettingsTabs(liveGen);
         }
 
-        // Game Data Tools button: route through ATK's component-disabled state. Plain
-        // Alpha-dim and even removing NodeFlags off the ImageNode left the underlying
-        // AtkComponentButton fully alive — cursor still flipped to "click" on hover, the
-        // click animation timeline still played, the tooltip still showed (because the
-        // tooltip is wired on the component, not the icon node). ButtonBase.IsEnabled
-        // calls ComponentBase->SetEnabledState which triggers the FFXIV-standard
-        // disabled visual (~0.7 alpha + multiplier 0.5, matching every other vanilla
-        // disabled button) AND silences the cursor / hover / click pipeline at the ATK
-        // level. Transition-tracked because SetEnabledState writes into ATK structs;
-        // safer to only call on real changes.
+        // Game Data Tools button: route through ATK's component-disabled state via
+        // ButtonBase.IsEnabled, which calls ComponentBase->SetEnabledState. That triggers
+        // the FFXIV-standard disabled visual (~0.7 alpha + multiplier 0.5) AND silences
+        // cursor flip + click animation at the component level.
+        //
+        // The hover handlers we wired manually on ImageNode (icon brighten + tooltip)
+        // have their own bail-out via IsEnabled inside the callbacks. On the disable
+        // transition itself we still need to clear any stuck hover state — if the user
+        // was hovering when liveGen flipped, MouseOut may have already fired (state ok),
+        // but we force-reset MultiplyColor + HideTooltip to be sure neither is left
+        // brightened or showing.
         if (_gameDataToolsButton != null && _gameDataBtnEnabledState != liveGen)
         {
             _gameDataBtnEnabledState = liveGen;
             _gameDataToolsButton.IsEnabled = liveGen;
+            if (!liveGen)
+            {
+                _gameDataToolsButton.ImageNode.MultiplyColor = new Vector3(1f, 1f, 1f);
+                _gameDataToolsButton.HideTooltip();
+            }
         }
 
         // Mode switcher — selected button stays bright, others dim. Locked while an install

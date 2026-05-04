@@ -341,9 +341,12 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
             OnClick = () => _toggleGameDataTools(),
         };
         _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
+        // Hover handlers wired on ImageNode fire independently of the parent component's
+        // SetEnabledState pipeline. Bail out when the button is disabled so None mode
+        // users get no tooltip / icon-brightening when hovering the dimmed button.
         _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
         {
-            if (_gameDataToolsButton == null) return;
+            if (_gameDataToolsButton == null || !_gameDataToolsButton.IsEnabled) return;
             _gameDataToolsButton.ImageNode.MultiplyColor = hoverTint;
             _gameDataToolsButton.ShowTooltip();
         });
@@ -404,16 +407,20 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
             _genAllToggleButton.Alpha = liveGen ? 1.0f : 0.4f;
 
         // Game Data Tools icon button: route through ATK's component-disabled state via
-        // ButtonBase.IsEnabled. Plain alpha + NodeFlags-on-ImageNode left the underlying
-        // AtkComponentButton alive (cursor still flipped, click animation still played,
-        // tooltip still showed) because all of those live on the component, not the icon
-        // node. SetEnabledState triggers the FFXIV-standard disabled timeline
-        // (alpha ~0.7, multiplier 0.5) AND silences the cursor / click pipeline at ATK
-        // level. Transition-tracked since SetEnabledState writes ATK struct fields.
+        // ButtonBase.IsEnabled. SetEnabledState triggers the FFXIV-standard disabled
+        // timeline (alpha ~0.7, multiplier 0.5) and silences cursor flip + click anim at
+        // the component level. The hover handlers wired on ImageNode bail on IsEnabled
+        // (see OnSetup); the disable transition itself force-clears any stuck hover
+        // state so the dimmed button never lingers brightened or showing a tooltip.
         if (_gameDataToolsButton != null && _gameDataBtnEnabledState != liveGen)
         {
             _gameDataBtnEnabledState = liveGen;
             _gameDataToolsButton.IsEnabled = liveGen;
+            if (!liveGen)
+            {
+                _gameDataToolsButton.ImageNode.MultiplyColor = new System.Numerics.Vector3(1f, 1f, 1f);
+                _gameDataToolsButton.HideTooltip();
+            }
         }
 
         // Process deferred quest type selection
