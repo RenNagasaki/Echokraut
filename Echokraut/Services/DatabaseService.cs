@@ -998,6 +998,28 @@ public class DatabaseService : IDatabaseService
                     && vc.NpcBaseId == voiceClip.NpcBaseId
                     && vc.OriginalText == voiceClip.OriginalText);
 
+            // Orphan-resolve fallback: clips created by the legacy audio backfill have a
+            // wav_file_name but empty text. The text-based lookup above misses them, so
+            // a live encounter would otherwise duplicate the row. If the caller supplied a
+            // wav_file_name, try matching on (character_id, wav_file_name) — that's the
+            // hash the backfill recorded. On a hit, fill in the now-known text + base id
+            // so subsequent text-based lookups find the same row directly.
+            if (existing == null && !string.IsNullOrEmpty(voiceClip.WavFileName))
+            {
+                existing = _context.VoiceClips
+                    .FirstOrDefault(vc => vc.CharacterId == voiceClip.CharacterId
+                        && vc.WavFileName == voiceClip.WavFileName);
+                if (existing != null)
+                {
+                    existing.NpcBaseId = voiceClip.NpcBaseId;
+                    existing.OriginalText = voiceClip.OriginalText;
+                    existing.TextSource = voiceClip.TextSource;
+                    existing.Language = voiceClip.Language;
+                    // Remaining fields (CleanedText, BodyType, voice key, …) get filled by
+                    // the existing-update branch below — same code path as a live re-encounter.
+                }
+            }
+
             VoiceClipEntity result;
             if (existing != null)
             {
@@ -1012,6 +1034,8 @@ public class DatabaseService : IDatabaseService
                 existing.MapX = voiceClip.MapX;
                 existing.MapY = voiceClip.MapY;
                 // Don't overwrite SavedToDisk/SavePath with empty values on re-encounter
+                // (the orphan path relies on this — backfill-set SavePath survives the live
+                // promote because the live caller passes empty SavePath).
                 if (voiceClip.SavedToDisk || !string.IsNullOrEmpty(voiceClip.SavePath))
                 {
                     existing.SavedToDisk = voiceClip.SavedToDisk;

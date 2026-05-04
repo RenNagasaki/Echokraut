@@ -34,6 +34,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
     private readonly IGameObjectService _gameObjects;
     private readonly IDatabaseService _db;
     private readonly ILodestoneService _lodestone;
+    private readonly IAudioFileService _audioFiles;
 
     public VoiceMessageProcessor(
         ILogService log,
@@ -49,7 +50,8 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         INpcDataService npcData,
         IGameObjectService gameObjects,
         IDatabaseService db,
-        ILodestoneService lodestone)
+        ILodestoneService lodestone,
+        IAudioFileService audioFiles)
     {
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _textProcessing = textProcessing ?? throw new ArgumentNullException(nameof(textProcessing));
@@ -65,6 +67,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         _gameObjects = gameObjects ?? throw new ArgumentNullException(nameof(gameObjects));
         _db = db ?? throw new ArgumentNullException(nameof(db));
         _lodestone = lodestone ?? throw new ArgumentNullException(nameof(lodestone));
+        _audioFiles = audioFiles ?? throw new ArgumentNullException(nameof(audioFiles));
     }
 
     /// <summary>
@@ -509,6 +512,15 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
             var npcBaseId = message.SpeakerObj != null ? (long)message.SpeakerObj.BaseId : 0;
             var originalText = message.OriginalText ?? "";
 
+            // wav_file_name = the same on-disk hash AudioFileService uses when it writes
+            // the file. Stored on every live-path clip so DatabaseService.LogOrUpdateVoiceClip
+            // can rescue legacy "orphan" rows the audio backfill created (clips with a
+            // wav_file_name but no text yet). When this dialog re-fires in-game and lands
+            // here for the first time, the orphan-resolve fallback finds the existing row
+            // by (CharacterId, WavFileName) and promotes it instead of inserting a duplicate.
+            var wavFileName = _audioFiles.VoiceMessageToFileName(
+                _audioFiles.RemovePlayerNameInText(originalText));
+
             var persisted = _db.LogOrUpdateVoiceClip(new DataClasses.Database.VoiceClipEntity
             {
                 CharacterId = character.Id,
@@ -519,6 +531,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
                 VoiceKey = speaker?.voice ?? "",
                 OriginalText = originalText,
                 CleanedText = message.Text ?? "",
+                WavFileName = wavFileName,
                 // Read-side (VoiceClipManagerService.GetEffectivePlayerId) keys generation rows on
                 // this flag, so it must be set in the live path too — otherwise generations are
                 // logged with the wrong player_content_id and the UI shows clips as "not generated".

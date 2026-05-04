@@ -202,7 +202,8 @@ public static class ServiceBuilder
             c.GetService<INpcDataService>(),
             c.GetService<IGameObjectService>(),
             c.GetService<IDatabaseService>(),
-            c.GetService<ILodestoneService>()));
+            c.GetService<ILodestoneService>(),
+            c.GetService<IAudioFileService>()));
 
         container.RegisterFactory<IAddonCancelService>(c => new AddonCancelService(
             c.GetService<IAudioPlaybackService>(),
