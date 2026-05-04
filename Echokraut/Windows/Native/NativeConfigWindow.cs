@@ -52,6 +52,13 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private readonly ScrollingListNode?[] _settingsPanels = new ScrollingListNode?[5];
     private TabBarNode? _settingsTabBar;
 
+    // Top-level tab bar (Settings / Voices / Phonetics / Logs). Promoted to a field because
+    // None-mode (no live generation) hides the Voices + Phonetics tabs at runtime — we need
+    // to Clear() + re-add tabs in correct order on InstanceType transitions, which can only
+    // happen if the tab bar reference survives OnSetup.
+    private TabBarNode? _topTabBar;
+    private bool? _topTabsLiveGenSnapshot;
+
     // Tab-spanning shortcut buttons pinned at the bottom-left of the window. Always visible
     // regardless of which top-level tab is active (they live outside the tab content area).
     private DynamicIconButtonNode? _voiceClipManagerButton;
@@ -239,7 +246,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var bottomRowY = pos.Y + size.Y - bottomBtnSize;
 
         // ── Top-level tab bar ────────────────────────────────────────────────
-        var topTabBar = new TabBarNode { Size = new Vector2(size.X, tabH), Position = pos };
+        _topTabBar = new TabBarNode { Size = new Vector2(size.X, tabH), Position = pos };
 
         // Content area below top tab bar — height shrunk so the tab-spanning bottom button
         // row gets its own dedicated strip and never overlaps tab content on any tab.
@@ -290,13 +297,13 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         SetupLogs();
 
         // ── Top-level tabs ───────────────────────────────────────────────────
-        topTabBar.AddTab(Loc.S("Settings"),   () => ShowTopPanel(0));
-        topTabBar.AddTab(Loc.S("Voices"),     () => ShowTopPanel(1));
-        topTabBar.AddTab(Loc.S("Phonetics"),  () => ShowTopPanel(2));
-        topTabBar.AddTab(Loc.S("Logs"),       () => ShowTopPanel(3));
+        // Initial population reflects the current InstanceType; OnUpdate re-runs this
+        // whenever HasLiveGeneration flips so tabs follow mode changes live.
+        _topTabsLiveGenSnapshot = _config.Alltalk.HasLiveGeneration;
+        BuildTopTabs(_topTabsLiveGenSnapshot.Value);
 
         // ── Add all nodes to addon ───────────────────────────────────────────
-        AddNode(topTabBar);
+        AddNode(_topTabBar);
 
         // Settings nodes
         AddNode(_settingsTabBar);
@@ -373,6 +380,44 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     }
 
     private int _activeSettingsTab;
+
+    /// <summary>
+    /// (Re)populates the top-level tab bar. Voices + Phonetics are present only when live
+    /// generation is available — None mode hides them entirely (the Voice routing they edit
+    /// only matters when there's a backend that consumes voice keys). Settings + Logs always
+    /// stay because they cover playback / cleanup / debugging that work without a backend.
+    /// Order is preserved by Clear()+AddTab — TabBarNode's AddTab always appends, so we can't
+    /// insert tabs back at their original position without a full rebuild.
+    /// </summary>
+    private void BuildTopTabs(bool liveGen)
+    {
+        if (_topTabBar == null) return;
+        _topTabBar.Clear();
+
+        _topTabBar.AddTab(Loc.S("Settings"), () => ShowTopPanel(0));
+        if (liveGen)
+        {
+            _topTabBar.AddTab(Loc.S("Voices"),    () => ShowTopPanel(1));
+            _topTabBar.AddTab(Loc.S("Phonetics"), () => ShowTopPanel(2));
+        }
+        _topTabBar.AddTab(Loc.S("Logs"),     () => ShowTopPanel(3));
+
+        // Restore the previously-active panel when its tab still exists; otherwise snap to
+        // Settings. SelectTab updates the radio-button visual state but does NOT fire the
+        // OnClick callback, so panel visibility has to be applied separately via ShowTopPanel.
+        var keepActive = _activeTopTab == 0 || _activeTopTab == 3
+            || (liveGen && (_activeTopTab == 1 || _activeTopTab == 2));
+        var targetIndex = keepActive ? _activeTopTab : 0;
+        var targetLabel = targetIndex switch
+        {
+            1 => Loc.S("Voices"),
+            2 => Loc.S("Phonetics"),
+            3 => Loc.S("Logs"),
+            _ => Loc.S("Settings"),
+        };
+        _topTabBar.SelectTab(targetLabel);
+        ShowTopPanel(targetIndex);
+    }
 
     private void ShowTopPanel(int index)
     {
@@ -499,6 +544,21 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var isRemote  = instanceType == AlltalkInstanceType.Remote;
         var isNone    = instanceType == AlltalkInstanceType.None;
         var installing = _alltalkInstance.Installing;
+        var liveGen = _config.Alltalk.HasLiveGeneration;
+
+        // Top tab bar follows live-generation availability. None mode → Voices + Phonetics
+        // disappear (they only configure the routing for backend generation). Tab rebuild
+        // is gated on a transition so we don't dispose+recreate radio buttons every frame.
+        if (_topTabsLiveGenSnapshot != liveGen)
+        {
+            _topTabsLiveGenSnapshot = liveGen;
+            BuildTopTabs(liveGen);
+        }
+
+        // Game Data Tools button is visually dimmed when live generation is unavailable.
+        // The actual click is no-op-guarded at NativeWindowManager.ToggleGameDataTools()
+        // (defense in depth — the button can only do harm if both gates fail).
+        Dim(_gameDataToolsButton, liveGen);
 
         // Instance type — dim the already-selected option
         Dim(_atLocalCheck,      !installing && !isLocal);

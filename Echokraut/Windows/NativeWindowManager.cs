@@ -19,6 +19,7 @@ public class NativeWindowManager : IWindowManager
     private readonly NativeVoiceClipDetailWindow _voiceClipDetailWindow;
     private readonly NativeGameDataToolsWindow _gameDataToolsWindow;
     private readonly IFramework _framework;
+    private readonly Configuration _config;
 
     public bool IsFirstTimeOpen => _firstTimeWindow.IsOpen;
 
@@ -31,6 +32,7 @@ public class NativeWindowManager : IWindowManager
         IFramework framework)
     {
         _framework = framework;
+        _config = config;
         var addonTalk = services.GetService<IAddonTalkHelper>();
 
         _dialogController = new DialogTalkController(
@@ -128,7 +130,9 @@ public class NativeWindowManager : IWindowManager
         };
 
         _configWindow.OnToggleVoiceClipManager = () => _voiceClipManagerWindow.Toggle();
-        _configWindow.OnToggleGameDataTools = () => _gameDataToolsWindow.Toggle();
+        // Route through ToggleGameDataTools so the None-mode guard catches every call site
+        // (the config-window button + the VC Manager button + the public method itself).
+        _configWindow.OnToggleGameDataTools = ToggleGameDataTools;
 
         // Suppress Talk advance when clicking inside our native windows
         _dialogController.SetWindowHitTest(pos => IsInsideWindow(_configWindow, pos)
@@ -152,7 +156,14 @@ public class NativeWindowManager : IWindowManager
     public void ToggleConfig() => _configWindow.Toggle();
     public void ToggleFirstTime() => _firstTimeWindow.Toggle();
     public void ToggleVoiceClipManager() => _voiceClipManagerWindow.Toggle();
-    public void ToggleGameDataTools() => _gameDataToolsWindow.Toggle();
+    public void ToggleGameDataTools()
+    {
+        // None-mode users have no live backend, so the harvest + voice-extract operations
+        // exposed by Game Data Tools have nothing useful to drive. Refusing to open the
+        // window is the functional twin of the dimmed buttons in NativeConfigWindow / VCM.
+        if (!_config.Alltalk.HasLiveGeneration) return;
+        _gameDataToolsWindow.Toggle();
+    }
     public void Draw() { }
 
     public void Dispose()
