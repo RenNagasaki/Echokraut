@@ -83,7 +83,7 @@ public class DatabaseService : IDatabaseService
         RefreshAllCaches();
     }
 
-    internal const int CurrentSchemaVersion = 3;
+    internal const int CurrentSchemaVersion = 4;
 
     private void InitializeDatabase(Configuration config)
     {
@@ -120,6 +120,7 @@ public class DatabaseService : IDatabaseService
     {
         EnsureSpeakerAliasTable();              // v1 → v2
         EnsureVoiceClipGenerationVoiceKey();    // v2 → v3
+        EnsureVoiceClipWavFileName();           // v3 → v4
         RecordSchemaVersion();
     }
 
@@ -178,6 +179,28 @@ public class DatabaseService : IDatabaseService
         if (TableHasColumn("voice_clip_generations", "voice_key")) return;
         _context.Database.ExecuteSqlRaw(
             "ALTER TABLE voice_clip_generations ADD COLUMN voice_key TEXT NOT NULL DEFAULT ''");
+    }
+
+    /// <summary>
+    /// v4 migration: add <c>wav_file_name TEXT NOT NULL DEFAULT ''</c> to <c>voice_clips</c>
+    /// plus an index on <c>(character_id, wav_file_name)</c>. The column lets the legacy
+    /// audio-file backfill (run from <c>MigrateFromConfig</c> once) record orphan files
+    /// without inventing fake text/cleaned-text content; the index supports the live
+    /// runtime's fallback lookup that promotes those orphans to full rows when the same
+    /// dialog comes through chat. Same PRAGMA-probe pattern as v3 — SQLite has no
+    /// <c>ADD COLUMN IF NOT EXISTS</c>.
+    /// Internal so migration tests can exercise this single step in isolation.
+    /// </summary>
+    internal void EnsureVoiceClipWavFileName()
+    {
+        if (!TableHasColumn("voice_clips", "wav_file_name"))
+            _context.Database.ExecuteSqlRaw(
+                "ALTER TABLE voice_clips ADD COLUMN wav_file_name TEXT NOT NULL DEFAULT ''");
+        // Index creation is independently idempotent via IF NOT EXISTS — runs even if the
+        // column already existed but the index didn't (mid-migration interruption).
+        _context.Database.ExecuteSqlRaw(@"
+            CREATE INDEX IF NOT EXISTS IX_voice_clips_character_wav_file_name
+                ON voice_clips (character_id, wav_file_name)");
     }
 
     /// <summary>

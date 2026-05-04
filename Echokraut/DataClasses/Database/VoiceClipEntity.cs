@@ -47,6 +47,20 @@ public class VoiceClipEntity
     [Column("save_path")]
     public string SavePath { get; set; } = "";
 
+    /// <summary>
+    /// On-disk file name (without extension) the audio file lives under, e.g. the result of
+    /// <c>AudioFileService.VoiceMessageToFileName(RemovePlayerNameInText(originalText))</c>.
+    /// Empty for clips first encountered through the live runtime path — that path never
+    /// needs the column because it already has the original text. Set by the legacy audio
+    /// backfill in <c>MigrateFromConfig</c> for orphan files we discover on disk without a
+    /// matching <c>voice_clips</c> row, so the live runtime can later upgrade the orphan to
+    /// a fully-textualised row when the same dialog re-occurs in-game (lookup
+    /// <c>(character_id, wav_file_name)</c> as the fallback after the text-based match misses).
+    /// Indexed for that fallback path.
+    /// </summary>
+    [Column("wav_file_name")]
+    public string WavFileName { get; set; } = "";
+
     [Column("has_player_placeholder")]
     public bool HasPlayerPlaceholder { get; set; }
 

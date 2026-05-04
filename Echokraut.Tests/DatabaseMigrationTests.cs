@@ -73,6 +73,8 @@ public class DatabaseMigrationTests
         Assert.Equal(DatabaseService.CurrentSchemaVersion, f.ReadSchemaVersion());
         Assert.True(f.TableExists("character_speaker_aliases"));
         Assert.True(f.ColumnExists("voice_clip_generations", "voice_key"));
+        Assert.True(f.ColumnExists("voice_clips", "wav_file_name"));
+        Assert.True(f.IndexExists("IX_voice_clips_character_wav_file_name"));
     }
 
     // ── v1 → v2: character_speaker_aliases ──────────────────────────────
@@ -143,6 +145,87 @@ public class DatabaseMigrationTests
         var ex = Record.Exception(() => f.Service.EnsureVoiceClipGenerationVoiceKey());
         Assert.Null(ex);
         Assert.True(f.ColumnExists("voice_clip_generations", "voice_key"));
+    }
+
+    // ── v3 → v4: voice_clips.wav_file_name + index ────────────────────
+
+    [Fact]
+    public void EnsureVoiceClipWavFileName_AddsColumnWhenMissing()
+    {
+        using var f = new MigrationTestFixture();
+
+        // The index has to be dropped first — SQLite's ALTER TABLE DROP COLUMN refuses
+        // when an index references the column.
+        f.Exec("DROP INDEX IF EXISTS IX_voice_clips_character_wav_file_name");
+        f.Exec("ALTER TABLE voice_clips DROP COLUMN wav_file_name");
+        Assert.False(f.ColumnExists("voice_clips", "wav_file_name"));
+
+        f.Service.EnsureVoiceClipWavFileName();
+
+        Assert.True(f.ColumnExists("voice_clips", "wav_file_name"));
+        Assert.True(f.IndexExists("IX_voice_clips_character_wav_file_name"));
+    }
+
+    [Fact]
+    public void EnsureVoiceClipWavFileName_IsIdempotentWhenColumnAlreadyPresent()
+    {
+        using var f = new MigrationTestFixture();
+        // Both column and index are already there from EnsureCreated + the chain run by the
+        // fixture. PRAGMA-probe must skip the ALTER, IF NOT EXISTS must skip the index.
+        var ex = Record.Exception(() => f.Service.EnsureVoiceClipWavFileName());
+        Assert.Null(ex);
+        Assert.True(f.ColumnExists("voice_clips", "wav_file_name"));
+        Assert.True(f.IndexExists("IX_voice_clips_character_wav_file_name"));
+    }
+
+    [Fact]
+    public void EnsureVoiceClipWavFileName_BackfillsIndexWhenColumnExistsButIndexMissing()
+    {
+        // Defensive: an interrupted v3 → v4 migration could leave the column without
+        // its companion index. Re-running the migration must add the index even though
+        // the column-add itself is a no-op.
+        using var f = new MigrationTestFixture();
+
+        f.Exec("DROP INDEX IF EXISTS IX_voice_clips_character_wav_file_name");
+        Assert.False(f.IndexExists("IX_voice_clips_character_wav_file_name"));
+        Assert.True(f.ColumnExists("voice_clips", "wav_file_name"));
+
+        f.Service.EnsureVoiceClipWavFileName();
+
+        Assert.True(f.IndexExists("IX_voice_clips_character_wav_file_name"));
+    }
+
+    [Fact]
+    public void EnsureVoiceClipWavFileName_PreservesExistingRows()
+    {
+        // Same data-preservation guarantee as the v2 → v3 migration: existing voice_clips
+        // rows survive the ALTER TABLE ADD COLUMN unchanged, with the new column defaulting
+        // to empty string for legacy data.
+        using var f = new MigrationTestFixture();
+
+        var character = new CharacterEntity { Name = "Test", Language = 1, Gender = 0, Race = 0 };
+        f.Context.Characters.Add(character);
+        f.Context.SaveChanges();
+
+        f.Context.VoiceClips.Add(new VoiceClipEntity
+        {
+            CharacterId = character.Id,
+            OriginalText = "hello world",
+            CleanedText = "hello world",
+            VoiceKey = "VoiceA",
+        });
+        f.Context.SaveChanges();
+        f.Context.ChangeTracker.Clear();
+
+        f.Exec("DROP INDEX IF EXISTS IX_voice_clips_character_wav_file_name");
+        f.Exec("ALTER TABLE voice_clips DROP COLUMN wav_file_name");
+        f.Service.EnsureVoiceClipWavFileName();
+
+        var rows = f.Context.VoiceClips.AsNoTracking().ToList();
+        Assert.Single(rows);
+        Assert.Equal("hello world", rows[0].OriginalText);
+        Assert.Equal("VoiceA", rows[0].VoiceKey);
+        Assert.Equal("", rows[0].WavFileName);
     }
 
     [Fact]
