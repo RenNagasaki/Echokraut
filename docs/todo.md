@@ -68,61 +68,11 @@ into actionable follow-ups.
 
 ---
 
-## 4. Default-voice-set export
-
-Generate a shareable "default voice set" bundle: for each voiced NPC, **one** representative
-voice clip, between **6 and 12 seconds** of audio, suitable for a community-distributable
-starter pack so new users get reasonable coverage out of the box without running their own
-generation pass.
-
-**Constraints:**
-- One file per NPC (the longest clip ≤ 12s, falling back to ≥ 6s; if no clip in the window,
-  skip the NPC and report it).
-- Targets the **client language** of whoever runs the export (so the bundle is language-pure).
-- Output format: probably zipped folder mirroring on-disk layout
-  (`<SpeakerName>/<filename>.wav`) so it can be drop-in copied to a fresh
-  `LocalSaveLocation`.
-
-**Open:**
-- Audio length detection: read WAV header from `_savedFiles` paths, OR keep length in the
-  DB at generation time (extra schema column, more accurate).
-- UI: probably a button in `NativeConfigWindow` Save/Loading panel next to the regular
-  per-clip export (TBD), with a progress dialog for the bulk job.
-
----
-
-## 5. BUG: live generations are not marked as generated in the DB
-
-**Symptom:** when a voice clip is generated through the normal runtime flow (chat message,
-addon talk, bubble — i.e. any path other than `IVoiceClipManagerService.GenerateForVoiceClip`
-called from the Voice Clip Manager UI), the audio file lands on disk but the
-`voice_clip_generations` row is **not** written. Result: the clip looks "not yet generated"
-in the Voice Clip Manager even though the audio is right there.
-
-**Suspected cause:** the live path runs through `BackendService.ProcessVoiceMessage` →
-backend → audio playback / save. That code path probably writes the file but does not call
-`IDatabaseService.LogVoiceClipGeneration(...)`. Only the bulk Voice Clip Manager path goes
-through `VoiceClipManagerService.GenerateForVoiceClip`, which does the DB log.
-
-**Fix sketch:**
-- Find the single chokepoint after a successful live generation where the file path is known
-  and the originating `VoiceClipEntity` (or enough info to find/create one) is in scope.
-- Call `_db.LogVoiceClipGeneration(voiceClipId, playerContentId, playerName, savePath)` from
-  there with `aliasGender = 0`.
-- Be careful with the "alias auto-generation" hook from track #4 in
-  `docs/continuation/shareable-alias-clips.md` — once the live path logs generations, it
-  should respect `Configuration.AutoGenerateShareableAliases` too, OR we explicitly decide
-  that auto-alias only fires from the bulk path. Decide before fixing.
-
-**Verification:** trigger a chat message that produces a voice clip with audio. Open Voice
-Clip Manager → the clip's row should show as generated, and re-clicking "play" should pull
-the file via `GetVoiceClipGeneration`, not re-generate.
-
 ---
 
 ## See also
 - `docs/continuation/shareable-alias-clips.md` — alias generation done; **Export/Import** is
-  the only open item there. Track #4 above is a related but separate export feature
-  (default voice set, length-bounded, single file per NPC).
-- `docs/continuation/voiced-line-detection.md` — closed; "no further work recommended".
-- `plans/quest-type-classification.md` — older, status not re-assessed.
+  the only open item there.
+- `plans/cutb-parser.md` — TODO. Cutscene NPC attribution via the per-cutscene `.cutb`
+  Havok timeline file. Not started; closes the ~85% gap of unvoiced cutscene dialog the
+  current harvest can't attribute.
