@@ -30,6 +30,7 @@ public class CommandService : ICommandService
     public event Action? ToggleConfigRequested;
     public event Action? ToggleFirstTimeRequested;
     public event Action? ToggleVoiceClipManagerRequested;
+    public event Action? ToggleGameDataToolsRequested;
     public event Action<EKEventId>? CancelAllRequested;
     public event Action? DumpSheetsRequested;
     public event Action<uint>? SearchSheetIdRequested;
@@ -67,6 +68,7 @@ public class CommandService : ICommandService
         _commandManager.AddHandler("/ekfirst", new CommandInfo(OnCommand) { HelpMessage = "Opens the first-time setup window" });
         _commandManager.AddHandler("/ekfirsttime", new CommandInfo(OnCommand) { HelpMessage = "Opens the first-time setup window (alias of /ekfirst)" });
         _commandManager.AddHandler("/ekhistory", new CommandInfo(OnCommand) { HelpMessage = "Opens the voice clip history window" });
+        _commandManager.AddHandler("/ekdata", new CommandInfo(OnCommand) { HelpMessage = "Opens the Game Data Tools window" });
         _commandManager.AddHandler("/ekdump", new CommandInfo(OnCommand) { HelpMessage = "Dumps all Lumina sheets to TSV files" });
         _commandManager.AddHandler("/eksearchid", new CommandInfo(OnCommand) { HelpMessage = "/eksearchid <value> -> Searches every sheet for a uint32 column value and writes hits to sheet_dump/search_<value>.tsv" });
 
@@ -93,7 +95,13 @@ public class CommandService : ICommandService
                 ToggleFirstTimeUi();
                 break;
             case "/ekhistory":
-                ToggleVoiceClipManagerRequested?.Invoke();
+                // Route through ToggleVoiceClipManagerUi so the FirstTime gate applies
+                // here too — opening VCM before setup is finished should funnel users
+                // back to the wizard, same as /ek.
+                ToggleVoiceClipManagerUi();
+                break;
+            case "/ekdata":
+                ToggleGameDataToolsUi();
                 break;
             case "/ekdump":
                 DumpSheetsRequested?.Invoke();
@@ -214,6 +222,19 @@ public class CommandService : ICommandService
 
     public void ToggleFirstTimeUi() => ToggleFirstTimeRequested?.Invoke();
 
+    public void ToggleGameDataToolsUi()
+    {
+        // FirstTime gate: until the user finishes setup, every window-opening command
+        // funnels into the wizard so they don't start poking at backend tooling that
+        // depends on a configured backend. Once FirstTime is false the request goes
+        // through normally; NativeWindowManager.ToggleGameDataTools then applies its
+        // own None-mode guard (refuses to open if there's no live backend).
+        if (_config.FirstTime)
+            ToggleFirstTimeRequested?.Invoke();
+        else
+            ToggleGameDataToolsRequested?.Invoke();
+    }
+
     private unsafe void PrintTargetInfo()
     {
         var localPlayer = _gameObjects.LocalPlayer;
@@ -275,6 +296,7 @@ public class CommandService : ICommandService
         _commandManager.RemoveHandler("/ekfirst");
         _commandManager.RemoveHandler("/ekfirsttime");
         _commandManager.RemoveHandler("/ekhistory");
+        _commandManager.RemoveHandler("/ekdata");
         _commandManager.RemoveHandler("/ekdump");
         _commandManager.RemoveHandler("/eksearchid");
     }

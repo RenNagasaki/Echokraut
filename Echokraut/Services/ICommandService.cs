@@ -12,6 +12,7 @@ public interface ICommandService
     event Action? ToggleConfigRequested;
     event Action? ToggleFirstTimeRequested;
     event Action? ToggleVoiceClipManagerRequested;
+    event Action? ToggleGameDataToolsRequested;
     event Action<EKEventId>? CancelAllRequested;
     event Action? DumpSheetsRequested;
     event Action<uint>? SearchSheetIdRequested;
@@ -19,6 +20,7 @@ public interface ICommandService
     void ToggleConfigUi();
     void ToggleVoiceClipManagerUi();
     void ToggleFirstTimeUi();
+    void ToggleGameDataToolsUi();
     void PrintText(string name, string text);
     void Dispose();
 }

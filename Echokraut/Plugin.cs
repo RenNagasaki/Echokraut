@@ -150,6 +150,7 @@ public partial class Plugin : IDalamudPlugin
         _commands.ToggleConfigRequested    += _windowManager.ToggleConfig;
         _commands.ToggleFirstTimeRequested += _windowManager.ToggleFirstTime;
         _commands.ToggleVoiceClipManagerRequested += _windowManager.ToggleVoiceClipManager;
+        _commands.ToggleGameDataToolsRequested += _windowManager.ToggleGameDataTools;
         _commands.CancelAllRequested += _ => _audioPlayback?.ClearQueue();
         _commands.DumpSheetsRequested += () =>
         {
