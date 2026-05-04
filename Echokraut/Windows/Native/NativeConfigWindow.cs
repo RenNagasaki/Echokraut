@@ -51,6 +51,10 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     // Settings sub-panels (index matches inner tab order)
     private readonly ScrollingListNode?[] _settingsPanels = new ScrollingListNode?[5];
     private TabBarNode? _settingsTabBar;
+    // Live-generation snapshot for the settings sub-tab bar (Chat tab disappears in None
+    // mode — chat TTS is purely live-per-line, has no audio-file fallback like dialogue
+    // does, so the whole tab is meaningless without a backend).
+    private bool? _settingsTabsLiveGenSnapshot;
 
     // Top-level tab bar (Settings / Voices / Phonetics / Logs). Promoted to a field because
     // None-mode (no live generation) hides the Voices + Phonetics tabs at runtime — we need
@@ -294,11 +298,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _settingsPanels[3] = BuildSaveLoadPanel(_innerContentPos, _innerContentSize);
         _settingsPanels[4] = BuildBackendPanel(_innerContentPos, _innerContentSize);
 
-        _settingsTabBar.AddTab(Loc.S("General"),   () => ShowSettingsPanel(0));
-        _settingsTabBar.AddTab(Loc.S("Dialogue"),  () => ShowSettingsPanel(1));
-        _settingsTabBar.AddTab(Loc.S("Chat"),      () => ShowSettingsPanel(2));
-        _settingsTabBar.AddTab(Loc.S("Storage"),   () => ShowSettingsPanel(3));
-        _settingsTabBar.AddTab(Loc.S("Backend"),   () => ShowSettingsPanel(4));
+        _settingsTabsLiveGenSnapshot = _config.Alltalk.HasLiveGeneration;
+        BuildSettingsTabs(_settingsTabsLiveGenSnapshot.Value);
 
         // Link buttons — positioned top-right, only visible on Settings tab
         const float discordW = 160f;
@@ -444,6 +445,42 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         };
         _topTabBar.SelectTab(targetLabel);
         ShowTopPanel(targetIndex);
+    }
+
+    /// <summary>
+    /// (Re)populates the inner Settings tab bar. Chat is omitted in None mode — chat TTS is
+    /// purely live-per-line, has no audio-file fallback path the way dialogue does, so the
+    /// whole tab has nothing to control without a backend. General / Dialogue / Storage /
+    /// Backend always stay because they cover playback controls, file paths, and the mode
+    /// switcher itself (which is how the user gets out of None mode).
+    /// </summary>
+    private void BuildSettingsTabs(bool liveGen)
+    {
+        if (_settingsTabBar == null) return;
+        _settingsTabBar.Clear();
+
+        _settingsTabBar.AddTab(Loc.S("General"),  () => ShowSettingsPanel(0));
+        _settingsTabBar.AddTab(Loc.S("Dialogue"), () => ShowSettingsPanel(1));
+        if (liveGen)
+            _settingsTabBar.AddTab(Loc.S("Chat"), () => ShowSettingsPanel(2));
+        _settingsTabBar.AddTab(Loc.S("Storage"),  () => ShowSettingsPanel(3));
+        _settingsTabBar.AddTab(Loc.S("Backend"),  () => ShowSettingsPanel(4));
+
+        // Restore the previously-active sub-tab when its tab still exists; otherwise (the
+        // user was on Chat and we just hid it) snap to General. Panel indices stay the
+        // same regardless of which tabs are present — only the tab bar itself shrinks.
+        var keepActive = _activeSettingsTab != 2 || liveGen;
+        var targetIndex = keepActive ? _activeSettingsTab : 0;
+        var targetLabel = targetIndex switch
+        {
+            1 => Loc.S("Dialogue"),
+            2 => Loc.S("Chat"),
+            3 => Loc.S("Storage"),
+            4 => Loc.S("Backend"),
+            _ => Loc.S("General"),
+        };
+        _settingsTabBar.SelectTab(targetLabel);
+        ShowSettingsPanel(targetIndex);
     }
 
     private void ShowTopPanel(int index)
@@ -600,6 +637,13 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         {
             _topTabsLiveGenSnapshot = liveGen;
             BuildTopTabs(liveGen);
+        }
+
+        // Settings sub-tab bar follows the same gate — Chat tab disappears in None mode.
+        if (_settingsTabsLiveGenSnapshot != liveGen)
+        {
+            _settingsTabsLiveGenSnapshot = liveGen;
+            BuildSettingsTabs(liveGen);
         }
 
         // Game Data Tools button is visually dimmed when live generation is unavailable.
