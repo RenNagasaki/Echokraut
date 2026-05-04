@@ -8,8 +8,7 @@ namespace Echokraut.Tests;
 
 public class RemoteUrlsJsonTests
 {
-    private static readonly string RepoJsonPath = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Echokraut", "Resources", "RemoteUrls.json"));
+    private static readonly string RepoJsonPath = TestPaths.RemoteUrlsJsonPath;
 
     private static RemoteUrlsData LoadFromFile()
     {

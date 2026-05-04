@@ -7,8 +7,7 @@ namespace Echokraut.Tests;
 
 public class RemoteUrlsReachabilityTests : IDisposable
 {
-    private static readonly string RepoJsonPath = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "Echokraut", "Resources", "RemoteUrls.json"));
+    private static readonly string RepoJsonPath = TestPaths.RemoteUrlsJsonPath;
 
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
     private readonly RemoteUrlsData _data;
