@@ -212,13 +212,8 @@ public static class ServiceBuilder
         container.RegisterFactory<ICommandService>(c => new CommandService(
             commandManager,
             chatGui,
-            condition,
             c.GetService<ILogService>(),
-            c.GetService<ICharacterDataService>(),
-            c.GetService<ILuminaService>(),
-            configuration,
-            c.GetService<IAudioFileService>(),
-            c.GetService<IGameObjectService>()));
+            configuration));
 
         container.RegisterFactory<ISoundHelper>(c => new SoundHelper(
             c.GetService<ILogService>(), sigScanner, gameInteropProvider));

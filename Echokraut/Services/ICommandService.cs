@@ -14,8 +14,6 @@ public interface ICommandService
     event Action? ToggleVoiceClipManagerRequested;
     event Action? ToggleGameDataToolsRequested;
     event Action<EKEventId>? CancelAllRequested;
-    event Action? DumpSheetsRequested;
-    event Action<uint>? SearchSheetIdRequested;
 
     void ToggleConfigUi();
     void ToggleVoiceClipManagerUi();

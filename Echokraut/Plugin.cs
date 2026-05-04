@@ -152,16 +152,6 @@ public partial class Plugin : IDalamudPlugin
         _commands.ToggleVoiceClipManagerRequested += _windowManager.ToggleVoiceClipManager;
         _commands.ToggleGameDataToolsRequested += _windowManager.ToggleGameDataTools;
         _commands.CancelAllRequested += _ => _audioPlayback?.ClearQueue();
-        _commands.DumpSheetsRequested += () =>
-        {
-            var harvest = _services.GetService<IDialogHarvestService>();
-            _ = harvest.DumpAllSheetsAsync(CancellationToken.None);
-        };
-        _commands.SearchSheetIdRequested += value =>
-        {
-            var harvest = _services.GetService<IDialogHarvestService>();
-            _ = harvest.SearchSheetsForValueAsync(value, CancellationToken.None);
-        };
     }
 
     private void HandleStartup()

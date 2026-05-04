@@ -18,6 +18,4 @@ public interface IDialogHarvestService : IDisposable
     /// (when cast back to the enum) are harvested. <c>null</c> = all quests + non-quest dialog (DefaultTalk, Bubbles).</param>
     Task RunAsync(ClientLanguage language, CancellationToken ct, int? questTypeFilter = null);
     string? ExportQuestLuaDebug(uint questRowId);
-    Task DumpAllSheetsAsync(CancellationToken ct);
-    Task SearchSheetsForValueAsync(uint value, CancellationToken ct);
 }

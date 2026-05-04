@@ -13,8 +13,6 @@ public interface IAudioFileService
     string RemovePlayerNameInText(string text);
     string VoiceMessageToFileName(string voiceMessage);
     Task<bool> WriteStreamToFile(EKEventId eventId, VoiceMessage voiceMessage, Stream stream, string localSaveLocation, bool googleDriveUpload);
-    int DeleteLastNFiles(int nFilesToDelete = 10);
-    int DeleteLastNMinutesFiles(int nMinutesFilesToDelete = 10);
     bool RemoveSavedNpcFiles(string localSaveLocation, string speaker);
     int RemoveAllSavedFiles(string localSaveLocation);
 }
