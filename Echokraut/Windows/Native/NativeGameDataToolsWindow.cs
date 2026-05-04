@@ -28,12 +28,21 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
     private readonly IVoiceSampleExtractorService _voiceExtract;
     private readonly IClientState _clientState;
     private readonly ILogService _log;
+    private readonly Configuration _config;
 
     // ── Quest Dialog Harvest section ─────────────────────────────────────────
     private TextButtonNode? _harvestButton;
     private CancellationTokenSource? _harvestCts;
     private TextInputNode? _debugQuestIdInput;
     private TextButtonNode? _debugExportButton;
+    private TextDropDownNode? _questTypeDropDown;
+    private string[]? _questTypeLabels;
+    // Maps dropdown index → questTypeFilter passed to RunAsync.
+    //   index 0 (All)      → null  (everything)
+    //   index 1..6         → 1..6  (specific QuestType)
+    //   index 7 (Non-Quest)→ 0     (QuestType.None — DefaultTalk etc.)
+    private int _selectedQuestTypeIndex;
+    private int _pendingQuestTypeSelection = -1;
 
     // ── Voice Starter Set section ────────────────────────────────────────────
     private SliderNode? _samplesSlider;
@@ -70,6 +79,7 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
         IVoiceSampleExtractorService voiceExtract,
         IClientState clientState,
         ILogService log,
+        Configuration config,
         Action toggleConfig,
         Action toggleVoiceClipManager)
     {
@@ -77,6 +87,7 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
         _voiceExtract = voiceExtract;
         _clientState = clientState;
         _log = log;
+        _config = config;
         _toggleConfig = toggleConfig;
         _toggleVoiceClipManager = toggleVoiceClipManager;
 
@@ -129,13 +140,29 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
             w);
 
         _harvestButton = Button(Loc.S("Start Harvest"), 160, OnHarvestClick);
-        _debugQuestIdInput = Input("Quest ID", 120, 10, "65614", _ => { });
-        _debugExportButton = Button(Loc.S("Export Quest Lua Debug"), 200, OnDebugExportClick);
+
+        // Quest type filter — mirrors the dropdown in the VC Manager so the user can scope
+        // the harvest to a single quest category (or non-quest dialog only).
+        _questTypeLabels = new[]
+        {
+            Loc.S("All"), Loc.S("Main Scenario"), Loc.S("Side Quest"),
+            Loc.S("Unlock / Class Quest"), Loc.S("Beast Tribe"),
+            Loc.S("Repeatable"), Loc.S("Seasonal Event"), Loc.S("Non-Quest Dialog")
+        };
+        _questTypeDropDown = new TextDropDownNode
+        {
+            Size = new Vector2(180, 28),
+            Options = [],
+        };
+        _questTypeDropDown.OptionListNode.Options = new System.Collections.Generic.List<string>(_questTypeLabels);
+        _questTypeDropDown.OptionListNode.SelectedOption = _questTypeLabels[0];
+        if (_questTypeDropDown.LabelNode.Node != null)
+            _questTypeDropDown.LabelNode.String = _questTypeLabels[0];
+        _questTypeDropDown.OnOptionSelected = selected => _pendingQuestTypeSelection = Array.IndexOf(_questTypeLabels, selected);
 
         var harvestRow = new HorizontalListNode { Size = new Vector2(w, 28), ItemSpacing = 6 };
         harvestRow.AddNode(_harvestButton);
-        harvestRow.AddNode(_debugQuestIdInput);
-        harvestRow.AddNode(_debugExportButton);
+        harvestRow.AddNode(_questTypeDropDown);
 
         CreateCollapsibleSection(list, Loc.S("Quest Dialog Harvest"), w, false,
             [questDesc, harvestRow]);
@@ -149,25 +176,26 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
                   "Always overwrites previous output."),
             w);
 
+        const int defaultSamples = 1;
         _samplesSlider = new SliderNode
         {
-            Size = new Vector2(w - 120, 22),
+            Size = new Vector2(w - 260, 22),
             Range = 1..5,
-            Value = 3,
+            Value = defaultSamples,
             DecimalPlaces = 0,
         };
-        _samplesValueLabel = Label("3", 30);
+        // Combined label that shows what the slider does + what's currently selected.
+        // Updated in OnValueChanged so the count stays in sync with the slider thumb.
+        _samplesValueLabel = Label(string.Format(Loc.S("Samples per NPC: {0} (1-5)"), defaultSamples), 240);
         _samplesSlider.OnValueChanged = v =>
         {
             if (_samplesValueLabel != null)
-                _samplesValueLabel.String = ((int)v).ToString();
+                _samplesValueLabel.String = string.Format(Loc.S("Samples per NPC: {0} (1-5)"), (int)v);
         };
 
-        var sliderLabel = Label(Loc.S("Samples per NPC (1-5):"), 180);
         var sliderRow = new HorizontalListNode { Size = new Vector2(w, 24), ItemSpacing = 6 };
-        sliderRow.AddNode(sliderLabel);
-        sliderRow.AddNode(_samplesSlider);
         sliderRow.AddNode(_samplesValueLabel);
+        sliderRow.AddNode(_samplesSlider);
 
         _starterSetButton = Button(Loc.S("Build Starter Set"), 200, OnStarterSetClick);
 
@@ -182,6 +210,25 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
                   "of community voice sets."),
             w);
         CreateCollapsibleSection(list, Loc.S("Import / Export"), w, true, [importDesc]);
+
+        // ── Quest Lua Debug (subgroup under Import / Export) ─────────────────
+        // Developer / power-user tool — emits the disassembled Lua script + bytecode trace
+        // for a single quest so its ACTOR→text mapping can be inspected. Lives below
+        // Import/Export as a sibling collapsible section, collapsed by default.
+        var luaDebugDesc = WrappedLabel(
+            Loc.S("Export the disassembled Lua script and bytecode trace for a single quest. " +
+                  "Used to investigate why a quest's NPC dialog isn't getting matched."),
+            w);
+
+        _debugQuestIdInput = Input("Quest ID", 120, 10, "65614", _ => { });
+        _debugExportButton = Button(Loc.S("Export Quest Lua Debug"), 200, OnDebugExportClick);
+
+        var luaDebugRow = new HorizontalListNode { Size = new Vector2(w, 28), ItemSpacing = 6 };
+        luaDebugRow.AddNode(_debugQuestIdInput);
+        luaDebugRow.AddNode(_debugExportButton);
+
+        CreateCollapsibleSection(list, Loc.S("Quest Lua Debug"), w, true,
+            [luaDebugDesc, luaDebugRow]);
 
         AddNode(list);
 
@@ -253,8 +300,28 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
     protected override void OnUpdate(AtkUnitBase* addon)
     {
         _log.UpdateMainThreadLogs();
+
+        // Process deferred quest-type dropdown selection (TextDropDownNode crashes if we read
+        // it inside its own OnOptionSelected callback — defer to the next frame).
+        if (_pendingQuestTypeSelection >= 0)
+        {
+            _selectedQuestTypeIndex = _pendingQuestTypeSelection;
+            _pendingQuestTypeSelection = -1;
+        }
+
         UpdateProgressBar();
         ClampToScreen(addon);
+    }
+
+    /// <summary>Translates the dropdown selection into the <c>questTypeFilter</c> argument
+    /// of <see cref="IDialogHarvestService.RunAsync"/>.</summary>
+    private int? GetQuestTypeFilter()
+    {
+        // 0 → All (no filter), 1..6 → specific QuestType, 7 → None / non-quest only
+        var idx = _selectedQuestTypeIndex;
+        if (idx <= 0) return null;        // All
+        if (idx == 7) return 0;           // QuestType.None
+        return idx;                       // 1..6
     }
 
     /// <summary>
@@ -343,7 +410,8 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
             lock (_statusLock) _harvestLabel = Loc.S("Starting...");
             _harvestCurrent = 0;
             _harvestTotal = 1;
-            _ = _dialogHarvest.RunAsync(_clientState.ClientLanguage, _harvestCts.Token).ContinueWith(t =>
+            var filter = GetQuestTypeFilter();
+            _ = _dialogHarvest.RunAsync(_clientState.ClientLanguage, _harvestCts.Token, filter).ContinueWith(t =>
             {
                 if (_harvestButton != null)
                     _harvestButton.String = Loc.S("Start Harvest");
@@ -373,7 +441,7 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
             return;
         }
 
-        var samples = _samplesSlider != null ? Math.Clamp((int)_samplesSlider.Value, 1, 5) : 3;
+        var samples = _samplesSlider != null ? Math.Clamp((int)_samplesSlider.Value, 1, 5) : 1;
         _starterCts?.Dispose();
         _starterCts = new CancellationTokenSource();
 
@@ -382,7 +450,22 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
         // Reset the bar at run start; live progress events take over from here.
         SetExtractProgress(Loc.S("Starting..."), 0, 0);
 
-        _ = _voiceExtract.RunAsync(_clientState.ClientLanguage, samples, _starterCts.Token).ContinueWith(t =>
+        // When AllTalk is configured as a Local Instance, route the output directly into
+        // its voices folder (and let the extractor wipe it first — see VoiceSampleExtractor
+        // for the wipe-on-override semantic). Same target as the First-Time install flow:
+        // <LocalInstallPath>/alltalk_tts/voices/. Remote / no-instance setups fall back to
+        // <LocalSaveLocation>/FF14-Voices/ which the user can copy manually.
+        string? overrideRoot = null;
+        string subfolder = "FF14-Voices";
+        if (_config.Alltalk.InstanceType == AlltalkInstanceType.Local
+            && !string.IsNullOrWhiteSpace(_config.Alltalk.LocalInstallPath))
+        {
+            overrideRoot = System.IO.Path.Combine(_config.Alltalk.LocalInstallPath, "alltalk_tts");
+            subfolder = "voices";
+        }
+
+        _ = _voiceExtract.RunAsync(_clientState.ClientLanguage, samples, _starterCts.Token, overrideRoot, subfolder)
+            .ContinueWith(t =>
         {
             if (_starterSetButton != null)
                 _starterSetButton.String = Loc.S("Build Starter Set");

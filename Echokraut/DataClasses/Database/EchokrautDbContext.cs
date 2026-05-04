@@ -14,6 +14,7 @@ public class EchokrautDbContext : DbContext
     public DbSet<PhoneticCorrectionEntity> PhoneticCorrections => Set<PhoneticCorrectionEntity>();
     public DbSet<VoiceClipGenerationEntity> VoiceClipGenerations => Set<VoiceClipGenerationEntity>();
     public DbSet<LodestoneLookupEntity> LodestoneLookups => Set<LodestoneLookupEntity>();
+    public DbSet<CharacterSpeakerAliasEntity> CharacterSpeakerAliases => Set<CharacterSpeakerAliasEntity>();
 
     private readonly string _dbPath = "";
 
@@ -119,6 +120,22 @@ public class EchokrautDbContext : DbContext
             .HasMany(v => v.AllowedRaces)
             .WithOne(r => r.Voice)
             .HasForeignKey(r => r.VoiceId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        // Speaker aliases: unique on (character_id, language, alias). Lookup at runtime is
+        // (language, alias) → character_id, so a covering index on those two columns handles
+        // the hot path; the unique index on the full triple guards harvest from inserting
+        // dupes for the same character.
+        modelBuilder.Entity<CharacterSpeakerAliasEntity>()
+            .HasIndex(a => new { a.CharacterId, a.Language, a.Alias })
+            .IsUnique();
+        modelBuilder.Entity<CharacterSpeakerAliasEntity>()
+            .HasIndex(a => new { a.Language, a.Alias });
+
+        modelBuilder.Entity<CharacterEntity>()
+            .HasMany<CharacterSpeakerAliasEntity>()
+            .WithOne(a => a.Character)
+            .HasForeignKey(a => a.CharacterId)
             .OnDelete(DeleteBehavior.Cascade);
     }
 }

@@ -84,6 +84,7 @@ public class RemoteUrlService : IRemoteUrlService, IDisposable
             EmoticonsUrl = StringOrFallback(remote.EmoticonsUrl, fallback.EmoticonsUrl),
             VoiceNameUrls = remote.VoiceNameUrls.Count > 0 ? remote.VoiceNameUrls : fallback.VoiceNameUrls,
             QuestNpcAliasesUrl = StringOrFallback(remote.QuestNpcAliasesUrl, fallback.QuestNpcAliasesUrl),
+            VoiceExtractAliasesUrl = StringOrFallback(remote.VoiceExtractAliasesUrl, fallback.VoiceExtractAliasesUrl),
         };
     }
 

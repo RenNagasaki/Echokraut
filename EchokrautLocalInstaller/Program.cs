@@ -198,8 +198,6 @@ public class Program
             var alltalkFolderWrong = Path.Join(installFolder, alltalkFolderNameWrong);
             var alltalkFolder = Path.Join(installFolder, Constants.ALLTALKFOLDERNAME);
             var modelFolder = Path.Join(alltalkFolder, "models", "xtts", "xtts2.0.3");
-            var voicesFile = Path.Join(alltalkFolder, "voices.zip");
-            var voices2File = Path.Join(alltalkFolder, "voices2.zip");
             var confignewFile = Path.Join(alltalkFolder, "confignew.json");
             var ttsEnginesFile = Path.Join(alltalkFolder, "system", "tts_engines", "tts_engines.json");
             var modelSettingsFile = Path.Join(alltalkFolder, "system", "tts_engines", "xtts", "model_settings.json");
@@ -273,39 +271,12 @@ public class Program
                     }
                 }
 
-                Log($"Downloading voices.zip to {voicesFile}");
-                using(var client = new HttpClient() { Timeout = TimeSpan.FromMinutes(30) })
-                {
-                    try
-                    {
-                        DownloadFileAsync(client, voicesUrl, voicesFile, "voices.zip").Wait();
-                    }
-                    catch (Exception ex)
-                    {
-                        Log($"Error while downloading voices.zip: {ex}");
-                    }
-                }
-
-                Log($"Extracting voices.zip");
-                System.IO.Compression.ZipFile.ExtractToDirectory(voicesFile, alltalkFolder, true);
-                File.Delete(voicesFile);
-
-                Log($"Downloading voices2.zip to {voices2File}");
-                using(var client = new HttpClient() { Timeout = TimeSpan.FromMinutes(30) })
-                {
-                    try
-                    {
-                        DownloadFileAsync(client, voices2Url, voices2File, "voices2.zip").Wait();
-                    }
-                    catch (Exception ex)
-                    {
-                        Log($"Error while downloading voices2.zip: {ex}");
-                    }
-                }
-
-                Log($"Extracting voices2.zip");
-                System.IO.Compression.ZipFile.ExtractToDirectory(voices2File, alltalkFolder, true);
-                File.Delete(voices2File);
+                // Voice samples used to be downloaded via voices.zip + voices2.zip and
+                // extracted into alltalkFolder here. As of the Voice Sample Extractor
+                // integration in the First-Time install flow, the plugin builds those
+                // samples from the user's own FFXIV game files via Lumina (no separate
+                // download). voicesUrl / voices2Url remain in the install args for
+                // back-compat but are no longer consumed by the installer.
 
                 var silentArgs = cpuMode ? "-silent cpu" : "-silent";
                 Log($"Configuring InstallProcess (atsetup args: {silentArgs})");

@@ -221,6 +221,14 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
                 return;
             }
 
+            // Step 8.5: Cache hit — if we've previously generated this exact clip for this
+            // player and the file is still on disk, skip the backend call and play it back.
+            // Without this every dialog re-generation costs a full backend round-trip even
+            // though SaveToLocal had cached the audio. Voice changes invalidate via the live
+            // path's StopPlaying + RecreateInference flow, so cached files always reflect the
+            // currently-assigned voice for that (clip, player) pair.
+            TryLoadCachedAudio(voiceMessage, eventId);
+
             // Step 9: Process the voice message
             _backend.ProcessVoiceMessage(voiceMessage);
         }
@@ -240,12 +248,13 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         // Special handling for chat
         if (source == TextSource.Chat)
         {
-            if (_config.VoiceChatIn3D && speaker == null)
-            {
-                _log.Info(nameof(CleanText), "Player is not on the same map. Can't voice", eventId);
-                return null;
-            }
-
+            // Off-map chat senders (no resolvable GameObject) are still valid Player entries.
+            // Race / Gender start as Unknown and get filled in asynchronously by
+            // TryEnrichPlayerFromLodestoneAsync — that's why we hard-set ObjectKind.Pc for the
+            // Chat source in GetOrCreateNpcDataAsync, so that enrichment branch fires.
+            // SpeakerFollowObj already falls back to LocalPlayer when 3D audio is enabled but
+            // the speaker isn't on this map (see VoiceMessage construction below), so we don't
+            // need to drop the message just because it came from a different zone.
             if (!_config.VoiceChatIn3D)
                 speaker = _gameObjects.LocalPlayer;
 
@@ -280,10 +289,90 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         return cleanText;
     }
 
+    /// <summary>
+    /// Resolve a fakename (e.g. "???" or "Mysterious Lady") to a single character row,
+    /// disambiguating across multi-match cases. Priority:
+    /// <list type="number">
+    /// <item>If the alias resolves to exactly one character row, return it.</item>
+    /// <item>If multiple match, prefer the row whose <c>CharacterInstance.NpcBaseId</c>
+    ///     equals the live <paramref name="speaker"/>'s BaseId — that's a direct match
+    ///     against the actually-spoken NPC and beats heuristics.</item>
+    /// <item>Otherwise filter to characters physically present in the object table now
+    ///     (anonymous "???" speakers always have their real ENpcBase spawned in the
+    ///     scene, even when the dialog box hides their name).</item>
+    /// <item>If still ambiguous, prefer one not yet resolved during this dialog session
+    ///     (<see cref="DialogState.SpeakersResolvedThisDialog"/>). FFXIV cutscenes
+    ///     typically have each actor speak with a different fakename in turn — this
+    ///     tie-breaker mirrors the harvest's silent-actor heuristic.</item>
+    /// </list>
+    /// Returns <c>null</c> when no candidate survives. Callers leave the speaker name
+    /// unchanged and fall through to existing "???"-handling in <c>AddonTalkHelper</c>.
+    /// </summary>
+    private int? ResolveCharacterByAlias(string fakename, Dalamud.Game.ClientLanguage language, IGameObject? speaker, EKEventId eventId)
+    {
+        var candidates = _db.FindCharacterIdsByAlias(fakename, (int)language);
+        if (candidates.Count == 0) return null;
+        if (candidates.Count == 1) return candidates[0];
+
+        // BaseId match wins outright — it's the actual ENpcBase of the speaker the game
+        // is currently rendering. The alias→character mapping is only useful as a name
+        // canonicalizer; the BaseId already pinpoints which character row to use.
+        if (speaker != null && speaker.DataId != 0)
+        {
+            foreach (var charId in candidates)
+            {
+                var instances = _db.GetInstancesForCharacter(charId);
+                if (instances.Any(i => (uint)i.NpcBaseId == speaker.DataId))
+                {
+                    _log.Debug(nameof(ResolveCharacterByAlias),
+                        $"Alias '{fakename}' has {candidates.Count} candidates — picked {charId} via speaker.BaseId={speaker.DataId} match.",
+                        eventId);
+                    return charId;
+                }
+            }
+        }
+
+        // No BaseId match (or no speaker) — fall back to physical-presence filter.
+        var spawned = _gameObjects.GetSpawnedNpcBaseIds();
+        var present = candidates;
+        if (spawned.Count > 0)
+        {
+            var filtered = candidates
+                .Where(charId => _db.GetInstancesForCharacter(charId)
+                    .Any(i => spawned.Contains((uint)i.NpcBaseId)))
+                .ToList();
+            if (filtered.Count > 0) present = filtered;
+            // If no candidate is physically present, fall through with the original list —
+            // the alias was registered for a reason and an inexact pick beats no pick.
+        }
+
+        if (present.Count == 1)
+        {
+            _log.Debug(nameof(ResolveCharacterByAlias),
+                $"Alias '{fakename}' has {candidates.Count} candidates — narrowed to {present[0]} via physical presence.",
+                eventId);
+            return present[0];
+        }
+
+        // Still multiple. Prefer one that hasn't been used this dialog yet.
+        var spoken = DialogState.SpeakersResolvedThisDialog;
+        var notYetSpoken = present.FirstOrDefault(c => !spoken.Contains(c));
+        var pick = notYetSpoken != 0 ? notYetSpoken : present[0];
+        _log.Debug(nameof(ResolveCharacterByAlias),
+            $"Alias '{fakename}' has {present.Count} present candidates — picked {pick} (not-yet-spoken tie-break={notYetSpoken != 0}).",
+            eventId);
+        return pick;
+    }
+
     private async Task<NpcMapData> GetOrCreateNpcDataAsync(IGameObject? speaker, SeString speakerName, string cleanText, TextSource source, EKEventId eventId, string worldEnglish = "")
     {
         var cleanSpeakerName = _textProcessing.NormalizePunctuation(speakerName.TextValue);
-        var objectKind = speaker?.ObjectKind ?? ObjectKind.None;
+        // Chat senders are always Players. Without forcing this, off-map senders (speaker==null)
+        // would fall through with ObjectKind.None and skip the Pc-only Lodestone enrichment
+        // branch further down — leaving Race/Gender as Unknown indefinitely.
+        var objectKind = source == TextSource.Chat
+            ? ObjectKind.Pc
+            : speaker?.ObjectKind ?? ObjectKind.None;
         var npcData = new NpcMapData(objectKind);
 
         // Get character race and gender
@@ -294,9 +383,37 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         npcData.Language = _clientState.ClientLanguage;
         npcData.World = worldEnglish ?? "";
 
-        // Handle NPC name mapping
+        // Handle NPC name mapping. Two-step canonicalization:
+        //   1) VoiceNames{LANG}.json — community-curated voice families (e.g. "Y'shtola's
+        //      Avatar" → "Y'shtola"). Static, ships with the plugin.
+        //   2) DB speaker aliases — harvest-discovered (-Fakename-) hints (e.g.
+        //      "Mysterious Lady" → "Y'shtola Rhul"). Per-installation, populated by
+        //      DialogHarvestService.PersistLinkedDialogs. May be ambiguous for anonymous
+        //      markers like "???"; resolved via physical-presence + already-spoken
+        //      tracking inside ResolveCharacterByAlias.
+        // The DB step only runs when (1) didn't change the name (i.e. VoiceNames missed),
+        // so a VoiceNames hit always wins over a per-user alias.
         if (npcData.ObjectKind != ObjectKind.Pc)
+        {
+            var beforeJson = npcData.Name;
             npcData.Name = _jsonData.GetNpcName(npcData.Name);
+            if (string.Equals(beforeJson, npcData.Name, StringComparison.OrdinalIgnoreCase))
+            {
+                var resolvedCharId = ResolveCharacterByAlias(npcData.Name, npcData.Language, speaker, eventId);
+                if (resolvedCharId.HasValue)
+                {
+                    var aliasChar = _db.GetAllCharacters().FirstOrDefault(c => c.Id == resolvedCharId.Value);
+                    if (aliasChar != null && !string.IsNullOrEmpty(aliasChar.Name))
+                    {
+                        npcData.Name = aliasChar.Name;
+                        // Track that this character has now been "used" via alias resolution
+                        // in this dialog session. Drives the disambiguation tie-breaker for
+                        // future multi-match lookups in the same cutscene.
+                        DialogState.SpeakersResolvedThisDialog.Add(resolvedCharId.Value);
+                    }
+                }
+            }
+        }
 
         if (npcData.Name == "PLAYER")
             npcData.Name = _gameObjects.LocalPlayer?.Name.ToString() ?? "PLAYER";
@@ -419,6 +536,39 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
         {
             _log.Debug(nameof(LogVoiceClip), $"Failed to log voice clip: {ex.Message}",
                 new EKEventId(0, TextSource.None));
+        }
+    }
+
+    /// <summary>
+    /// If a previous generation of this (clip, player, alias_gender=0) exists on disk, attach
+    /// the file stream to <paramref name="voiceMessage"/> and flag it as locally-loaded so
+    /// <see cref="IBackendService.GenerationLoopAsync"/> short-circuits the backend call.
+    /// Gated on the user having any caching mode active (SaveToLocal or LoadFromLocalFirst).
+    /// </summary>
+    private void TryLoadCachedAudio(VoiceMessage voiceMessage, EKEventId eventId)
+    {
+        if (!_config.SaveToLocal && !_config.LoadFromLocalFirst) return;
+        if (voiceMessage.VoiceClipId <= 0) return;
+
+        try
+        {
+            var playerId = voiceMessage.HasPlayerPlaceholder
+                ? (long)_gameObjects.LocalPlayerContentId
+                : 0;
+            var gen = _db.GetVoiceClipGeneration(voiceMessage.VoiceClipId, playerId);
+            var path = gen?.SavePath;
+            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) return;
+
+            voiceMessage.Stream = System.IO.File.OpenRead(path);
+            voiceMessage.LoadedLocally = true;
+            _log.Debug(nameof(TryLoadCachedAudio),
+                $"Cache hit — replaying saved audio: {path}", eventId);
+        }
+        catch (Exception ex)
+        {
+            // Cache lookup failed — fall through to normal generation. Don't crash the pipeline.
+            _log.Warning(nameof(TryLoadCachedAudio),
+                $"Cache lookup failed, will regenerate: {ex.Message}", eventId);
         }
     }
 

@@ -46,4 +46,15 @@ public class RemoteUrlsData
     /// </summary>
     [JsonPropertyName("questNpcAliasesUrl")]
     public string QuestNpcAliasesUrl { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Optional URL for the community-curated voice-extract shortname alias mapping. Loaded
+    /// by <c>VoiceSampleExtractorService</c> with the embedded <c>VoiceExtractAliases.json</c>
+    /// as fallback. Per-user overrides live in
+    /// <c>&lt;localSaveLocation&gt;/FF14-Voices/voice_extract_aliases.json</c> (sibling of
+    /// <c>voice_extract_unmatched.json</c> so users can copy entries from one to the other)
+    /// and stack on top of remote+embedded.
+    /// </summary>
+    [JsonPropertyName("voiceExtractAliasesUrl")]
+    public string VoiceExtractAliasesUrl { get; set; } = string.Empty;
 }

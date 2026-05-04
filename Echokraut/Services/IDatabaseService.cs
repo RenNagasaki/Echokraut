@@ -8,7 +8,7 @@ namespace Echokraut.Services;
 
 public interface IDatabaseService : IDisposable
 {
-    // Migration
+    // Migration (one-shot JSON-config → SQLite import, idempotent after first run)
     bool NeedsMigration(Configuration config);
     void MigrateFromConfig(Configuration config);
 
@@ -106,4 +106,25 @@ public interface IDatabaseService : IDisposable
     // Lodestone lookup cache
     LodestoneLookupEntity? GetLodestoneLookup(string name, string world);
     void UpsertLodestoneLookup(string name, string world, NpcRaces race, Genders gender, bool found);
+
+    // Speaker aliases — harvest-discovered (-Fakename-) → character mappings, queried at
+    // runtime when the dialog-box speaker name doesn't match a character row directly.
+    // Complements VoiceNames{LANG}.json which holds community-curated voice families.
+    void UpsertSpeakerAlias(int characterId, int language, string alias);
+    /// <summary>
+    /// Resolve a dialog-box speaker name (case-insensitive) to a character ID via the
+    /// alias table. Returns <c>null</c> when no match OR when multiple character rows share
+    /// the same alias (typical for the anonymous <c>???</c> marker) — ambiguity-aware
+    /// callers should use <see cref="FindCharacterIdsByAlias"/> instead and apply their own
+    /// disambiguation (e.g. physical-presence check via spawned NPCs in the object table).
+    /// Cached in memory after first build.
+    /// </summary>
+    int? FindCharacterIdByAlias(string alias, int language);
+    /// <summary>
+    /// Returns every character ID that registers the given fakename in the given language.
+    /// Multi-valued by design: anonymous markers like "???" map to many characters, and the
+    /// caller is expected to disambiguate at runtime. Returns an empty list when no match.
+    /// </summary>
+    List<int> FindCharacterIdsByAlias(string alias, int language);
+    List<CharacterSpeakerAliasEntity> GetSpeakerAliases(int characterId);
 }

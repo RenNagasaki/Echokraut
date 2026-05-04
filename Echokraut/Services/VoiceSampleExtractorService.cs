@@ -31,18 +31,12 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
     private const int CatalogClipThreshold = 20;
     private const int TargetSampleRate = 22050;
 
-    /// <summary>FFXIV expansion sub-paths used in <c>cut/{exp}/sound/...</c>. Tools mirrors
-    /// this. We try each in order until the first SCD resolves.</summary>
-    private static readonly string[] ExpansionKeys =
-    {
-        "ffxiv", "ex1", "ex2", "ex3", "ex4", "ex5",
-    };
-
     private readonly IDataManager _dataManager;
     private readonly IClientState _clientState;
     private readonly ILogService _log;
     private readonly IJsonDataService _jsonData;
     private readonly Configuration _config;
+    private readonly IRemoteUrlService _remoteUrls;
 
     private volatile bool _isRunning;
     /// <summary>Counter for OGG-encoded SCD entries skipped during the current run. Voice
@@ -68,23 +62,26 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
         IClientState clientState,
         ILogService log,
         IJsonDataService jsonData,
-        Configuration config)
+        Configuration config,
+        IRemoteUrlService remoteUrls)
     {
         _dataManager = dataManager;
         _clientState = clientState;
         _log = log;
         _jsonData = jsonData;
         _config = config;
+        _remoteUrls = remoteUrls;
     }
 
-    public async Task RunAsync(ClientLanguage language, int samplesPerNpc, CancellationToken ct)
+    public async Task RunAsync(ClientLanguage language, int samplesPerNpc, CancellationToken ct,
+        string? outputRootOverride = null, string outputSubfolder = "FF14-Voices")
     {
         if (_isRunning) return;
         _isRunning = true;
         var eventId = new EKEventId(0, TextSource.None);
         try
         {
-            await Task.Run(() => RunInternal(language, samplesPerNpc, ct, eventId), ct);
+            await Task.Run(() => RunInternal(language, samplesPerNpc, ct, eventId, outputRootOverride, outputSubfolder), ct);
         }
         catch (OperationCanceledException)
         {
@@ -100,7 +97,8 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
         }
     }
 
-    private void RunInternal(ClientLanguage language, int samplesPerNpc, CancellationToken ct, EKEventId eventId)
+    private void RunInternal(ClientLanguage language, int samplesPerNpc, CancellationToken ct, EKEventId eventId,
+        string? outputRootOverride = null, string outputSubfolder = "FF14-Voices")
     {
         samplesPerNpc = Math.Clamp(samplesPerNpc, 1, 5);
         _oggSkipCount = 0;
@@ -108,8 +106,29 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
         _firstHitLogged = 0;
         _scdResolveCount = 0;
         _scdMissCount = 0;
-        var outputRoot = _config.LocalSaveLocation;
-        Directory.CreateDirectory(Path.Combine(outputRoot, "FF14-Voices"));
+        // Allow callers (specifically the First-Time install flow) to redirect output into
+        // e.g. the AllTalk install folder instead of LocalSaveLocation. Empty / null falls
+        // back to the user's configured save location.
+        var hasOverride = !string.IsNullOrWhiteSpace(outputRootOverride);
+        var outputRoot = hasOverride ? outputRootOverride! : _config.LocalSaveLocation;
+        var fullVoicesDir = Path.Combine(outputRoot, outputSubfolder);
+        // When the caller specifies an override (install flow), wipe the target subfolder
+        // before extracting — the old voices.zip flow extracted over a fresh dir, and we
+        // mirror that semantic so leftover files from a previous extraction don't haunt
+        // AllTalk's voice list. Default Game-Data-Tools usage (no override) leaves the
+        // existing FF14-Voices/ contents in place; same-named files are overwritten by the
+        // per-file WriteAllBytes downstream.
+        if (hasOverride && Directory.Exists(fullVoicesDir))
+        {
+            try { Directory.Delete(fullVoicesDir, recursive: true); }
+            catch (Exception ex)
+            {
+                _log.Warning(nameof(RunInternal),
+                    $"Could not wipe target voices dir {fullVoicesDir}: {ex.Message}. " +
+                    $"Continuing with extraction over existing files.", eventId);
+            }
+        }
+        Directory.CreateDirectory(fullVoicesDir);
 
         // ── Phase 1+2: harvest text-key → speaker-shortname, then resolve to NpcId ──
         ProgressChanged?.Invoke(Loc.S("Building NPC name index"), 0, 1);
@@ -118,6 +137,11 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
         _log.Info(nameof(RunInternal),
             $"NPC name index: {nameIndex.Count} entries (across {npcNames.Count} NPCs)",
             eventId);
+
+        // Layered short-name → NPC override map (embedded ← remote ← user-local). Consulted
+        // ONLY when the normal name-index resolve returns nothing — so name-index hits never
+        // get overruled accidentally. Built once before the iteration loop.
+        var aliasMap = LoadVoiceExtractAliases(nameIndex, eventId);
 
         ProgressChanged?.Invoke(Loc.S("Scanning voice text sheets"), 0, 1);
         var perNpcKeys = new Dictionary<uint, List<VoiceClipCandidate>>();
@@ -147,23 +171,37 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
             if (cleaned == null || cleaned.Length == 0 || string.IsNullOrWhiteSpace(cleaned[0])) continue;
 
             var resolved = VoiceExtractKey.Resolve(shortName, nameIndex);
+            uint npcId;
             if (resolved == null || resolved.Count == 0)
             {
-                if (!unmatched.TryGetValue(shortName, out var unm))
-                    unmatched[shortName] = unm = new UnmatchedShortName { ShortName = shortName };
-                unm.Count++;
-                if (unm.Examples.Count < 3)
-                    unm.Examples.Add(new UnmatchedExample { TextKey = textKey, Text = cleaned[0] });
-                continue;
+                // Last-chance: layered alias overrides (embedded ← remote ← user-local).
+                // The user pulls entries from voice_extract_unmatched.json, looks the speaker
+                // up in-game, and writes them into voice_extract_aliases.json — re-running the
+                // extract then resolves them through this map instead of dropping them.
+                if (aliasMap.TryGetValue(shortName, out var aliasNpcId))
+                {
+                    npcId = aliasNpcId;
+                }
+                else
+                {
+                    if (!unmatched.TryGetValue(shortName, out var unm))
+                        unmatched[shortName] = unm = new UnmatchedShortName { ShortName = shortName };
+                    unm.Count++;
+                    if (unm.Examples.Count < 3)
+                        unm.Examples.Add(new UnmatchedExample { TextKey = textKey, Text = cleaned[0] });
+                    continue;
+                }
             }
-
-            var npcId = resolved[0];
-            if (resolved.Count > 1 && _multiNpcWarned.Add(shortName))
-                _log.Debug(nameof(RunInternal),
-                    $"Shortname '{shortName}' maps to {resolved.Count} NPC instances, " +
-                    $"using first ({npcId}). All instances share the same character " +
-                    "(name/gender/race) and only differ by spawn location.",
-                    eventId);
+            else
+            {
+                npcId = resolved[0];
+                if (resolved.Count > 1 && _multiNpcWarned.Add(shortName))
+                    _log.Debug(nameof(RunInternal),
+                        $"Shortname '{shortName}' maps to {resolved.Count} NPC instances, " +
+                        $"using first ({npcId}). All instances share the same character " +
+                        "(name/gender/race) and only differ by spawn location.",
+                        eventId);
+            }
 
             if (!perNpcKeys.TryGetValue(npcId, out var list))
                 perNpcKeys[npcId] = list = new List<VoiceClipCandidate>();
@@ -198,7 +236,7 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
         _log.Info(nameof(RunInternal),
             $"  cut_scene sheets producing rows: {cutSceneCount}", eventId);
 
-        WriteUnmatchedJson(outputRoot, unmatched, eventId);
+        WriteUnmatchedJson(outputRoot, outputSubfolder, unmatched, eventId);
 
         // ── Phases 3-7: per NPC, decode + length filter + resample + pick + write ──
         var npcCount = perNpcKeys.Count;
@@ -223,11 +261,33 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
                 "filenames will auto-widen to NPC0000+ once we cross it.",
                 eventId);
 
+        var skippedUnknownRace = 0;
+        var skippedNoName = 0;
         foreach (var (npcId, candidates) in perNpcKeys)
         {
             ct.ThrowIfCancellationRequested();
             npcsProcessed++;
             ProgressChanged?.Invoke(string.Format(Loc.S("Extracting samples for NPC {0}"), npcId), npcsProcessed, npcCount);
+
+            // Skip NPCs the voice picker can't make sensible use of, BEFORE the expensive
+            // decode + resample work runs:
+            //   • Race=Unknown → no race-bucket fits the file in AllTalk, sample sits unused.
+            //   • No resolvable display name → filename collapses to "NPC_<rawId>" which
+            //     gives nothing the user can recognize and clutters the voices folder.
+            // Both produce the "Male_Unknown_NPC_1043638"-style entries the user reported
+            // as useless.
+            var (gender, race, bodyType) = ResolveGenderRaceBody(npcId);
+            if (string.Equals(race, "Unknown", StringComparison.OrdinalIgnoreCase))
+            {
+                skippedUnknownRace++;
+                continue;
+            }
+            var locName = ResolveDisplayName(npcId, language, gender);
+            if (string.IsNullOrEmpty(locName))
+            {
+                skippedNoName++;
+                continue;
+            }
 
             // Decode all candidates to PCM. Skips candidates whose SCD can't be resolved,
             // fails to decode, or is OGG (counted globally — overwhelmingly absent in voice paths).
@@ -250,11 +310,6 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
             // Pick N deterministically (seeded by NpcId).
             var picked = VoiceExtractSampleSelector.PickN(filtered, samplesPerNpc, seed: (int)npcId);
 
-            // Resolve gender first — the localized name normalizer needs it to resolve
-            // German [a]/[p] declension tags into their grammatically-correct form.
-            var (gender, race) = ResolveGenderRace(npcId);
-            var locName = ResolveDisplayName(npcId, language, gender) ?? $"NPC_{npcId}";
-
             // Resample each picked clip once (downmix → 22050 mono → PCM-WAV bytes), then
             // write to the named folder and (when eligible) the random-voice catalog.
             var resampledBytes = new byte[picked.Count][];
@@ -268,19 +323,22 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
             {
                 ct.ThrowIfCancellationRequested();
                 var path = VoiceExtractFileNames.GetNamedTargetPath(
-                    outputRoot, gender, race, locName, i + 1, picked.Count);
+                    outputRoot, gender, race, bodyType, locName, i + 1, picked.Count, outputSubfolder);
                 WriteWavToFile(resampledBytes[i], path, eventId);
                 totalClipsWritten++;
             }
 
             // Write the catalog version when this NPC is below the 20-clip threshold.
+            // Player-race NPCs collapse to "All" inside GetCatalogTargetPath; non-player races
+            // (beast tribes etc.) keep their specific race token so their distinctive voices
+            // don't get mixed into the generic player-race pool.
             if (catalogIdByNpc.TryGetValue(npcId, out var catalogId))
             {
                 for (var i = 0; i < picked.Count; i++)
                 {
                     ct.ThrowIfCancellationRequested();
                     var path = VoiceExtractFileNames.GetCatalogTargetPath(
-                        outputRoot, gender, catalogId, i + 1, picked.Count);
+                        outputRoot, gender, race, bodyType, catalogId, i + 1, picked.Count, outputSubfolder);
                     WriteWavToFile(resampledBytes[i], path, eventId);
                     totalClipsWritten++;
                 }
@@ -290,6 +348,7 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
         _log.Info(nameof(RunInternal),
             $"Voice starter set complete: {totalClipsWritten} files written across " +
             $"{npcsProcessed} NPCs ({catalogEligible.Count} also in catalog). " +
+            $"Skipped: {skippedUnknownRace} Race=Unknown, {skippedNoName} no resolvable name. " +
             $"SCD lookups: {_scdResolveCount} resolved, {_scdMissCount} exhausted.",
             eventId);
         if (_oggSkipCount > 0)
@@ -400,12 +459,13 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
     {
         // Build a list of candidate SCD paths. FFXIV organizes cutscene voice files under
         // cut/<expansion>/sound/... but the exact folder layout differs per voice family.
-        // We try multiple plausible structures since reverse-engineering docs disagree.
-        var lang = LanguageCodeForScd(language);
+        // VoiceScdPaths centralizes the substring math so the harvest's "is this voiced?"
+        // check sees the same set of paths.
+        var lang = VoiceScdPaths.LanguageCodeForScd(language);
         var audioBase = c.AudioFileBase;
         if (audioBase.Length < 14) return null;
 
-        var paths = BuildCandidateScdPaths(audioBase, lang);
+        var paths = VoiceScdPaths.Build(audioBase, lang);
         if (paths.Count == 0) return null;
 
         foreach (var path in paths)
@@ -461,56 +521,6 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
         return null;
     }
 
-    /// <summary>
-    /// Build the list of candidate SCD paths for an audio file base. The proven layout
-    /// (verified against live game data) is Tools' substring math:
-    /// <c>cut/{exp}/sound/{base[3..6]}/{base[3..14]}/{base}_{gender}_{lang}.scd</c> — for
-    /// "vo_voiceman_06006_000010" that becomes
-    /// <c>cut/{exp}/sound/voicem/voiceman_06006/vo_voiceman_06006_000010_m_de.scd</c>. The
-    /// gender marker is empty (single underscore separator) for non-gender-branching lines.
-    /// We iterate all expansions because the same cutscene-id range can be referenced from
-    /// any expansion's archive; first hit wins.
-    /// </summary>
-    private List<string> BuildCandidateScdPaths(string audioBase, string lang)
-    {
-        var result = new List<string>(18);
-        if (audioBase.Length < 17) return result;
-
-        var folder6 = audioBase.Substring(3, 6);
-        var folder14 = audioBase.Substring(3, 14);
-        // ManFst entries use a 9-char inner folder and the file path drops trailing tokens
-        // (truncated base of 12 chars); we keep that legacy layout as a fallback.
-        var isManFst = audioBase.Contains("manfst");
-
-        foreach (var exp in ExpansionKeys)
-        {
-            // Gender marker has a LEADING underscore — real filenames are
-            // <base>_m_<lang>.scd / <base>_f_<lang>.scd / <base>_<lang>.scd.
-            foreach (var suffix in new[] { "_m_", "_", "_f_" })
-            {
-                if (isManFst && audioBase.Length >= 12)
-                {
-                    var folder9 = audioBase.Substring(3, 9);
-                    result.Add($"cut/{exp}/sound/{folder6}/{folder9}/{audioBase.Substring(0, 12)}{suffix}{lang}.scd");
-                }
-                else
-                {
-                    result.Add($"cut/{exp}/sound/{folder6}/{folder14}/{audioBase}{suffix}{lang}.scd");
-                }
-            }
-        }
-        return result;
-    }
-
-    private static string LanguageCodeForScd(ClientLanguage language) => language switch
-    {
-        ClientLanguage.English => "en",
-        ClientLanguage.German => "de",
-        ClientLanguage.French => "fr",
-        ClientLanguage.Japanese => "ja",
-        _ => "en",
-    };
-
     private void WriteWavToFile(byte[] wavBytes, string path, EKEventId eventId)
     {
         try
@@ -526,12 +536,175 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
         }
     }
 
-    private void WriteUnmatchedJson(string outputRoot, Dictionary<string, UnmatchedShortName> unmatched, EKEventId eventId)
+    // ── Voice-extract aliases: embedded ← remote ← user-local (last wins) ────
+    /// <summary>
+    /// Build the short-name → NPC ID alias map from up to three layered sources. Mirrors the
+    /// pattern in <c>DialogHarvestService.LoadUserAliases</c> so users have one mental model:
+    /// embedded baseline ships with the plugin, remote URL adds community-curated entries,
+    /// user-local file in <c>FF14-Voices/voice_extract_aliases.json</c> wins over both.
+    ///
+    /// Each entry resolves either by explicit <see cref="VoiceExtractAliasEntry.NpcId"/>
+    /// (wins when set and &gt; 0) or by <see cref="VoiceExtractAliasEntry.NpcName"/>, which
+    /// goes through the same <c>VoiceExtractKey.Normalize</c> as the runtime shortname index
+    /// (lowercase, strip spaces / apostrophes / hyphens). Unresolvable / empty entries are
+    /// logged at warning level and skipped — they don't break the whole alias load.
+    /// </summary>
+    private Dictionary<string, uint> LoadVoiceExtractAliases(
+        Dictionary<string, List<uint>> nameIndex, EKEventId eventId)
+    {
+        var result = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+
+        ApplyVoiceAliasEntries(LoadVoiceAliasesFromEmbedded(eventId), "embedded", result, nameIndex, eventId);
+        ApplyVoiceAliasEntries(LoadVoiceAliasesFromRemote(eventId), "remote", result, nameIndex, eventId);
+        var localFile = LoadVoiceAliasesFromLocal(eventId, out var localPath);
+        ApplyVoiceAliasEntries(localFile, $"local ({localPath})", result, nameIndex, eventId);
+
+        _log.Info(nameof(LoadVoiceExtractAliases),
+            $"Voice extract aliases loaded: {result.Count} effective entries (embedded+remote+local merged)",
+            eventId);
+        return result;
+    }
+
+    private VoiceExtractAliasFile? LoadVoiceAliasesFromEmbedded(EKEventId eventId)
+    {
+        try
+        {
+            using var stream = typeof(VoiceSampleExtractorService).Assembly
+                .GetManifestResourceStream("Echokraut.Resources.VoiceExtractAliases.json");
+            if (stream == null) return null;
+            using var reader = new StreamReader(stream);
+            var json = reader.ReadToEnd();
+            return JsonSerializer.Deserialize<VoiceExtractAliasFile>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(LoadVoiceExtractAliases),
+                $"Failed to read embedded VoiceExtractAliases.json: {ex.Message}", eventId);
+            return null;
+        }
+    }
+
+    private VoiceExtractAliasFile? LoadVoiceAliasesFromRemote(EKEventId eventId)
+    {
+        var url = _remoteUrls.Urls.VoiceExtractAliasesUrl;
+        if (string.IsNullOrWhiteSpace(url)) return null;
+        try
+        {
+            using var http = new System.Net.Http.HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            var json = http.GetStringAsync(url).GetAwaiter().GetResult();
+            return JsonSerializer.Deserialize<VoiceExtractAliasFile>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(LoadVoiceExtractAliases),
+                $"Failed to fetch remote voice extract aliases ({url}): {ex.Message} — using embedded+local only",
+                eventId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Local override file lives next to <c>voice_extract_unmatched.json</c> (same
+    /// <c>FF14-Voices/</c> folder) so users can copy entries from one to the other in their
+    /// editor without changing directories. Missing file = no local overrides; not an error.
+    /// </summary>
+    private VoiceExtractAliasFile? LoadVoiceAliasesFromLocal(EKEventId eventId, out string path)
+    {
+        var baseDir = string.IsNullOrEmpty(_config.LocalSaveLocation) ? @"C:\alltalk_tts" : _config.LocalSaveLocation;
+        path = Path.Combine(baseDir, "FF14-Voices", "voice_extract_aliases.json");
+        if (!File.Exists(path)) return null;
+        try
+        {
+            var json = File.ReadAllText(path);
+            return JsonSerializer.Deserialize<VoiceExtractAliasFile>(json,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(LoadVoiceExtractAliases),
+                $"Failed to parse {path}: {ex.Message} — local aliases ignored", eventId);
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Merge one layer's entries into the running result. Later layers overwrite earlier ones
+    /// for the same uppercase short-name key — that's how user-local wins over remote which
+    /// wins over embedded. Resolution mirrors quest-alias semantics: explicit NpcId wins,
+    /// otherwise NpcName goes through the canonical name index. Empty/unknown → skipped + log.
+    /// </summary>
+    internal void ApplyVoiceAliasEntries(
+        VoiceExtractAliasFile? file,
+        string sourceLabel,
+        Dictionary<string, uint> result,
+        Dictionary<string, List<uint>> nameIndex,
+        EKEventId eventId)
+    {
+        if (file?.Aliases == null) return;
+
+        var loaded = 0;
+        var overridden = 0;
+        var skippedUnknown = 0;
+        foreach (var entry in file.Aliases)
+        {
+            if (string.IsNullOrEmpty(entry.ShortName)) continue;
+
+            uint? resolved = null;
+            if (entry.NpcId.HasValue && entry.NpcId.Value > 0)
+            {
+                resolved = entry.NpcId.Value;
+            }
+            else if (!string.IsNullOrEmpty(entry.NpcName))
+            {
+                var ids = VoiceExtractKey.Resolve(entry.NpcName, nameIndex);
+                if (ids != null && ids.Count > 0)
+                {
+                    // First match wins — same reasoning as quest aliases: NPCs that share
+                    // (name, gender, race, language) collapse to one DB row, so any spawn id
+                    // works for voice attribution.
+                    resolved = ids[0];
+                    if (ids.Count > 1)
+                    {
+                        _log.Debug(nameof(LoadVoiceExtractAliases),
+                            $"[{sourceLabel}] Alias '{entry.ShortName}' → name '{entry.NpcName}' " +
+                            $"matches {ids.Count} NPCs [{string.Join(",", ids)}], using first ({ids[0]})",
+                            eventId);
+                    }
+                }
+                else
+                {
+                    _log.Warning(nameof(LoadVoiceExtractAliases),
+                        $"[{sourceLabel}] Alias '{entry.ShortName}' → name '{entry.NpcName}' " +
+                        $"not found in English NPC name index — entry ignored (use the English name " +
+                        "or set NpcId explicitly)", eventId);
+                    skippedUnknown++;
+                }
+            }
+
+            if (resolved.HasValue)
+            {
+                var key = entry.ShortName.ToUpperInvariant();
+                if (result.ContainsKey(key)) overridden++;
+                result[key] = resolved.Value;
+                loaded++;
+            }
+        }
+
+        _log.Info(nameof(LoadVoiceExtractAliases),
+            $"[{sourceLabel}] {loaded} voice extract aliases applied " +
+            $"({overridden} overrides, {skippedUnknown} unknown)",
+            eventId);
+    }
+
+    private void WriteUnmatchedJson(string outputRoot, string outputSubfolder,
+        Dictionary<string, UnmatchedShortName> unmatched, EKEventId eventId)
     {
         if (unmatched.Count == 0) return;
         try
         {
-            var dir = Path.Combine(outputRoot, "FF14-Voices");
+            var dir = Path.Combine(outputRoot, outputSubfolder);
             Directory.CreateDirectory(dir);
             var path = Path.Combine(dir, "voice_extract_unmatched.json");
             var json = JsonSerializer.Serialize(unmatched.Values.OrderByDescending(u => u.Count),
@@ -575,8 +748,18 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
 
     /// <summary>
     /// Localized display name with FFXIV grammatical gender tags resolved (German <c>[a]</c>/
-    /// <c>[p]</c>, French <c>[a]</c>/<c>[p]</c>). Without this step German NPC names like
-    /// <c>"Soldatin[p] der Befreiungsarmee"</c> would land literally in the output filename.
+    /// <c>[p]</c>, French <c>[a]</c>/<c>[p]</c>) and folded onto the canonical voice name.
+    /// Without the tag-resolution step German NPC names like <c>"Soldatin[p] der Befreiungsarmee"</c>
+    /// would land literally in the output filename.
+    ///
+    /// Final step: pipe the localized name through <see cref="IJsonDataService.GetNpcName"/>
+    /// so all "speaker variants" of one character collapse onto a single voice file. Example:
+    /// <c>"Ysayle"</c> and <c>"Iceheart"</c> are both speakers of the VoiceMap entry
+    /// <c>{voiceName: "Iceheart", speakers: ["Ysayle", "Iceheart"]}</c> in
+    /// <c>VoiceNamesEN.json</c> — the extractor writes both under the same
+    /// <c>Female_Hyur_Iceheart.wav</c>, so users end up with one voice per character instead
+    /// of one per dialog tag. <c>GetNpcName</c> returns the input unchanged when no VoiceMap
+    /// matches, so plain NPCs are unaffected.
     /// </summary>
     private string? ResolveDisplayName(uint npcId, ClientLanguage language, string gender)
     {
@@ -604,7 +787,13 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
 
             var langCode = LangCode(language);
             var isFemale = string.Equals(gender, "Female", StringComparison.OrdinalIgnoreCase);
-            return NpcNameNormalizer.Resolve(s, langCode, isFemale, dePronoun);
+            var resolved = NpcNameNormalizer.Resolve(s, langCode, isFemale, dePronoun);
+            if (string.IsNullOrEmpty(resolved)) return null;
+
+            // Collapse speaker variants of the same character onto a single canonical voice
+            // name (see VoiceMap example in the doc summary). GetNpcName falls through to
+            // the input when no VoiceMap matches, so this is a safe no-op for plain NPCs.
+            return _jsonData.GetNpcName(resolved);
         }
         catch
         {
@@ -613,22 +802,27 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
     }
 
     /// <summary>
-    /// Resolve gender + race for an NPC. Both are forced to fixed English so the starter set
-    /// filenames stay locale-stable (a German client and an English client produce identical
-    /// <c>Gender_Race_*</c> tokens). Race comes from the English <see cref="Race"/> sheet
-    /// directly, then runs through <see cref="VoiceExtractFileNames.NormalizeRace"/> which
-    /// maps <c>"Hyuran"→"Hyur"</c> / <c>"Au Ra"→"AuRa"</c> / <c>"Miqo'te"→"Miqote"</c> onto
-    /// the canonical NpcRaces enum tokens used by voice resolution.
+    /// Resolve gender + race + body type for an NPC. Gender and race are forced to fixed
+    /// English so the starter set filenames stay locale-stable (a German client and an
+    /// English client produce identical <c>Gender_Race[-BodyType]_*</c> tokens). Race comes
+    /// from the English <see cref="Race"/> sheet directly, then runs through
+    /// <see cref="VoiceExtractFileNames.NormalizeRace"/> at filename time which maps
+    /// <c>"Hyuran"→"Hyur"</c> / <c>"Au Ra"→"AuRa"</c> / <c>"Miqo'te"→"Miqote"</c> onto the
+    /// canonical NpcRaces enum tokens used by voice resolution.
+    ///
+    /// Body type uses ENpcBase's raw byte: <c>4=Child</c>, <c>3=Elder</c>, anything else =
+    /// Adult (the implicit default which carries no filename suffix). Mirrors the switch in
+    /// <see cref="VoiceMessageProcessor"/> that drives the live <see cref="BodyType"/> enum.
     /// </summary>
-    private (string gender, string race) ResolveGenderRace(uint npcId)
+    private (string gender, string race, string bodyType) ResolveGenderRaceBody(uint npcId)
     {
         try
         {
             // Gender comes from a numeric byte (0=Male, 1=Female) so it's already locale-free.
             var baseSheet = _dataManager.GetExcelSheet<ENpcBase>();
-            if (baseSheet == null) return ("None", "Unknown");
+            if (baseSheet == null) return ("None", "Unknown", "Adult");
             var npcBase = baseSheet.GetRowOrDefault(npcId);
-            if (npcBase == null) return ("None", "Unknown");
+            if (npcBase == null) return ("None", "Unknown", "Adult");
             var gender = npcBase.Value.Gender == 1 ? "Female" : npcBase.Value.Gender == 0 ? "Male" : "None";
 
             // Race must come from the English Race sheet — the client-language Masculine
@@ -642,11 +836,19 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
                 var raw = enRace?.Masculine.ExtractText();
                 if (!string.IsNullOrEmpty(raw)) race = raw;
             }
-            return (gender, race);
+
+            var bodyType = npcBase.Value.BodyType switch
+            {
+                4 => "Child",
+                3 => "Elder",
+                _ => "Adult",
+            };
+
+            return (gender, race, bodyType);
         }
         catch
         {
-            return ("None", "Unknown");
+            return ("None", "Unknown", "Adult");
         }
     }
 

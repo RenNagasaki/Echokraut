@@ -54,6 +54,17 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
     private Action? _pendingAction; // Deferred click action to avoid ATK use-after-free
     private int _progressUpdateCounter;
 
+    // ── Saved-count cache for the progress bar ──
+    // Computing the saved count means hitting the DB + filesystem once per clip; with large
+    // categories (2000+ clips) doing that synchronously every 30 frames drops FPS noticeably.
+    // Recompute on a background task whenever the underlying data changes (VoiceClipUpdated,
+    // VoiceClipLogged, dataset swap, generate-all batch step) and read cached values from
+    // OnUpdate. The dirty flag forces a refresh on the next tick.
+    private volatile int _cachedSavedCount;
+    private volatile int _cachedTotalCount;
+    private volatile bool _savedCountDirty = true;
+    private volatile bool _savedCountCalcRunning;
+
 
     public NativeVoiceClipDetailWindow(
         IDatabaseService db,
@@ -66,7 +77,11 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         _audioPlayback = audioPlayback;
         _gameObjects = gameObjects;
 
-        _onVoiceClipUpdated = () => _audioExistsCache.Clear();
+        _onVoiceClipUpdated = () =>
+        {
+            _audioExistsCache.Clear();
+            _savedCountDirty = true;
+        };
         _onVoiceClipLogged = () =>
         {
             if (_characterId > 0 && IsOpen)
@@ -74,6 +89,7 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
                 ReloadFilteredVoiceClips();
                 _paginationBar?.SetTotalItems(_voiceClips.Count, PageSize);
                 _needsRebuild = true;
+                _savedCountDirty = true;
                 _audioExistsCache.Clear();
             }
         };
@@ -136,6 +152,7 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
                     _genTotal = total;
                     // Clear cache so throttled OnUpdate picks up new audio state
                     _audioExistsCache.Clear();
+                    _savedCountDirty = true;
                 },
                 _genCts.Token).ContinueWith(_ =>
             {
@@ -143,6 +160,7 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
                 if (_genToggleButton != null) _genToggleButton.String = Loc.S("Generate All Unsaved");
                 ShowProgressBar(false);
                 _audioExistsCache.Clear();
+                _savedCountDirty = true;
             });
         });
         btnRow.AddNode(_genToggleButton);
@@ -223,6 +241,17 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
             ItemSpacing = 2,
         };
         AddNode(_panel);
+
+        // OnSetup may run again on a re-open after Close — at which point _voiceClips
+        // is already populated from the prior ShowVoiceClips call. Re-seed the freshly
+        // created pagination bar + flag a rebuild so the panel renders the current
+        // selection's first page. ShowVoiceClips also sets _paginationPending; this is a
+        // defensive belt-and-suspenders so neither pathway is missed.
+        if (_voiceClips.Count > 0)
+        {
+            _paginationPending = true;
+            _needsRebuild = true;
+        }
     }
 
     protected override void OnUpdate(AtkUnitBase* addon)
@@ -342,10 +371,18 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         _characterId = voiceClips.Count > 0 ? voiceClips[0].CharacterId : 0;
         _audioExistsCache.Clear();
         _buttonImages.Clear();
-        if (_paginationBar != null)
-            _paginationBar.SetTotalItems(voiceClips.Count, PageSize);
-        else
-            _paginationPending = true;
+        // Dataset just changed — force a fresh saved-count compute on the next OnUpdate
+        // tick. The interim `_cachedSavedCount/Total` shown for one frame are the previous
+        // category's totals; that's fine because we ALSO show old totals immediately and
+        // the recompute lands within ~0.5s.
+        _savedCountDirty = true;
+        // Always defer pagination init to OnUpdate. The Toggle() below can trigger OnSetup
+        // to rebuild the addon's nodes (replacing _paginationBar with a fresh instance) —
+        // any SetTotalItems we'd run synchronously here would then land on the stale, now-
+        // orphaned bar, and the freshly-created bar would start at totalItems=0 and render
+        // empty. The pending flag bridges the gap: OnUpdate runs after OnSetup completes,
+        // sees the latest _paginationBar reference, and applies the count.
+        _paginationPending = true;
 
         _needsRebuild = true;
 
@@ -455,6 +492,7 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
                         else
                             _playingVoiceClipId = null;
                         _audioExistsCache.Clear();
+                        _savedCountDirty = true;
                     });
                 }
             };
@@ -492,6 +530,7 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
                 _voiceClipManager.GenerateForVoiceClip(capturedVoiceClip).ContinueWith(_ =>
                 {
                     _audioExistsCache.Clear();
+                    _savedCountDirty = true;
                 });
             };
         };
@@ -531,11 +570,39 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
     {
         if (_progressBar == null) return;
 
-        var total = _voiceClips.Count;
-        var saved = _voiceClips.Count(vc => _voiceClipManager.HasLocalAudio(vc));
+        // Render synchronously from cache so the framework thread never blocks on
+        // 2000× DB-query + File.Exists. The cache is invalidated on data-changing events
+        // (clip updated/logged, dataset swap, generate-all batch step) and refreshed on a
+        // background task — the bar shows the previous count for one frame after a change,
+        // which is invisible in practice.
+        var total = _cachedTotalCount;
+        var saved = _cachedSavedCount;
         var fraction = total > 0 ? (float)saved / total : 0f;
-
         _progressBar.SetProgress(fraction, $"{saved}/{total}");
+
+        if (_savedCountDirty && !_savedCountCalcRunning)
+        {
+            _savedCountDirty = false;
+            _savedCountCalcRunning = true;
+            // Snapshot the current clip list — the field can be reassigned mid-task by
+            // ShowVoiceClips. The snapshot is immutable for the duration of the calculation.
+            var snapshot = _voiceClips;
+            System.Threading.Tasks.Task.Run(() =>
+            {
+                try
+                {
+                    var savedCount = 0;
+                    foreach (var vc in snapshot)
+                        if (_voiceClipManager.HasLocalAudio(vc)) savedCount++;
+                    _cachedTotalCount = snapshot.Count;
+                    _cachedSavedCount = savedCount;
+                }
+                finally
+                {
+                    _savedCountCalcRunning = false;
+                }
+            });
+        }
     }
 
     private bool GetAudioExists(VoiceClipEntity vc)

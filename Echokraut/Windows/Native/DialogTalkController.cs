@@ -78,6 +78,21 @@ public sealed unsafe class DialogTalkController : IDisposable
     // but our OnOptionSelected lambda fires first — so we capture here and process next frame.
     private string? _pendingVoiceSelection;
 
+    // OnUpdate runs every frame while the Talk addon is open. Each native property write
+    // (Alpha, IsVisible, IsChecked, Icon, Position/Scale) maps to an ATK call, and our own
+    // CLAUDE.md (Windows/) warns: "Don't set alpha/multiply every frame — set only when
+    // state changes". We cache the last-applied value per property and only re-write when
+    // it differs. Without this every dialog open dropped FPS noticeably on lower-end rigs.
+    private bool? _lastRowVisible;
+    private float _lastAddonW = -1f;
+    private float _lastAddonH = -1f;
+    private bool? _lastIsActive;
+    private bool? _lastPlayStopEnabled;
+    private bool? _lastMuteEnabled;
+    private bool? _lastMuteChecked;
+    private bool? _lastAutoChecked;
+    private bool? _lastVoiceEnabled;
+
     public DialogTalkController(
         EKConfig config,
         IAudioPlaybackService audioPlayback,
@@ -169,6 +184,18 @@ public sealed unsafe class DialogTalkController : IDisposable
         _pausedForDropDown = false;
         _dropDownWasOpen = false;
         _pendingVoiceSelection = null;
+
+        // Reset cached state — fresh nodes on next OnAttach won't have any of the previous
+        // values applied, so a "no change" comparison would incorrectly skip the first write.
+        _lastRowVisible = null;
+        _lastAddonW = -1f;
+        _lastAddonH = -1f;
+        _lastIsActive = null;
+        _lastPlayStopEnabled = null;
+        _lastMuteEnabled = null;
+        _lastMuteChecked = null;
+        _lastAutoChecked = null;
+        _lastVoiceEnabled = null;
     }
 
     /// <summary>
@@ -320,6 +347,16 @@ public sealed unsafe class DialogTalkController : IDisposable
         _layout.Position = new Vector2(bgX + (bgW - _layout.Size.X) / 2f - 25, addonH - overlap + (bgH - buttonH) / 2f - 5);
         _layout.AttachNode(addon);
 
+        // Static one-shot setup for nodes whose visible/enabled state never changes while the
+        // toolbar row is shown. Pulled out of OnUpdate to avoid per-frame property writes —
+        // see fields _lastRowVisible, _lastIsActive, etc. for the rest of the cached state.
+        _muteCheckbox.IsVisible = true;
+        _autoAdvanceCheckbox.IsVisible = true;
+        _voiceDropDown.IsVisible = true;
+        _settingsButton.IsVisible = true;
+        SetEnabled(_settingsButton, true);
+        SetEnabled(_autoAdvanceCheckbox, true);
+
         // Tooltip nodes — attached AFTER the layout so they render on top within Talk's
         // hierarchy. Sized/positioned dynamically by ShowToolbarTooltip; hidden by default.
         // Background settings mirror KamiToolKit.TextNineGridNode so the look matches the
@@ -387,22 +424,32 @@ public sealed unsafe class DialogTalkController : IDisposable
         // via SetEnabled, so the row layout stays stable and no button ever disappears
         // unexpectedly.
         var visible = _config.ShowExtraOptionsInDialogue;
-        _layout!.IsVisible = visible;
-        if (_background != null) _background.IsVisible = visible;
+        if (_lastRowVisible != visible)
+        {
+            _layout!.IsVisible = visible;
+            if (_background != null) _background.IsVisible = visible;
+            _lastRowVisible = visible;
+        }
         if (!visible) return;
 
         // Keep controls and background anchored below the Talk addon (height can change with text length).
+        // Position writes are gated on actual addon-size change — Talk's RootNode size only shifts
+        // when the dialog text wraps to a new line, not every frame.
         const int overlap = 52;
         const int buttonH = 28;
         var addonW = addon->RootNode->Width;
         var addonH = addon->RootNode->Height;
-        var bgW = addonW - 40;
-        var bgH = (int)(bgW * 128f / 512f / 2f) - 5;
-        var bgX = (addonW - bgW) / 2f;
-
-        _background!.Scale = new Vector2(bgW / 544f, bgH / 144f);
-        _background.Position = new Vector2(bgX, addonH - overlap);
-        _layout.Position = new Vector2(bgX + (bgW - _layout.Size.X) / 2f - 25, addonH - overlap + (bgH - buttonH) / 2f - 5);
+        if (addonW != _lastAddonW || addonH != _lastAddonH)
+        {
+            var bgW = addonW - 40;
+            var bgH = (int)(bgW * 128f / 512f / 2f) - 5;
+            var bgX = (addonW - bgW) / 2f;
+            _background!.Scale = new Vector2(bgW / 544f, bgH / 144f);
+            _background.Position = new Vector2(bgX, addonH - overlap);
+            _layout!.Position = new Vector2(bgX + (bgW - _layout.Size.X) / 2f - 25, addonH - overlap + (bgH - buttonH) / 2f - 5);
+            _lastAddonW = addonW;
+            _lastAddonH = addonH;
+        }
 
         // Safety net: sync _dropDownIsOpen if dropdown physically collapsed without OnCollapsed firing.
         if (_dropDownIsOpen && _voiceDropDown is { IsCollapsed: true })
@@ -429,22 +476,43 @@ public sealed unsafe class DialogTalkController : IDisposable
         var isStreamPaused = streamState == PlaybackState.Paused;
         var isActive       = _audioPlayback.IsPlaying || isStreamPaused;
 
-        // Play/Stop — always visible, dimmed when not in actionable dialogue.
-        _playStopButton!.Icon = isActive ? ButtonIcon.Mute : ButtonIcon.Volume;
-        _playStopTooltipText = isActive ? Loc.S("Stop") : Loc.S("Play");
-        SetEnabled(_playStopButton, inDialog && notVoiced && !isMuted && (isActive || !_audioPlayback.RecreationStarted));
+        // Play/Stop — Icon + tooltip text only flip when the active state flips.
+        if (_lastIsActive != isActive)
+        {
+            _playStopButton!.Icon = isActive ? ButtonIcon.Mute : ButtonIcon.Volume;
+            _playStopTooltipText  = isActive ? Loc.S("Stop") : Loc.S("Play");
+            _lastIsActive = isActive;
+        }
+        var playStopEnabled = inDialog && notVoiced && !isMuted && (isActive || !_audioPlayback.RecreationStarted);
+        if (_lastPlayStopEnabled != playStopEnabled)
+        {
+            SetEnabled(_playStopButton!, playStopEnabled);
+            _lastPlayStopEnabled = playStopEnabled;
+        }
 
-        // Mute — always visible, dimmed when no speaker / dialogue inactive.
-        _muteCheckbox!.IsVisible = true;
-        _muteCheckbox.IsChecked = hasSpeakerObj && isMuted;
-        SetEnabled(_muteCheckbox, hasSpeakerObj && inDialog && notVoiced);
+        // Mute checkbox — alpha + checked state cached separately.
+        var muteEnabled = hasSpeakerObj && inDialog && notVoiced;
+        var muteChecked = hasSpeakerObj && isMuted;
+        if (_lastMuteChecked != muteChecked)
+        {
+            _muteCheckbox!.IsChecked = muteChecked;
+            _lastMuteChecked = muteChecked;
+        }
+        if (_lastMuteEnabled != muteEnabled)
+        {
+            SetEnabled(_muteCheckbox!, muteEnabled);
+            _lastMuteEnabled = muteEnabled;
+        }
 
-        // The row's master toggle (ShowExtraOptionsInDialogue) already gates visibility above,
-        // so once we get here the auto-advance + voice picker are unconditionally enabled
-        // (further dimming only happens via the per-control hasSpeaker / inDialog checks).
-        _autoAdvanceCheckbox!.IsVisible = true;
-        _autoAdvanceCheckbox.IsChecked = _config.AutoAdvanceTextAfterSpeechCompleted;
-        SetEnabled(_autoAdvanceCheckbox, true);
+        // Auto-advance — IsChecked is the only dynamic input here. SetEnabled(true) is set
+        // once during OnAttach (see below) since this control is always interactive while
+        // the row is visible.
+        var autoChecked = _config.AutoAdvanceTextAfterSpeechCompleted;
+        if (_lastAutoChecked != autoChecked)
+        {
+            _autoAdvanceCheckbox!.IsChecked = autoChecked;
+            _lastAutoChecked = autoChecked;
+        }
 
         var voiceUsable = hasSpeaker;
 
@@ -453,8 +521,11 @@ public sealed unsafe class DialogTalkController : IDisposable
         if (!voiceUsable && _dropDownIsOpen)
             _voiceDropDown?.Collapse(false);
 
-        _voiceDropDown!.IsVisible = true;
-        SetEnabled(_voiceDropDown, voiceUsable);
+        if (_lastVoiceEnabled != voiceUsable)
+        {
+            SetEnabled(_voiceDropDown!, voiceUsable);
+            _lastVoiceEnabled = voiceUsable;
+        }
         if (voiceUsable)
         {
             var speakerKey = speaker!.ToString();
@@ -467,19 +538,14 @@ public sealed unsafe class DialogTalkController : IDisposable
                 var selectedVoice = speaker.Voice?.VoiceName ?? string.Empty;
                 // Bypass TextDropDownNode.Options and DropDownNode.SelectedOption setters —
                 // both call UpdateLabel → LabelNode.Node->SetText which crashes when LabelNode.Node is null.
-                _voiceDropDown.OptionListNode.Options = voiceNames;
+                _voiceDropDown!.OptionListNode.Options = voiceNames;
                 _voiceDropDown.OptionListNode.SelectedOption = selectedVoice;
                 if (_voiceDropDown.LabelNode.Node != null)
                     _voiceDropDown.LabelNode.String = selectedVoice;
+                // Layout content changed (option list rebuilt) — recompute layout once here.
+                _layout?.RecalculateLayout();
             }
         }
-
-        // Settings button opens an external window — always visible AND enabled,
-        // independent of dialogue state.
-        _settingsButton!.IsVisible = true;
-        SetEnabled(_settingsButton, true);
-
-        _layout.RecalculateLayout();
     }
 
     /// <summary>

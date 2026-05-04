@@ -36,7 +36,8 @@ public static class ServiceBuilder
         container.RegisterFactory<IDatabaseService>(c => new DatabaseService(
             c.GetService<ILogService>(),
             pluginInterface.GetPluginConfigDirectory(),
-            configuration));
+            configuration,
+            clientState.ClientLanguage));
 
         container.RegisterFactory<IRemoteUrlService>(c => new RemoteUrlService(
             c.GetService<ILogService>()));
@@ -92,7 +93,8 @@ public static class ServiceBuilder
             clientState,
             c.GetService<ILogService>(),
             c.GetService<IJsonDataService>(),
-            configuration));
+            configuration,
+            c.GetService<IRemoteUrlService>()));
 
         container.RegisterFactory<IBatchModeService>(c => new BatchModeService(
             c.GetService<IDialogHarvestService>(),
@@ -125,7 +127,9 @@ public static class ServiceBuilder
             c.GetService<ILogService>(),
             configuration,
             c.GetService<IGoogleDriveSyncService>(),
-            c.GetService<IRemoteUrlService>()));
+            c.GetService<IRemoteUrlService>(),
+            clientState,
+            c.GetService<IVoiceSampleExtractorService>()));
 
         container.RegisterFactory<IBackendService>(c => new BackendService(
             c.GetService<IVoiceMessageQueue>(),

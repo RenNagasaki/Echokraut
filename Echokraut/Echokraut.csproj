@@ -57,6 +57,7 @@
     <EmbeddedResource Include="Resources\RemoteUrls.json" />
     <EmbeddedResource Include="Resources\NpcRaces.json" />
     <EmbeddedResource Include="Resources\QuestNpcAliases.json" />
+    <EmbeddedResource Include="Resources\VoiceExtractAliases.json" />
   </ItemGroup>
 
   <ItemGroup>

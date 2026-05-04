@@ -1,7 +1,12 @@
 using System;
 using System.Collections.Generic;
 using Dalamud.Game;
+using Dalamud.Plugin.Services;
+using Echokraut.DataClasses;
 using Echokraut.Helper.Functional;
+using Echokraut.Services;
+using Echotools.Logging.Services;
+using Moq;
 using Xunit;
 
 namespace Echokraut.Tests;
@@ -174,14 +179,74 @@ public class VoiceSampleExtractorTests
     [Fact]
     public void CanonicalNamePart_NormalizesRaceButKeepsNameSpaces()
     {
-        var part = VoiceExtractFileNames.CanonicalNamePart("Female", "Au Ra", "Y'shtola Rhul");
+        var part = VoiceExtractFileNames.CanonicalNamePart("Female", "Au Ra", "Adult", "Y'shtola Rhul");
         Assert.Equal("Female_AuRa_Y'shtola Rhul", part);
+    }
+
+    [Fact]
+    public void CanonicalNamePart_AppendsBodyTypeSuffix_ForChild()
+    {
+        // Child / Elder NPCs get a "-Child" / "-Elder" suffix on the race segment so AllTalk's
+        // age-based voice picker can match them. Suffix is glued to the race with "-".
+        var part = VoiceExtractFileNames.CanonicalNamePart("Female", "Hyur", "Child", "Tataru");
+        Assert.Equal("Female_Hyur-Child_Tataru", part);
+    }
+
+    [Fact]
+    public void CanonicalNamePart_AppendsBodyTypeSuffix_ForElder()
+    {
+        var part = VoiceExtractFileNames.CanonicalNamePart("Male", "Lalafell", "Elder", "Old Sage");
+        Assert.Equal("Male_Lalafell-Elder_Old Sage", part);
+    }
+
+    [Theory]
+    [InlineData("Adult")]
+    [InlineData("")]
+    [InlineData("Unknown")]
+    [InlineData("garbage")]
+    public void CanonicalNamePart_AdultAndUnknownProduceNoSuffix(string bodyType)
+    {
+        // Adult is the implicit default — no filename token. Unknown / garbage values fall
+        // through to the same "no suffix" branch so callers can pass whatever they have.
+        var part = VoiceExtractFileNames.CanonicalNamePart("Female", "Hyur", bodyType, "Tataru");
+        Assert.Equal("Female_Hyur_Tataru", part);
+    }
+
+    [Theory]
+    [InlineData("Hyur")]
+    [InlineData("Elezen")]
+    [InlineData("Miqote")]
+    [InlineData("Roegadyn")]
+    [InlineData("Lalafell")]
+    [InlineData("Viera")]
+    [InlineData("AuRa")]
+    [InlineData("Hrothgar")]
+    // Aliases / un-normalized forms also resolve to player-race.
+    [InlineData("Hyuran")]
+    [InlineData("Au Ra")]
+    [InlineData("Miqo'te")]
+    public void IsPlayerRace_ReturnsTrueForAllEightPlayerRaces(string race)
+    {
+        Assert.True(VoiceExtractFileNames.IsPlayerRace(race));
+    }
+
+    [Theory]
+    [InlineData("Sylph")]
+    [InlineData("Goblin")]
+    [InlineData("Amaljaa")]
+    [InlineData("Moogle")]
+    [InlineData("Loporrit")]
+    [InlineData("Unknown")]
+    [InlineData("")]
+    public void IsPlayerRace_ReturnsFalseForBeastTribesAndUnknown(string race)
+    {
+        Assert.False(VoiceExtractFileNames.IsPlayerRace(race));
     }
 
     [Fact]
     public void GetNamedTargetPath_SingleSample_IsFlat()
     {
-        var path = VoiceExtractFileNames.GetNamedTargetPath(@"C:\save", "Female", "Hyur", "Tataru", 1, 1);
+        var path = VoiceExtractFileNames.GetNamedTargetPath(@"C:\save", "Female", "Hyur", "Adult", "Tataru", 1, 1);
         Assert.Contains("FF14-Voices", path);
         Assert.EndsWith("Female_Hyur_Tataru.wav", path);
         Assert.DoesNotContain("Tataru" + System.IO.Path.DirectorySeparatorChar, path);
@@ -193,7 +258,7 @@ public class VoiceSampleExtractorTests
         // Race "Miqo'te" → "Miqote" in the canonical filename. Name "Y'shtola Rhul" keeps
         // its apostrophe + space in both the filename and the subfolder.
         var path = VoiceExtractFileNames.GetNamedTargetPath(
-            @"C:\save", "Female", "Miqo'te", "Y'shtola Rhul", 2, 3);
+            @"C:\save", "Female", "Miqo'te", "Adult", "Y'shtola Rhul", 2, 3);
         Assert.EndsWith("Female_Miqote_Y'shtola Rhul_2.wav", path);
         Assert.Contains("Y'shtola Rhul" + System.IO.Path.DirectorySeparatorChar, path);
         Assert.DoesNotContain("Miqo'te", path);
@@ -202,21 +267,95 @@ public class VoiceSampleExtractorTests
     [Fact]
     public void GetNamedTargetPath_MultiSample_HasSubfolder()
     {
-        var path = VoiceExtractFileNames.GetNamedTargetPath(@"C:\save", "Female", "Hyur", "Tataru", 3, 5);
+        var path = VoiceExtractFileNames.GetNamedTargetPath(@"C:\save", "Female", "Hyur", "Adult", "Tataru", 3, 5);
         Assert.Contains("FF14-Voices", path);
         Assert.Contains("Tataru" + System.IO.Path.DirectorySeparatorChar, path);
         Assert.EndsWith("Female_Hyur_Tataru_3.wav", path);
     }
 
     [Fact]
-    public void GetCatalogTargetPath_MultiSample_FormatsIdWith3Digits_AndUsesPerNpcSubfolder()
+    public void GetNamedTargetPath_AppendsBodyTypeSuffix_ForChild()
     {
-        var path = VoiceExtractFileNames.GetCatalogTargetPath(@"C:\save", "Male", 7, sampleIndex: 2, totalSamplesPerNpc: 5);
+        var path = VoiceExtractFileNames.GetNamedTargetPath(
+            @"C:\save", "Female", "Hyur", "Child", "Tataru", 1, 1);
+        Assert.EndsWith("Female_Hyur-Child_Tataru.wav", path);
+    }
+
+    [Fact]
+    public void GetCatalogTargetPath_PlayerRace_CollapsesToAll()
+    {
+        // Hyur is a player race → race token is "All".
+        var path = VoiceExtractFileNames.GetCatalogTargetPath(
+            @"C:\save", "Male", "Hyur", "Adult", 7, sampleIndex: 2, totalSamplesPerNpc: 5);
         var sep = System.IO.Path.DirectorySeparatorChar;
         Assert.EndsWith("Male_All_NPC007_2.wav", path);
         Assert.Contains($"FF14-Voices{sep}NPC007{sep}", path);
-        // No legacy "NPC/NPC007/" double-folder layout.
         Assert.DoesNotContain($"FF14-Voices{sep}NPC{sep}", path);
+    }
+
+    [Fact]
+    public void GetCatalogTargetPath_NonPlayerRace_KeepsSpecificRaceToken()
+    {
+        // Sylph is NOT a player race — filename keeps the specific race token instead of "All",
+        // so the random-voice catalog won't pool sylph voices with player races.
+        var path = VoiceExtractFileNames.GetCatalogTargetPath(
+            @"C:\save", "Female", "Sylph", "Adult", 42, sampleIndex: 1, totalSamplesPerNpc: 1);
+        var sep = System.IO.Path.DirectorySeparatorChar;
+        Assert.EndsWith($"FF14-Voices{sep}Female_Sylph_NPC042.wav", path);
+        Assert.DoesNotContain("All", path);
+    }
+
+    [Fact]
+    public void GetCatalogTargetPath_NonPlayerRace_NormalizesRaceToken()
+    {
+        // "Au Ra" would be a player race anyway, so use a hyphenated non-player race for the
+        // normalization check — Mamool Ja → MamoolJa (no spaces).
+        var path = VoiceExtractFileNames.GetCatalogTargetPath(
+            @"C:\save", "Male", "Mamool Ja", "Adult", 9, sampleIndex: 1, totalSamplesPerNpc: 1);
+        Assert.EndsWith("Male_MamoolJa_NPC009.wav", path);
+        Assert.DoesNotContain("Mamool Ja", path);
+    }
+
+    [Fact]
+    public void GetCatalogTargetPath_PlayerRace_ChildAppendsBodyTypeSuffix()
+    {
+        // Child Lalafell NPCs (e.g. miner kids) → "All-Child" so AllTalk picks an
+        // age-appropriate voice. Body suffix is appended right after the race token.
+        var path = VoiceExtractFileNames.GetCatalogTargetPath(
+            @"C:\save", "Female", "Lalafell", "Child", 3, sampleIndex: 1, totalSamplesPerNpc: 1);
+        Assert.EndsWith("Female_All-Child_NPC003.wav", path);
+    }
+
+    [Fact]
+    public void GetCatalogTargetPath_NonPlayerRace_ElderAppendsBodyTypeSuffix()
+    {
+        // Elder Sylph → keeps the race token AND appends "-Elder".
+        var path = VoiceExtractFileNames.GetCatalogTargetPath(
+            @"C:\save", "Female", "Sylph", "Elder", 11, sampleIndex: 1, totalSamplesPerNpc: 1);
+        Assert.EndsWith("Female_Sylph-Elder_NPC011.wav", path);
+    }
+
+    [Theory]
+    [InlineData("Unknown")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void GetCatalogTargetPath_UnknownRace_CollapsesToAll(string? race)
+    {
+        // Race=Unknown (or empty / null) is treated like a player race and collapses to "All".
+        // Pinning it as "Unknown" in the filename would create a dead bucket no voice ever fits.
+        var path = VoiceExtractFileNames.GetCatalogTargetPath(
+            @"C:\save", "Female", race!, "Adult", 5, sampleIndex: 1, totalSamplesPerNpc: 1);
+        Assert.EndsWith("Female_All_NPC005.wav", path);
+    }
+
+    [Fact]
+    public void GetCatalogTargetPath_UnknownRace_StillAppendsBodyTypeSuffix()
+    {
+        // Even when race collapses to "All" via the Unknown-fallback, the body-type suffix is
+        // still applied — Child/Elder is independent of the race-pool decision.
+        var path = VoiceExtractFileNames.GetCatalogTargetPath(
+            @"C:\save", "Male", "Unknown", "Child", 8, sampleIndex: 1, totalSamplesPerNpc: 1);
+        Assert.EndsWith("Male_All-Child_NPC008.wav", path);
     }
 
     [Fact]
@@ -224,7 +363,8 @@ public class VoiceSampleExtractorTests
     {
         // totalSamplesPerNpc == 1 → flat filename directly under FF14-Voices/, no per-NPC
         // subfolder and no _1 suffix. Mirrors GetNamedTargetPath's single-sample behavior.
-        var path = VoiceExtractFileNames.GetCatalogTargetPath(@"C:\save", "Female", 12, sampleIndex: 1, totalSamplesPerNpc: 1);
+        var path = VoiceExtractFileNames.GetCatalogTargetPath(
+            @"C:\save", "Female", "Hyur", "Adult", 12, sampleIndex: 1, totalSamplesPerNpc: 1);
         var sep = System.IO.Path.DirectorySeparatorChar;
         Assert.EndsWith($"FF14-Voices{sep}Female_All_NPC012.wav", path);
         Assert.DoesNotContain("NPC012_", path);
@@ -234,7 +374,8 @@ public class VoiceSampleExtractorTests
     [Fact]
     public void GetCatalogTargetPath_AutoWidens_To4DigitsAt1000()
     {
-        var path = VoiceExtractFileNames.GetCatalogTargetPath(@"C:\save", "Male", 1234, sampleIndex: 1, totalSamplesPerNpc: 3);
+        var path = VoiceExtractFileNames.GetCatalogTargetPath(
+            @"C:\save", "Male", "Hyur", "Adult", 1234, sampleIndex: 1, totalSamplesPerNpc: 3);
         var sep = System.IO.Path.DirectorySeparatorChar;
         Assert.EndsWith("Male_All_NPC1234_1.wav", path);
         Assert.Contains($"FF14-Voices{sep}NPC1234{sep}", path);
@@ -346,5 +487,216 @@ public class VoiceSampleExtractorTests
     {
         using var ms = new System.IO.MemoryStream(new byte[] { 0xDE, 0xAD, 0xBE, 0xEF });
         Assert.Equal(0, WavInspector.GetDurationSeconds(ms));
+    }
+
+    // ── VoiceScdPaths ────────────────────────────────────────────────────────
+
+    [Theory]
+    [InlineData(ClientLanguage.English, "en")]
+    [InlineData(ClientLanguage.German, "de")]
+    [InlineData(ClientLanguage.French, "fr")]
+    [InlineData(ClientLanguage.Japanese, "ja")]
+    public void VoiceScdPaths_LanguageCodeForScd_MapsAllFourClientLanguages(ClientLanguage lang, string expected)
+    {
+        Assert.Equal(expected, VoiceScdPaths.LanguageCodeForScd(lang));
+    }
+
+    [Fact]
+    public void VoiceScdPaths_Build_ProducesAllExpansionAndGenderVariants()
+    {
+        // Standard VOICEMAN base — 6 expansions × 3 gender suffixes = 18 candidate paths.
+        var paths = VoiceScdPaths.Build("vo_voiceman_06006_000010", "de");
+        Assert.Equal(18, paths.Count);
+        // Spot-check a known-good combo.
+        Assert.Contains("cut/ffxiv/sound/voicem/voiceman_06006/vo_voiceman_06006_000010_m_de.scd", paths);
+        Assert.Contains("cut/ex3/sound/voicem/voiceman_06006/vo_voiceman_06006_000010_f_de.scd", paths);
+        Assert.Contains("cut/ex5/sound/voicem/voiceman_06006/vo_voiceman_06006_000010_de.scd", paths);
+    }
+
+    [Fact]
+    public void VoiceScdPaths_Build_ManFstUsesNineCharInnerFolderAnd12CharBase()
+    {
+        // ManFst entries have a different folder structure — 9-char inner folder, base
+        // truncated to 12 chars. Real-world example shape:
+        //   cut/{exp}/sound/{6}/{9}/<base[0..12]>_<gender>_<lang>.scd
+        var paths = VoiceScdPaths.Build("vo_manfst_00100_000010", "en");
+        Assert.NotEmpty(paths);
+        Assert.Contains(paths, p => p.Contains("manfst") && p.Contains("vo_manfst_00") && p.EndsWith("_m_en.scd"));
+    }
+
+    [Fact]
+    public void VoiceScdPaths_Build_ShortInputReturnsEmpty()
+    {
+        // Base must be at least 17 chars to satisfy the substring offsets — anything
+        // shorter is malformed and returns no candidate paths.
+        Assert.Empty(VoiceScdPaths.Build("too_short", "en"));
+        Assert.Empty(VoiceScdPaths.Build("", "en"));
+    }
+
+    // ── VoiceSampleExtractorService.ApplyVoiceAliasEntries ───────────────────
+    // Loader-side I/O (embedded resource read, HTTP fetch, file read) is not testable here
+    // without spinning up the full plugin runtime, so we focus on the deterministic merge
+    // logic — the same code path that decides "does an entry land in the result map and with
+    // which NPC ID". Constructed via a lean mock-only path because the helpers under test
+    // never touch DataManager / ClientState / Config / RemoteUrls.
+
+    private static VoiceSampleExtractorService BuildExtractorForAliasTests()
+    {
+        var log = new Mock<ILogService>();
+        var dataManager = new Mock<IDataManager>();
+        var clientState = new Mock<IClientState>();
+        var jsonData = new Mock<IJsonDataService>();
+        var remoteUrls = new Mock<IRemoteUrlService>();
+        return new VoiceSampleExtractorService(
+            dataManager.Object,
+            clientState.Object,
+            log.Object,
+            jsonData.Object,
+            new Echokraut.DataClasses.Configuration(),
+            remoteUrls.Object);
+    }
+
+    private static Dictionary<string, List<uint>> NameIndexFor(params (uint id, string name)[] entries)
+    {
+        var dict = new Dictionary<uint, Dictionary<string, string>>();
+        foreach (var (id, name) in entries)
+            dict[id] = new() { ["en"] = name };
+        return VoiceExtractKey.BuildNormalizedNameIndex(dict);
+    }
+
+    [Fact]
+    public void ApplyVoiceAliasEntries_ExplicitNpcId_WinsOverNameLookup()
+    {
+        var svc = BuildExtractorForAliasTests();
+        var nameIndex = NameIndexFor((100, "Alphinaud Leveilleur"));
+        var result = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        var file = new VoiceExtractAliasFile
+        {
+            Aliases = new()
+            {
+                // NpcId is set → name is irrelevant, even if it doesn't resolve.
+                new() { ShortName = "BUSCARRON", NpcId = 1003876, NpcName = "Made Up Name" }
+            }
+        };
+
+        svc.ApplyVoiceAliasEntries(file, "test", result, nameIndex, new Echokraut.DataClasses.EKEventId(0, Echotools.Logging.Enums.TextSource.None));
+
+        Assert.True(result.ContainsKey("BUSCARRON"));
+        Assert.Equal(1003876u, result["BUSCARRON"]);
+    }
+
+    [Fact]
+    public void ApplyVoiceAliasEntries_NameLookup_ResolvesViaIndex()
+    {
+        var svc = BuildExtractorForAliasTests();
+        var nameIndex = NameIndexFor((42, "Tataru Taru"));
+        var result = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        var file = new VoiceExtractAliasFile
+        {
+            Aliases = new()
+            {
+                new() { ShortName = "OLDTATARUKEY", NpcName = "Tataru Taru" }
+            }
+        };
+
+        svc.ApplyVoiceAliasEntries(file, "test", result, nameIndex, new Echokraut.DataClasses.EKEventId(0, Echotools.Logging.Enums.TextSource.None));
+
+        Assert.Equal(42u, result["OLDTATARUKEY"]);
+    }
+
+    [Fact]
+    public void ApplyVoiceAliasEntries_LaterLayerOverwritesEarlier()
+    {
+        var svc = BuildExtractorForAliasTests();
+        var nameIndex = NameIndexFor();
+        var result = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+
+        var embedded = new VoiceExtractAliasFile
+        {
+            Aliases = new() { new() { ShortName = "KEY", NpcId = 1u } }
+        };
+        var local = new VoiceExtractAliasFile
+        {
+            Aliases = new() { new() { ShortName = "KEY", NpcId = 999u } }
+        };
+
+        var ev = new Echokraut.DataClasses.EKEventId(0, Echotools.Logging.Enums.TextSource.None);
+        svc.ApplyVoiceAliasEntries(embedded, "embedded", result, nameIndex, ev);
+        svc.ApplyVoiceAliasEntries(local, "local", result, nameIndex, ev);
+
+        // Local wins — embedded entry got overwritten on the second apply.
+        Assert.Equal(999u, result["KEY"]);
+    }
+
+    [Fact]
+    public void ApplyVoiceAliasEntries_KeyComparisonIsCaseInsensitive()
+    {
+        var svc = BuildExtractorForAliasTests();
+        var nameIndex = NameIndexFor();
+        var result = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        var file = new VoiceExtractAliasFile
+        {
+            Aliases = new()
+            {
+                new() { ShortName = "buscarron", NpcId = 100u }
+            }
+        };
+
+        svc.ApplyVoiceAliasEntries(file, "test", result, nameIndex, new Echokraut.DataClasses.EKEventId(0, Echotools.Logging.Enums.TextSource.None));
+
+        // Stored key is uppercase-invariant so RunInternal's lookup hits regardless of how the
+        // text key in the SCD sheet is cased. Both lookups must succeed.
+        Assert.Equal(100u, result["BUSCARRON"]);
+        Assert.Equal(100u, result["buscarron"]);
+    }
+
+    [Fact]
+    public void ApplyVoiceAliasEntries_UnknownName_NotResolved_AndSkipped()
+    {
+        var svc = BuildExtractorForAliasTests();
+        var nameIndex = NameIndexFor((1, "Alphinaud"));
+        var result = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        var file = new VoiceExtractAliasFile
+        {
+            Aliases = new()
+            {
+                new() { ShortName = "MYSTERY", NpcName = "NotInGame" }
+            }
+        };
+
+        svc.ApplyVoiceAliasEntries(file, "test", result, nameIndex, new Echokraut.DataClasses.EKEventId(0, Echotools.Logging.Enums.TextSource.None));
+
+        // Unknown name → entry skipped, key absent. Logger receives a warning but that's not
+        // asserted here (would couple the test to log message wording).
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void ApplyVoiceAliasEntries_EmptyShortName_Skipped()
+    {
+        var svc = BuildExtractorForAliasTests();
+        var nameIndex = NameIndexFor((1, "Alphinaud"));
+        var result = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+        var file = new VoiceExtractAliasFile
+        {
+            Aliases = new()
+            {
+                new() { ShortName = "", NpcId = 1u }
+            }
+        };
+
+        svc.ApplyVoiceAliasEntries(file, "test", result, nameIndex, new Echokraut.DataClasses.EKEventId(0, Echotools.Logging.Enums.TextSource.None));
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void ApplyVoiceAliasEntries_NullFile_NoOp()
+    {
+        var svc = BuildExtractorForAliasTests();
+        var nameIndex = NameIndexFor();
+        var result = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase);
+
+        svc.ApplyVoiceAliasEntries(null, "missing", result, nameIndex, new Echokraut.DataClasses.EKEventId(0, Echotools.Logging.Enums.TextSource.None));
+        Assert.Empty(result);
     }
 }

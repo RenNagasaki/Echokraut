@@ -65,6 +65,7 @@ public class CommandService : ICommandService
         _commandManager.AddHandler("/ekdel", new CommandInfo(OnCommand) { HelpMessage = "/ekdel n -> Deletes last 'n' local saved files. Default 10" });
         _commandManager.AddHandler("/ekdelmin", new CommandInfo(OnCommand) { HelpMessage = "/ekdelmin n -> Deletes last 'n' minutes generated local saved files. Default 10" });
         _commandManager.AddHandler("/ekfirst", new CommandInfo(OnCommand) { HelpMessage = "Opens the first-time setup window" });
+        _commandManager.AddHandler("/ekfirsttime", new CommandInfo(OnCommand) { HelpMessage = "Opens the first-time setup window (alias of /ekfirst)" });
         _commandManager.AddHandler("/ekhistory", new CommandInfo(OnCommand) { HelpMessage = "Opens the voice clip history window" });
         _commandManager.AddHandler("/ekdump", new CommandInfo(OnCommand) { HelpMessage = "Dumps all Lumina sheets to TSV files" });
         _commandManager.AddHandler("/eksearchid", new CommandInfo(OnCommand) { HelpMessage = "/eksearchid <value> -> Searches every sheet for a uint32 column value and writes hits to sheet_dump/search_<value>.tsv" });
@@ -88,6 +89,7 @@ public class CommandService : ICommandService
                 ToggleConfigUi();
                 break;
             case "/ekfirst":
+            case "/ekfirsttime":
                 ToggleFirstTimeUi();
                 break;
             case "/ekhistory":
@@ -271,6 +273,7 @@ public class CommandService : ICommandService
         _commandManager.RemoveHandler("/ekdelmin");
         _commandManager.RemoveHandler("/ektchat");
         _commandManager.RemoveHandler("/ekfirst");
+        _commandManager.RemoveHandler("/ekfirsttime");
         _commandManager.RemoveHandler("/ekhistory");
         _commandManager.RemoveHandler("/ekdump");
         _commandManager.RemoveHandler("/eksearchid");

@@ -26,7 +26,6 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     private readonly IVoiceClipManagerService _voiceClipManager;
     private readonly IAudioPlaybackService _audioPlayback;
     private readonly INpcDataService _npcData;
-    private readonly IDialogHarvestService _dialogHarvest;
     private readonly IGameObjectService _gameObjects;
     private readonly IClientState _clientState;
     private readonly ILogService _log;
@@ -34,9 +33,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     private readonly Action _toggleConfig;
     private readonly Action _toggleGameDataTools;
 
-    // Harvest
-    private CancellationTokenSource? _harvestCts;
-    private TextButtonNode? _harvestButton;
+    // Generation status bar (harvest progress + start/stop now lives in NativeGameDataToolsWindow)
     private StatusProgressBar? _statusBar;
     private TextNode? _backendStatusLabel;
     private DynamicIconButtonNode? _settingsButton;
@@ -51,7 +48,6 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     private volatile bool _statusCalcRunning;
     private volatile int _statusTotalClips;
     private volatile int _statusTotalSaved;
-    private bool _pendingHarvestClick;
 
     // Layout
     private float _contentWidth;
@@ -127,7 +123,6 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         IVoiceClipManagerService voiceClipManager,
         IAudioPlaybackService audioPlayback,
         INpcDataService npcData,
-        IDialogHarvestService dialogHarvest,
         IGameObjectService gameObjects,
         IClientState clientState,
         ILogService log,
@@ -139,7 +134,6 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _voiceClipManager = voiceClipManager;
         _audioPlayback = audioPlayback;
         _npcData = npcData;
-        _dialogHarvest = dialogHarvest;
         _gameObjects = gameObjects;
         _clientState = clientState;
         _log = log;
@@ -172,18 +166,11 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         var pos = ContentStartPosition;
         var size = ContentSize;
         _contentWidth = size.X;
-        const float harvestRowH = 28f;
+        const float topRowH = 28f;
 
-        // Harvest button — language always follows the running client locale, so no dropdown.
-        _harvestButton = new TextButtonNode
-        {
-            Size = new Vector2(120, harvestRowH),
-            Position = pos,
-            String = Loc.S("Start Harvest"),
-            OnClick = () => _pendingHarvestClick = true,
-        };
-        AddNode(_harvestButton);
-
+        // Quest-type filter (NPC tree pre-filter). Harvest controls now live exclusively in
+        // the Game Data Tools window — the dropdown sits at the left edge where the harvest
+        // button used to be.
         _questTypeLabels = new[]
         {
             Loc.S("All"), Loc.S("Main Scenario"), Loc.S("Side Quest"),
@@ -192,8 +179,8 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         };
         _questTypeDropDown = new TextDropDownNode
         {
-            Size = new Vector2(180, harvestRowH),
-            Position = pos + new Vector2(124, 0),
+            Size = new Vector2(180, topRowH),
+            Position = pos,
             Options = [],
         };
         _questTypeDropDown.OptionListNode.Options = new List<string>(_questTypeLabels);
@@ -203,7 +190,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _questTypeDropDown.OnOptionSelected = selected => _pendingQuestTypeSelection = Array.IndexOf(_questTypeLabels, selected);
         AddNode(_questTypeDropDown);
 
-        var tabY = pos.Y + harvestRowH + 4;
+        var tabY = pos.Y + topRowH + 4;
         const float tabH = 32f;
 
         _tabBar = new TabBarNode { Size = new Vector2(size.X, tabH), Position = new Vector2(pos.X, tabY) };
@@ -401,27 +388,6 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         // Skip first frame so OnSetup node creation doesn't compound with data loading
         if (_firstFrame) { _firstFrame = false; return; }
 
-        // Process deferred harvest click
-        if (_pendingHarvestClick)
-        {
-            _pendingHarvestClick = false;
-            if (_dialogHarvest.IsRunning)
-            {
-                _harvestCts?.Cancel();
-                if (_harvestButton != null) _harvestButton.String = Loc.S("Start Harvest");
-            }
-            else
-            {
-                _harvestCts?.Dispose();
-                _harvestCts = new CancellationTokenSource();
-                if (_harvestButton != null) _harvestButton.String = Loc.S("Stop Harvest");
-                _ = _dialogHarvest.RunAsync(_clientState.ClientLanguage, _harvestCts.Token).ContinueWith(_ =>
-                {
-                    if (_harvestButton != null) _harvestButton.String = Loc.S("Start Harvest");
-                });
-            }
-        }
-
         // Process deferred quest type selection
         if (_pendingQuestTypeSelection >= 0)
         {
@@ -604,9 +570,12 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
                     _vcCountCache[npcKey] = 0;
             }
 
-            // Skip NPCs with no clips matching the current filter
+            // Show every mapped NPC regardless of clip count — migrated configs and
+            // unspoken-to NPCs still need to surface so users can edit voice / race /
+            // gender. NPCs with zero clips just have an empty children list when expanded.
+            // (When a quest-type filter is active the upstream filter in BuildPage already
+            //  removes mismatching NPCs, so this scope is correct.)
             _vcCountCache.TryGetValue(npcKey, out var vcCount);
-            if (vcCount == 0) continue;
             var wasExpanded = _expandedNpcs.Contains(npcKey);
             var npcCategory = new TreeListCategoryNode
             {

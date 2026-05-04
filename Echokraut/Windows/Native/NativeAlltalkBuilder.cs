@@ -75,10 +75,15 @@ public static class NativeAlltalkBuilder
             // Install custom data — only when installed, not installing, and path valid
             Dim(InstallCustomDataButton, pathValid && config.Alltalk.LocalInstall && !alltalkInstance.Installing);
 
-            // Start/Stop
+            // Start/Stop. Start is also blocked while an install is in progress — clicking
+            // it mid-install would race against the installer touching alltalkFolder and the
+            // post-install voice-extract step writing into voices/.
             StartButton.String = alltalkInstance.InstanceStarting ? Loc.S("Starting...")
                 : alltalkInstance.InstanceRunning ? Loc.S("Running") : Loc.S("Start");
-            Dim(StartButton, pathValid && !alltalkInstance.InstanceRunning && !alltalkInstance.InstanceStarting);
+            Dim(StartButton, pathValid
+                && !alltalkInstance.InstanceRunning
+                && !alltalkInstance.InstanceStarting
+                && !alltalkInstance.Installing);
             Dim(StopButton, (alltalkInstance.InstanceRunning || alltalkInstance.InstanceStarting) && !alltalkInstance.InstanceStopping);
         }
     }

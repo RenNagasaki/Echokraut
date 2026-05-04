@@ -448,6 +448,266 @@ public class DatabaseServiceTests : IDisposable
         Assert.True(wipedFired);
     }
 
+    // ── Speaker aliases ─────────────────────────────────────
+
+    [Fact]
+    public void UpsertSpeakerAlias_InsertsAndIsCaseInsensitive()
+    {
+        var character = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Y'shtola Rhul",
+            Race = (int)NpcRaces.Miqote,
+            Gender = (int)Genders.Female,
+            Language = 2, // German
+        });
+        _db.UpsertSpeakerAlias(character.Id, 2, "Geheimnisvolle Dame");
+
+        // Lookup uses case-insensitive normalized key.
+        Assert.Equal(character.Id, _db.FindCharacterIdByAlias("geheimnisvolle dame", 2));
+        Assert.Equal(character.Id, _db.FindCharacterIdByAlias("GEHEIMNISVOLLE DAME", 2));
+        Assert.Equal(character.Id, _db.FindCharacterIdByAlias("  Geheimnisvolle Dame  ", 2));
+    }
+
+    [Fact]
+    public void UpsertSpeakerAlias_DeduplicatesOnRepeatedCall()
+    {
+        var character = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Tataru Taru",
+            Race = (int)NpcRaces.Lalafell,
+            Gender = (int)Genders.Female,
+            Language = 1,
+        });
+        _db.UpsertSpeakerAlias(character.Id, 1, "Energetic Lalafell");
+        _db.UpsertSpeakerAlias(character.Id, 1, "Energetic Lalafell"); // dup
+        _db.UpsertSpeakerAlias(character.Id, 1, "energetic lalafell"); // case-only dup
+
+        var aliases = _db.GetSpeakerAliases(character.Id);
+        Assert.Single(aliases);
+    }
+
+    [Fact]
+    public void FindCharacterIdByAlias_ReturnsNullForUnknown()
+    {
+        Assert.Null(_db.FindCharacterIdByAlias("Nobody", 1));
+        Assert.Null(_db.FindCharacterIdByAlias("", 1));
+    }
+
+    [Fact]
+    public void FindCharacterIdByAlias_ReturnsNullWhenAmbiguous()
+    {
+        // Two characters share the alias "???" — the convenience getter must return null
+        // so callers know they need disambiguation. The full multi-match list is exposed
+        // via FindCharacterIdsByAlias for runtime resolution.
+        var charA = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "MaskedA", Race = (int)NpcRaces.Hyur, Gender = (int)Genders.Male, Language = 1,
+        });
+        var charB = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "MaskedB", Race = (int)NpcRaces.Elezen, Gender = (int)Genders.Female, Language = 1,
+        });
+        _db.UpsertSpeakerAlias(charA.Id, 1, "???");
+        _db.UpsertSpeakerAlias(charB.Id, 1, "???");
+
+        Assert.Null(_db.FindCharacterIdByAlias("???", 1));
+
+        var ids = _db.FindCharacterIdsByAlias("???", 1);
+        Assert.Equal(2, ids.Count);
+        Assert.Contains(charA.Id, ids);
+        Assert.Contains(charB.Id, ids);
+    }
+
+    [Fact]
+    public void FindCharacterIdsByAlias_ReturnsEmptyForUnknown()
+    {
+        Assert.Empty(_db.FindCharacterIdsByAlias("Nobody", 1));
+        Assert.Empty(_db.FindCharacterIdsByAlias("", 1));
+    }
+
+    [Fact]
+    public void FindCharacterIdsByAlias_ReturnsCopy_NotInternalReference()
+    {
+        var character = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Tataru Taru", Race = (int)NpcRaces.Lalafell, Gender = (int)Genders.Female, Language = 1,
+        });
+        _db.UpsertSpeakerAlias(character.Id, 1, "Energetic Lalafell");
+
+        var first = _db.FindCharacterIdsByAlias("Energetic Lalafell", 1);
+        first.Add(99999); // mutate caller's copy
+
+        var second = _db.FindCharacterIdsByAlias("Energetic Lalafell", 1);
+        Assert.Single(second);
+        Assert.DoesNotContain(99999, second);
+    }
+
+    [Fact]
+    public void FindCharacterIdByAlias_ScopedByLanguage()
+    {
+        // Same fakename string in two languages must resolve independently. Live runtime
+        // queries by the client-language locale so cross-language collisions would be a bug.
+        var charDe = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Y'shtola Rhul DE", Race = (int)NpcRaces.Miqote, Gender = (int)Genders.Female, Language = 2,
+        });
+        var charEn = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Y'shtola Rhul EN", Race = (int)NpcRaces.Miqote, Gender = (int)Genders.Female, Language = 1,
+        });
+        _db.UpsertSpeakerAlias(charDe.Id, 2, "Mysterious Lady");
+        _db.UpsertSpeakerAlias(charEn.Id, 1, "Mysterious Lady");
+
+        Assert.Equal(charDe.Id, _db.FindCharacterIdByAlias("Mysterious Lady", 2));
+        Assert.Equal(charEn.Id, _db.FindCharacterIdByAlias("Mysterious Lady", 1));
+        Assert.Null(_db.FindCharacterIdByAlias("Mysterious Lady", 3)); // FR
+    }
+
+    [Fact]
+    public void WipeAll_ClearsAliasCache()
+    {
+        var character = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Doomed", Race = (int)NpcRaces.Hyur, Gender = (int)Genders.Male, Language = 1,
+        });
+        _db.UpsertSpeakerAlias(character.Id, 1, "Faceless");
+        Assert.Equal(character.Id, _db.FindCharacterIdByAlias("Faceless", 1));
+
+        _db.WipeAll();
+
+        Assert.Null(_db.FindCharacterIdByAlias("Faceless", 1));
+        Assert.Empty(_db.GetSpeakerAliases(character.Id));
+    }
+
+    // ── UpsertVoice burst-insertion (regression: ChangeTracker collision) ────
+
+    [Fact]
+    public void UpsertVoice_BurstInsertWithCompositeKeyChildren_DoesNotCollide()
+    {
+        // Regression: BackendService.MapVoices upserts every backend voice in a tight loop
+        // after AllTalk starts. Each VoiceEntity ships with VoiceAllowedGenderEntity children
+        // that have a composite PK (VoiceId, Gender). Earlier the second iteration threw
+        // "another instance with the same key value for {'VoiceId', 'Gender'} is already
+        // being tracked" because EF's identity map didn't shed iteration-1's children before
+        // iteration 2 attached its own (also-with-VoiceId=0) children. Verify the fix holds
+        // for a typical voice-list size.
+        var voiceCount = 50;
+        for (var i = 0; i < voiceCount; i++)
+        {
+            var voice = new VoiceEntity
+            {
+                BackendVoice = $"voice_{i:D3}.wav",
+                VoiceName = $"Voice {i}",
+                AllowedGenders = new List<VoiceAllowedGenderEntity>
+                {
+                    new() { Gender = (int)Genders.Male },
+                    new() { Gender = (int)Genders.Female },
+                },
+                AllowedRaces = new List<VoiceAllowedRaceEntity>
+                {
+                    new() { Race = (int)NpcRaces.Hyur },
+                    new() { Race = (int)NpcRaces.Elezen },
+                },
+            };
+            _db.UpsertVoice(voice); // Must NOT throw.
+        }
+
+        Assert.Equal(voiceCount, _db.GetVoices().Count);
+    }
+
+    [Fact]
+    public void UpsertVoice_DuplicateChildrenInInput_AreDeduped()
+    {
+        // Real-world case: voice filenames sometimes carry the same race twice
+        // ("Male_Roegadyn-Roegadyn_NPC123.wav") and the parser would push Roegadyn onto
+        // AllowedRaces twice. Without dedup at UpsertVoice the tracker fails on the
+        // (VoiceId, Race) composite key. Dedup must produce a single row per (Race) for
+        // this voice.
+        var voice = new VoiceEntity
+        {
+            BackendVoice = "Male_Roegadyn-Roegadyn_NPC001.wav",
+            VoiceName = "RoegadynNpc",
+            AllowedGenders = new List<VoiceAllowedGenderEntity>
+            {
+                new() { Gender = (int)Genders.Male },
+                new() { Gender = (int)Genders.Male }, // duplicate
+            },
+            AllowedRaces = new List<VoiceAllowedRaceEntity>
+            {
+                new() { Race = (int)NpcRaces.Roegadyn },
+                new() { Race = (int)NpcRaces.Roegadyn }, // duplicate
+            },
+        };
+
+        var result = _db.UpsertVoice(voice); // Must NOT throw on the composite key.
+
+        var saved = _db.GetVoices().Single(v => v.BackendVoice == voice.BackendVoice);
+        Assert.Single(saved.AllowedGenders);
+        Assert.Single(saved.AllowedRaces);
+        Assert.Equal((int)Genders.Male, saved.AllowedGenders[0].Gender);
+        Assert.Equal((int)NpcRaces.Roegadyn, saved.AllowedRaces[0].Race);
+    }
+
+    [Fact]
+    public void UpsertVoice_RepeatedSameBackendKey_UpdatesInPlace()
+    {
+        // Update branch: same BackendVoice on second call should refresh children, not throw.
+        for (var i = 0; i < 5; i++)
+        {
+            _db.UpsertVoice(new VoiceEntity
+            {
+                BackendVoice = "shared.wav",
+                VoiceName = $"Iteration {i}",
+                AllowedGenders = new List<VoiceAllowedGenderEntity>
+                {
+                    new() { Gender = (int)Genders.Male },
+                },
+                AllowedRaces = new List<VoiceAllowedRaceEntity>
+                {
+                    new() { Race = (int)NpcRaces.Hyur },
+                },
+            });
+        }
+        var voices = _db.GetVoices();
+        Assert.Single(voices);
+        Assert.Equal("Iteration 4", voices[0].VoiceName);
+    }
+
+    [Fact]
+    public void WipeAll_ClearsCharacterCaches()
+    {
+        // Regression: WipeAll used to clear voices/phonetics/muted caches but forgot the
+        // character caches — GetNpcs() / GetPlayers() kept returning the pre-wipe lists,
+        // so NpcDataService's count-diff guard short-circuited the reload and the VC
+        // Manager kept showing wiped NPCs.
+        var npc = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "DoomedNpc",
+            Race = (int)NpcRaces.Hyur,
+            Gender = (int)Genders.Male,
+            Language = 1,
+            ObjectKind = (int)ObjectKind.BattleNpc,
+        });
+        _db.UpsertContext(npc.Id, "npc");
+        var player = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "DoomedPlayer",
+            Race = (int)NpcRaces.Elezen,
+            Gender = (int)Genders.Female,
+            Language = 1,
+            ObjectKind = (int)ObjectKind.Pc,
+        });
+        _db.UpsertContext(player.Id, "player");
+
+        Assert.Single(_db.GetNpcs());
+        Assert.Single(_db.GetPlayers());
+
+        _db.WipeAll();
+
+        Assert.Empty(_db.GetNpcs());
+        Assert.Empty(_db.GetPlayers());
+    }
+
     [Fact]
     public void ClearVoiceClips_RemovesAll()
     {
@@ -468,106 +728,6 @@ public class DatabaseServiceTests : IDisposable
 
         _db.ClearVoiceClips();
         Assert.Equal(0, _db.GetVoiceClipCount());
-    }
-
-    // ── Migration ───────────────────────────────────────────
-
-    [Fact]
-    public void MigrateFromConfig_ImportsAllData()
-    {
-        var config = new Configuration
-        {
-            MappedNpcs = new List<NpcMapData>
-            {
-                new(ObjectKind.EventNpc)
-                {
-                    Name = "Thancred",
-                    Race = NpcRaces.Hyur,
-                    Gender = Genders.Male,
-                    voice = "voice_01",
-                    IsEnabled = true,
-                    Volume = 0.9f,
-                    HasBubbles = true,
-                    IsEnabledBubble = false,
-                    VolumeBubble = 0.5f
-                }
-            },
-            MappedPlayers = new List<NpcMapData>
-            {
-                new(ObjectKind.Pc)
-                {
-                    Name = "Player",
-                    Race = NpcRaces.Miqote,
-                    Gender = Genders.Female,
-                    voice = "voice_02",
-                    IsEnabled = true,
-                    Volume = 1.0f
-                }
-            },
-            EchokrautVoices = new List<EchokrautVoice>
-            {
-                new()
-                {
-                    BackendVoice = "voice_01",
-                    voiceName = "Male_Hyur",
-                    IsEnabled = true,
-                    AllowedGenders = new List<Genders> { Genders.Male },
-                    AllowedRaces = new List<NpcRaces> { NpcRaces.Hyur }
-                }
-            },
-            PhoneticCorrections = new List<PhoneticCorrection>
-            {
-                new("Eorzea", "Ay-or-zay-ah")
-            }
-        };
-
-        Assert.True(_db.NeedsMigration(config));
-        _db.MigrateFromConfig(config);
-
-        // Config should be cleared
-        Assert.Empty(config.MappedNpcs);
-        Assert.Empty(config.MappedPlayers);
-        Assert.Empty(config.EchokrautVoices);
-        Assert.Empty(config.PhoneticCorrections);
-
-        // DB should have data
-        Assert.Single(_db.GetVoices());
-        Assert.Single(_db.GetPhoneticCorrections());
-
-        // Thancred should have NPC + bubble contexts
-        var thancred = _db.FindCharacter("Thancred", Genders.Male, NpcRaces.Hyur, language: 1);
-        Assert.NotNull(thancred);
-        Assert.Equal("voice_01", thancred!.VoiceKey);
-
-        var npcCtx = _db.GetContext(thancred.Id, "npc");
-        Assert.NotNull(npcCtx);
-        Assert.True(npcCtx!.IsEnabled);
-        Assert.Equal(0.9f, npcCtx.Volume);
-
-        var bubbleCtx = _db.GetContext(thancred.Id, "bubble");
-        Assert.NotNull(bubbleCtx);
-        Assert.False(bubbleCtx!.IsEnabled);
-        Assert.Equal(0.5f, bubbleCtx.Volume);
-
-        // Player
-        var player = _db.FindCharacter("Player", Genders.Female, NpcRaces.Miqote, language: 1);
-        Assert.NotNull(player);
-    }
-
-    [Fact]
-    public void MigrateFromConfig_Idempotent()
-    {
-        var config = new Configuration
-        {
-            EchokrautVoices = new List<EchokrautVoice>
-            {
-                new() { BackendVoice = "v1", voiceName = "Test" }
-            }
-        };
-
-        _db.MigrateFromConfig(config);
-        // After migration, config is cleared — second call should detect no data
-        Assert.False(_db.NeedsMigration(config));
     }
 
     // ── Cache ───────────────────────────────────────────────

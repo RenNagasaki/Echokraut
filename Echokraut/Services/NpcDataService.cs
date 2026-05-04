@@ -42,6 +42,19 @@ public class NpcDataService : INpcDataService
         // NpcDataService will reload once the harvest fires the final VoiceClipLogged event.
         if (_db.SuppressEvents) return;
 
+        // VoiceClipLogged fires from inside _db's _writeLock on EVERY dialog line. Without
+        // this guard each line would clear and re-allocate up to N×NpcMapData on the framework
+        // thread, freezing the game for users with large mapping sets. SaveCharacter keeps the
+        // in-memory _mappedNpcs/_mappedPlayers in sync with DB writes already, so a wholesale
+        // reload only matters when a path bypasses SaveCharacter (the harvest does — it
+        // populates DB rows directly via UpsertCharacter and triggers exactly one reload at
+        // end-of-batch). Count diff cleanly distinguishes "harvest just landed N new rows"
+        // from "another dialog line was logged, no character changes."
+        var dbNpcCount = _db.GetNpcs().Count;
+        var dbPlayerCount = _db.GetPlayers().Count;
+        if (dbNpcCount == _mappedNpcs.Count && dbPlayerCount == _mappedPlayers.Count)
+            return;
+
         _mappedNpcs.Clear();
         _mappedPlayers.Clear();
 
@@ -73,45 +86,56 @@ public class NpcDataService : INpcDataService
         var foundBodyType = false;
         string[] splitVoice = voice.voiceName.Split('_');
 
-        foreach (var split in splitVoice)
+        // Filename convention is Gender_Race[-BodyType]_Name(.wav). The race+body-type info
+        // lives in segment[1] ONLY — segment[0] is the gender and segment[2..] is the NPC's
+        // name, which can legitimately contain race-like words (e.g.
+        // "Male_Roegadyn_Roegadyn-Gladiator.wav" — the NPC is named Roegadyn-Gladiator,
+        // and the file's race is Roegadyn ONCE). Scanning all segments would re-parse the
+        // name and emit duplicate / wrong races. AddIfMissing kept as a belt-and-suspenders
+        // dedupe in case segment[1] itself somehow carries a duplicate (e.g. "Hyur-Hyur").
+        void AddIfMissing(NpcRaces race)
         {
-            var raceStrArr = split.Split('-');
-            foreach (var raceStr in raceStrArr)
+            if (!voice.AllowedRaces.Contains(race))
+                voice.AllowedRaces.Add(race);
+        }
+
+        if (splitVoice.Length < 2) return;
+        var raceStrArr = splitVoice[1].Split('-');
+        foreach (var raceStr in raceStrArr)
+        {
+            if (Enum.TryParse(typeof(NpcRaces), raceStr, true, out object? race))
             {
-                if (Enum.TryParse(typeof(NpcRaces), raceStr, true, out object? race))
-                {
-                    voice.AllowedRaces.Add((NpcRaces)race);
-                    _log.Debug(nameof(ReSetVoiceRaces), $"Found {race} race", eventId);
-                }
-                else if (raceStr.Equals("Child", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    if (!foundBodyType) { voice.IsAdultVoice = false; foundBodyType = true; }
-                    voice.IsChildVoice = true;
-                    _log.Debug(nameof(ReSetVoiceRaces), $"Found Child option", eventId);
-                }
-                else if (raceStr.Equals("Elder", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    if (!foundBodyType) { voice.IsAdultVoice = false; foundBodyType = true; }
-                    voice.IsElderVoice = true;
-                    _log.Debug(nameof(ReSetVoiceRaces), $"Found Elder option", eventId);
-                }
-                else if (raceStr.Equals("Adult", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    if (!foundBodyType) { voice.IsAdultVoice = false; foundBodyType = true; }
-                    voice.IsAdultVoice = true;
-                    _log.Debug(nameof(ReSetVoiceRaces), $"Found Adult option", eventId);
-                }
-                else if (raceStr.Equals("All", StringComparison.InvariantCultureIgnoreCase))
-                {
-                    foreach (var raceObj in Constants.RACELIST)
-                    {
-                        voice.AllowedRaces.Add(raceObj);
-                        _log.Debug(nameof(ReSetVoiceRaces), $"Found {raceObj} race", eventId);
-                    }
-                }
-                else
-                    _log.Debug(nameof(ReSetVoiceRaces), $"Skipped segment '{raceStr}' (not a race, body type, or 'All')", eventId);
+                AddIfMissing((NpcRaces)race);
+                _log.Debug(nameof(ReSetVoiceRaces), $"Found {race} race", eventId);
             }
+            else if (raceStr.Equals("Child", StringComparison.InvariantCultureIgnoreCase))
+            {
+                if (!foundBodyType) { voice.IsAdultVoice = false; foundBodyType = true; }
+                voice.IsChildVoice = true;
+                _log.Debug(nameof(ReSetVoiceRaces), $"Found Child option", eventId);
+            }
+            else if (raceStr.Equals("Elder", StringComparison.InvariantCultureIgnoreCase))
+            {
+                if (!foundBodyType) { voice.IsAdultVoice = false; foundBodyType = true; }
+                voice.IsElderVoice = true;
+                _log.Debug(nameof(ReSetVoiceRaces), $"Found Elder option", eventId);
+            }
+            else if (raceStr.Equals("Adult", StringComparison.InvariantCultureIgnoreCase))
+            {
+                if (!foundBodyType) { voice.IsAdultVoice = false; foundBodyType = true; }
+                voice.IsAdultVoice = true;
+                _log.Debug(nameof(ReSetVoiceRaces), $"Found Adult option", eventId);
+            }
+            else if (raceStr.Equals("All", StringComparison.InvariantCultureIgnoreCase))
+            {
+                foreach (var raceObj in Constants.RACELIST)
+                {
+                    AddIfMissing(raceObj);
+                    _log.Debug(nameof(ReSetVoiceRaces), $"Found {raceObj} race", eventId);
+                }
+            }
+            else
+                _log.Debug(nameof(ReSetVoiceRaces), $"Skipped segment '{raceStr}' (not a race, body type, or 'All')", eventId);
         }
     }
 
@@ -123,13 +147,17 @@ public class NpcDataService : INpcDataService
         voice.AllowedGenders.Clear();
         string[] splitVoice = voice.voiceName.Split('_');
 
-        foreach (var split in splitVoice)
+        // Filename convention: gender lives in segment[0] only. Same reasoning as
+        // ReSetVoiceRaces — scanning all segments would mis-pick gender-like tokens out
+        // of the NPC's name. Defensive Contains check stays in case segment[0] is itself
+        // duplicated somehow.
+        if (splitVoice.Length == 0) return;
+        var genderStr = splitVoice[0];
+        if (Enum.TryParse(typeof(Genders), genderStr, true, out object? gender))
         {
-            if (Enum.TryParse(typeof(Genders), split, true, out object? gender))
-            {
-                _log.Debug(nameof(ReSetVoiceGenders), $"Found {gender} gender", eventId);
+            _log.Debug(nameof(ReSetVoiceGenders), $"Found {gender} gender", eventId);
+            if (!voice.AllowedGenders.Contains((Genders)gender))
                 voice.AllowedGenders.Add((Genders)gender);
-            }
         }
     }
 

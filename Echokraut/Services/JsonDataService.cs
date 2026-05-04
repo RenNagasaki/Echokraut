@@ -33,6 +33,8 @@ public class JsonDataService : IJsonDataService, IDisposable
     public List<string> Emoticons { get; private set; } = new();
     private List<VoiceMap> _voiceMaps = new();
 
+    public IReadOnlyList<VoiceMap> VoiceMaps => _voiceMaps;
+
     public JsonDataService(ILogService log, IRemoteUrlService remoteUrls, ClientLanguage language)
     {
         _log = log ?? throw new ArgumentNullException(nameof(log));

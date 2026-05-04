@@ -64,8 +64,33 @@ public class GameObjectService : IGameObjectService
         _textProcessingService = textProcessingService ?? throw new System.ArgumentNullException(nameof(textProcessingService));
     }
 
+    public HashSet<uint> GetSpawnedNpcBaseIds()
+    {
+        // Walk the object table and collect every non-player BaseId. The live alias resolver
+        // intersects this set with character_instance.NpcBaseId values to disambiguate
+        // multi-match aliases (typical for "???" speakers). Empty set when the table can't
+        // be enumerated — caller falls through to existing "??? " heuristics.
+        var result = new HashSet<uint>();
+        try
+        {
+            foreach (var obj in _objectTable)
+            {
+                if (obj == null) continue;
+                if (obj.ObjectKind == Dalamud.Game.ClientState.Objects.Enums.ObjectKind.Pc) continue;
+                if (obj.DataId == 0) continue;
+                result.Add(obj.DataId);
+            }
+        }
+        catch
+        {
+            // ObjectTable can throw if the game state is in flux (zone change, cutscene
+            // transition). Returning an empty set is correct fallthrough behavior.
+        }
+        return result;
+    }
+
     public IGameObject? GetGameObjectByName(SeString? name, EKEventId eventId)
-    { 
+    {
         if (name is null) return null;
         if (string.IsNullOrWhiteSpace(name.TextValue)) return null;
         if (!_textProcessingService.TryGetEntityName(name, out var parsedName)) return null;

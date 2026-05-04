@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using Dalamud.Game;
 using Echokraut.DataClasses;
 using Echokraut.DataClasses.Database;
 using Echokraut.Enums;
@@ -18,6 +19,12 @@ public class DatabaseService : IDatabaseService
     private readonly ILogService _log;
     private readonly EchokrautDbContext _context;
     private readonly object _writeLock = new();
+    /// <summary>Client language at construction time. Used as the override for legacy JSON
+    /// migration: pre-DB plugin versions didn't track per-entry language so all NpcMapData
+    /// entries deserialize as English (the default), which then gets filtered out by the VCM's
+    /// language filter on non-English clients. The migration forces this language on every
+    /// imported entry to match the user's actual session.</summary>
+    private readonly ClientLanguage _clientLanguage;
 
     // In-memory caches for hot-path reads
     private volatile List<CharacterEntity> _cachedNpcs = new();
@@ -25,10 +32,27 @@ public class DatabaseService : IDatabaseService
     private volatile List<VoiceEntity> _cachedVoices = new();
     private volatile List<PhoneticCorrectionEntity> _cachedPhonetics = new();
     private volatile HashSet<uint> _cachedMutedBaseIds = new();
+    /// <summary>(language, normalized-alias) → list of characterIds. Built from
+    /// <c>character_speaker_aliases</c>. Multi-valued because some fakenames (notably the
+    /// anonymous <c>???</c> marker) are shared across many characters; the live runtime
+    /// disambiguates via physical-presence and already-spoken tracking. Normalized =
+    /// trimmed + lowercased so the runtime compare is allocation-free.</summary>
+    private volatile Dictionary<(int lang, string alias), List<int>> _cachedAliasMap = new();
 
-    public DatabaseService(ILogService log, string configDirectory, Configuration config)
+    /// <summary>
+    /// True after <see cref="Dispose"/> has begun. Native addons keep firing OnUpdate during
+    /// KamiToolKit's async ATK detach window — those late frames can call DB methods after
+    /// the DbContext has already been torn down. Read methods that touch <c>_context</c> check
+    /// this flag (under <c>_writeLock</c>) and return null/empty instead of throwing
+    /// ObjectDisposedException, so the addon spam dies quietly during plugin reload.
+    /// </summary>
+    private volatile bool _disposed;
+
+    public DatabaseService(ILogService log, string configDirectory, Configuration config,
+        ClientLanguage clientLanguage)
     {
         _log = log ?? throw new ArgumentNullException(nameof(log));
+        _clientLanguage = clientLanguage;
         var dbPath = Path.Combine(configDirectory, "echokraut.db");
         _context = new EchokrautDbContext(dbPath);
 
@@ -55,7 +79,7 @@ public class DatabaseService : IDatabaseService
         RefreshAllCaches();
     }
 
-    private const int CurrentSchemaVersion = 12;
+    private const int CurrentSchemaVersion = 2;
 
     private void InitializeDatabase(Configuration config)
     {
@@ -64,11 +88,20 @@ public class DatabaseService : IDatabaseService
         _context.Database.ExecuteSqlRaw("PRAGMA foreign_keys=ON");
         _context.Database.EnsureCreated();
 
-        RunSchemaMigrations();
+        // v2: introduce character_speaker_aliases. EnsureCreated only creates missing tables
+        // when the database file is brand new — for existing v1 installs we explicitly add
+        // the table + indexes via raw SQL. Idempotent so it's safe to re-run.
+        EnsureSpeakerAliasTable();
 
+        RecordSchemaVersion();
+
+        // One-shot legacy import: pull MappedNpcs / MappedPlayers / EchokrautVoices /
+        // PhoneticCorrections / MutedNpcDialogues out of the JSON config into SQLite. Idempotent
+        // after the first successful run (the migration clears the source lists).
         if (NeedsMigration(config))
         {
-            _log.Info(nameof(InitializeDatabase), "Migrating data from JSON config to SQLite...",
+            _log.Info(nameof(InitializeDatabase),
+                "Migrating data from JSON config to SQLite...",
                 new EKEventId(0, TextSource.None));
             MigrateFromConfig(config);
         }
@@ -76,408 +109,48 @@ public class DatabaseService : IDatabaseService
         RefreshAllCaches();
     }
 
-    private void RunSchemaMigrations()
+
+    /// <summary>
+    /// Records the current schema version after <see cref="DbContext.Database.EnsureCreated"/>
+    /// has built the canonical schema. We dropped all v1–v13 incremental migrations after the
+    /// plugin's pre-release rewrite, so anyone installing now starts at v1 with the modern
+    /// table layout. If a real upgrade ever ships, add migrations on top of this baseline.
+    /// </summary>
+    private void RecordSchemaVersion()
     {
-        // Create schema_version table if it doesn't exist
         _context.Database.ExecuteSqlRaw(
             "CREATE TABLE IF NOT EXISTS schema_version (version INTEGER NOT NULL)");
-
-        var version = 0;
-        try
-        {
-            using var cmd = _context.Database.GetDbConnection().CreateCommand();
-            cmd.CommandText = "SELECT version FROM schema_version LIMIT 1";
-            if (_context.Database.GetDbConnection().State != System.Data.ConnectionState.Open)
-                _context.Database.GetDbConnection().Open();
-            var result = cmd.ExecuteScalar();
-            if (result != null)
-                version = Convert.ToInt32(result);
-        }
-        catch { /* Table may not exist yet on first run */ }
-
-        if (version < 1)
-        {
-            _log.Info(nameof(RunSchemaMigrations), "Applying schema v1: initial schema",
-                new EKEventId(0, TextSource.None));
-            // v1 is the initial schema created by EnsureCreated — just record it
-            SetSchemaVersion(1);
-        }
-
-        // Migrations v2-v4 operate on the old dialog_encounters table.
-        // On fresh installs, EnsureCreated creates voice_clips directly — skip these.
-        var hasOldTable = false;
-        try
-        {
-            using var checkCmd = _context.Database.GetDbConnection().CreateCommand();
-            checkCmd.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name='dialog_encounters'";
-            var checkResult = checkCmd.ExecuteScalar();
-            hasOldTable = checkResult != null;
-        }
-        catch { /* ignore */ }
-
-        if (version < 2 && hasOldTable)
-        {
-            _log.Info(nameof(RunSchemaMigrations), "Applying schema v2: cascade delete encounters on character deletion, make character_id non-nullable",
-                new EKEventId(0, TextSource.None));
-
-            // Delete orphaned encounters (character_id is NULL)
-            _context.Database.ExecuteSqlRaw(
-                "DELETE FROM dialog_encounters WHERE character_id IS NULL");
-
-            // SQLite doesn't support ALTER COLUMN or ALTER CONSTRAINT.
-            // Recreate the table with the new schema.
-            _context.Database.ExecuteSqlRaw(@"
-                CREATE TABLE IF NOT EXISTS dialog_encounters_new (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
-                    npc_base_id INTEGER NOT NULL DEFAULT 0,
-                    timestamp TEXT NOT NULL,
-                    text_source INTEGER NOT NULL,
-                    language INTEGER NOT NULL,
-                    voice_key TEXT NOT NULL DEFAULT '',
-                    original_text TEXT NOT NULL DEFAULT '',
-                    cleaned_text TEXT NOT NULL DEFAULT '',
-                    saved_to_disk INTEGER NOT NULL DEFAULT 0,
-                    body_type INTEGER NOT NULL DEFAULT 0
-                )");
-
-            _context.Database.ExecuteSqlRaw(@"
-                INSERT INTO dialog_encounters_new
-                    (id, character_id, npc_base_id, timestamp, text_source, language,
-                     voice_key, original_text, cleaned_text, saved_to_disk, body_type)
-                SELECT id, character_id, npc_base_id, timestamp, text_source, language,
-                       voice_key, original_text, cleaned_text, saved_to_disk, body_type
-                FROM dialog_encounters
-                WHERE character_id IS NOT NULL");
-
-            _context.Database.ExecuteSqlRaw("DROP TABLE dialog_encounters");
-            _context.Database.ExecuteSqlRaw("ALTER TABLE dialog_encounters_new RENAME TO dialog_encounters");
-
-            // Recreate indexes
-            _context.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS idx_enc_character ON dialog_encounters(character_id)");
-            _context.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS idx_enc_timestamp ON dialog_encounters(timestamp)");
-            _context.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS idx_enc_source ON dialog_encounters(text_source)");
-
-            SetSchemaVersion(2);
-        }
-
-        if (version < 3 && hasOldTable)
-        {
-            _log.Info(nameof(RunSchemaMigrations), "Applying schema v3: add zone_name, map_x, map_y to dialog_encounters",
-                new EKEventId(0, TextSource.None));
-
-            _context.Database.ExecuteSqlRaw("ALTER TABLE dialog_encounters ADD COLUMN zone_name TEXT NOT NULL DEFAULT ''");
-            _context.Database.ExecuteSqlRaw("ALTER TABLE dialog_encounters ADD COLUMN map_x REAL NOT NULL DEFAULT 0");
-            _context.Database.ExecuteSqlRaw("ALTER TABLE dialog_encounters ADD COLUMN map_y REAL NOT NULL DEFAULT 0");
-
-            SetSchemaVersion(3);
-        }
-
-        if (version < 4 && hasOldTable)
-        {
-            _log.Info(nameof(RunSchemaMigrations), "Applying schema v4: add last_seen, zone_name, map_x, map_y to character_instances",
-                new EKEventId(0, TextSource.None));
-
-            _context.Database.ExecuteSqlRaw("ALTER TABLE character_instances ADD COLUMN last_seen TEXT NOT NULL DEFAULT '0001-01-01'");
-            _context.Database.ExecuteSqlRaw("ALTER TABLE character_instances ADD COLUMN zone_name TEXT NOT NULL DEFAULT ''");
-            _context.Database.ExecuteSqlRaw("ALTER TABLE character_instances ADD COLUMN map_x REAL NOT NULL DEFAULT 0");
-            _context.Database.ExecuteSqlRaw("ALTER TABLE character_instances ADD COLUMN map_y REAL NOT NULL DEFAULT 0");
-
-            // Backfill last_seen from first_seen
-            _context.Database.ExecuteSqlRaw("UPDATE character_instances SET last_seen = first_seen");
-
-            SetSchemaVersion(4);
-        }
-
-        if (version < 5)
-        {
-            _log.Info(nameof(RunSchemaMigrations), "Applying schema v5: rename dialog_encounters table to voice_clips",
-                new EKEventId(0, TextSource.None));
-
-            // Only rename if old table exists (upgrades); new installs already have voice_clips
-            try { _context.Database.ExecuteSqlRaw("ALTER TABLE dialog_encounters RENAME TO voice_clips"); }
-            catch { /* Table already named voice_clips on fresh install */ }
-
-            SetSchemaVersion(5);
-        }
-
-        if (version < 6)
-        {
-            _log.Info(nameof(RunSchemaMigrations), "Applying schema v6: add save_path to voice_clips",
-                new EKEventId(0, TextSource.None));
-
-            try { _context.Database.ExecuteSqlRaw("ALTER TABLE voice_clips ADD COLUMN save_path TEXT NOT NULL DEFAULT ''"); }
-            catch { /* already exists on fresh install */ }
-
-            SetSchemaVersion(6);
-        }
-
-        if (version < 7)
-        {
-            _log.Info(nameof(RunSchemaMigrations), "Applying schema v7: add is_adult_voice, is_elder_voice to voices; add language to characters",
-                new EKEventId(0, TextSource.None));
-
-            // On fresh installs, EnsureCreated already creates these columns — use ALTER only on upgrades
-            try { _context.Database.ExecuteSqlRaw("ALTER TABLE voices ADD COLUMN is_adult_voice INTEGER NOT NULL DEFAULT 1"); } catch { /* already exists */ }
-            try { _context.Database.ExecuteSqlRaw("ALTER TABLE voices ADD COLUMN is_elder_voice INTEGER NOT NULL DEFAULT 0"); } catch { /* already exists */ }
-            try { _context.Database.ExecuteSqlRaw("ALTER TABLE characters ADD COLUMN language INTEGER NOT NULL DEFAULT 1"); } catch { /* already exists */ }
-
-            // Update unique index to include language (only needed on upgrade — fresh installs have the 4-column index)
-            _context.Database.ExecuteSqlRaw("DROP INDEX IF EXISTS IX_characters_Name_Gender_Race");
-            try { _context.Database.ExecuteSqlRaw("CREATE UNIQUE INDEX IX_characters_Name_Gender_Race_Language ON characters (name, gender, race, language)"); } catch { /* already exists */ }
-
-            // Composite index for voice clip upsert lookup performance
-            try { _context.Database.ExecuteSqlRaw("CREATE INDEX IX_voice_clips_CharacterId_NpcBaseId_OriginalText ON voice_clips (character_id, npc_base_id, original_text)"); } catch { /* already exists */ }
-
-            SetSchemaVersion(7);
-        }
-
-        if (version < 8)
-        {
-            _log.Info(nameof(RunSchemaMigrations),
-                "Applying schema v8: voice_clip_generations table, has_player_placeholder column",
-                new EKEventId(0, TextSource.None));
-
-            // Create the per-player generation tracking table
-            _context.Database.ExecuteSqlRaw(@"
-                CREATE TABLE IF NOT EXISTS voice_clip_generations (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    voice_clip_id INTEGER NOT NULL,
-                    player_content_id INTEGER NOT NULL DEFAULT 0,
-                    player_name TEXT NOT NULL DEFAULT '',
-                    save_path TEXT NOT NULL DEFAULT '',
-                    generated_at TEXT NOT NULL DEFAULT '',
-                    FOREIGN KEY (voice_clip_id) REFERENCES voice_clips(id) ON DELETE CASCADE
-                )");
-
-            // Indexes
-            try { _context.Database.ExecuteSqlRaw(
-                "CREATE UNIQUE INDEX IX_voice_clip_generations_VoiceClipId_PlayerContentId ON voice_clip_generations (voice_clip_id, player_content_id)"); }
-            catch { /* already exists */ }
-            try { _context.Database.ExecuteSqlRaw(
-                "CREATE INDEX IX_voice_clip_generations_PlayerContentId ON voice_clip_generations (player_content_id)"); }
-            catch { /* already exists */ }
-
-            // Add has_player_placeholder to voice_clips
-            try { _context.Database.ExecuteSqlRaw(
-                "ALTER TABLE voice_clips ADD COLUMN has_player_placeholder INTEGER NOT NULL DEFAULT 0"); }
-            catch { /* already exists on fresh install */ }
-
-            // Migrate existing saved_to_disk data → voice_clip_generations (player-independent, content_id=0)
-            _context.Database.ExecuteSqlRaw(@"
-                INSERT OR IGNORE INTO voice_clip_generations (voice_clip_id, player_content_id, player_name, save_path, generated_at)
-                SELECT id, 0, '', save_path, timestamp
-                FROM voice_clips
-                WHERE saved_to_disk = 1");
-
-            // Backfill has_player_placeholder for any already-harvested clips with placeholders
-            _context.Database.ExecuteSqlRaw(@"
-                UPDATE voice_clips SET has_player_placeholder = 1
-                WHERE original_text LIKE '%-PlayerFirstName-%'
-                   OR original_text LIKE '%-PlayerLastName-%'
-                   OR original_text LIKE '%-PlayerName-%'");
-
-            SetSchemaVersion(8);
-        }
-
-        if (version < 9)
-        {
-            _log.Info(nameof(RunSchemaMigrations), "Applying schema v9: quest_type column on voice_clips",
-                new EKEventId(0, TextSource.None));
-            try { _context.Database.ExecuteSqlRaw(
-                "ALTER TABLE voice_clips ADD COLUMN quest_type INTEGER NOT NULL DEFAULT 0"); }
-            catch { /* already exists on fresh install */ }
-            try { _context.Database.ExecuteSqlRaw(
-                "CREATE INDEX IX_voice_clips_QuestType ON voice_clips (quest_type)"); }
-            catch { /* already exists */ }
-            SetSchemaVersion(9);
-        }
-
-        if (version < 10)
-        {
-            _log.Info(nameof(RunSchemaMigrations), "Applying schema v10: drop do_not_delete column from characters",
-                new EKEventId(0, TextSource.None));
-            try { _context.Database.ExecuteSqlRaw(
-                "ALTER TABLE characters DROP COLUMN do_not_delete"); }
-            catch { /* already dropped on fresh install or pre-v9 install never had it persisted */ }
-            SetSchemaVersion(10);
-        }
-
-        if (version < 11)
-        {
-            _log.Info(nameof(RunSchemaMigrations), "Applying schema v11: world column on characters + lodestone_lookups cache table",
-                new EKEventId(0, TextSource.None));
-            try { _context.Database.ExecuteSqlRaw(
-                "ALTER TABLE characters ADD COLUMN world TEXT NOT NULL DEFAULT ''"); }
-            catch { /* already exists on fresh install */ }
-            try { _context.Database.ExecuteSqlRaw(
-                @"CREATE TABLE IF NOT EXISTS lodestone_lookups (
-                    name TEXT NOT NULL,
-                    world TEXT NOT NULL,
-                    race INTEGER NOT NULL DEFAULT 0,
-                    gender INTEGER NOT NULL DEFAULT 0,
-                    fetched_at TEXT NOT NULL,
-                    found INTEGER NOT NULL DEFAULT 0,
-                    PRIMARY KEY (name, world)
-                )"); }
-            catch { /* already exists */ }
-            SetSchemaVersion(11);
-        }
-
-        if (version < 12)
-        {
-            _log.Info(nameof(RunSchemaMigrations),
-                "Applying schema v12: merge case-duplicate character rows, recreate name index COLLATE NOCASE",
-                new EKEventId(0, TextSource.None));
-            MergeCaseDuplicateCharacters();
-            try { _context.Database.ExecuteSqlRaw(
-                "DROP INDEX IF EXISTS IX_characters_name_gender_race_language"); }
-            catch { /* not present */ }
-            try { _context.Database.ExecuteSqlRaw(
-                "CREATE UNIQUE INDEX IX_characters_name_gender_race_language ON characters (name COLLATE NOCASE, gender, race, language)"); }
-            catch { /* already created with NOCASE on fresh install */ }
-            SetSchemaVersion(12);
-        }
-
-        if (version < 13)
-        {
-            _log.Info(nameof(RunSchemaMigrations),
-                "Applying schema v13: alias_gender column on voice_clip_generations + recreate unique index",
-                new EKEventId(0, TextSource.None));
-            try { _context.Database.ExecuteSqlRaw(
-                "ALTER TABLE voice_clip_generations ADD COLUMN alias_gender INTEGER NOT NULL DEFAULT 0"); }
-            catch { /* already exists on fresh install */ }
-            try { _context.Database.ExecuteSqlRaw(
-                "DROP INDEX IF EXISTS IX_voice_clip_generations_VoiceClipId_PlayerContentId"); }
-            catch { /* not present */ }
-            try { _context.Database.ExecuteSqlRaw(
-                "CREATE UNIQUE INDEX IX_voice_clip_generations_VoiceClipId_PlayerContentId_AliasGender ON voice_clip_generations (voice_clip_id, player_content_id, alias_gender)"); }
-            catch { /* already created on fresh install */ }
-            SetSchemaVersion(13);
-        }
+        _context.Database.ExecuteSqlRaw("DELETE FROM schema_version");
+        _context.Database.ExecuteSqlRaw(
+            "INSERT INTO schema_version (version) VALUES ({0})", CurrentSchemaVersion);
     }
 
     /// <summary>
-    /// Pre-v12 the characters unique index was case-sensitive on (name, gender, race, language),
-    /// so harvested German adjective stems like "stille Druidin" coexisted with the runtime
-    /// display "Stille Druidin" as two distinct rows. Merges them: voice clips, instances,
-    /// contexts get re-parented to the winner; conflicting child rows on the loser side are
-    /// dropped. Winner = row with non-empty voice_key, then the one whose name already starts
-    /// uppercase, then highest object_kind, then lowest id. After merge the winner's name is
-    /// title-cased so the final state is canonical.
+    /// v2 migration: ensure <c>character_speaker_aliases</c> exists for users coming from
+    /// v1 (where <see cref="DbContext.Database.EnsureCreated"/> built the schema BEFORE this
+    /// table was part of the model). Uses <c>CREATE TABLE IF NOT EXISTS</c> + <c>CREATE INDEX
+    /// IF NOT EXISTS</c> so re-running is a no-op. Fresh installs already have the table from
+    /// EnsureCreated; this just paves over v1.
     /// </summary>
-    internal void MergeCaseDuplicateCharacters()
+    private void EnsureSpeakerAliasTable()
     {
-        // 1. Collect (winnerId, loserId) pairs and the canonical name to apply to the winner.
-        var merges = new List<(int winnerId, int loserId, string canonicalName)>();
-        var winnerNames = new Dictionary<int, string>();
-        var conn = _context.Database.GetDbConnection();
-        if (conn.State != System.Data.ConnectionState.Open) conn.Open();
-        using (var cmd = conn.CreateCommand())
-        {
-            cmd.CommandText = @"
-WITH grouped AS (
-    SELECT id, name, gender, race, language, voice_key, object_kind,
-           ROW_NUMBER() OVER (
-               PARTITION BY LOWER(name), gender, race, language
-               ORDER BY CASE WHEN voice_key != '' THEN 0 ELSE 1 END,
-                        CASE WHEN substr(name, 1, 1) = upper(substr(name, 1, 1)) THEN 0 ELSE 1 END,
-                        object_kind DESC,
-                        id ASC
-           ) AS rnk,
-           COUNT(*) OVER (PARTITION BY LOWER(name), gender, race, language) AS grp_size
-      FROM characters
-)
-SELECT g.id AS loser_id, g.name AS loser_name,
-       w.id AS winner_id, w.name AS winner_name
-  FROM grouped g
-  JOIN grouped w
-    ON LOWER(w.name) = LOWER(g.name)
-   AND w.gender = g.gender AND w.race = g.race AND w.language = g.language
-   AND w.rnk = 1
- WHERE g.grp_size > 1 AND g.rnk > 1";
-            using var reader = cmd.ExecuteReader();
-            while (reader.Read())
-            {
-                var loserId = reader.GetInt32(0);
-                var winnerId = reader.GetInt32(2);
-                var winnerName = reader.GetString(3);
-                merges.Add((winnerId, loserId, winnerName));
-                winnerNames[winnerId] = winnerName;
-            }
-        }
-
-        if (merges.Count == 0) return;
-
-        foreach (var (winnerId, loserId, _) in merges)
-        {
-            // voice_clips: move when winner has no entry for the same (npc_base_id, original_text);
-            //              drop the rest (they would violate the composite index).
-            _context.Database.ExecuteSqlInterpolated(
-                $@"UPDATE voice_clips
-                      SET character_id = {winnerId}
-                    WHERE character_id = {loserId}
-                      AND NOT EXISTS (
-                        SELECT 1 FROM voice_clips v2
-                         WHERE v2.character_id = {winnerId}
-                           AND v2.npc_base_id = voice_clips.npc_base_id
-                           AND v2.original_text = voice_clips.original_text
-                      )");
-            _context.Database.ExecuteSqlInterpolated(
-                $"DELETE FROM voice_clips WHERE character_id = {loserId}");
-
-            // character_instances: composite PK (character_id, npc_base_id) — same conflict rule.
-            _context.Database.ExecuteSqlInterpolated(
-                $@"UPDATE character_instances
-                      SET character_id = {winnerId}
-                    WHERE character_id = {loserId}
-                      AND NOT EXISTS (
-                        SELECT 1 FROM character_instances ci2
-                         WHERE ci2.character_id = {winnerId}
-                           AND ci2.npc_base_id = character_instances.npc_base_id
-                      )");
-            _context.Database.ExecuteSqlInterpolated(
-                $"DELETE FROM character_instances WHERE character_id = {loserId}");
-
-            // character_contexts: unique (character_id, context_type).
-            _context.Database.ExecuteSqlInterpolated(
-                $@"UPDATE character_contexts
-                      SET character_id = {winnerId}
-                    WHERE character_id = {loserId}
-                      AND NOT EXISTS (
-                        SELECT 1 FROM character_contexts cc2
-                         WHERE cc2.character_id = {winnerId}
-                           AND cc2.context_type = character_contexts.context_type
-                      )");
-            _context.Database.ExecuteSqlInterpolated(
-                $"DELETE FROM character_contexts WHERE character_id = {loserId}");
-
-            _context.Database.ExecuteSqlInterpolated(
-                $"DELETE FROM characters WHERE id = {loserId}");
-        }
-
-        // Force the winner's name to title case so the canonical form survives.
-        foreach (var (winnerId, currentName) in winnerNames)
-        {
-            if (string.IsNullOrEmpty(currentName)) continue;
-            var titled = char.ToUpperInvariant(currentName[0]) + currentName.Substring(1);
-            if (titled == currentName) continue;
-            _context.Database.ExecuteSqlInterpolated(
-                $"UPDATE characters SET name = {titled} WHERE id = {winnerId}");
-        }
-
-        _log.Info(nameof(MergeCaseDuplicateCharacters),
-            $"Merged {merges.Count} case-duplicate character row(s)",
-            new EKEventId(0, TextSource.None));
+        _context.Database.ExecuteSqlRaw(@"
+            CREATE TABLE IF NOT EXISTS character_speaker_aliases (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                character_id INTEGER NOT NULL,
+                language INTEGER NOT NULL,
+                alias TEXT NOT NULL,
+                FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE
+            )");
+        _context.Database.ExecuteSqlRaw(@"
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_character_speaker_aliases_character_language_alias
+                ON character_speaker_aliases (character_id, language, alias)");
+        _context.Database.ExecuteSqlRaw(@"
+            CREATE INDEX IF NOT EXISTS IX_character_speaker_aliases_language_alias
+                ON character_speaker_aliases (language, alias)");
     }
 
-    private void SetSchemaVersion(int version)
-    {
-        _context.Database.ExecuteSqlRaw("DELETE FROM schema_version");
-        _context.Database.ExecuteSqlRaw("INSERT INTO schema_version (version) VALUES ({0})", version);
-    }
-
-    // ── Migration ───────────────────────────────────────────
+    // ── JSON-config → SQLite migration ──────────────────────
 
     public bool NeedsMigration(Configuration config)
     {
@@ -488,7 +161,6 @@ SELECT g.id AS loser_id, g.name AS loser_name,
                                 || config.MappedPlayers.Count > 0
                                 || config.EchokrautVoices.Count > 0
                                 || config.PhoneticCorrections.Count > 0;
-
             return !hasDbData && hasConfigData;
         }
     }
@@ -501,7 +173,7 @@ SELECT g.id AS loser_id, g.name AS loser_name,
             var transaction = supportsTransactions ? _context.Database.BeginTransaction() : null;
             try
             {
-                // Migrate voices first (characters reference voice_key)
+                // Voices first — characters reference voice_key.
                 foreach (var voice in config.EchokrautVoices)
                 {
                     var entity = new VoiceEntity
@@ -524,54 +196,42 @@ SELECT g.id AS loser_id, g.name AS loser_name,
                         _context.VoiceAllowedGenders.Add(new VoiceAllowedGenderEntity
                         {
                             VoiceId = entity.Id,
-                            Gender = (int)g
+                            Gender = (int)g,
                         });
-
                     foreach (var r in voice.AllowedRaces)
                         _context.VoiceAllowedRaces.Add(new VoiceAllowedRaceEntity
                         {
                             VoiceId = entity.Id,
-                            Race = (int)r
+                            Race = (int)r,
                         });
                 }
-
                 _context.SaveChanges();
 
-                // Migrate NPC mappings
                 MigrateCharacterList(config.MappedNpcs, "npc");
-
-                // Migrate player mappings
                 MigrateCharacterList(config.MappedPlayers, "player");
 
-                // Migrate phonetic corrections
                 foreach (var pc in config.PhoneticCorrections)
                 {
                     _context.PhoneticCorrections.Add(new PhoneticCorrectionEntity
                     {
                         OriginalText = pc.OriginalText ?? "",
-                        CorrectedText = pc.CorrectedText ?? ""
+                        CorrectedText = pc.CorrectedText ?? "",
                     });
                 }
 
-                // Migrate muted dialogues into character_instances
-                // These are just base IDs without character association — we'll create placeholder instances
+                // Muted dialogues are bare base IDs; flip the flag on any matching instance,
+                // skip the rest (they get recreated naturally when the NPC is encountered).
                 foreach (var baseId in config.MutedNpcDialogues)
                 {
-                    // Find or create a character for this muted instance
                     var existing = _context.CharacterInstances
                         .FirstOrDefault(ci => ci.NpcBaseId == (long)baseId);
-                    if (existing != null)
-                    {
-                        existing.IsMuted = true;
-                    }
-                    // If no character instance exists, we can't create one without character info
-                    // These will be recreated when the NPC is encountered again
+                    if (existing != null) existing.IsMuted = true;
                 }
 
                 _context.SaveChanges();
                 transaction?.Commit();
 
-                // Clear config data after successful migration
+                // Clear source lists so NeedsMigration returns false on subsequent starts.
                 config.MappedNpcs.Clear();
                 config.MappedPlayers.Clear();
                 config.EchokrautVoices.Clear();
@@ -594,9 +254,39 @@ SELECT g.id AS loser_id, g.name AS loser_name,
         }
     }
 
+    /// <summary>
+    /// Migrates a list of <see cref="NpcMapData"/> into <c>characters</c> + <c>character_contexts</c>.
+    /// De-duplicates on the same case-insensitive (Name, Gender, Race, Language) key the v1
+    /// schema's UNIQUE index uses — pre-DB JSON configs from older plugin versions sometimes
+    /// contain multiple entries that collapse to the same key (case-only differences, repeated
+    /// entries from older versions). Without dedup the migration crashed on UNIQUE constraint.
+    /// Conflict resolution: prefer the entry with a non-empty voice key, otherwise keep the first.
+    /// </summary>
     private void MigrateCharacterList(List<NpcMapData> mappings, string contextType)
     {
+        // Pre-DB plugin versions didn't track per-entry language — every NpcMapData
+        // deserializes from those legacy configs as ClientLanguage.English (the property
+        // default). On a non-English client the VCM's language filter then hides every
+        // migrated row. We override Language with the user's actual session language so
+        // imported entries match what they're hearing in-game. Edge case (multi-language
+        // users): they'd need to re-harvest in the missing language.
+        var migratedLanguage = (int)_clientLanguage;
+
+        var deduped = new Dictionary<(string, int, int, int), NpcMapData>();
         foreach (var npc in mappings)
+        {
+            var key = ((npc.Name ?? "").ToLowerInvariant(),
+                       (int)npc.Gender, (int)npc.Race, migratedLanguage);
+            if (deduped.TryGetValue(key, out var existing))
+            {
+                if (string.IsNullOrEmpty(existing.voice) && !string.IsNullOrEmpty(npc.voice))
+                    deduped[key] = npc;
+                continue;
+            }
+            deduped[key] = npc;
+        }
+
+        foreach (var npc in deduped.Values)
         {
             var character = new CharacterEntity
             {
@@ -605,22 +295,22 @@ SELECT g.id AS loser_id, g.name AS loser_name,
                 RaceStr = npc.RaceStr ?? "",
                 Gender = (int)npc.Gender,
                 BodyType = (int)npc.BodyType,
+                Language = migratedLanguage,
                 VoiceKey = npc.voice ?? "",
-                ObjectKind = (int)npc.ObjectKind
+                ObjectKind = (int)npc.ObjectKind,
+                World = npc.World ?? "",
             };
             _context.Characters.Add(character);
             _context.SaveChanges();
 
-            // Create context for the primary type
             _context.CharacterContexts.Add(new CharacterContextEntity
             {
                 CharacterId = character.Id,
                 ContextType = contextType,
                 IsEnabled = npc.IsEnabled,
-                Volume = npc.Volume
+                Volume = npc.Volume,
             });
 
-            // If NPC has bubbles, create a bubble context too
             if (npc.HasBubbles && contextType == "npc")
             {
                 _context.CharacterContexts.Add(new CharacterContextEntity
@@ -628,11 +318,10 @@ SELECT g.id AS loser_id, g.name AS loser_name,
                     CharacterId = character.Id,
                     ContextType = "bubble",
                     IsEnabled = npc.IsEnabledBubble,
-                    Volume = npc.VolumeBubble
+                    Volume = npc.VolumeBubble,
                 });
             }
         }
-
         _context.SaveChanges();
     }
 
@@ -645,6 +334,7 @@ SELECT g.id AS loser_id, g.name AS loser_name,
     {
         lock (_writeLock)
         {
+            if (_disposed) return new List<CharacterEntity>();
             return _context.Characters.AsNoTracking().ToList();
         }
     }
@@ -653,6 +343,7 @@ SELECT g.id AS loser_id, g.name AS loser_name,
     {
         lock (_writeLock)
         {
+            if (_disposed) return null;
             // Match the unique index's COLLATE NOCASE so harvest stems ("stille") and runtime
             // display names ("Stille") resolve to the same row.
             return _context.Characters
@@ -715,6 +406,7 @@ SELECT g.id AS loser_id, g.name AS loser_name,
     {
         lock (_writeLock)
         {
+            if (_disposed) return null;
             return _context.CharacterContexts
                 .FirstOrDefault(cc => cc.CharacterId == characterId && cc.ContextType == contextType);
         }
@@ -795,6 +487,7 @@ SELECT g.id AS loser_id, g.name AS loser_name,
     {
         lock (_writeLock)
         {
+            if (_disposed) return new List<CharacterInstanceEntity>();
             return _context.CharacterInstances
                 .Where(ci => ci.CharacterId == characterId)
                 .ToList();
@@ -867,6 +560,26 @@ SELECT g.id AS loser_id, g.name AS loser_name,
     {
         lock (_writeLock)
         {
+            // Clear the change tracker before every Upsert. BackendService.MapVoices calls
+            // this in a tight loop right after AllTalk starts (one Upsert per backend voice),
+            // and EF Core's identity map for the (VoiceId, Gender) and (VoiceId, Race)
+            // composite-key children doesn't always survive iteration N's SaveChanges +
+            // FK fixup → iteration N+1 collides with "another instance with the same key
+            // value is already being tracked". Clearing here is safe because every method
+            // on this service does its own lock-bracketed read-modify-write — no caller
+            // depends on long-lived tracked state across calls.
+            _context.ChangeTracker.Clear();
+
+            // Dedupe child collections in-place. Voice filenames occasionally carry the same
+            // race / gender token twice (legacy community zips, "Male_Roegadyn-Roegadyn_..."
+            // shapes, etc.) which would push the same composite key (VoiceId, Race) onto the
+            // tracker twice and crash on Add. Source-side fix lives in NpcDataService.ReSet*
+            // — this is belt-and-suspenders for any other entry path (migration, hand-built).
+            voice.AllowedGenders = voice.AllowedGenders
+                .GroupBy(g => g.Gender).Select(g => g.First()).ToList();
+            voice.AllowedRaces = voice.AllowedRaces
+                .GroupBy(r => r.Race).Select(r => r.First()).ToList();
+
             var existing = _context.Voices
                 .Include(v => v.AllowedGenders)
                 .Include(v => v.AllowedRaces)
@@ -884,7 +597,10 @@ SELECT g.id AS loser_id, g.name AS loser_name,
                 existing.Volume = voice.Volume;
                 existing.Note = voice.Note;
 
-                // Update junction tables
+                // Update junction tables — Clear() on the navigation marks existing children
+                // as removed (cascade-delete configured), and the new children re-attach with
+                // the resolved Voice.Id. The ChangeTracker.Clear() above ensures no stale
+                // (VoiceId, Gender) entries from a prior iteration's Update branch linger.
                 existing.AllowedGenders.Clear();
                 existing.AllowedGenders.AddRange(voice.AllowedGenders.Select(g =>
                     new VoiceAllowedGenderEntity { VoiceId = existing.Id, Gender = g.Gender }));
@@ -983,6 +699,7 @@ SELECT g.id AS loser_id, g.name AS loser_name,
             RefreshVoiceCache();
             RefreshPhoneticCache();
             RefreshMutedCache();
+            RefreshSpeakerAliasCache();
         }
     }
 
@@ -1111,6 +828,7 @@ SELECT g.id AS loser_id, g.name AS loser_name,
     {
         lock (_writeLock)
         {
+            if (_disposed) return new List<VoiceClipEntity>();
             return _context.VoiceClips
                 .Include(e => e.Character)
                 .Where(e => e.CharacterId == characterId)
@@ -1210,6 +928,7 @@ SELECT g.id AS loser_id, g.name AS loser_name,
             // Order matters for FK constraints: dependent rows first.
             _context.VoiceClipGenerations.RemoveRange(_context.VoiceClipGenerations);
             _context.VoiceClips.RemoveRange(_context.VoiceClips);
+            _context.CharacterSpeakerAliases.RemoveRange(_context.CharacterSpeakerAliases);
             _context.CharacterInstances.RemoveRange(_context.CharacterInstances);
             _context.CharacterContexts.RemoveRange(_context.CharacterContexts);
             _context.Characters.RemoveRange(_context.Characters);
@@ -1219,9 +938,34 @@ SELECT g.id AS loser_id, g.name AS loser_name,
             _context.SaveChanges();
             _context.ChangeTracker.Clear();
 
+            // Reclaim disk space. SQLite's DELETE only marks pages as free — the .db file stays
+            // at its previous high-water mark until a VACUUM rewrites it. Without this, a user
+            // who wiped a 150 MB DB sees an empty plugin but the file on disk is still 150 MB.
+            // Must run OUTSIDE a transaction (EF Core's SaveChanges already committed). Holding
+            // _writeLock keeps our own writers from racing — Dalamud is single-process so we
+            // don't worry about external connections.
+            try
+            {
+                _context.Database.ExecuteSqlRaw("VACUUM");
+            }
+            catch (Exception ex)
+            {
+                _log.Warning(nameof(WipeAll),
+                    $"VACUUM failed; the .db file size will not shrink until next plugin start: {ex.Message}",
+                    new EKEventId(0, TextSource.None));
+            }
+
+            // Reset every cache, not just voices/phonetics/muted. NpcDataService.LoadFromDatabase
+            // is subscribed to VoiceClipLogged and bails early when DB count matches the in-memory
+            // count. With stale _cachedNpcs/_cachedPlayers, GetNpcs()/GetPlayers() would still
+            // return the pre-wipe lists, the count comparison would pass (NNN==NNN), and the VC
+            // Manager would keep showing the wiped NPCs until plugin reload.
+            _cachedNpcs = new List<CharacterEntity>();
+            _cachedPlayers = new List<CharacterEntity>();
             _cachedVoices = new List<VoiceEntity>();
             _cachedPhonetics = new List<PhoneticCorrectionEntity>();
             _cachedMutedBaseIds = new HashSet<uint>();
+            _cachedAliasMap = new Dictionary<(int, string), List<int>>();
         }
         if (!SuppressEvents)
         {
@@ -1293,6 +1037,7 @@ SELECT g.id AS loser_id, g.name AS loser_name,
     {
         lock (_writeLock)
         {
+            if (_disposed) return 0;
             var q = _context.VoiceClipGenerations
                 .Where(g => g.VoiceClip != null
                     && g.VoiceClip.CharacterId == characterId
@@ -1360,6 +1105,7 @@ SELECT g.id AS loser_id, g.name AS loser_name,
         RefreshVoiceCache();
         RefreshPhoneticCache();
         RefreshMutedCache();
+        RefreshSpeakerAliasCache();
     }
 
     private void RefreshCharacterCaches()
@@ -1399,6 +1145,85 @@ SELECT g.id AS loser_id, g.name AS loser_name,
             .Where(ci => ci.IsMuted)
             .Select(ci => (uint)ci.NpcBaseId)
             .ToHashSet();
+    }
+
+    private void RefreshSpeakerAliasCache()
+    {
+        // Single round-trip: pull (language, alias, character_id) rows, group by normalized
+        // alias (lowercase + trim). One key → list of character_ids; the live resolver
+        // disambiguates multi-value entries (typical for "???" / generic fakenames).
+        var fresh = new Dictionary<(int, string), List<int>>();
+        foreach (var row in _context.CharacterSpeakerAliases.AsNoTracking())
+        {
+            var key = (row.Language, NormalizeAlias(row.Alias));
+            if (key.Item2.Length == 0) continue;
+            if (!fresh.TryGetValue(key, out var list))
+                fresh[key] = list = new List<int>();
+            if (!list.Contains(row.CharacterId)) list.Add(row.CharacterId);
+        }
+        _cachedAliasMap = fresh;
+    }
+
+    private static string NormalizeAlias(string s) =>
+        string.IsNullOrEmpty(s) ? string.Empty : s.Trim().ToLowerInvariant();
+
+    // ── Speaker aliases (harvest-discovered (-Fakename-) → character) ───────
+
+    public void UpsertSpeakerAlias(int characterId, int language, string alias)
+    {
+        if (characterId <= 0 || string.IsNullOrWhiteSpace(alias)) return;
+        var trimmed = alias.Trim();
+        lock (_writeLock)
+        {
+            var existing = _context.CharacterSpeakerAliases
+                .FirstOrDefault(a => a.CharacterId == characterId
+                                  && a.Language == language
+                                  && EF.Functions.Collate(a.Alias, "NOCASE") == trimmed);
+            if (existing == null)
+            {
+                _context.CharacterSpeakerAliases.Add(new CharacterSpeakerAliasEntity
+                {
+                    CharacterId = characterId,
+                    Language = language,
+                    Alias = trimmed,
+                });
+                if (!BulkMode)
+                {
+                    _context.SaveChanges();
+                    RefreshSpeakerAliasCache();
+                }
+            }
+        }
+    }
+
+    public int? FindCharacterIdByAlias(string alias, int language)
+    {
+        // Convenience wrapper for the unambiguous case. Returns null for 0 or >1 matches —
+        // callers that need to handle ambiguity must use FindCharacterIdsByAlias and apply
+        // their own disambiguation (e.g. live-runtime physical-presence check).
+        var ids = FindCharacterIdsByAlias(alias, language);
+        return ids.Count == 1 ? ids[0] : (int?)null;
+    }
+
+    public List<int> FindCharacterIdsByAlias(string alias, int language)
+    {
+        if (string.IsNullOrWhiteSpace(alias)) return new List<int>();
+        var key = (language, NormalizeAlias(alias));
+        return _cachedAliasMap.TryGetValue(key, out var list)
+            ? new List<int>(list)  // defensive copy — caller might mutate, cache is shared
+            : new List<int>();
+    }
+
+    public List<CharacterSpeakerAliasEntity> GetSpeakerAliases(int characterId)
+    {
+        lock (_writeLock)
+        {
+            if (_disposed) return new List<CharacterSpeakerAliasEntity>();
+            return _context.CharacterSpeakerAliases
+                .Where(a => a.CharacterId == characterId)
+                .AsNoTracking()
+                .ToList();
+        }
     }
 
     // ── Lodestone lookup cache ──────────────────────────────
@@ -1447,14 +1272,22 @@ SELECT g.id AS loser_id, g.name AS loser_name,
 
     public void Dispose()
     {
-        try
+        // Serialize against in-flight reads so a method already inside _writeLock finishes
+        // before we tear down _context. Then set _disposed inside the same critical section so
+        // any read that takes the lock AFTER us sees the flag and bails instead of throwing.
+        lock (_writeLock)
         {
-            var connection = _context.Database.GetDbConnection();
-            _context.Dispose();
-            connection.Close();
-            connection.Dispose();
-            Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            if (_disposed) return;
+            _disposed = true;
+            try
+            {
+                var connection = _context.Database.GetDbConnection();
+                _context.Dispose();
+                connection.Close();
+                connection.Dispose();
+                Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+            }
+            catch { /* In-memory databases may already be disposed */ }
         }
-        catch { /* In-memory databases may already be disposed */ }
     }
 }

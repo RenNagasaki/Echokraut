@@ -35,10 +35,10 @@ public class Configuration : IPluginConfiguration
     public bool RemoveStutters { get; set; } = true;
     public bool HideUiInCutscenes { get; set; } = true;
     public LogConfig logConfig { get; set; } = new LogConfig();
-    public bool SaveToLocal { get; set; } = false;
-    public bool LoadFromLocalFirst { get; set; } = false;
+    public bool SaveToLocal { get; set; } = true;
+    public bool LoadFromLocalFirst { get; set; } = true;
     public string LocalSaveLocation { get; set; } = @"C:\alltalk_tts\LocalSaves";
-    public bool CreateMissingLocalSaveLocation { get; set; } = false;
+    public bool CreateMissingLocalSaveLocation { get; set; } = true;
     /// <summary>
     /// When true, every time a voice clip with player-name placeholders is generated for the
     /// local player, additional male + female alias variants are auto-generated using a

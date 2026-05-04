@@ -36,10 +36,21 @@ namespace Echokraut.DataClasses
 
                             if (Enum.TryParse(typeof(NpcRaces), voiceNme, true, out object? race))
                                 continue;
-                            
+
+                            // Bare race-pool / body-type tokens (no dash composite). Without
+                            // this branch, filenames like "Female_All_NPC030.wav" would land
+                            // on "All" as the display name because "All" isn't an NpcRaces
+                            // enum value but is a valid race-pool marker. Same applies to
+                            // standalone "Child" / "Elder" / "Adult" segments.
+                            if (voiceNme.Equals("All", StringComparison.OrdinalIgnoreCase) ||
+                                voiceNme.Equals("Child", StringComparison.OrdinalIgnoreCase) ||
+                                voiceNme.Equals("Elder", StringComparison.OrdinalIgnoreCase) ||
+                                voiceNme.Equals("Adult", StringComparison.OrdinalIgnoreCase))
+                                continue;
+
                             if (voiceNme.Contains("-"))
                             {
-                                
+
                                 var voiceNmeArr = voiceNme.Split('-');
                                 if (voiceNmeArr[0] == "All" || voiceNmeArr[0] == "Child" || voiceNmeArr[0] == "Elder" || voiceNmeArr[0] == "Adult")
                                     continue;

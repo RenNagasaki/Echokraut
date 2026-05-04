@@ -135,6 +135,9 @@ public unsafe class AddonTalkHelper : IAddonTalkHelper
                 if (_configuration.CancelSpeechOnTextAdvance)
                     _cancelService.Cancel(DialogState.CurrentVoiceMessage, true);
                 DialogState.CurrentVoiceMessage = null;
+                // Reset alias-resolution tracking — the next dialog may spawn a different
+                // cast of NPCs and the "already spoken" disambiguation must start fresh.
+                DialogState.SpeakersResolvedThisDialog.Clear();
             }
         }
     }

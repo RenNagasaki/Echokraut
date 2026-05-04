@@ -11,6 +11,7 @@ using System.Net.Http;
 using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
+using Dalamud.Plugin.Services;
 
 namespace Echokraut.Services;
 
@@ -24,6 +25,8 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
     private readonly Configuration _config;
     private readonly IGoogleDriveSyncService _googleDrive;
     private readonly IRemoteUrlService _remoteUrls;
+    private readonly IClientState _clientState;
+    private readonly IVoiceSampleExtractorService _voiceExtract;
 
     public event Action? OnInstanceReady;
 
@@ -34,18 +37,24 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
     public bool IsWindows { get; private set; }
     public bool IsCudaInstalled { get; private set; }
 
+    public string CurrentInstallStatus { get; private set; } = string.Empty;
+    public float CurrentInstallProgress { get; private set; }
+
     private Task? _installThread;
     private Process? _installProcess;
     private Task? _instanceThread;
     private Process? _instanceProcess;
     private volatile bool _instanceProcessIsRunning;
 
-    public AlltalkInstanceService(ILogService log, Configuration config, IGoogleDriveSyncService googleDrive, IRemoteUrlService remoteUrls)
+    public AlltalkInstanceService(ILogService log, Configuration config, IGoogleDriveSyncService googleDrive,
+        IRemoteUrlService remoteUrls, IClientState clientState, IVoiceSampleExtractorService voiceExtract)
     {
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _config = config ?? throw new ArgumentNullException(nameof(config));
         _googleDrive = googleDrive ?? throw new ArgumentNullException(nameof(googleDrive));
         _remoteUrls = remoteUrls ?? throw new ArgumentNullException(nameof(remoteUrls));
+        _clientState = clientState ?? throw new ArgumentNullException(nameof(clientState));
+        _voiceExtract = voiceExtract ?? throw new ArgumentNullException(nameof(voiceExtract));
 
         IsWindows = Dalamud.Utility.Util.GetHostPlatform() == OSPlatform.Windows;
         IsCudaInstalled = IsCudaInstalledCheck(new EKEventId(0, TextSource.Backend));
@@ -66,6 +75,8 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
             _installThread = Task.Run(() =>
             {
                 Installing = true;
+                CurrentInstallStatus = "Preparing installer...";
+                CurrentInstallProgress = 0.05f;
                 var localInstallerLocation = CheckAndDownloadLocalInstaller(eventId);
 
                 // Args: install <installFolder> <customModelUrl> <customVoicesUrl> <reinstall>
@@ -99,13 +110,67 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
 
                 _installProcess = new Process { StartInfo = processInfo };
                 _installProcess.Start();
+                CurrentInstallStatus = "Installing AllTalk (downloads + setup, may take 10+ minutes)...";
+                CurrentInstallProgress = 0.10f;
                 _installProcess.WaitForExit();
 
+                // Replace the legacy voices.zip / voices2.zip download with an on-the-fly
+                // extract from the user's own FFXIV install. Output target is AllTalk's
+                // canonical voices folder (alltalk_tts/voices/), which the extractor wipes
+                // before writing so leftover files from a previous extract don't haunt the
+                // voice list. samplesPerNpc=1 keeps the install fast (decode + resample of
+                // ~hundreds of NPCs once); user can rebuild with more samples later via the
+                // Game Data Tools window.
+                var alltalkFolder = Path.Join(_config.Alltalk.LocalInstallPath, "alltalk_tts");
+                var voicesDir = Path.Join(alltalkFolder, "voices");
+                _log.Info(nameof(Install),
+                    $"Building voice starter set into {voicesDir} (this replaces the old voices.zip download)...",
+                    eventId);
+                CurrentInstallStatus = "Building voice samples...";
+                CurrentInstallProgress = 0.50f;
+                // Subscribe to extractor progress for the duration of this run so the
+                // First-Time window's progress bar shows real "X/Y NPCs" granularity instead
+                // of the indeterminate sticky-50% during the opaque installer phase. Mapping:
+                // 0..1 from the extractor → 0.50..0.95 in our overall install bar.
+                Action<string, int, int> onExtractProgress = (label, current, total) =>
+                {
+                    var ratio = total > 0 ? Math.Clamp((float)current / total, 0f, 1f) : 0f;
+                    CurrentInstallProgress = 0.50f + ratio * 0.45f;
+                    if (!string.IsNullOrEmpty(label))
+                        CurrentInstallStatus = $"Voice samples — {label} ({current}/{total})";
+                };
+                try
+                {
+                    _voiceExtract.ProgressChanged += onExtractProgress;
+                    using var extractCts = new CancellationTokenSource();
+                    _voiceExtract.RunAsync(_clientState.ClientLanguage, samplesPerNpc: 1, extractCts.Token,
+                        outputRootOverride: alltalkFolder, outputSubfolder: "voices")
+                        .GetAwaiter().GetResult();
+                    _log.Info(nameof(Install), "Voice starter set ready.", eventId);
+                }
+                catch (Exception ex)
+                {
+                    // Non-fatal: install still completes. User can re-run extract from the
+                    // Game Data Tools window if voice samples are missing.
+                    _log.Warning(nameof(Install),
+                        $"Voice starter-set extraction failed during install: {ex.Message}. " +
+                        $"Run it manually from Game Data Tools later.",
+                        eventId);
+                }
+                finally
+                {
+                    _voiceExtract.ProgressChanged -= onExtractProgress;
+                }
+
+                CurrentInstallStatus = "Finalizing...";
+                CurrentInstallProgress = 0.95f;
                 _config.Alltalk.BaseUrl = "http://127.0.0.1:7851";
                 _config.Alltalk.LocalInstall = true;
                 _config.FirstTime = false;
                 _config.Save();
                 Installing = false;
+                CurrentInstallStatus = "Done";
+                CurrentInstallProgress = 1.0f;
                 _log.Info(nameof(Install), "Done!", eventId);
 
                 if (_config.Alltalk.AutoStartLocalInstance)
@@ -115,6 +180,8 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
         catch (Exception ex)
         {
             _log.Error(nameof(Install), $"Error while installing alltalk locally: {ex}", eventId);
+            CurrentInstallStatus = $"Failed: {ex.Message}";
+            CurrentInstallProgress = 0f;
             StopInstall(eventId);
         }
     }

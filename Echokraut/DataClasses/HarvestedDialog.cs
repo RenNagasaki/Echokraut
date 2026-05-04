@@ -150,3 +150,45 @@ public class QuestNpcAliasEntry
     public uint? NpcId { get; set; }
     public string? Comment { get; set; }
 }
+
+/// <summary>
+/// One entry in the per-language <c>voice_name_suggestions_&lt;lang&gt;.json</c> harvest
+/// output. Same shape as <see cref="VoiceMap"/> in <c>VoiceNames{LANG}.json</c> so users
+/// can copy entries directly into the canonical voice-name file.
+///
+/// Built by the harvester from dialog lines that start with the FFXIV speaker hint
+/// <c>(-Fakename-)</c> AND have a resolved NPC. <see cref="speakers"/> collects every
+/// distinct fakename observed for the same NPC in that language; <see cref="voiceName"/>
+/// is the NPC's name in that language. The intent is to make filling the
+/// <c>VoiceNames*.json</c> files much faster — the harvest discovers new aliases
+/// automatically, the user reviews and merges.
+///
+/// Field names use the lowercase form (<c>voiceName</c>/<c>speakers</c>) to match
+/// <see cref="VoiceMap"/> exactly so JSON deserialization-on-merge works without
+/// renaming. SonarQube will flag the casing — that's acceptable for this DTO.
+/// </summary>
+public class VoiceNameSuggestion
+{
+#pragma warning disable IDE1006 // Name matches the JSON field name in VoiceNames*.json
+    public string voiceName { get; set; } = "";
+    public List<string> speakers { get; set; } = new();
+#pragma warning restore IDE1006
+}
+
+/// <summary>
+/// One entry in the per-language <c>voice_name_collisions_&lt;lang&gt;.json</c> harvest
+/// output. Captures fakenames that LOOK suspicious — the fakename text contains another
+/// known NPC's name as a substring AND that other NPC isn't who the harvest attributed
+/// the line to. Typical case: <c>(-Kriles Stimme-)</c> attributed to Alisaie instead of
+/// Krile, because FFXIV references the same DefaultTalk row from multiple ENpcBase rows.
+///
+/// User reviews this file manually — entries with a single obvious correct NPC
+/// (<see cref="LikelyMeantFor"/>) can be re-attributed by adding a quest_npc_alias
+/// override; the rest are spurious overlaps and can be ignored.
+/// </summary>
+public class VoiceNameCollision
+{
+    public string Fakename { get; set; } = "";
+    public string ResolvedAs { get; set; } = "";
+    public List<string> LikelyMeantFor { get; set; } = new();
+}

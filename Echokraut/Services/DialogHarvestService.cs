@@ -213,7 +213,7 @@ public class DialogHarvestService : IDialogHarvestService
         _remoteUrls = remoteUrls ?? throw new ArgumentNullException(nameof(remoteUrls));
     }
 
-    public async Task RunAsync(Dalamud.Game.ClientLanguage language, CancellationToken ct)
+    public async Task RunAsync(Dalamud.Game.ClientLanguage language, CancellationToken ct, int? questTypeFilter = null)
     {
         if (_disposed || IsRunning) return;
         IsRunning = true;
@@ -233,7 +233,7 @@ public class DialogHarvestService : IDialogHarvestService
         try
         {
             Task task;
-            lock (_runLock) { _runningTask = Task.Run(() => DoHarvest(language, linkedCt, eventId), linkedCt); task = _runningTask; }
+            lock (_runLock) { _runningTask = Task.Run(() => DoHarvest(language, linkedCt, eventId, questTypeFilter), linkedCt); task = _runningTask; }
             await task;
         }
         catch (OperationCanceledException)
@@ -269,8 +269,14 @@ public class DialogHarvestService : IDialogHarvestService
         try { cts?.Dispose(); } catch { }
     }
 
-    private void DoHarvest(Dalamud.Game.ClientLanguage language, CancellationToken ct, EKEventId eventId)
+    private void DoHarvest(Dalamud.Game.ClientLanguage language, CancellationToken ct, EKEventId eventId, int? questTypeFilter = null)
     {
+        // Filter semantics:
+        //   null     → harvest everything (default)
+        //   0 (None) → only non-quest dialog (DefaultTalk/Balloon/etc.) — skip quest scan + persist
+        //   1..6     → only quests whose ClassifyQuest matches — skip non-quest persist
+        var harvestNonQuest = questTypeFilter is null or 0;
+        var harvestQuests = questTypeFilter is null or > 0;
         // Step 1: Load dialog sheets in all languages (LoadDialogSheet drives its own phase progress)
         var defaultTalkTexts = LoadDialogSheet<DefaultTalk>("DefaultTalk", GetDefaultTalkTexts, ct, eventId);
         ct.ThrowIfCancellationRequested();
@@ -1209,7 +1215,31 @@ public class DialogHarvestService : IDialogHarvestService
 
         // Step 5: Harvest quest dialogs (HarvestQuestDialogs drives its own phase)
         ct.ThrowIfCancellationRequested();
-        var (linkedQuests, unmatchedQuests, parenCandidates) = HarvestQuestDialogs(npcNames, bnpcNames, npcBaseSheet, npcTerritories, npcZoneNames, language, ct, eventId);
+        List<LinkedQuestDialog> linkedQuests;
+        List<UnmatchedQuestDialog> unmatchedQuests;
+        List<ParenCandidateEntry> parenCandidates;
+        if (harvestQuests)
+        {
+            (linkedQuests, unmatchedQuests, parenCandidates) = HarvestQuestDialogs(npcNames, bnpcNames, npcBaseSheet, npcTerritories, npcZoneNames, language, ct, eventId, questTypeFilter);
+        }
+        else
+        {
+            _log.Info(nameof(DoHarvest), "Quest dialog scan skipped — quest type filter set to 'Non-Quest Dialog' only.", eventId);
+            linkedQuests = new List<LinkedQuestDialog>();
+            unmatchedQuests = new List<UnmatchedQuestDialog>();
+            parenCandidates = new List<ParenCandidateEntry>();
+        }
+
+        // Step 5b: Harvest cut_scene/* unvoiced dialogs. Gated on harvestNonQuest because
+        // we tag them as QuestType.None (no .cutb parsing → can't tell which quest the
+        // cutscene belongs to). Filter "All" and "Non-Quest Dialog" pick them up; specific
+        // quest-type filters skip them.
+        if (harvestNonQuest)
+        {
+            ct.ThrowIfCancellationRequested();
+            var cutsceneDialogs = HarvestCutsceneDialogs(npcNames, npcBaseSheet, language, ct, eventId);
+            linkedDialogs.AddRange(cutsceneDialogs);
+        }
 
         // Log unmapped ModelChara IDs before persist (so it's visible early)
         if (_unmappedModels.Count > 0)
@@ -1233,11 +1263,21 @@ public class DialogHarvestService : IDialogHarvestService
         _db.BulkMode = true;
         try
         {
-            ct.ThrowIfCancellationRequested();
-            persisted = PersistLinkedDialogs(linkedDialogs, npcBaseSheet, language, npcZoneNames, ct, eventId);
+            if (harvestNonQuest)
+            {
+                ct.ThrowIfCancellationRequested();
+                persisted = PersistLinkedDialogs(linkedDialogs, npcBaseSheet, language, npcZoneNames, ct, eventId);
+            }
+            else
+            {
+                _log.Info(nameof(DoHarvest), "Non-quest dialog persist skipped — quest type filter restricts to a single quest type.", eventId);
+            }
 
-            ct.ThrowIfCancellationRequested();
-            persistedQuest = PersistLinkedQuestDialogs(linkedQuests, npcBaseSheet, language, npcZoneNames, ct, eventId);
+            if (harvestQuests)
+            {
+                ct.ThrowIfCancellationRequested();
+                persistedQuest = PersistLinkedQuestDialogs(linkedQuests, npcBaseSheet, language, npcZoneNames, ct, eventId);
+            }
         }
         finally
         {
@@ -1279,6 +1319,13 @@ public class DialogHarvestService : IDialogHarvestService
                 File.WriteAllText(Path.Combine(outputDir, "quest_alias_candidates.json"),
                     JsonSerializer.Serialize(parenCandidates, jsonOptions));
         }
+
+        // Voice-name suggestion files: harvest detects (-Fakename-) prefixes on lines that
+        // DID resolve to an NPC and emits one VoiceMap-shaped entry per (NPC, language).
+        // Output is directly mergeable into VoiceNames{LANG}.json so the user can grow that
+        // file from real game data instead of curating each entry by hand.
+        ct.ThrowIfCancellationRequested();
+        EmitVoiceNameSuggestions(linkedDialogs, linkedQuests, eventId);
 
         var linkedDtCount = linkedDialogs.Count(d => d.Sheet == "DefaultTalk");
         var linkedBalloonCount = linkedDialogs.Count(d => d.Sheet == "Balloon");
@@ -1455,6 +1502,24 @@ public class DialogHarvestService : IDialogHarvestService
                 HasPlayerPlaceholder = TalkTextHelper.ContainsPlayerPlaceholder(text),
                 QuestType = (int)dialog.QuestType,
             });
+
+            // Speaker-alias capture: if the text starts with the FFXIV speaker hint
+            // "(-Fakename-)" AND the fakename differs from the NPC's own name in this
+            // language, record the alias on the character row. Includes anonymous markers
+            // like "???" — those still tell us which characters CAN appear as "???" in
+            // a cutscene, and the runtime resolves the actual speaker via physical
+            // presence (speaker.BaseId match) + already-spoken tracking. Runs in bulk
+            // mode → SaveChanges is deferred to the persist flush.
+            var aliasMatch = ParenSpeakerCaptureRegex.Match(text);
+            if (aliasMatch.Success)
+            {
+                var fake = aliasMatch.Groups[1].Value.Trim();
+                if (!string.IsNullOrEmpty(fake)
+                    && !string.Equals(fake, resolved.npcName, StringComparison.OrdinalIgnoreCase))
+                {
+                    _db.UpsertSpeakerAlias(cached.character.Id, (int)language, fake);
+                }
+            }
 
             persisted++;
             ReportPhaseProgress(persisted);
@@ -2387,8 +2452,11 @@ public class DialogHarvestService : IDialogHarvestService
         Dictionary<uint, string> npcZoneNames,
         Dalamud.Game.ClientLanguage language,
         CancellationToken ct,
-        EKEventId eventId)
+        EKEventId eventId,
+        int? questTypeFilter = null)
     {
+        // Pre-resolve the QuestType enum filter once. >0 means user picked a specific quest type.
+        QuestType? requiredQuestType = questTypeFilter is > 0 ? (QuestType)questTypeFilter.Value : null;
         var linked = new List<LinkedQuestDialog>();
         var unmatched = new List<UnmatchedQuestDialog>();
         var parenCandidates = new List<ParenCandidateEntry>();
@@ -2463,6 +2531,10 @@ public class DialogHarvestService : IDialogHarvestService
             var questType = ClassifyQuest(quest);
 
             ReportPhaseProgress(questCount);
+
+            // Single-quest-type filter: skip everything that doesn't match the user's selection.
+            if (requiredQuestType is { } req && questType != req)
+                continue;
 
             // Compute sheet path: quest/{subdir}/{questId}
             // FFXIV organizes quest EXDs in folders of 100 (not 1000)
@@ -2737,6 +2809,504 @@ public class DialogHarvestService : IDialogHarvestService
 
         EndPhase();
         return (linked, unmatched, parenCandidates);
+    }
+
+    // ── Cut_scene dialog harvest ─────────────────────────────────────────────
+    /// <summary>
+    /// Harvest cutscene voice text from the <c>cut_scene/*</c> Excel sheets that FFXIV uses
+    /// for cinematic dialog. Each row's TEXT key (e.g. <c>TEXT_VOICEMAN_06006_000010_YSHTOLA</c>)
+    /// gets parsed via <see cref="VoiceExtractKey.TryParse"/>, the trailing shortname
+    /// resolved to an NPC ID via the existing English name index, and the multilingual text
+    /// extracted (with macro / placeholder handling).
+    /// <para>
+    /// <b>Filter — only unvoiced lines are kept.</b> If <see cref="VoiceScdPaths.Exists"/>
+    /// reports an SCD audio file for the harvest language, the line is skipped — FFXIV
+    /// already plays its own voice acting and Echokraut should not compete with TTS for
+    /// content that's already voiced. The starter-set extractor consumes those voiced lines
+    /// for AllTalk training; the harvest captures only the silent residue.
+    /// </para>
+    /// <para>
+    /// QuestType is fixed to <see cref="QuestType.None"/> — we don't parse the .cutb
+    /// timeline files, so we can't reliably tell which quest a cutscene belongs to. None
+    /// keeps these lines visible under the "Non-Quest Dialog" filter and out of single
+    /// quest-type filters where the tagging would be a guess.
+    /// </para>
+    /// </summary>
+    private List<LinkedDialog> HarvestCutsceneDialogs(
+        Dictionary<uint, Dictionary<string, string>> npcNames,
+        ExcelSheet<ENpcBase> npcBaseSheet,
+        Dalamud.Game.ClientLanguage harvestLanguage,
+        CancellationToken ct,
+        EKEventId eventId)
+    {
+        var result = new List<LinkedDialog>();
+        var nameIndex = VoiceExtractKey.BuildNormalizedNameIndex(npcNames);
+        var scdLangCode = VoiceScdPaths.LanguageCodeForScd(harvestLanguage);
+        var harvestLangCode = LangToCode.GetValueOrDefault(harvestLanguage, "en");
+
+        IReadOnlyList<string>? sheetNames = null;
+        try { sheetNames = _dataManager.Excel.SheetNames; }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(HarvestCutsceneDialogs),
+                $"Could not enumerate Excel sheet names: {ex.Message}", eventId);
+            return result;
+        }
+        var cutSheets = sheetNames
+            .Where(n => n.StartsWith("cut_scene/", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (cutSheets.Count == 0)
+        {
+            _log.Info(nameof(HarvestCutsceneDialogs), "No cut_scene/* sheets found.", eventId);
+            return result;
+        }
+
+        BeginPhase(Loc.S("Harvesting cutscene dialogs..."), Math.Max(1, cutSheets.Count));
+        _log.Info(nameof(HarvestCutsceneDialogs),
+            $"Scanning {cutSheets.Count} cut_scene/* sheets for unvoiced lines (lang={scdLangCode})", eventId);
+
+        var processed = 0;
+        var voicedSkipped = 0;
+        var unmatchedSkipped = 0;
+        var unparsedSkipped = 0;
+        var noneVoiceSkipped = 0;
+        var added = 0;
+        var multiNpcWarned = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        // Diagnostics: track which TEXT_-key shapes we reject so we can spot when the harvest
+        // is silently dropping a whole class of unvoiced lines (e.g. an unrecognized prefix).
+        // Prefix = first two underscore tokens (e.g. "TEXT_NONVOICEMAN"), value = (count, sample).
+        var unparsedPrefixes = new Dictionary<string, (int count, string sampleKey, string sampleText)>(StringComparer.OrdinalIgnoreCase);
+        string? noneVoiceSample = null;
+        string? noneVoiceSampleText = null;
+
+        foreach (var sheetName in cutSheets)
+        {
+            ct.ThrowIfCancellationRequested();
+            processed++;
+            ReportPhaseProgress(processed);
+
+            // Open the sheet in all 4 languages so we can capture the multilingual text
+            // payload at the moment we resolve the row. Missing-locale entries fall through
+            // as empty.
+            var byLang = new Dictionary<string, ExcelSheet<RawRow>?>(StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < LangCodes.Length; i++)
+            {
+                try { byLang[LangCodes[i]] = _dataManager.GetExcelSheet<RawRow>(LangValues[i], sheetName); }
+                catch { byLang[LangCodes[i]] = null; }
+            }
+
+            var primary = byLang.GetValueOrDefault(harvestLangCode);
+            if (primary == null) continue;
+
+            foreach (var primaryRow in primary)
+            {
+                ct.ThrowIfCancellationRequested();
+
+                string textKey;
+                try { textKey = primaryRow.ReadStringColumn(0).ExtractText(); }
+                catch { continue; }
+                if (string.IsNullOrEmpty(textKey)) continue;
+
+                if (!VoiceExtractKey.TryParse(textKey, out var shortName, out var audioBase))
+                {
+                    // Special case: TEXT_VOICEMAN_<scene>_..._NONE_VOICE is FFXIV's explicit
+                    // "unvoiced cutscene line, no speaker info in key" marker. The actual
+                    // speaker for these lines lives in the .cutb timeline file (which we
+                    // don't parse). They're real unvoiced lines that we'd want to harvest
+                    // — but without speaker attribution they'd land as orphan rows. Surface
+                    // them in the diagnostic separately so the user knows how much .cutb
+                    // parsing would unlock.
+                    // TODO: Implement .cutb timeline parsing so these get attributed and
+                    // persisted instead of dropped — see plans/cutb-parser.md (Havok packfile
+                    // reader; ~85% of unvoiced cutscene dialog gated behind this).
+                    if (textKey.EndsWith("_NONE_VOICE", StringComparison.OrdinalIgnoreCase))
+                    {
+                        noneVoiceSkipped++;
+                        if (noneVoiceSample == null)
+                        {
+                            noneVoiceSample = textKey;
+                            try { noneVoiceSampleText = primaryRow.ReadStringColumn(1).ExtractText() ?? ""; }
+                            catch { /* best effort */ }
+                        }
+                        continue;
+                    }
+
+                    unparsedSkipped++;
+                    // Capture the shape (first two tokens) + a sample for the end-of-run log.
+                    // Helps identify whether the unparsed pile contains a coherent class of
+                    // keys we should add to TryParse (a different prefix for unvoiced lines,
+                    // a 6-token quest-name format, etc.) versus genuine garbage.
+                    var firstUnderscore = textKey.IndexOf('_');
+                    var secondUnderscore = firstUnderscore >= 0 ? textKey.IndexOf('_', firstUnderscore + 1) : -1;
+                    var prefix = secondUnderscore > 0 ? textKey.Substring(0, secondUnderscore) : textKey;
+                    if (!unparsedPrefixes.TryGetValue(prefix, out var existing))
+                    {
+                        string sampleText = string.Empty;
+                        try { sampleText = primaryRow.ReadStringColumn(1).ExtractText() ?? ""; }
+                        catch { /* best effort */ }
+                        if (sampleText.Length > 80) sampleText = sampleText.Substring(0, 80) + "…";
+                        unparsedPrefixes[prefix] = (1, textKey, sampleText);
+                    }
+                    else
+                    {
+                        unparsedPrefixes[prefix] = (existing.count + 1, existing.sampleKey, existing.sampleText);
+                    }
+                    continue;
+                }
+
+                // Voiced-line filter: skip anything FFXIV already plays in this locale.
+                // Checking just the harvest language is intentional — voiced-in-JP-only lines
+                // are silent for a German user and SHOULD get TTS-harvested for them.
+                if (VoiceScdPaths.Exists(_dataManager, audioBase, scdLangCode))
+                {
+                    voicedSkipped++;
+                    continue;
+                }
+
+                // Shortname → NPC. We deliberately don't use the alias map here; cutscene
+                // shortnames overlap with the voice-extractor's input set and the alias map
+                // already maps them through the same name-index path.
+                var resolved = VoiceExtractKey.Resolve(shortName, nameIndex);
+                if (resolved == null || resolved.Count == 0)
+                {
+                    unmatchedSkipped++;
+                    continue;
+                }
+                var npcId = resolved[0];
+                if (resolved.Count > 1 && multiNpcWarned.Add(shortName))
+                    _log.Debug(nameof(HarvestCutsceneDialogs),
+                        $"Cutscene shortname '{shortName}' maps to {resolved.Count} NPC instances — using first ({npcId})",
+                        eventId);
+
+                if (!npcNames.TryGetValue(npcId, out var names)) continue;
+
+                string raceStr;
+                Genders gender;
+                try
+                {
+                    var npcBase = npcBaseSheet.GetRow(npcId);
+                    raceStr = GetRaceString(npcBase);
+                    var race = ParseNpcRace(raceStr);
+                    gender = DetermineGender(npcBase, race);
+                }
+                catch
+                {
+                    // ENpcBase row missing for this id — without race/gender PersistLinkedDialogs
+                    // would store as Unknown/None which would silently miss bestIdentity merging.
+                    // Skip rather than persist garbage.
+                    continue;
+                }
+
+                // Multilingual text via ExtractTextWithPlayerName so PcName / gstr / conditional
+                // macros translate to the correct -PlayerFirstName- etc. placeholders.
+                var texts = new Dictionary<string, string>();
+                for (var i = 0; i < LangCodes.Length; i++)
+                {
+                    var lc = LangCodes[i];
+                    var sheet = byLang.GetValueOrDefault(lc);
+                    if (sheet == null) continue;
+                    try
+                    {
+                        var langRow = sheet.GetRowOrDefault(primaryRow.RowId);
+                        if (langRow == null) continue;
+                        var t = ExtractTextWithPlayerName(langRow.Value.ReadStringColumn(1), lc);
+                        if (!string.IsNullOrEmpty(t)) texts[lc] = t;
+                    }
+                    catch { /* per-locale failures are non-fatal */ }
+                }
+
+                if (texts.Count == 0) continue;
+
+                result.Add(new LinkedDialog
+                {
+                    NpcId = npcId,
+                    NpcName = names,
+                    Race = raceStr,
+                    Gender = gender.ToString(),
+                    Sheet = sheetName,
+                    DialogId = primaryRow.RowId,
+                    MatchSource = DialogMatchSource.Direct.ToString(),
+                    QuestType = QuestType.None,
+                    Texts = texts,
+                });
+                added++;
+            }
+        }
+
+        EndPhase();
+        _log.Info(nameof(HarvestCutsceneDialogs),
+            $"Cutscene harvest: {processed} sheets scanned, {added} unvoiced lines added, " +
+            $"{voicedSkipped} voiced (skipped), {unmatchedSkipped} shortname unmatched, " +
+            $"{noneVoiceSkipped} NONE_VOICE marker (no speaker in key — needs .cutb), " +
+            $"{unparsedSkipped} other unparseable keys",
+            eventId);
+
+        if (noneVoiceSkipped > 0 && noneVoiceSample != null)
+        {
+            var sampleTextDisplay = noneVoiceSampleText ?? "";
+            if (sampleTextDisplay.Length > 80) sampleTextDisplay = sampleTextDisplay.Substring(0, 80) + "…";
+            _log.Info(nameof(HarvestCutsceneDialogs),
+                $"NONE_VOICE sample: \"{noneVoiceSample}\" → \"{sampleTextDisplay}\". " +
+                $"These {noneVoiceSkipped} lines have no speaker info in the TEXT key — attribution " +
+                $"requires parsing the per-cutscene .cutb timeline (Havok packfile).",
+                eventId);
+        }
+
+        // Diagnostic: top 10 unparsed key prefixes by count, with one sample key + text each.
+        // If the dominant prefix is something other than TEXT_VOICEMAN/TEXT_MANFST it likely
+        // means we're missing a class of keys that should also be parsed (e.g. silent-line
+        // prefix or a 6-token format) — extend VoiceExtractKey.TryParse to cover them.
+        if (unparsedPrefixes.Count > 0)
+        {
+            var top = unparsedPrefixes
+                .OrderByDescending(kvp => kvp.Value.count)
+                .Take(10)
+                .ToList();
+            var sb = new StringBuilder();
+            sb.AppendLine($"Top unparsed cutscene-key prefixes ({unparsedPrefixes.Count} unique):");
+            foreach (var (prefix, info) in top)
+            {
+                sb.AppendLine($"  {prefix}: {info.count}x — sample: \"{info.sampleKey}\" → \"{info.sampleText}\"");
+            }
+            _log.Info(nameof(HarvestCutsceneDialogs), sb.ToString().TrimEnd(), eventId);
+        }
+
+        return result;
+    }
+
+    // ── Voice-name suggestion emit ───────────────────────────────────────────
+    /// <summary>
+    /// Captures the inner token from a <c>(-Fakename-)</c> speaker hint at the start of a
+    /// dialog line. Same shape as <see cref="ParenSpeakerPrefixRegex"/> but exposes a
+    /// capture group so the harvester can pull the fakename out.
+    /// </summary>
+    internal static readonly Regex ParenSpeakerCaptureRegex = new(
+        @"^\(-([^-]+)-\)", RegexOptions.Compiled);
+
+    /// <summary>
+    /// True when the captured fakename is an anonymous speaker marker (<c>???</c> / <c>?</c>
+    /// / etc.) rather than an actual character hint. FFXIV uses these prefixes when the
+    /// dialog box itself displays "???" — i.e. nobody knows who speaks YET. Persisting them
+    /// as DB aliases would be catastrophic: every "???"-speaker NPC would write the same
+    /// <c>(language, "???")</c> key, the alias-map cache would last-wins to a random
+    /// character row, and the live runtime would map every future <c>???</c> speaker onto
+    /// that random NPC. Filter them out at both the DB-persist and the JSON-suggestion sites.
+    /// </summary>
+    internal static bool IsAnonymousFakename(string fake)
+    {
+        if (string.IsNullOrWhiteSpace(fake)) return true;
+        var span = fake.AsSpan().Trim();
+        foreach (var ch in span)
+            if (ch != '?') return false;
+        return span.Length > 0;
+    }
+
+    /// <summary>
+    /// Detect cases where a fakename string contains the name of a different NPC as a
+    /// substring — strongly suggests the line is misattributed (FFXIV's DefaultTalk rows
+    /// are often referenced by multiple ENpcBase rows, so the same line can land on
+    /// several NPCs even though only one of them is the real speaker).
+    ///
+    /// Returns the list of OTHER NPC names that appear inside the fakename. Empty list
+    /// → fakename looks clean. Names shorter than 4 chars are skipped to avoid trivial
+    /// hits like "Al" matching everything.
+    ///
+    /// Internal+static for unit tests. Plain substring (no word-boundary) — German
+    /// genitive forms like "Kriles" should still flag against "Krile". The downside
+    /// is occasional false positives (e.g. "Yoshida" flagging against "Yoshi"); those
+    /// land in the collisions JSON for manual review where the user can decide.
+    /// </summary>
+    internal static List<string> FindCollidingNames(
+        string fakename,
+        string currentName,
+        IReadOnlyCollection<string> nameIndex)
+    {
+        var hits = new List<string>();
+        if (string.IsNullOrEmpty(fakename) || nameIndex.Count == 0) return hits;
+        foreach (var other in nameIndex)
+        {
+            if (string.IsNullOrEmpty(other) || other.Length < 4) continue;
+            if (string.Equals(other, currentName, StringComparison.OrdinalIgnoreCase)) continue;
+            if (fakename.IndexOf(other, StringComparison.OrdinalIgnoreCase) >= 0)
+                hits.Add(other);
+        }
+        return hits;
+    }
+
+    /// <summary>
+    /// Pure accumulator behind <see cref="EmitVoiceNameSuggestions"/> — no I/O, no logger,
+    /// just <c>(NpcId, NpcName-per-lang, Text-per-lang) → per-language NpcName→Fakenames</c>.
+    /// Exposed as <c>internal static</c> for unit tests (the outer method is private and
+    /// touches <c>_config</c>/<c>_log</c>).
+    /// </summary>
+    internal static void AccumulateVoiceNameSuggestion(
+        uint npcId,
+        Dictionary<string, string> npcName,
+        Dictionary<string, string> texts,
+        IReadOnlyList<string> langCodes,
+        Dictionary<string, Dictionary<string, HashSet<string>>> perLanguage)
+    {
+        if (npcId == 0) return;
+        foreach (var lc in langCodes)
+        {
+            if (!texts.TryGetValue(lc, out var text) || string.IsNullOrEmpty(text)) continue;
+            if (!npcName.TryGetValue(lc, out var name) || string.IsNullOrEmpty(name)) continue;
+
+            var match = ParenSpeakerCaptureRegex.Match(text);
+            if (!match.Success) continue;
+            var fake = match.Groups[1].Value.Trim();
+            if (string.IsNullOrEmpty(fake)) continue;
+
+            // Anonymous "???" markers are kept in the DB alias table (the live runtime
+            // disambiguates them via physical-presence + already-spoken tracking) but
+            // skipped in the JSON suggestion output — that file is meant for community
+            // PRs into VoiceNames{LANG}.json, where "???" entries have no meaning.
+            if (IsAnonymousFakename(fake)) continue;
+
+            // Skip if the fakename is just the NPC's own name — no aliasing value
+            // (and no point cluttering the suggestion file with no-op entries).
+            if (string.Equals(fake, name, StringComparison.OrdinalIgnoreCase)) continue;
+
+            if (!perLanguage.TryGetValue(lc, out var byNpc))
+                perLanguage[lc] = byNpc = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            if (!byNpc.TryGetValue(name, out var set))
+                byNpc[name] = set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            set.Add(fake);
+        }
+    }
+
+    /// <summary>
+    /// After every dialog has been linked to an NPC, scan the multilingual texts for
+    /// <c>(-Fakename-)</c> speaker hints and emit one
+    /// <c>voice_name_suggestions_&lt;lang&gt;.json</c> file per language. Each entry
+    /// matches the <see cref="VoiceMap"/> schema so the user can copy lines straight into
+    /// <c>VoiceNames{LANG}.json</c>:
+    /// <code>
+    /// [
+    ///   { "voiceName": "Y'shtola Rhul", "speakers": ["Mysterious Lady"] },
+    ///   { "voiceName": "Tataru Taru",   "speakers": ["Energetic Lalafell"] }
+    /// ]
+    /// </code>
+    /// Filters: skip when the fakename equals the NPC name (no aliasing value), skip when
+    /// either name or text is missing for the language, skip dialogs without a resolved
+    /// NPC. Per (NPC, language) we accumulate a deduplicated set of fakenames.
+    /// </summary>
+    private void EmitVoiceNameSuggestions(
+        List<LinkedDialog> linkedDialogs,
+        List<LinkedQuestDialog> linkedQuests,
+        EKEventId eventId)
+    {
+        // Per language: NpcName → set of distinct fakenames.
+        var perLanguage = new Dictionary<string, Dictionary<string, HashSet<string>>>(StringComparer.OrdinalIgnoreCase);
+        // Per language: full set of NPC display names — used to detect "this fakename
+        // contains another NPC's name" misattributions. Built from ALL linked dialogs
+        // (not just those carrying a fakename) so collisions are detectable even when the
+        // colliding NPC has no fakename suggestions of its own.
+        var nameIndex = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var lc in LangCodes)
+        {
+            perLanguage[lc] = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase);
+            nameIndex[lc] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        }
+
+        void IndexNames(Dictionary<string, string> names)
+        {
+            foreach (var lc in LangCodes)
+                if (names.TryGetValue(lc, out var n) && !string.IsNullOrEmpty(n))
+                    nameIndex[lc].Add(n);
+        }
+
+        foreach (var d in linkedDialogs)
+        {
+            AccumulateVoiceNameSuggestion(d.NpcId, d.NpcName, d.Texts, LangCodes, perLanguage);
+            IndexNames(d.NpcName);
+        }
+        foreach (var d in linkedQuests)
+        {
+            AccumulateVoiceNameSuggestion(d.NpcId, d.NpcName, d.Texts, LangCodes, perLanguage);
+            IndexNames(d.NpcName);
+        }
+
+        // Always write the suggestion + collision files (even if empty) so the user has a
+        // stable set of paths to look for; an empty file is a clear "no findings this run"
+        // signal.
+        var baseDir = _config.SaveToLocal ? _config.LocalSaveLocation : @"C:\alltalk_tts";
+        var outputDir = Path.Combine(baseDir, "harvest");
+        try { Directory.CreateDirectory(outputDir); }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(EmitVoiceNameSuggestions),
+                $"Could not create harvest output dir '{outputDir}': {ex.Message}", eventId);
+            return;
+        }
+
+        var jsonOptions = new JsonSerializerOptions { WriteIndented = true };
+        var totalEntries = 0;
+        var totalFakenames = 0;
+        var totalCollisions = 0;
+        foreach (var lc in LangCodes)
+        {
+            var cleanEntries = new List<VoiceNameSuggestion>();
+            var collisionEntries = new List<VoiceNameCollision>();
+
+            var langNames = nameIndex[lc];
+            var byNpc = perLanguage[lc].OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase);
+            foreach (var (currentName, fakenames) in byNpc)
+            {
+                if (fakenames.Count == 0) continue;
+                var clean = new List<string>();
+                foreach (var fake in fakenames.OrderBy(s => s, StringComparer.OrdinalIgnoreCase))
+                {
+                    var collisions = FindCollidingNames(fake, currentName, langNames);
+                    if (collisions.Count > 0)
+                    {
+                        collisionEntries.Add(new VoiceNameCollision
+                        {
+                            Fakename = fake,
+                            ResolvedAs = currentName,
+                            LikelyMeantFor = collisions
+                                .OrderBy(s => s, StringComparer.OrdinalIgnoreCase)
+                                .ToList(),
+                        });
+                    }
+                    else
+                    {
+                        clean.Add(fake);
+                    }
+                }
+                if (clean.Count > 0)
+                {
+                    cleanEntries.Add(new VoiceNameSuggestion
+                    {
+                        voiceName = currentName,
+                        speakers = clean,
+                    });
+                }
+            }
+
+            totalEntries += cleanEntries.Count;
+            totalFakenames += cleanEntries.Sum(e => e.speakers.Count);
+            totalCollisions += collisionEntries.Count;
+
+            var suggestionsPath = Path.Combine(outputDir, $"voice_name_suggestions_{lc}.json");
+            var collisionsPath = Path.Combine(outputDir, $"voice_name_collisions_{lc}.json");
+            try
+            {
+                File.WriteAllText(suggestionsPath, JsonSerializer.Serialize(cleanEntries, jsonOptions));
+                File.WriteAllText(collisionsPath, JsonSerializer.Serialize(collisionEntries, jsonOptions));
+            }
+            catch (Exception ex)
+            {
+                _log.Warning(nameof(EmitVoiceNameSuggestions),
+                    $"Failed to write voice-name suggestion / collision JSON for {lc}: {ex.Message}",
+                    eventId);
+            }
+        }
+
+        _log.Info(nameof(EmitVoiceNameSuggestions),
+            $"Voice-name files written: {totalEntries} clean NPC entries / {totalFakenames} fakenames " +
+            $"across 4 languages, {totalCollisions} collisions for manual review — under {outputDir}",
+            eventId);
     }
 
     /// <summary>
@@ -3932,10 +4502,25 @@ public class DialogHarvestService : IDialogHarvestService
     };
 
     /// <summary>
-    /// Regex to detect Split index in a macro ToString() representation.
-    /// Matches patterns like: Split(PcName(...), ..., 1) or Split(Head(PcName(...)), ..., 2)
+    /// Regex to detect Split index in a macro ToString() representation. Matches both
+    /// <c>Split(PcName(...), …, N)</c> AND <c>Split(string(gstrM), …, N)</c> — the latter
+    /// is FFXIV's convention for player-name references in cutscene quest text (slot
+    /// <c>gstr1</c> overwhelmingly carries the player's name; we detect any digit suffix).
     /// </summary>
-    private static readonly Regex SplitIndexRegex = new(@"Split\(.*?PcName.*?,\s*.+?,\s*(\d+)\)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex SplitIndexRegex = new(
+        @"Split\(.*?(?:PcName|gstr\d+).*?,\s*.+?,\s*(\d+)\)",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    /// <summary>
+    /// Regex matching ANY player-name macro reference in a payload's repr. Used both for
+    /// the first-pass scan (decides whether to take the slow rebuild path) and the
+    /// second-pass append (decides whether to emit a placeholder for unhandled macros).
+    /// Covers <c>PcName</c> calls (the standard payload) and <c>gstr&lt;N&gt;</c> global
+    /// string references (used by cutscene quest text — see <see cref="SplitIndexRegex"/>).
+    /// </summary>
+    private static readonly Regex PlayerNameMacroRegex = new(
+        @"PcName|gstr\d+",
+        RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>
     /// Extract text from a SeString, replacing player-name macros with
@@ -3949,6 +4534,57 @@ public class DialogHarvestService : IDialogHarvestService
         MacroCode.IfPcGender, MacroCode.IfPcName, MacroCode.IfSelf,
         MacroCode.If, MacroCode.Switch,
     };
+
+    // ── TEMPORARY DEBUG: payload-tree dump for the Gaius/Praetorium row ──────
+    // Writes the full SeString payload tree (high-level repr + per-payload type/MacroCode/
+    // raw repr) to %TEMP%\echokraut_payload_dump.txt the first time the German line
+    // "..., uns erwartet ein Kampf auf Leben und Tod..." comes through extraction. Used
+    // to diagnose why ExtractConditionalText returned empty for the leading address
+    // macro. REMOVE THIS BLOCK AND THE CALL BELOW once the placeholder fallback in
+    // ExtractTextWithPlayerName is verified end-to-end against a fresh harvest.
+    private static int _gaiusDumpOnce;
+    private const string DebugDumpTriggerSnippet = "uns erwartet ein Kampf auf Leben und Tod";
+
+    private static void DebugDumpPayloadTree(ReadOnlySeString seString, string langCode, string extractedText)
+    {
+        try
+        {
+            var path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "echokraut_payload_dump.txt");
+            var sb = new StringBuilder();
+            sb.AppendLine("================================================");
+            sb.AppendLine($"Timestamp: {DateTime.UtcNow:O}");
+            sb.AppendLine($"Lang code: {langCode}");
+            sb.AppendLine($"Extracted: {extractedText}");
+            sb.AppendLine("------------------------------------------------");
+            sb.AppendLine("SeString.ToString():");
+            sb.AppendLine(seString.ToString());
+            sb.AppendLine("------------------------------------------------");
+            sb.AppendLine("Per-payload:");
+            var idx = 0;
+            foreach (var payload in seString)
+            {
+                if (payload.Type == ReadOnlySePayloadType.Text)
+                {
+                    var bytes = payload.Body.Span.ToArray();
+                    var text = Encoding.UTF8.GetString(bytes);
+                    sb.AppendLine($"  [{idx}] Text: '{text}' (raw bytes: {BitConverter.ToString(bytes)})");
+                }
+                else if (payload.Type == ReadOnlySePayloadType.Macro)
+                {
+                    sb.AppendLine($"  [{idx}] Macro {payload.MacroCode} ({(int)payload.MacroCode}): {payload}");
+                }
+                else
+                {
+                    sb.AppendLine($"  [{idx}] {payload.Type}");
+                }
+                idx++;
+            }
+            sb.AppendLine();
+            System.IO.File.AppendAllText(path, sb.ToString());
+        }
+        catch { /* best effort — diagnostic only, never crash the harvest over a dump */ }
+    }
+    // ── END TEMPORARY DEBUG ─────────────────────────────────────────────────
 
     private static string ExtractTextWithPlayerName(ReadOnlySeString seString, string langCode)
     {
@@ -3973,7 +4609,7 @@ public class DialogHarvestService : IDialogHarvestService
                 && payload.MacroCode != MacroCode.NonBreakingSpace)
             {
                 var repr = payload.ToString();
-                if (repr.Contains("PcName", StringComparison.OrdinalIgnoreCase))
+                if (PlayerNameMacroRegex.IsMatch(repr))
                 {
                     needsCustomExtraction = true;
                     break;
@@ -3983,7 +4619,16 @@ public class DialogHarvestService : IDialogHarvestService
 
         // Fast path: no macros that need special handling
         if (!needsCustomExtraction)
-            return seString.ExtractText();
+        {
+            var fastResult = seString.ExtractText();
+            // TEMPORARY DEBUG — see DebugDumpPayloadTree comment block above. Remove after diag.
+            if (fastResult.Contains(DebugDumpTriggerSnippet, StringComparison.OrdinalIgnoreCase)
+                && System.Threading.Interlocked.CompareExchange(ref _gaiusDumpOnce, 1, 0) == 0)
+            {
+                DebugDumpPayloadTree(seString, langCode, fastResult);
+            }
+            return fastResult;
+        }
 
         // Rebuild text, handling player name and conditional macros
         var sb = new StringBuilder();
@@ -4014,17 +4659,43 @@ public class DialogHarvestService : IDialogHarvestService
                 else if (ConditionalTextMacros.Contains(payload.MacroCode))
                 {
                     // Extract first text branch from conditional macros (e.g., IfPcGender → male form)
-                    sb.Append(ExtractConditionalText(payload));
+                    var conditionalText = ExtractConditionalText(payload);
+                    if (string.IsNullOrEmpty(conditionalText))
+                    {
+                        // ExtractConditionalText returned empty because every branch was a nested
+                        // expression instead of a literal string — typical when FFXIV wraps the
+                        // player address as <If(...)<PcName>...<PcName></If>, uns erwartet ein Kampf...>.
+                        // Without this fallback the macro silently disappears and OriginalText starts
+                        // with orphan punctuation like ", uns erwartet…" while HasPlayerPlaceholder
+                        // stays false (a real DB-side bug we hit in the wild on Gaius's Praetorium
+                        // line). When the macro tree references PcName, emit a player placeholder so
+                        // (a) the visible text reads correctly, and (b) the live path substitutes
+                        // the actual player name at speak-time.
+                        var repr = payload.ToString();
+                        if (PlayerNameMacroRegex.IsMatch(repr))
+                            sb.Append(GetPlayerPlaceholderFromRepr(repr));
+                    }
+                    else
+                    {
+                        sb.Append(conditionalText);
+                    }
                 }
                 else if (!FormattingOnlyMacros.Contains(payload.MacroCode))
                 {
                     var repr = payload.ToString();
-                    if (repr.Contains("PcName", StringComparison.OrdinalIgnoreCase))
+                    if (PlayerNameMacroRegex.IsMatch(repr))
                         sb.Append(GetPlayerPlaceholderFromRepr(repr));
                 }
             }
         }
-        return sb.ToString();
+        var result = sb.ToString();
+        // TEMPORARY DEBUG — see DebugDumpPayloadTree comment block above. Remove after diag.
+        if (result.Contains(DebugDumpTriggerSnippet, StringComparison.OrdinalIgnoreCase)
+            && System.Threading.Interlocked.CompareExchange(ref _gaiusDumpOnce, 1, 0) == 0)
+        {
+            DebugDumpPayloadTree(seString, langCode, result);
+        }
+        return result;
     }
 
     /// <summary>
