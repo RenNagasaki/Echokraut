@@ -403,21 +403,17 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         if (_genAllToggleButton != null)
             _genAllToggleButton.Alpha = liveGen ? 1.0f : 0.4f;
 
-        // Game Data Tools icon button — same pattern as in NativeConfigWindow: Alpha dim +
-        // collision flags off when None mode, so the button is fully inert (no cursor flip,
-        // no hover effect, no tooltip, no click). Transition-tracked because hitting
-        // AddNodeFlags / RemoveNodeFlags every frame can crash the game.
-        if (_gameDataToolsButton != null)
+        // Game Data Tools icon button: route through ATK's component-disabled state via
+        // ButtonBase.IsEnabled. Plain alpha + NodeFlags-on-ImageNode left the underlying
+        // AtkComponentButton alive (cursor still flipped, click animation still played,
+        // tooltip still showed) because all of those live on the component, not the icon
+        // node. SetEnabledState triggers the FFXIV-standard disabled timeline
+        // (alpha ~0.7, multiplier 0.5) AND silences the cursor / click pipeline at ATK
+        // level. Transition-tracked since SetEnabledState writes ATK struct fields.
+        if (_gameDataToolsButton != null && _gameDataBtnEnabledState != liveGen)
         {
-            _gameDataToolsButton.Alpha = liveGen ? 1.0f : 0.4f;
-            if (_gameDataBtnEnabledState != liveGen)
-            {
-                _gameDataBtnEnabledState = liveGen;
-                if (liveGen)
-                    _gameDataToolsButton.ImageNode.AddNodeFlags(NodeFlags.RespondToMouse | NodeFlags.HasCollision);
-                else
-                    _gameDataToolsButton.ImageNode.RemoveNodeFlags(NodeFlags.RespondToMouse | NodeFlags.HasCollision);
-            }
+            _gameDataBtnEnabledState = liveGen;
+            _gameDataToolsButton.IsEnabled = liveGen;
         }
 
         // Process deferred quest type selection
