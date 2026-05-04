@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Threading;
+using Echokraut.DataClasses;
 using Echokraut.DataClasses.Database;
 using Echotools.UI.Nodes;
 using Echokraut.Helper.Functional;
@@ -21,6 +22,7 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
     private readonly IVoiceClipManagerService _voiceClipManager;
     private readonly IAudioPlaybackService _audioPlayback;
     private readonly IGameObjectService _gameObjects;
+    private readonly Configuration _config;
 
     private float _contentWidth;
     private ScrollingListNode? _panel;
@@ -70,12 +72,14 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         IDatabaseService db,
         IVoiceClipManagerService voiceClipManager,
         IAudioPlaybackService audioPlayback,
-        IGameObjectService gameObjects)
+        IGameObjectService gameObjects,
+        Configuration config)
     {
         _db = db;
         _voiceClipManager = voiceClipManager;
         _audioPlayback = audioPlayback;
         _gameObjects = gameObjects;
+        _config = config;
 
         _onVoiceClipUpdated = () =>
         {
@@ -290,6 +294,17 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
             UpdateProgressBar();
 
             var isGen = _voiceClipManager.IsGenerating;
+            // None mode locks out everything that requires hitting the backend: the bulk
+            // "Generate All Unsaved" button + every per-clip Generate/Regenerate icon,
+            // plus the Play icon for unsaved clips (Play of an unsaved clip auto-generates).
+            // Saved Play stays bright — the file already exists, no backend call needed.
+            var liveGen = _config.Alltalk.HasLiveGeneration;
+            var lockedOut = isGen || !liveGen;
+
+            // Bulk button — dimmed but not removed, so users can still see the batch
+            // operation exists.
+            if (_genToggleButton != null) _genToggleButton.Alpha = liveGen ? 1.0f : 0.4f;
+
             try
             {
                 var updates = new Dictionary<int, (DynamicIconButtonNode playBtn, DynamicIconButtonNode genBtn, bool wasSaved)>(_buttonImages);
@@ -309,13 +324,13 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
                     genBtn.Icon = nowSaved ? ButtonIcon.Refresh : ButtonIcon.MusicNote;
                     genBtn.Tooltip = nowSaved ? Loc.S("Generate again") : Loc.S("Generate");
 
-                    // Dim gen buttons + unsaved play buttons during batch
-                    genBtn.ImageNode.Alpha = isGen ? 178f / 255f : 1f;
-                    genBtn.ImageNode.MultiplyColor = isGen ? new Vector3(0.5f, 0.5f, 0.5f) : new Vector3(1f, 1f, 1f);
+                    // Dim gen buttons + unsaved play buttons during batch OR in None mode
+                    genBtn.ImageNode.Alpha = lockedOut ? 178f / 255f : 1f;
+                    genBtn.ImageNode.MultiplyColor = lockedOut ? new Vector3(0.5f, 0.5f, 0.5f) : new Vector3(1f, 1f, 1f);
                     if (!nowSaved)
                     {
-                        playBtn.ImageNode.Alpha = isGen ? 178f / 255f : 1f;
-                        playBtn.ImageNode.MultiplyColor = isGen ? new Vector3(0.5f, 0.5f, 0.5f) : new Vector3(1f, 1f, 1f);
+                        playBtn.ImageNode.Alpha = lockedOut ? 178f / 255f : 1f;
+                        playBtn.ImageNode.MultiplyColor = lockedOut ? new Vector3(0.5f, 0.5f, 0.5f) : new Vector3(1f, 1f, 1f);
                     }
                     else if (wasSaved != nowSaved)
                     {

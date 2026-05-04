@@ -74,7 +74,8 @@ public class NativeWindowManager : IWindowManager
             services.GetService<IDatabaseService>(),
             services.GetService<IVoiceClipManagerService>(),
             services.GetService<IAudioPlaybackService>(),
-            services.GetService<IGameObjectService>())
+            services.GetService<IGameObjectService>(),
+            config)
         {
             InternalName = "EchokrautEncounterDetail",
             Title = Loc.S("Voice Clip Detail"),
@@ -91,6 +92,7 @@ public class NativeWindowManager : IWindowManager
             clientState,
             services.GetService<ILogService>(),
             services.GetService<IBackendService>(),
+            config,
             ToggleConfig,
             ToggleGameDataTools)
         {

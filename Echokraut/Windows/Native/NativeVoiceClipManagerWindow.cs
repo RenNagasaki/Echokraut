@@ -118,6 +118,8 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     private readonly List<(string npcKey, int questType, IconListItemNode node)> _subGroupNodes = new();
     private bool _countsNeedRefresh;
 
+    private readonly Configuration _config;
+
     public NativeVoiceClipManagerWindow(
         IDatabaseService db,
         IVoiceClipManagerService voiceClipManager,
@@ -127,6 +129,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         IClientState clientState,
         ILogService log,
         IBackendService backend,
+        Configuration config,
         Action toggleConfig,
         Action toggleGameDataTools)
     {
@@ -138,6 +141,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _clientState = clientState;
         _log = log;
         _backend = backend;
+        _config = config;
         _toggleConfig = toggleConfig;
         _toggleGameDataTools = toggleGameDataTools;
 
@@ -387,6 +391,12 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
 
         // Skip first frame so OnSetup node creation doesn't compound with data loading
         if (_firstFrame) { _firstFrame = false; return; }
+
+        // Bulk Generate All Unsaved button — dim in None mode (no backend to call). The
+        // per-clip Generate buttons in the detail window are handled by that window's own
+        // OnUpdate dim pass; here we only own the bulk button at the top of VCM.
+        if (_genAllToggleButton != null)
+            _genAllToggleButton.Alpha = _config.Alltalk.HasLiveGeneration ? 1.0f : 0.4f;
 
         // Process deferred quest type selection
         if (_pendingQuestTypeSelection >= 0)
@@ -907,7 +917,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     {
         // Close any existing edit popup before opening a new one.
         _npcEditWindow?.Dispose();
-        _npcEditWindow = new NativeNpcEditWindow(mapData, _npcData, _log, OnNpcEdited)
+        _npcEditWindow = new NativeNpcEditWindow(mapData, _npcData, _log, _config, OnNpcEdited)
         {
             InternalName = "EKNpcEdit",
             Title = $"{Loc.S("Edit Character")}: {mapData.Name}",

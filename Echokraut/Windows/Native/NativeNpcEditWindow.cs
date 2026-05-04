@@ -25,7 +25,15 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
     private readonly NpcMapData _npc;
     private readonly INpcDataService _npcData;
     private readonly ILogService _log;
+    private readonly Configuration _config;
     private readonly Action _onSaved;
+
+    // Dropdowns are promoted to fields so OnUpdate can dim them when live generation is
+    // unavailable (None mode): Race/Gender/Voice only matter for backend voice routing,
+    // so they're locked, while Volume + Enabled stay interactive — those still affect
+    // playback of pre-existing audio files.
+    private TextDropDownNode? _raceDropDown;
+    private TextDropDownNode? _genderDropDown;
 
     // Pending values — TextDropDownNode crashes when its label is updated mid-OnOptionSelected,
     // so we capture pending values and apply them on Save click.
@@ -52,11 +60,13 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
         NpcMapData npc,
         INpcDataService npcData,
         ILogService log,
+        Configuration config,
         Action onSaved)
     {
         _npc = npc ?? throw new ArgumentNullException(nameof(npc));
         _npcData = npcData ?? throw new ArgumentNullException(nameof(npcData));
         _log = log ?? throw new ArgumentNullException(nameof(log));
+        _config = config ?? throw new ArgumentNullException(nameof(config));
         _onSaved = onSaved ?? throw new ArgumentNullException(nameof(onSaved));
 
         _pendingRace = _npc.Race;
@@ -86,23 +96,23 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
         });
         y += 20;
 
-        var raceDropDown = new TextDropDownNode
+        _raceDropDown = new TextDropDownNode
         {
             Position = new Vector2(pos.X, pos.Y + y),
             Size = new Vector2(w, 26),
             Options = [],
         };
-        raceDropDown.OptionListNode.Options = new List<string>(Constants.RACENAMESLIST);
+        _raceDropDown.OptionListNode.Options = new List<string>(Constants.RACENAMESLIST);
         var currentRaceName = _npc.Race.ToString();
-        raceDropDown.OptionListNode.SelectedOption = currentRaceName;
-        if (raceDropDown.LabelNode.Node != null)
-            raceDropDown.LabelNode.String = currentRaceName;
-        raceDropDown.OnOptionSelected = option =>
+        _raceDropDown.OptionListNode.SelectedOption = currentRaceName;
+        if (_raceDropDown.LabelNode.Node != null)
+            _raceDropDown.LabelNode.String = currentRaceName;
+        _raceDropDown.OnOptionSelected = option =>
         {
             if (Enum.TryParse<NpcRaces>(option, out var race))
                 _pendingRace = race;
         };
-        AddNode(raceDropDown);
+        AddNode(_raceDropDown);
         y += 36;
 
         // ── Gender dropdown ──────────────────────────────────────────
@@ -116,23 +126,23 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
         });
         y += 20;
 
-        var genderDropDown = new TextDropDownNode
+        _genderDropDown = new TextDropDownNode
         {
             Position = new Vector2(pos.X, pos.Y + y),
             Size = new Vector2(w, 26),
             Options = [],
         };
-        genderDropDown.OptionListNode.Options = new List<string>(Constants.GENDERNAMESLIST);
+        _genderDropDown.OptionListNode.Options = new List<string>(Constants.GENDERNAMESLIST);
         var currentGenderName = _npc.Gender.ToString();
-        genderDropDown.OptionListNode.SelectedOption = currentGenderName;
-        if (genderDropDown.LabelNode.Node != null)
-            genderDropDown.LabelNode.String = currentGenderName;
-        genderDropDown.OnOptionSelected = option =>
+        _genderDropDown.OptionListNode.SelectedOption = currentGenderName;
+        if (_genderDropDown.LabelNode.Node != null)
+            _genderDropDown.LabelNode.String = currentGenderName;
+        _genderDropDown.OnOptionSelected = option =>
         {
             if (Enum.TryParse<Genders>(option, out var gender))
                 _pendingGender = gender;
         };
-        AddNode(genderDropDown);
+        AddNode(_genderDropDown);
         y += 36;
 
         // ── Voice dropdown ───────────────────────────────────────────
@@ -262,6 +272,14 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
 
     protected override void OnUpdate(AtkUnitBase* addon)
     {
+        // Race / Gender / Voice are pure backend-routing config — they have nothing to do
+        // with playback of pre-existing audio. Lock them in None mode (Volume + Enabled stay
+        // interactive). Cheap to set Alpha each frame; no transition tracking needed.
+        var liveGen = _config.Alltalk.HasLiveGeneration;
+        Dim(_raceDropDown, liveGen);
+        Dim(_genderDropDown, liveGen);
+        Dim(_voiceDropDown, liveGen);
+
         if (_voiceDropDown is null) return;
 
         // Pick up code-driven voice changes (e.g. BackendService.EnsureFittingVoice
@@ -294,6 +312,11 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
         _voiceDropDown.OptionListNode.SelectedOption = newLabel;
         if (_voiceDropDown.LabelNode.Node != null)
             _voiceDropDown.LabelNode.String = newLabel;
+    }
+
+    private static void Dim(NodeBase? node, bool enabled)
+    {
+        if (node != null) node.Alpha = enabled ? 1.0f : 0.4f;
     }
 
     private void SaveClicked()
