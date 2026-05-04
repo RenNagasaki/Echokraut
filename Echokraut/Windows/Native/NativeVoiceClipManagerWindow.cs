@@ -341,9 +341,10 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
             OnClick = () => _toggleGameDataTools(),
         };
         _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
-        // Hover handlers wired on ImageNode fire independently of the parent component's
-        // SetEnabledState pipeline. Bail out when the button is disabled so None mode
-        // users get no tooltip / icon-brightening when hovering the dimmed button.
+        // Both MouseOver and MouseOut bail when disabled so the None-mode dimmed look is
+        // owned exclusively by ATK's disabled timeline; without the MouseOut gate, the
+        // cursor leaving a dimmed button reset MultiplyColor to (1,1,1) and the icon
+        // snapped brighter than its disabled state.
         _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
         {
             if (_gameDataToolsButton == null || !_gameDataToolsButton.IsEnabled) return;
@@ -352,7 +353,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         });
         _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
         {
-            if (_gameDataToolsButton == null) return;
+            if (_gameDataToolsButton == null || !_gameDataToolsButton.IsEnabled) return;
             _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
             _gameDataToolsButton.HideTooltip();
         });

@@ -397,8 +397,12 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
         // Hover handlers wired on ImageNode fire independently of the parent component's
         // SetEnabledState pipeline — the icon node has its own RespondToMouse + EmitsEvents
-        // flags. Bail out when the button is disabled so None mode users get no tooltip
-        // and no icon-brightening when their cursor sweeps over the dimmed button.
+        // flags. Both MouseOver and MouseOut bail when the button is disabled so the
+        // None-mode dimmed look is owned exclusively by ATK's disabled timeline (alpha
+        // 178 + multiplier 0.5). Without the MouseOut gate, sweeping the cursor off a
+        // disabled button reset MultiplyColor to (1,1,1) and the icon snapped brighter
+        // than its disabled state. Any stuck hover state from an enabled→disabled
+        // transition while hovered is force-cleared by the OnUpdate transition handler.
         _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
         {
             if (_gameDataToolsButton == null || !_gameDataToolsButton.IsEnabled) return;
@@ -407,7 +411,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         });
         _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
         {
-            if (_gameDataToolsButton == null) return;
+            if (_gameDataToolsButton == null || !_gameDataToolsButton.IsEnabled) return;
             _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
             _gameDataToolsButton.HideTooltip();
         });
