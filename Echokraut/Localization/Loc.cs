@@ -418,6 +418,22 @@ public static class Loc
         },
         ["You're all set!"] = new() { { DE, "Alles bereit!" }, { FR, "Vous êtes prêt !" }, { JP, "準備完了！" } },
 
+        // ── First-time wizard: Step 1 header + Step 2 finish summary ──────
+        ["Configure your setup"] = new() { { DE, "Richte deine Konfiguration ein" }, { FR, "Configurez votre installation" }, { JP, "セットアップを構成" } },
+        ["Mode"] = new() { { DE, "Modus" }, { FR, "Mode" }, { JP, "モード" } },
+        ["Install path"] = new() { { DE, "Installationspfad" }, { FR, "Chemin d'installation" }, { JP, "インストールパス" } },
+        ["Install status"] = new() { { DE, "Installationsstatus" }, { FR, "État d'installation" }, { JP, "インストール状況" } },
+        ["Installed"] = new() { { DE, "Installiert" }, { FR, "Installé" }, { JP, "インストール済み" } },
+        ["Not installed yet"] = new() { { DE, "Noch nicht installiert" }, { FR, "Pas encore installé" }, { JP, "未インストール" } },
+        ["Server URL"] = new() { { DE, "Server-URL" }, { FR, "URL du serveur" }, { JP, "サーバーURL" } },
+        ["Connection"] = new() { { DE, "Verbindung" }, { FR, "Connexion" }, { JP, "接続" } },
+        ["Connection successful"] = new() { { DE, "Verbindung erfolgreich" }, { FR, "Connexion réussie" }, { JP, "接続成功" } },
+        ["Not yet tested"] = new() { { DE, "Noch nicht getestet" }, { FR, "Pas encore testé" }, { JP, "未テスト" } },
+        ["Audio path"] = new() { { DE, "Audio-Pfad" }, { FR, "Chemin audio" }, { JP, "音声パス" } },
+        ["Disabled"] = new() { { DE, "Deaktiviert" }, { FR, "Désactivé" }, { JP, "無効" } },
+        ["Testing..."] = new() { { DE, "Teste..." }, { FR, "Test en cours..." }, { JP, "テスト中..." } },
+        ["No backend selected"] = new() { { DE, "Kein Backend ausgewählt" }, { FR, "Aucun backend sélectionné" }, { JP, "バックエンド未選択" } },
+
         // ── Common buttons ────────────────────────────────────────────────
         ["Back"] = new() { { DE, "Zurück" }, { FR, "Retour" }, { JP, "戻る" } },
         ["Next"] = new() { { DE, "Weiter" }, { FR, "Suivant" }, { JP, "次へ" } },
@@ -578,6 +594,12 @@ public static class Loc
         ["Quest Dialog Harvest"] = new() { { DE, "Quest-Dialog-Sammlung" }, { FR, "Récolte de dialogues de quête" }, { JP, "クエスト会話の取得" } },
         ["Voice Starter Set"] = new() { { DE, "Stimmen-Starterset" }, { FR, "Pack de démarrage vocal" }, { JP, "ボイス・スターターセット" } },
         ["Import / Export"] = new() { { DE, "Import / Export" }, { FR, "Import / Export" }, { JP, "インポート / エクスポート" } },
+        ["Quest Lua Debug"] = new() { { DE, "Quest-Lua-Debug" }, { FR, "Debug Lua quête" }, { JP, "クエスト Lua デバッグ" } },
+        ["Export the disassembled Lua script and bytecode trace for a single quest. Used to investigate why a quest's NPC dialog isn't getting matched."]
+            = new() {
+                { DE, "Exportiert das disassemblierte Lua-Skript und den Bytecode-Trace einer einzelnen Quest. Wird genutzt, um zu untersuchen, warum NPC-Dialoge einer Quest nicht zugeordnet werden." },
+                { FR, "Exporte le script Lua désassemblé et la trace de bytecode d'une seule quête. Utile pour comprendre pourquoi le dialogue NPC d'une quête n'est pas associé." },
+                { JP, "単一クエストの逆アセンブル済み Lua スクリプトとバイトコードのトレースを出力します。クエストの NPC 会話が一致しない原因を調査するのに使用します。" } },
         ["Scan game data for NPC dialog text and persist linked entries to the database. Use this to populate or refresh your voice clip catalog after a game patch."]
             = new() {
                 { DE, "Spieldaten nach NPC-Dialogtexten durchsuchen und verknüpfte Einträge in der Datenbank ablegen. Damit füllst oder aktualisierst du deinen Sprachclip-Katalog nach einem Spielpatch." },
@@ -594,6 +616,7 @@ public static class Loc
                 { FR, "Bientôt : sauvegarde / restauration de la base et de la configuration, et import/export de packs vocaux communautaires." },
                 { JP, "近日公開：データベース＋設定のバックアップ／復元、およびコミュニティ・ボイスセットのインポート／エクスポート。" } },
         ["Samples per NPC (1-5):"] = new() { { DE, "Samples pro NPC (1-5):" }, { FR, "Échantillons par NPC (1-5) :" }, { JP, "NPC ごとのサンプル数 (1-5):" } },
+        ["Samples per NPC: {0} (1-5)"] = new() { { DE, "Samples pro NPC: {0} (1-5)" }, { FR, "Échantillons par NPC : {0} (1-5)" }, { JP, "NPC ごとのサンプル数: {0} (1-5)" } },
         ["Build Starter Set"] = new() { { DE, "Starterset erstellen" }, { FR, "Créer le pack de démarrage" }, { JP, "スターターセットを作成" } },
         ["Stop"] = new() { { DE, "Stopp" }, { FR, "Arrêter" }, { JP, "停止" } },
         ["Starting..."] = new() { { DE, "Wird gestartet…" }, { FR, "Démarrage…" }, { JP, "開始中…" } },

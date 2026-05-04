@@ -85,7 +85,6 @@ public class NativeWindowManager : IWindowManager
             services.GetService<IVoiceClipManagerService>(),
             services.GetService<IAudioPlaybackService>(),
             services.GetService<INpcDataService>(),
-            services.GetService<IDialogHarvestService>(),
             services.GetService<IGameObjectService>(),
             clientState,
             services.GetService<ILogService>(),
@@ -104,6 +103,7 @@ public class NativeWindowManager : IWindowManager
             config,
             services.GetService<IAlltalkInstanceService>(),
             services.GetService<IBackendService>(),
+            framework,
             () => _configWindow.Toggle())
         {
             InternalName = "EchokrautFirstTime",
@@ -117,6 +117,7 @@ public class NativeWindowManager : IWindowManager
             services.GetService<IVoiceSampleExtractorService>(),
             clientState,
             services.GetService<ILogService>(),
+            config,
             ToggleConfig,
             ToggleVoiceClipManager)
         {

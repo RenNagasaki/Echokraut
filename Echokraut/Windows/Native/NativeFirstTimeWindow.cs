@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
@@ -7,6 +8,7 @@ using Echotools.Logging.Enums;
 using Echokraut.Helper.Functional;
 using Echokraut.Localization;
 using Echokraut.Services;
+using Echotools.UI.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
@@ -25,9 +27,18 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
     private readonly Configuration _config;
     private readonly IAlltalkInstanceService _alltalkInstance;
     private readonly IBackendService _backend;
+    private readonly IFramework _framework;
     private readonly Action _onComplete;
 
     private int _wizardStep;
+
+    // Remote connection test state. The Step-1 Next button is gated on a successful
+    // CheckReady against the *current* base URL; if the user edits the URL after a
+    // successful test, _remoteTestUrlSnapshot stops matching _config.Alltalk.BaseUrl and
+    // the user is forced to retest.
+    private bool _remoteTestSucceeded;
+    private string _remoteTestUrlSnapshot = string.Empty;
+    private bool _remoteTestRunning;
 
     // ── Step 0: Welcome ──────────────────────────────────────────────────
     private TextNode? _welcomeTitle;
@@ -42,6 +53,9 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
 
     // ── Step 1: Configure ────────────────────────────────────────────────
     private TextButtonNode? _backButton1;
+    private TextNode? _step1Title;
+    private TextNode? _step1Subtitle;
+    private HorizontalLineNode? _step1Sep;
 
     // Local instance nodes
     private NativeAlltalkBuilder.LocalInstanceNodes? _localNodes;
@@ -64,22 +78,39 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
 
     // ── Step 2: Finish ───────────────────────────────────────────────────
     private TextButtonNode? _backButton2;
-    private TextNode? _finishSummary;
+    private TextNode? _finishTitle;
+    private TextNode? _finishDetails;
     private TextNode? _finishHelp;
     private TextButtonNode? _finishButton;
 
     // ── Links (always visible) ───────────────────────────────────────────
     private HorizontalListNode? _linksRow;
 
+    // Outer list reference + last-applied visibility signature. ScrollingListNode
+    // doesn't auto-shrink hidden children — without an explicit RecalculateLayout()
+    // every time we toggle a node's IsVisible, hidden Step-0 nodes keep their slots
+    // and Step-1 content appears pushed way down. Track the (step, instanceType)
+    // tuple as the visibility signature and recompute layout only on transitions.
+    private ScrollingListNode? _list;
+    private (int step, AlltalkInstanceType type)? _lastVisibilitySignature;
+
+    // Install progress bar pinned at the very top of the window. Driven by
+    // IAlltalkInstanceService.CurrentInstallStatus / CurrentInstallProgress. Visible only
+    // while Local install is running on Step 1; the user gets phase-level feedback
+    // (Preparing → Installer → Voice samples N/M → Finalizing → Done).
+    private StatusProgressBar? _installProgressBar;
+
     public NativeFirstTimeWindow(
         Configuration config,
         IAlltalkInstanceService alltalkInstance,
         IBackendService backend,
+        IFramework framework,
         Action onComplete)
     {
         _config = config;
         _alltalkInstance = alltalkInstance;
         _backend = backend;
+        _framework = framework;
         _onComplete = onComplete;
     }
 
@@ -89,13 +120,32 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         var size = ContentSize;
         var w = size.X;
 
-        var list = new ScrollingListNode
+        // Reserved progress-bar strip at the top of the window. Always present (so the
+        // ScrollingListNode size below stays stable across install state changes), but the
+        // bar itself is hidden until an install run kicks in.
+        const float progressBarHeight = 28f;
+        const float progressBarGap = 4f;
+        _installProgressBar = new StatusProgressBar
         {
             Position = pos,
-            Size = size,
+            Size = new Vector2(size.X, progressBarHeight),
+            IsVisible = false,
+        };
+        _installProgressBar.ActionText = string.Empty;
+        _installProgressBar.SetProgress(0f, string.Empty);
+        AddNode(_installProgressBar);
+
+        var listPos = new Vector2(pos.X, pos.Y + progressBarHeight + progressBarGap);
+        var listSize = new Vector2(size.X, size.Y - progressBarHeight - progressBarGap);
+        var list = new ScrollingListNode
+        {
+            Position = listPos,
+            Size = listSize,
             FitWidth = true,
             ItemSpacing = 4,
         };
+        _list = list;
+        _lastVisibilitySignature = null;
 
         // ── Step 0: Welcome ──────────────────────────────────────────────
         _welcomeTitle = Lbl(Loc.S("Welcome to Echokraut!"), w, 14);
@@ -140,6 +190,14 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         _backButton1 = Btn(Loc.S("Back"), 80, () => { _wizardStep = 0; });
         list.AddNode(_backButton1);
 
+        // Dynamic header — title shows the chosen mode, subtitle is constant context.
+        _step1Title = Lbl(string.Empty, w, 14);
+        _step1Subtitle = Lbl(Loc.S("Configure your setup"), w);
+        _step1Sep = Sep(w);
+        list.AddNode(_step1Title);
+        list.AddNode(_step1Subtitle);
+        list.AddNode(_step1Sep);
+
         // Local instance
         _localNodes = NativeAlltalkBuilder.BuildLocalInstance(w, _config, _alltalkInstance);
         _localEssentialNodes = _localNodes.EssentialNodes;
@@ -152,6 +210,9 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
             var isHidden = _localAdvancedNodes!.Length > 0 && !_localAdvancedNodes[0].IsVisible;
             foreach (var n in _localAdvancedNodes!) n.IsVisible = isHidden;
             _localAdvancedToggle!.String = isHidden ? Loc.S("[-] Advanced Options") : Loc.S("[+] Advanced Options");
+            // Re-flow so the post-advanced block doesn't leave a gap when collapsed,
+            // and doesn't push past the visible area when expanded.
+            _list?.RecalculateLayout();
         });
         list.AddNode(_localAdvancedToggle);
         foreach (var n in _localAdvancedNodes) list.AddNode(n);
@@ -182,7 +243,18 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
 
         // ── Step 2: Finish ───────────────────────────────────────────────
         _backButton2 = Btn(Loc.S("Back"), 80, () => { _wizardStep = 1; });
-        _finishSummary = Lbl(Loc.S("You're all set!"), w, 14);
+        _finishTitle = Lbl(Loc.S("You're all set!"), w, 14);
+        // Multi-line summary node: rebuilt each frame in OnUpdate so its content
+        // tracks Configuration / install state / remote test result live. Generous
+        // height covers up to ~7 rows at 18px each.
+        _finishDetails = new TextNode
+        {
+            Size = new Vector2(w, 140),
+            String = string.Empty,
+            FontType = FontType.Axis,
+            FontSize = 12,
+        };
+        _finishDetails.AddTextFlags(TextFlags.MultiLine);
         _finishHelp = Lbl(Loc.S("Use /ek in chat to open the full configuration window."), w);
         _finishButton = Btn(Loc.S("I Understand"), 200, () =>
         {
@@ -193,7 +265,8 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         });
 
         list.AddNode(_backButton2);
-        list.AddNode(_finishSummary);
+        list.AddNode(_finishTitle);
+        list.AddNode(_finishDetails);
         list.AddNode(_finishHelp);
         list.AddNode(_finishButton);
         list.AddNode(Sep(w));
@@ -234,6 +307,15 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         // ── Step 1 visibility ────────────────────────────────────────────
         var s1 = step == 1;
         SetVisible(_backButton1, s1);
+        SetVisible(_step1Title, s1);
+        SetVisible(_step1Subtitle, s1);
+        SetVisible(_step1Sep, s1);
+        if (s1 && _step1Title != null)
+        {
+            _step1Title.String = isLocal ? Loc.S("Local TTS")
+                : isRemote ? Loc.S("Remote Server")
+                : Loc.S("Audio Files Only");
+        }
 
         // Local nodes
         if (_localEssentialNodes != null)
@@ -259,38 +341,149 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         SetVisible(_noInstanceGdLinkInput, s1 && isNone);
         Dim(_noInstanceGdLinkInput, _config.GoogleDriveDownload);
 
-        // Next button — dim if local but not installed
+        // Next button — gated per mode:
+        //   Local : LocalInstall must be true (install completed)
+        //   Remote: a successful CheckReady against the *current* BaseUrl
+        //   None  : always allowed
         SetVisible(_nextButton, s1);
-        var canNext = isRemote || (isLocal && _config.Alltalk.LocalInstall) || isNone;
+        var remoteUrlMatches = string.Equals(_remoteTestUrlSnapshot, _config.Alltalk.BaseUrl, StringComparison.Ordinal);
+        var canNext = (isLocal && _config.Alltalk.LocalInstall)
+            || (isRemote && _remoteTestSucceeded && remoteUrlMatches)
+            || isNone;
         Dim(_nextButton, canNext);
 
         // ── Step 2 visibility ────────────────────────────────────────────
         var s2 = step == 2;
         SetVisible(_backButton2, s2);
-        SetVisible(_finishSummary, s2);
+        SetVisible(_finishTitle, s2);
+        SetVisible(_finishDetails, s2);
         SetVisible(_finishHelp, s2);
         SetVisible(_finishButton, s2);
 
-        if (s2 && _finishSummary != null)
-            _finishSummary.String = $"Setup mode: {instanceType}. You're all set!";
+        if (s2 && _finishDetails != null)
+            _finishDetails.String = BuildFinishSummary(instanceType);
+
+        // Re-flow the ScrollingListNode whenever the visible block changes. Hidden nodes
+        // otherwise hold their slots (game-side layout cache), so e.g. clicking "Local"
+        // on Step 0 → Step 1 leaves the Local install controls floating below the now-
+        // invisible Step-0 buttons. Signature on (step, instanceType) is enough — the
+        // advanced-options accordion has its own toggle that can fire RecalculateLayout
+        // independently if we ever need it.
+        var sig = (step, instanceType);
+        if (_lastVisibilitySignature != sig)
+        {
+            _lastVisibilitySignature = sig;
+            _list?.RecalculateLayout();
+        }
+
+        // Install progress bar — visible while a Local install is running OR briefly
+        // showing the terminal status afterwards. The bar lives outside the scrolling list
+        // (pinned to the top), so toggling its visibility doesn't perturb the list layout.
+        if (_installProgressBar != null)
+        {
+            var installing = _alltalkInstance.Installing;
+            var hasTerminalStatus = !string.IsNullOrEmpty(_alltalkInstance.CurrentInstallStatus);
+            var showBar = s1 && isLocal && (installing || hasTerminalStatus);
+            _installProgressBar.IsVisible = showBar;
+            if (showBar)
+            {
+                _installProgressBar.ActionText = _alltalkInstance.CurrentInstallStatus;
+                _installProgressBar.SetProgress(
+                    Math.Clamp(_alltalkInstance.CurrentInstallProgress, 0f, 1f),
+                    string.Empty);
+            }
+        }
     }
 
     private void TestConnection()
     {
-        if (_remoteNodes == null) return;
-        _remoteNodes.ConnectionResultLabel.String = "Testing...";
+        if (_remoteNodes == null || _remoteTestRunning) return;
+
+        _remoteTestRunning = true;
+        // Tentatively invalidate prior result — even before the request starts, the
+        // user has signalled they want a fresh verdict.
+        _remoteTestSucceeded = false;
+        var urlAtStart = _config.Alltalk.BaseUrl;
+        _remoteNodes.ConnectionResultLabel.String = Loc.S("Testing...");
 
         var task = _config.BackendSelection == TTSBackends.Alltalk
             ? _backend.CheckReady(new EKEventId(0, TextSource.None))
-            : System.Threading.Tasks.Task.FromResult("No backend selected");
+            : System.Threading.Tasks.Task.FromResult(Loc.S("No backend selected"));
 
-        task.ContinueWith(t =>
+        // ContinueWith fires on a thread-pool thread; bounce to the framework thread
+        // before touching ATK nodes (label string + KamiToolKit node state aren't
+        // thread-safe — they must be mutated on the main game thread).
+        task.ContinueWith(t => _framework.RunOnFrameworkThread(() =>
         {
+            _remoteTestRunning = false;
             if (_remoteNodes == null) return;
-            _remoteNodes.ConnectionResultLabel.String = t.IsFaulted
-                ? $"Error: {t.Exception?.InnerException?.Message}"
-                : $"Result: {t.Result}";
-        });
+
+            if (t.IsFaulted)
+            {
+                _remoteTestSucceeded = false;
+                _remoteTestUrlSnapshot = string.Empty;
+                _remoteNodes.ConnectionResultLabel.String =
+                    string.Format(Loc.S("Error: {0}"), t.Exception?.InnerException?.Message ?? string.Empty);
+                return;
+            }
+
+            // CheckReady returns AllTalk's /api/ready body on success ("Ready") and a
+            // human-readable error message on failure (see AlltalkBackend.CheckReady).
+            // "Ready" is the only success token; everything else is treated as failure.
+            var result = t.Result ?? string.Empty;
+            var success = string.Equals(result.Trim(), "Ready", StringComparison.OrdinalIgnoreCase);
+            _remoteTestSucceeded = success;
+            _remoteTestUrlSnapshot = success ? urlAtStart : string.Empty;
+            _remoteNodes.ConnectionResultLabel.String = success
+                ? Loc.S("Connection successful")
+                : string.Format(Loc.S("Error: {0}"), result);
+        }));
+    }
+
+    /// <summary>
+    /// Builds the localized multi-line summary shown on Step 2. Lines are separated
+    /// by '\n'; the TextNode has TextFlags.MultiLine set in OnSetup.
+    /// </summary>
+    private string BuildFinishSummary(AlltalkInstanceType instanceType)
+    {
+        var modeLabel = instanceType switch
+        {
+            AlltalkInstanceType.Local => Loc.S("Local TTS"),
+            AlltalkInstanceType.Remote => Loc.S("Remote Server"),
+            _ => Loc.S("Audio Files Only"),
+        };
+
+        var lines = new System.Collections.Generic.List<string>
+        {
+            $"{Loc.S("Mode")}: {modeLabel}",
+        };
+
+        switch (instanceType)
+        {
+            case AlltalkInstanceType.Local:
+                lines.Add($"{Loc.S("Install path")}: {_config.Alltalk.LocalInstallPath}");
+                lines.Add($"{Loc.S("Install status")}: " +
+                    (_config.Alltalk.LocalInstall ? Loc.S("Installed") : Loc.S("Not installed yet")));
+                break;
+
+            case AlltalkInstanceType.Remote:
+                lines.Add($"{Loc.S("Server URL")}: {_config.Alltalk.BaseUrl}");
+                var remoteOk = _remoteTestSucceeded
+                    && string.Equals(_remoteTestUrlSnapshot, _config.Alltalk.BaseUrl, StringComparison.Ordinal);
+                lines.Add($"{Loc.S("Connection")}: " +
+                    (remoteOk ? Loc.S("Connection successful") : Loc.S("Not yet tested")));
+                break;
+
+            default: // None
+                lines.Add($"{Loc.S("Audio path")}: {_config.LocalSaveLocation}");
+                lines.Add($"{Loc.S("Google Drive")}: " +
+                    (_config.GoogleDriveDownload
+                        ? (string.IsNullOrWhiteSpace(_config.GoogleDriveShareLink) ? Loc.S("Enabled") : _config.GoogleDriveShareLink)
+                        : Loc.S("Disabled")));
+                break;
+        }
+
+        return string.Join("\n", lines);
     }
 
     private static void Dim(NodeBase? node, bool enabled)
