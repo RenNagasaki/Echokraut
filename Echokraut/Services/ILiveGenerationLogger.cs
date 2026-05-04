@@ -16,9 +16,11 @@ public interface ILiveGenerationLogger
     /// <paramref name="hasPlayerPlaceholder"/> selects the same <c>player_content_id</c> the UI uses
     /// in <c>VoiceClipManagerService.GetEffectivePlayerId</c>: 0 for shareable clips, the local
     /// player's content id for placeholder clips. Storing under a different id leaves the row
-    /// invisible to the manager UI.
+    /// invisible to the manager UI. <paramref name="voiceKey"/> is persisted onto the
+    /// generation row so the system retains which voice produced the file even if the parent
+    /// clip's voice key gets overwritten later.
     /// No-op when <paramref name="voiceClipId"/> is 0 (e.g. VoiceTest playback or harvest-only clips).
     /// Failures are swallowed and logged at warning level — never bubbles up to the playback loop.
     /// </summary>
-    void LogIfApplicable(int voiceClipId, bool hasPlayerPlaceholder, string savePath, EKEventId eventId);
+    void LogIfApplicable(int voiceClipId, bool hasPlayerPlaceholder, string savePath, string voiceKey, EKEventId eventId);
 }

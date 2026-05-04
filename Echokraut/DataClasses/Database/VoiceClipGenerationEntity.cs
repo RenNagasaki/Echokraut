@@ -48,6 +48,17 @@ public class VoiceClipGenerationEntity
     [Column("alias_gender")]
     public int AliasGender { get; set; } = 0;
 
+    /// <summary>
+    /// BackendVoice key the audio file at <see cref="SavePath"/> was actually generated under.
+    /// Distinct from <see cref="VoiceClipEntity.VoiceKey"/>, which only tracks the *most recently
+    /// used* voice for the clip and gets overwritten on re-encounter / voice reassignment. This
+    /// column lets the system answer "which voice produced this on-disk file" without trusting
+    /// the snapshot, and survives a later voice change for the parent clip.
+    /// Empty string for legacy rows generated before schema v3.
+    /// </summary>
+    [Column("voice_key")]
+    public string VoiceKey { get; set; } = "";
+
     // Navigation
     [ForeignKey(nameof(VoiceClipId))]
     public VoiceClipEntity? VoiceClip { get; set; }

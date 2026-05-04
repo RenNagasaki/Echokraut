@@ -77,7 +77,7 @@ public class VoiceClipGenerationTests : IDisposable
     {
         // Column exists with default 0 — exercised via insert without explicit value.
         var clip = SeedClip();
-        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 99, "MyName", "/path/own.wav");
+        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 99, "MyName", "/path/own.wav", voiceKey: "");
 
         var row = _context.VoiceClipGenerations.AsNoTracking().Single();
         Assert.Equal(0, row.AliasGender);
@@ -88,9 +88,9 @@ public class VoiceClipGenerationTests : IDisposable
     {
         var clip = SeedClip();
 
-        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 42, "MyName", "/path/own.wav");
-        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "Adventurer", "/path/m.wav", aliasGender: 1);
-        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "Adventurer", "/path/f.wav", aliasGender: 2);
+        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 42, "MyName", "/path/own.wav", voiceKey: "VoiceA");
+        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "Adventurer", "/path/m.wav", voiceKey: "VoiceA", aliasGender: 1);
+        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "Adventurer", "/path/f.wav", voiceKey: "VoiceA", aliasGender: 2);
 
         var rows = _context.VoiceClipGenerations.AsNoTracking()
             .Where(g => g.VoiceClipId == clip.Id)
@@ -107,8 +107,8 @@ public class VoiceClipGenerationTests : IDisposable
     public void GetVoiceClipGeneration_ReturnsRowMatchingAliasGender()
     {
         var clip = SeedClip();
-        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "Adventurer",  "/path/m.wav", aliasGender: 1);
-        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "Adventurerf", "/path/f.wav", aliasGender: 2);
+        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "Adventurer",  "/path/m.wav", voiceKey: "VoiceA", aliasGender: 1);
+        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "Adventurerf", "/path/f.wav", voiceKey: "VoiceA", aliasGender: 2);
 
         var male   = _db.GetVoiceClipGeneration(clip.Id, playerContentId: 0, aliasGender: 1);
         var female = _db.GetVoiceClipGeneration(clip.Id, playerContentId: 0, aliasGender: 2);
@@ -125,9 +125,9 @@ public class VoiceClipGenerationTests : IDisposable
     public void DeleteVoiceClipGeneration_OnlyRemovesMatchingAliasRow()
     {
         var clip = SeedClip();
-        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "A", "/m.wav", aliasGender: 1);
-        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "B", "/f.wav", aliasGender: 2);
-        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 7, "Self", "/own.wav");
+        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "A", "/m.wav", voiceKey: "VoiceA", aliasGender: 1);
+        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "B", "/f.wav", voiceKey: "VoiceA", aliasGender: 2);
+        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 7, "Self", "/own.wav", voiceKey: "VoiceA");
 
         _db.DeleteVoiceClipGeneration(clip.Id, playerContentId: 0, aliasGender: 1);
 
@@ -146,8 +146,8 @@ public class VoiceClipGenerationTests : IDisposable
     public void LogVoiceClipGeneration_RepeatWithSameKeyUpdatesInPlace()
     {
         var clip = SeedClip();
-        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "OldAlias", "/old.wav", aliasGender: 1);
-        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "NewAlias", "/new.wav", aliasGender: 1);
+        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "OldAlias", "/old.wav", voiceKey: "VoiceA", aliasGender: 1);
+        _db.LogVoiceClipGeneration(clip.Id, playerContentId: 0, "NewAlias", "/new.wav", voiceKey: "VoiceB", aliasGender: 1);
 
         var rows = _context.VoiceClipGenerations.AsNoTracking()
             .Where(g => g.VoiceClipId == clip.Id && g.AliasGender == 1)

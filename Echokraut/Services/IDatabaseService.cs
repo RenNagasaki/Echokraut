@@ -91,7 +91,7 @@ public interface IDatabaseService : IDisposable
     // Per-player generation tracking. aliasGender: 0 = real player generation,
     // 1 = shareable male alias variant, 2 = shareable female alias variant.
     // Alias variants always pass playerContentId = 0 — they're not bound to a specific player.
-    void LogVoiceClipGeneration(int voiceClipId, long playerContentId, string playerName, string savePath, int aliasGender = 0);
+    void LogVoiceClipGeneration(int voiceClipId, long playerContentId, string playerName, string savePath, string voiceKey, int aliasGender = 0);
     void DeleteVoiceClipGeneration(int voiceClipId, long playerContentId, int aliasGender = 0);
     VoiceClipGenerationEntity? GetVoiceClipGeneration(int voiceClipId, long playerContentId, int aliasGender = 0);
     int GetGeneratedCountForCharacter(int characterId, long playerContentId, int? questTypeFilter = null);

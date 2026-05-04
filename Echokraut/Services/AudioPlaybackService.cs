@@ -150,12 +150,13 @@ public class AudioPlaybackService : IAudioPlaybackService, IDisposable
                         var savePath = _audioFiles.GetLocalAudioPath(_configuration.LocalSaveLocation, message);
                         var voiceClipId = message.VoiceClipId;
                         var hasPlayerPlaceholder = message.HasPlayerPlaceholder;
+                        var voiceKey = message.Speaker?.voice ?? "";
                         _ = _audioFiles.WriteStreamToFile(eventId, message, message.Stream, _configuration.LocalSaveLocation, _configuration.GoogleDriveUpload)
                             .ContinueWith(t =>
                             {
                                 if (t.Status == TaskStatus.RanToCompletion && t.Result)
                                 {
-                                    _generationLogger.LogIfApplicable(voiceClipId, hasPlayerPlaceholder, savePath, eventId);
+                                    _generationLogger.LogIfApplicable(voiceClipId, hasPlayerPlaceholder, savePath, voiceKey, eventId);
                                 }
                                 else
                                 {

@@ -18,7 +18,7 @@ public class LiveGenerationLogger : ILiveGenerationLogger
         _log = log ?? throw new ArgumentNullException(nameof(log));
     }
 
-    public void LogIfApplicable(int voiceClipId, bool hasPlayerPlaceholder, string savePath, EKEventId eventId)
+    public void LogIfApplicable(int voiceClipId, bool hasPlayerPlaceholder, string savePath, string voiceKey, EKEventId eventId)
     {
         if (voiceClipId <= 0)
         {
@@ -37,9 +37,10 @@ public class LiveGenerationLogger : ILiveGenerationLogger
                 voiceClipId,
                 playerContentId,
                 _gameObjects.LocalPlayerName,
-                savePath);
+                savePath,
+                voiceKey ?? "");
             _log.Debug(nameof(LogIfApplicable),
-                $"Logged generation: clipId={voiceClipId}, playerContentId={playerContentId}, hasPlaceholder={hasPlayerPlaceholder}, savePath={savePath}",
+                $"Logged generation: clipId={voiceClipId}, playerContentId={playerContentId}, hasPlaceholder={hasPlayerPlaceholder}, savePath={savePath}, voiceKey={voiceKey}",
                 eventId);
         }
         catch (Exception ex)

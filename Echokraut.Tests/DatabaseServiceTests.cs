@@ -425,7 +425,7 @@ public class DatabaseServiceTests : IDisposable
         const string playerName = "Test Player";
         const string savePath = "C:/audio/test.wav";
 
-        _db.LogVoiceClipGeneration(clip.Id, playerContentId, playerName, savePath);
+        _db.LogVoiceClipGeneration(clip.Id, playerContentId, playerName, savePath, voiceKey: "");
 
         var gen = _db.GetVoiceClipGeneration(clip.Id, playerContentId);
         Assert.NotNull(gen);

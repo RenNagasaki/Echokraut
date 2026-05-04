@@ -263,7 +263,8 @@ public class VoiceClipManagerService : IVoiceClipManagerService
 
                 var playerId = GetEffectivePlayerId(voiceClip);
                 var playerName = _gameObjects.LocalPlayerName;
-                _db.LogVoiceClipGeneration(voiceClip.Id, playerId, playerName, savePath);
+                _db.LogVoiceClipGeneration(voiceClip.Id, playerId, playerName, savePath,
+                    message.Speaker?.voice ?? "");
 
                 _log.Info(nameof(GenerateForVoiceClip), $"Audio saved for voice clip {voiceClip.Id}", eventId);
 
@@ -328,7 +329,9 @@ public class VoiceClipManagerService : IVoiceClipManagerService
             // playerName carries the alias string for human-readable identification in the DB.
             _db.LogVoiceClipGeneration(voiceClip.Id, 0,
                 TalkTextHelper.GetPlayerAlias((Dalamud.Game.ClientLanguage)voiceClip.Language, isMale),
-                savePath, aliasGender);
+                savePath,
+                message.Speaker?.voice ?? "",
+                aliasGender);
 
             _log.Info(nameof(GenerateAliasVariant),
                 $"Alias variant gender={aliasGender} saved for clip {voiceClip.Id}: {savePath}", eventId);

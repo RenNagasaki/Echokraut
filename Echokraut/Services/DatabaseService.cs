@@ -68,7 +68,10 @@ public class DatabaseService : IDatabaseService
     }
 
     /// <summary>
-    /// Constructor for testing with a pre-configured DbContext.
+    /// Constructor for testing with a pre-configured DbContext. Runs the same schema-migration
+    /// chain as the production constructor so tests against an in-memory SQLite exercise the
+    /// real upgrade paths (and any v_n → v_{n+1} migration test can roll specific tables/columns
+    /// back manually before re-running).
     /// </summary>
     public DatabaseService(ILogService log, EchokrautDbContext context)
     {
@@ -76,10 +79,11 @@ public class DatabaseService : IDatabaseService
         _context = context ?? throw new ArgumentNullException(nameof(context));
 
         _context.Database.EnsureCreated();
+        RunSchemaMigrations();
         RefreshAllCaches();
     }
 
-    private const int CurrentSchemaVersion = 2;
+    internal const int CurrentSchemaVersion = 3;
 
     private void InitializeDatabase(Configuration config)
     {
@@ -88,12 +92,7 @@ public class DatabaseService : IDatabaseService
         _context.Database.ExecuteSqlRaw("PRAGMA foreign_keys=ON");
         _context.Database.EnsureCreated();
 
-        // v2: introduce character_speaker_aliases. EnsureCreated only creates missing tables
-        // when the database file is brand new — for existing v1 installs we explicitly add
-        // the table + indexes via raw SQL. Idempotent so it's safe to re-run.
-        EnsureSpeakerAliasTable();
-
-        RecordSchemaVersion();
+        RunSchemaMigrations();
 
         // One-shot legacy import: pull MappedNpcs / MappedPlayers / EchokrautVoices /
         // PhoneticCorrections / MutedNpcDialogues out of the JSON config into SQLite. Idempotent
@@ -111,10 +110,24 @@ public class DatabaseService : IDatabaseService
 
 
     /// <summary>
+    /// Runs every schema migration that bridges a previous on-disk version to
+    /// <see cref="CurrentSchemaVersion"/>. Each migration is idempotent (CREATE … IF NOT
+    /// EXISTS, or PRAGMA-guarded ALTER), so the chain runs the same on a brand-new DB,
+    /// a v1 install upgrading, a v2 install upgrading, etc. Add a new
+    /// <c>EnsureXxx()</c> method here whenever <see cref="CurrentSchemaVersion"/> bumps.
+    /// </summary>
+    private void RunSchemaMigrations()
+    {
+        EnsureSpeakerAliasTable();              // v1 → v2
+        EnsureVoiceClipGenerationVoiceKey();    // v2 → v3
+        RecordSchemaVersion();
+    }
+
+    /// <summary>
     /// Records the current schema version after <see cref="DbContext.Database.EnsureCreated"/>
     /// has built the canonical schema. We dropped all v1–v13 incremental migrations after the
     /// plugin's pre-release rewrite, so anyone installing now starts at v1 with the modern
-    /// table layout. If a real upgrade ever ships, add migrations on top of this baseline.
+    /// table layout, then walks forward through the post-rewrite migrations.
     /// </summary>
     private void RecordSchemaVersion()
     {
@@ -131,8 +144,10 @@ public class DatabaseService : IDatabaseService
     /// table was part of the model). Uses <c>CREATE TABLE IF NOT EXISTS</c> + <c>CREATE INDEX
     /// IF NOT EXISTS</c> so re-running is a no-op. Fresh installs already have the table from
     /// EnsureCreated; this just paves over v1.
+    /// Internal so migration tests can exercise this single step in isolation without
+    /// running the full RunSchemaMigrations chain.
     /// </summary>
-    private void EnsureSpeakerAliasTable()
+    internal void EnsureSpeakerAliasTable()
     {
         _context.Database.ExecuteSqlRaw(@"
             CREATE TABLE IF NOT EXISTS character_speaker_aliases (
@@ -148,6 +163,40 @@ public class DatabaseService : IDatabaseService
         _context.Database.ExecuteSqlRaw(@"
             CREATE INDEX IF NOT EXISTS IX_character_speaker_aliases_language_alias
                 ON character_speaker_aliases (language, alias)");
+    }
+
+    /// <summary>
+    /// v3 migration: add <c>voice_key TEXT NOT NULL DEFAULT ''</c> to
+    /// <c>voice_clip_generations</c>. SQLite has no <c>ADD COLUMN IF NOT EXISTS</c>, so we
+    /// probe the schema via <c>PRAGMA table_info</c> and skip the ALTER when the column is
+    /// already present. Fresh installs already have the column via EnsureCreated; this only
+    /// fires for v2 → v3 upgrades.
+    /// Internal so migration tests can exercise this single step in isolation.
+    /// </summary>
+    internal void EnsureVoiceClipGenerationVoiceKey()
+    {
+        if (TableHasColumn("voice_clip_generations", "voice_key")) return;
+        _context.Database.ExecuteSqlRaw(
+            "ALTER TABLE voice_clip_generations ADD COLUMN voice_key TEXT NOT NULL DEFAULT ''");
+    }
+
+    /// <summary>
+    /// Returns true when the given table has a column with the given name. Read via
+    /// <c>PRAGMA table_info</c>; case-insensitive on the column name (SQLite default).
+    /// </summary>
+    private bool TableHasColumn(string table, string column)
+    {
+        using var cmd = _context.Database.GetDbConnection().CreateCommand();
+        cmd.CommandText = $"PRAGMA table_info({table})";
+        if (cmd.Connection!.State != System.Data.ConnectionState.Open) cmd.Connection.Open();
+        using var reader = cmd.ExecuteReader();
+        // PRAGMA table_info columns: cid, name, type, notnull, dflt_value, pk
+        while (reader.Read())
+        {
+            if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
     }
 
     // ── JSON-config → SQLite migration ──────────────────────
@@ -976,7 +1025,7 @@ public class DatabaseService : IDatabaseService
 
     // ── Per-player generation tracking ──────────────────────────
 
-    public void LogVoiceClipGeneration(int voiceClipId, long playerContentId, string playerName, string savePath, int aliasGender = 0)
+    public void LogVoiceClipGeneration(int voiceClipId, long playerContentId, string playerName, string savePath, string voiceKey, int aliasGender = 0)
     {
         lock (_writeLock)
         {
@@ -988,6 +1037,7 @@ public class DatabaseService : IDatabaseService
             {
                 existing.PlayerName = playerName;
                 existing.SavePath = savePath;
+                existing.VoiceKey = voiceKey ?? "";
                 existing.GeneratedAt = DateTime.UtcNow;
             }
             else
@@ -998,6 +1048,7 @@ public class DatabaseService : IDatabaseService
                     PlayerContentId = playerContentId,
                     PlayerName = playerName,
                     SavePath = savePath,
+                    VoiceKey = voiceKey ?? "",
                     GeneratedAt = DateTime.UtcNow,
                     AliasGender = aliasGender,
                 });
