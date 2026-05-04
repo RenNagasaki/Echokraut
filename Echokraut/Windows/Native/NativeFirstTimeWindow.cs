@@ -28,6 +28,7 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
     private readonly IAlltalkInstanceService _alltalkInstance;
     private readonly IBackendService _backend;
     private readonly IFramework _framework;
+    private readonly IBatchModeService _batchMode;
     private readonly Action _onComplete;
 
     private int _wizardStep;
@@ -105,12 +106,14 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         IAlltalkInstanceService alltalkInstance,
         IBackendService backend,
         IFramework framework,
+        IBatchModeService batchMode,
         Action onComplete)
     {
         _config = config;
         _alltalkInstance = alltalkInstance;
         _backend = backend;
         _framework = framework;
+        _batchMode = batchMode;
         _onComplete = onComplete;
     }
 
@@ -291,6 +294,10 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         var isLocal = instanceType == AlltalkInstanceType.Local;
         var isRemote = instanceType == AlltalkInstanceType.Remote;
         var isNone = instanceType == AlltalkInstanceType.None;
+        // FTU is also reachable via /ekfirst after a batch op started (e.g. user opens it
+        // mid-harvest to reconfigure). Lock the choice / install / test buttons in that
+        // case — same reasoning as the main config window's mode switcher.
+        var batchActive = _batchMode.IsActive;
 
         // ── Step 0 visibility ────────────────────────────────────────────
         var s0 = step == 0;
@@ -328,28 +335,43 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         }
         if (_localPostAdvancedNodes != null)
             foreach (var n in _localPostAdvancedNodes) SetVisible(n, s1 && isLocal);
-        if (s1 && isLocal) _localNodes?.Update(_config, _alltalkInstance);
+        if (s1 && isLocal) _localNodes?.Update(_config, _alltalkInstance, batchActive);
 
         // Remote nodes
         if (_remoteAllNodes != null)
             foreach (var n in _remoteAllNodes) SetVisible(n, s1 && isRemote);
+        if (s1 && isRemote && _remoteNodes != null)
+        {
+            Dim(_remoteNodes.BaseUrlInput,         !batchActive);
+            Dim(_remoteNodes.TestConnectionButton, !batchActive);
+        }
 
         // No instance nodes
         SetVisible(_noInstanceWarning, s1 && isNone);
         SetVisible(_noInstancePathInput, s1 && isNone);
         SetVisible(_noInstanceGdCheck, s1 && isNone);
         SetVisible(_noInstanceGdLinkInput, s1 && isNone);
-        Dim(_noInstanceGdLinkInput, _config.GoogleDriveDownload);
+        Dim(_noInstancePathInput, !batchActive);
+        Dim(_noInstanceGdCheck,   !batchActive);
+        Dim(_noInstanceGdLinkInput, _config.GoogleDriveDownload && !batchActive);
+
+        // Step-0 mode-choice buttons also lock during batch — picking a new mode mid-batch
+        // would change which backend any in-flight backend call talks to.
+        Dim(_choiceLocalBtn,  !batchActive);
+        Dim(_choiceRemoteBtn, !batchActive);
+        Dim(_choiceNoneBtn,   !batchActive);
 
         // Next button — gated per mode:
         //   Local : LocalInstall must be true (install completed)
         //   Remote: a successful CheckReady against the *current* BaseUrl
         //   None  : always allowed
+        // Batch lock also blocks Next so the user can't advance the wizard while the
+        // backend they're configuring is being touched by a running op.
         SetVisible(_nextButton, s1);
         var remoteUrlMatches = string.Equals(_remoteTestUrlSnapshot, _config.Alltalk.BaseUrl, StringComparison.Ordinal);
-        var canNext = (isLocal && _config.Alltalk.LocalInstall)
+        var canNext = !batchActive && ((isLocal && _config.Alltalk.LocalInstall)
             || (isRemote && _remoteTestSucceeded && remoteUrlMatches)
-            || isNone;
+            || isNone);
         Dim(_nextButton, canNext);
 
         // ── Step 2 visibility ────────────────────────────────────────────

@@ -56,8 +56,12 @@ public static class NativeAlltalkBuilder
             InstallCustomDataRow, AutoStartCheck,
         ];
 
-        /// <summary>Updates button labels, dimming, and validation each frame.</summary>
-        public void Update(Configuration config, IAlltalkInstanceService alltalkInstance)
+        /// <summary>Updates button labels, dimming, and validation each frame.
+        /// <paramref name="batchActive"/> locks every backend-affecting button while a
+        /// long-running operation (harvest / voice-sample extract / future import-export)
+        /// is in flight — switching install mode mid-batch would race on the file paths
+        /// the running op is using.</summary>
+        public void Update(Configuration config, IAlltalkInstanceService alltalkInstance, bool batchActive = false)
         {
             var (pathValid, validationMsg) = ValidateInstallPath(config.Alltalk.LocalInstallPath);
 
@@ -70,10 +74,10 @@ public static class NativeAlltalkBuilder
             InstallButton.String = alltalkInstance.Installing
                 ? Loc.S("Installing...")
                 : config.Alltalk.LocalInstall ? Loc.S("Reinstall") : Loc.S("Install");
-            Dim(InstallButton, pathValid && !alltalkInstance.Installing);
+            Dim(InstallButton, pathValid && !alltalkInstance.Installing && !batchActive);
 
             // Install custom data — only when installed, not installing, and path valid
-            Dim(InstallCustomDataButton, pathValid && config.Alltalk.LocalInstall && !alltalkInstance.Installing);
+            Dim(InstallCustomDataButton, pathValid && config.Alltalk.LocalInstall && !alltalkInstance.Installing && !batchActive);
 
             // Start/Stop. Start is also blocked while an install is in progress — clicking
             // it mid-install would race against the installer touching alltalkFolder and the
@@ -83,7 +87,13 @@ public static class NativeAlltalkBuilder
             Dim(StartButton, pathValid
                 && !alltalkInstance.InstanceRunning
                 && !alltalkInstance.InstanceStarting
-                && !alltalkInstance.Installing);
+                && !alltalkInstance.Installing
+                && !batchActive);
+            // Stop button stays available during a batch — that's the canonical "stop the
+            // running op" affordance. (The stop button on this row stops the AllTalk
+            // instance, not the batch op, but it's still operationally fine to allow:
+            // batches don't depend on AllTalk being up — harvest works on game data only,
+            // voice-sample extract reads SCDs from Lumina.)
             Dim(StopButton, (alltalkInstance.InstanceRunning || alltalkInstance.InstanceStarting) && !alltalkInstance.InstanceStopping);
         }
     }

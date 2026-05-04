@@ -196,6 +196,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     internal Action? OnToggleGameDataTools;
 
     private readonly IDatabaseService _db;
+    private readonly IBatchModeService _batchMode;
 
     public NativeConfigWindow(
         EKConfig config,
@@ -213,7 +214,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         IVolumeService volumeService,
         IGameObjectService gameObjects,
         IVoiceTestService voiceTest,
-        IDatabaseService db)
+        IDatabaseService db,
+        IBatchModeService batchMode)
     {
         _config = config;
         _audioPlayback = audioPlayback;
@@ -231,6 +233,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _gameObjects = gameObjects;
         _voiceTest = voiceTest;
         _db = db;
+        _batchMode = batchMode;
 
         _backend.CharacterMapped += OnCharacterMapped;
         _backend.VoicesMapped += OnVoicesMapped;
@@ -583,6 +586,12 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var isRemote  = instanceType == AlltalkInstanceType.Remote;
         var isNone    = instanceType == AlltalkInstanceType.None;
         var installing = _alltalkInstance.Installing;
+        // Batch lock — harvest / voice-sample extract / (future) import / export. While any
+        // such operation is in flight, every backend-affecting widget (mode switcher, install
+        // controls, backend dropdown, reload buttons, etc.) is dimmed so the run isn't
+        // disturbed mid-flight. Use-XYZ playback toggles stay interactive (per user spec).
+        var batchActive = _batchMode.IsActive;
+        var modeLocked = installing || batchActive;
 
         // Top tab bar follows live-generation availability. None mode → Voices + Phonetics
         // disappear (they only configure the routing for backend generation). Tab rebuild
@@ -598,11 +607,28 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         // (defense in depth — the button can only do harm if both gates fail).
         Dim(_gameDataToolsButton, liveGen);
 
-        // Mode switcher — selected button stays bright, others dim. Block all clicks while
-        // an install is in progress (mid-install switch would race on alltalkFolder).
-        Dim(_modeLocalBtn,  !installing && isLocal);
-        Dim(_modeRemoteBtn, !installing && isRemote);
-        Dim(_modeNoneBtn,   !installing && isNone);
+        // Mode switcher — selected button stays bright, others dim. Locked while an install
+        // is in progress (mid-install switch would race on alltalkFolder) AND while a batch
+        // op (harvest / voice-extract) runs — switching modes would change which backend
+        // the op talks to mid-flight.
+        Dim(_modeLocalBtn,  !modeLocked && isLocal);
+        Dim(_modeRemoteBtn, !modeLocked && isRemote);
+        Dim(_modeNoneBtn,   !modeLocked && isNone);
+
+        // Backend dropdown / streaming / reload buttons — all "talk to the live backend"
+        // and must not flip mid-batch. Streaming + reload are also already gated on
+        // showService (= isLocal || isRemote), so this is an additional batch-lock layer.
+        Dim(_backendDropDown,    !batchActive);
+        Dim(_atStreamingCheck,   !batchActive);
+        Dim(_atReloadModelInput, !batchActive);
+        Dim(_atReloadModelButton,!batchActive);
+        Dim(_atReloadVoicesButton,!batchActive);
+        // None-mode panel: lock the path / GD widgets too — the user could change the
+        // audio source mid-batch, but VoiceSampleExtractor writes to the same FF14-Voices
+        // root and we don't want it pointed at a moving target.
+        Dim(_noneAudioPathInput, !batchActive);
+        Dim(_noneGdDownloadCheck,!batchActive);
+        // _noneGdLinkInput already dims via GoogleDriveDownload below; combine.
 
         // Show/hide entire collapsible sections based on instance type. Service options
         // (Streaming, ReloadModel, ReloadVoices) are Local-or-Remote only — None has no
@@ -621,19 +647,26 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             foreach (var n in _localAdvancedContent) SetVisible(n, false);
         if (_localPostAdvancedContent != null)
             foreach (var n in _localPostAdvancedContent) SetVisible(n, showLocal);
-        if (showLocal) _atLocalNodes?.Update(_config, _alltalkInstance);
+        if (showLocal) _atLocalNodes?.Update(_config, _alltalkInstance, batchActive);
 
         // Remote section: toggle button + content
         SetVisible(_remoteSectionToggle, showRemote);
         if (!showRemote && _remoteSectionContent != null)
             foreach (var n in _remoteSectionContent) SetVisible(n, false);
+        // Lock remote URL editing + test-connection button during batch — same rationale
+        // as the install controls: the running backend would see the URL flip mid-flight.
+        if (showRemote && _atRemoteNodes != null)
+        {
+            Dim(_atRemoteNodes.BaseUrlInput,        !batchActive);
+            Dim(_atRemoteNodes.TestConnectionButton,!batchActive);
+        }
 
         // None section: toggle button + content (info text + audio path + GD link)
         SetVisible(_noneSectionToggle, showNone);
         if (!showNone && _noneSectionContent != null)
             foreach (var n in _noneSectionContent) SetVisible(n, false);
         // GD link follows GoogleDriveDownload toggle even within the None section
-        if (showNone) Dim(_noneGdLinkInput, _config.GoogleDriveDownload);
+        if (showNone) Dim(_noneGdLinkInput, _config.GoogleDriveDownload && !batchActive);
 
         // Service section: toggle button + content
         SetVisible(_serviceSectionToggle, showService);

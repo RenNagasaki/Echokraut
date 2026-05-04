@@ -62,7 +62,8 @@ public class NativeWindowManager : IWindowManager
             services.GetService<IVolumeService>(),
             services.GetService<IGameObjectService>(),
             services.GetService<IVoiceTestService>(),
-            services.GetService<IDatabaseService>())
+            services.GetService<IDatabaseService>(),
+            services.GetService<IBatchModeService>())
         {
             InternalName = "EchokrautSettings",
             Title = Loc.S("Configuration"),
@@ -108,6 +109,7 @@ public class NativeWindowManager : IWindowManager
             services.GetService<IAlltalkInstanceService>(),
             services.GetService<IBackendService>(),
             framework,
+            services.GetService<IBatchModeService>(),
             () => _configWindow.Toggle())
         {
             InternalName = "EchokrautFirstTime",
