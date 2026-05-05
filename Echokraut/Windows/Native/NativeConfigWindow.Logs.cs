@@ -18,20 +18,27 @@ public sealed unsafe partial class NativeConfigWindow
 {
     // ── Logs fields ──────────────────────────────────────────────────────────
 
-    // Log sub-tab sources (matches ImGui version order)
-    private static readonly (string Label, TextSource Source)[] LogTabs =
+    // Log sub-tab sources (matches ImGui version order). LiveOnly tabs disappear in None
+    // mode — same rule as the Settings sub-tabs: anything that has no audio-file fallback
+    // (Chat, Player Choices, Cutscene Choices, Backend communication) is meaningless when
+    // there's no live generation backend running.
+    private static readonly (string Label, TextSource Source, bool LiveOnly)[] LogTabs =
     {
-        ("General",    TextSource.None),
-        ("Dialogue",   TextSource.AddonTalk),
-        ("Battle",     TextSource.AddonBattleTalk),
-        ("Chat",       TextSource.Chat),
-        ("Bubbles",    TextSource.AddonBubble),
-        ("Cutscene",   TextSource.AddonCutsceneSelectString),
-        ("Choice",     TextSource.AddonSelectString),
-        ("Backend",    TextSource.Backend),
+        ("General",    TextSource.None,                       false),
+        ("Dialogue",   TextSource.AddonTalk,                  false),
+        ("Battle",     TextSource.AddonBattleTalk,            false),
+        ("Chat",       TextSource.Chat,                       true),
+        ("Bubbles",    TextSource.AddonBubble,                false),
+        ("Cutscene",   TextSource.AddonCutsceneSelectString,  true),
+        ("Choice",     TextSource.AddonSelectString,          true),
+        ("Backend",    TextSource.Backend,                    true),
     };
 
     private TabBarNode? _logsTabBar;
+    // Live-generation snapshot for the Logs sub-tab bar — same gating pattern as the Settings
+    // sub-tab bar: LiveOnly log tabs disappear in None mode and reappear when the user
+    // switches back to a live backend.
+    private bool? _logsTabsLiveGenSnapshot;
     private readonly ScrollingListNode?[] _logsPanels = new ScrollingListNode?[LogTabs.Length];
     private readonly bool[] _logsDirty = new bool[LogTabs.Length];
 
@@ -86,13 +93,36 @@ public sealed unsafe partial class NativeConfigWindow
                 });
         }
 
+        _logsTabsLiveGenSnapshot = _config.Alltalk.HasLiveGeneration;
+        BuildLogsTabs(_logsTabsLiveGenSnapshot.Value);
+
+        _log.LogUpdated += OnLogUpdated;
+    }
+
+    /// <summary>
+    /// (Re)populates the Logs sub-tab bar. LiveOnly tabs (Chat / Cutscene / Choice / Backend)
+    /// are omitted in None mode — same rule as the Settings sub-tab bar. Panel + pagination
+    /// arrays keep their full size so source-indexed lookups (OnLogUpdated, accessor switches)
+    /// stay valid; only the visible tab buttons shrink. Order is preserved by Clear()+AddTab.
+    /// </summary>
+    private void BuildLogsTabs(bool liveGen)
+    {
+        if (_logsTabBar == null) return;
+        _logsTabBar.Clear();
+
         for (var i = 0; i < LogTabs.Length; i++)
         {
+            if (LogTabs[i].LiveOnly && !liveGen) continue;
             var idx = i;
             _logsTabBar.AddTab(LogTabs[i].Label, () => ShowLogPanel(idx));
         }
 
-        _log.LogUpdated += OnLogUpdated;
+        // Restore the previously-active sub-tab when its tab still exists; otherwise snap to
+        // General (index 0). Panel indices stay the same regardless of which tabs are present.
+        var activeStillVisible = !LogTabs[_activeLogTab].LiveOnly || liveGen;
+        var targetIndex = activeStillVisible ? _activeLogTab : 0;
+        _logsTabBar.SelectTab(LogTabs[targetIndex].Label);
+        ShowLogPanel(targetIndex);
     }
 
     private void AddLogsNodes()

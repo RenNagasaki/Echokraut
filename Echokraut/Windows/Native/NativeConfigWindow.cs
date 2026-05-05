@@ -659,6 +659,16 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             BuildSettingsTabs(liveGen);
         }
 
+        // Logs sub-tab bar follows the same gate — Chat / Cutscene / Choice / Backend log
+        // tabs are LiveOnly and disappear in None mode (no audio-file fallback / no backend
+        // traffic to log). Source-indexed log writes continue in the background, so history
+        // is preserved when the user switches back to a live backend.
+        if (_logsTabsLiveGenSnapshot != liveGen)
+        {
+            _logsTabsLiveGenSnapshot = liveGen;
+            BuildLogsTabs(liveGen);
+        }
+
         // Game Data Tools button: route through ATK's component-disabled state via
         // ButtonBase.IsEnabled, which calls ComponentBase->SetEnabledState. That triggers
         // the FFXIV-standard disabled visual (~0.7 alpha + multiplier 0.5) AND silences
