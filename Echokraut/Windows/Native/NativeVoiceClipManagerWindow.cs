@@ -123,6 +123,8 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     // Game-Data-Tools icon button "enabled" snapshot — gates NodeFlags toggles on
     // transitions only (CLAUDE.md: AddNodeFlags every frame can crash the game).
     private bool? _gameDataBtnEnabledState;
+    // Bulk-generate button "enabled" snapshot — same rationale.
+    private bool? _genAllBtnEnabledState;
 
     public NativeVoiceClipManagerWindow(
         IDatabaseService db,
@@ -400,12 +402,8 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         // Skip first frame so OnSetup node creation doesn't compound with data loading
         if (_firstFrame) { _firstFrame = false; return; }
 
-        // Bulk Generate All Unsaved button — dim in None mode (no backend to call). The
-        // per-clip Generate buttons in the detail window are handled by that window's own
-        // OnUpdate dim pass; here we only own the bulk button at the top of VCM.
         var liveGen = _config.Alltalk.HasLiveGeneration;
-        if (_genAllToggleButton != null)
-            _genAllToggleButton.Alpha = liveGen ? 1.0f : 0.4f;
+        UpdateGenAllButtonState(liveGen);
 
         // Game Data Tools icon button: route through ATK's component-disabled state via
         // ButtonBase.IsEnabled. SetEnabledState triggers the FFXIV-standard disabled
@@ -655,27 +653,52 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         }
     }
 
+    // Bulk "Generate All Unsaved" — fully disabled in None mode (no backend to call). Dim
+    // *and* IsEnabled=false so clicks are swallowed by ATK instead of running through the
+    // no-op generation gate. Per-clip Generate buttons are handled in the detail window.
+    private void UpdateGenAllButtonState(bool liveGen)
+    {
+        if (_genAllToggleButton == null) return;
+        _genAllToggleButton.Alpha = liveGen ? 1.0f : 0.4f;
+        if (_genAllBtnEnabledState != liveGen)
+        {
+            _genAllBtnEnabledState = liveGen;
+            _genAllToggleButton.IsEnabled = liveGen;
+        }
+    }
+
     private void UpdateStatusBar()
     {
         if (_statusBar == null) return;
 
-        // Backend reachability label (bottom-left). Cached for 30s in BackendService so this
-        // is cheap to call repeatedly; if no cached value yet, kick off an async check.
-        var reachability = _backend.CachedReachability;
-        if (reachability == null)
-            _ = _backend.IsBackendReachableAsync();
+        // Backend reachability label (bottom-left). In None mode there is no backend to
+        // ping — show a neutral "Audio Files Only" instead of the misleading "online" the
+        // ping returns by design (see BackendService.PingBackendAsync). Otherwise: cached
+        // for 30s so this is cheap to call repeatedly; if no cached value yet, kick off
+        // an async check.
         if (_backendStatusLabel != null)
         {
-            _backendStatusLabel.String = reachability switch
+            if (!_config.Alltalk.HasLiveGeneration)
             {
-                true => Loc.S("Backend: online"),
-                false => Loc.S("Backend: offline"),
-                _ => Loc.S("Backend: checking..."),
-            };
-            // FFXIV's color codes via UI ATK: tint via TextColor (RGBA Vector4).
-            _backendStatusLabel.TextColor = reachability == false
-                ? new System.Numerics.Vector4(1.0f, 0.4f, 0.4f, 1f)   // red-ish for offline
-                : new System.Numerics.Vector4(0.6f, 0.85f, 0.6f, 1f); // greenish for online/checking
+                _backendStatusLabel.String = Loc.S("Audio Files Only");
+                _backendStatusLabel.TextColor = new System.Numerics.Vector4(0.75f, 0.75f, 0.75f, 1f); // neutral grey
+            }
+            else
+            {
+                var reachability = _backend.CachedReachability;
+                if (reachability == null)
+                    _ = _backend.IsBackendReachableAsync();
+                _backendStatusLabel.String = reachability switch
+                {
+                    true => Loc.S("Backend: online"),
+                    false => Loc.S("Backend: offline"),
+                    _ => Loc.S("Backend: checking..."),
+                };
+                // FFXIV's color codes via UI ATK: tint via TextColor (RGBA Vector4).
+                _backendStatusLabel.TextColor = reachability == false
+                    ? new System.Numerics.Vector4(1.0f, 0.4f, 0.4f, 1f)   // red-ish for offline
+                    : new System.Numerics.Vector4(0.6f, 0.85f, 0.6f, 1f); // greenish for online/checking
+            }
         }
 
         // Harvest progress lives in the Game Data Tools window now; this status bar is
