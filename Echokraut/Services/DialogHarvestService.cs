@@ -1343,7 +1343,9 @@ public class DialogHarvestService : IDialogHarvestService
                     VoiceKey = pickedVoice?.BackendVoice ?? string.Empty,
                 });
 
-                var context = _db.UpsertContext(character.Id, dialog.Sheet == "Balloon" ? "bubble" : "npc");
+                // EnsureContext (not Upsert) so re-runs of the harvest don't reset user-tuned
+                // IsEnabled / Volume back to defaults on characters that already exist.
+                var context = _db.EnsureContext(character.Id, dialog.Sheet == "Balloon" ? "bubble" : "npc");
 
                 characterCache[charKey] = (character, context);
             }

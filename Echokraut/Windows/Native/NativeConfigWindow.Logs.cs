@@ -122,7 +122,15 @@ public sealed unsafe partial class NativeConfigWindow
         var activeStillVisible = !LogTabs[_activeLogTab].LiveOnly || liveGen;
         var targetIndex = activeStillVisible ? _activeLogTab : 0;
         _logsTabBar.SelectTab(LogTabs[targetIndex].Label);
-        ShowLogPanel(targetIndex);
+        // Only force-show the panel + pagination if we're actually on the Logs top section.
+        // Otherwise this rebuild (triggered by a mode flip while the user is on Settings)
+        // would re-show the active log panel + its pagination arrows on top of whatever
+        // section is currently active, intercepting clicks. _activeLogTab is still updated
+        // so a later ShowTopPanel(3) lands on the right sub-tab.
+        if (_activeTopTab == 3)
+            ShowLogPanel(targetIndex);
+        else
+            _activeLogTab = targetIndex;
     }
 
     private void AddLogsNodes()

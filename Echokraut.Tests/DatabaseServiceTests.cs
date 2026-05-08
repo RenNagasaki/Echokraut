@@ -197,6 +197,35 @@ public class DatabaseServiceTests : IDisposable
         Assert.Equal(0.5f, updated.Volume);
     }
 
+    [Fact]
+    public void EnsureContext_CreatesWithDefaultsAndPreservesExisting()
+    {
+        var character = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "PreserveTest",
+            Race = (int)NpcRaces.Hyur,
+            Gender = (int)Genders.Female,
+        });
+
+        // First call creates the row with defaults.
+        var created = _db.EnsureContext(character.Id, "npc");
+        Assert.True(created.IsEnabled);
+        Assert.Equal(1.0f, created.Volume);
+
+        // User mutates settings via the UI path.
+        _db.UpsertContext(character.Id, "npc", false, 0.25f);
+
+        // Subsequent EnsureContext (e.g. a re-harvest) must NOT stomp the user's values.
+        var preserved = _db.EnsureContext(character.Id, "npc");
+        Assert.False(preserved.IsEnabled);
+        Assert.Equal(0.25f, preserved.Volume);
+
+        var fromDb = _db.GetContext(character.Id, "npc");
+        Assert.NotNull(fromDb);
+        Assert.False(fromDb!.IsEnabled);
+        Assert.Equal(0.25f, fromDb.Volume);
+    }
+
     // ── Character Instances ─────────────────────────────────
 
     [Fact]
@@ -688,7 +717,7 @@ public class DatabaseServiceTests : IDisposable
             Language = 1,
             ObjectKind = (int)ObjectKind.BattleNpc,
         });
-        _db.UpsertContext(npc.Id, "npc");
+        _db.EnsureContext(npc.Id, "npc");
         var player = _db.UpsertCharacter(new CharacterEntity
         {
             Name = "DoomedPlayer",
@@ -697,7 +726,7 @@ public class DatabaseServiceTests : IDisposable
             Language = 1,
             ObjectKind = (int)ObjectKind.Pc,
         });
-        _db.UpsertContext(player.Id, "player");
+        _db.EnsureContext(player.Id, "player");
 
         Assert.Single(_db.GetNpcs());
         Assert.Single(_db.GetPlayers());
@@ -741,7 +770,7 @@ public class DatabaseServiceTests : IDisposable
             Race = (int)NpcRaces.Lalafell,
             Gender = (int)Genders.Female
         });
-        _db.UpsertContext(character.Id, "npc");
+        _db.EnsureContext(character.Id, "npc");
 
         var npcs = _db.GetNpcs();
         Assert.Single(npcs);
@@ -757,7 +786,7 @@ public class DatabaseServiceTests : IDisposable
             Race = (int)NpcRaces.AuRa,
             Gender = (int)Genders.Male
         });
-        _db.UpsertContext(character.Id, "player");
+        _db.EnsureContext(character.Id, "player");
 
         var players = _db.GetPlayers();
         Assert.Single(players);
