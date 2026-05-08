@@ -182,14 +182,25 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private TextInputNode? _noneGdLinkInput;
     private NodeBase[]? _noneSectionContent;
     private TextButtonNode? _noneSectionToggle;
-    // Collapsible section toggle buttons + content arrays for per-frame visibility control
+    // Collapsible section toggle buttons + content arrays for per-frame visibility control.
+    // Expanded state is tracked explicitly per section instead of derived from
+    // contentNodes[0].IsVisible — OnUpdate also writes IsVisible to hide whole sections in
+    // off-modes, so the IsVisible bit is no longer a reliable expanded-state proxy. Without
+    // explicit tracking, switching None→Local left the Local toggle reading "[-]" while its
+    // content was force-hidden, with the post-advanced (Install/Start-Stop) row visible and
+    // the section essentials missing — clicking the toggle then "did nothing visually" since
+    // the arrow was already "[-]".
     private TextButtonNode? _localSectionToggle;
     private NodeBase[]? _localSectionContent;
+    private bool _localExpanded = true;             // built with startCollapsed=false
     private TextButtonNode? _localAdvancedToggle;
     private NodeBase[]? _localAdvancedContent;
+    private bool _localAdvancedExpanded;            // built with startCollapsed=true
     private NodeBase[]? _localPostAdvancedContent;
     private TextButtonNode? _remoteSectionToggle;
     private NodeBase[]? _remoteSectionContent;
+    private bool _remoteExpanded = true;            // built with startCollapsed=false
+    private bool _noneExpanded = true;              // built with startCollapsed=false
 
     // Track previous backend visibility state to recalculate layout only on change
     private bool _prevShowLocal;
@@ -493,7 +504,14 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             _ => Loc.S("General"),
         };
         _settingsTabBar.SelectTab(targetLabel);
-        ShowSettingsPanel(targetIndex);
+        // Only force-show the settings panel if we're actually on the Settings top section.
+        // Otherwise (e.g. user is on Logs and a mode flip rebuilds tabs) this would force
+        // a settings panel visible on top of the active section. Update the index anyway so
+        // a later ShowTopPanel(0) lands on the right sub-tab.
+        if (_activeTopTab == 0)
+            ShowSettingsPanel(targetIndex);
+        else
+            _activeSettingsTab = targetIndex;
     }
 
     private void ShowTopPanel(int index)
@@ -718,21 +736,22 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var showRemote  = isAlltalk && isRemote;
         var showNone    = isAlltalk && isNone;
 
-        // Local section: toggle button + content
+        // Local section: toggle button + content. Content visibility = section shown × expanded.
+        // Single-source-of-truth for expanded state lives in _localExpanded (mirrored by toggle text).
         SetVisible(_localSectionToggle, showLocal);
-        if (!showLocal && _localSectionContent != null)
-            foreach (var n in _localSectionContent) SetVisible(n, false);
+        if (_localSectionContent != null)
+            foreach (var n in _localSectionContent) SetVisible(n, showLocal && _localExpanded);
         SetVisible(_localAdvancedToggle, showLocal);
-        if (!showLocal && _localAdvancedContent != null)
-            foreach (var n in _localAdvancedContent) SetVisible(n, false);
+        if (_localAdvancedContent != null)
+            foreach (var n in _localAdvancedContent) SetVisible(n, showLocal && _localAdvancedExpanded);
         if (_localPostAdvancedContent != null)
             foreach (var n in _localPostAdvancedContent) SetVisible(n, showLocal);
         if (showLocal) _atLocalNodes?.Update(_config, _alltalkInstance, batchActive);
 
         // Remote section: toggle button + content
         SetVisible(_remoteSectionToggle, showRemote);
-        if (!showRemote && _remoteSectionContent != null)
-            foreach (var n in _remoteSectionContent) SetVisible(n, false);
+        if (_remoteSectionContent != null)
+            foreach (var n in _remoteSectionContent) SetVisible(n, showRemote && _remoteExpanded);
         // Lock remote URL editing + test-connection button during batch — same rationale
         // as the install controls: the running backend would see the URL flip mid-flight.
         if (showRemote && _atRemoteNodes != null)
@@ -743,8 +762,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
 
         // None section: toggle button + content (info text + audio path + GD link)
         SetVisible(_noneSectionToggle, showNone);
-        if (!showNone && _noneSectionContent != null)
-            foreach (var n in _noneSectionContent) SetVisible(n, false);
+        if (_noneSectionContent != null)
+            foreach (var n in _noneSectionContent) SetVisible(n, showNone && _noneExpanded);
         // GD link follows GoogleDriveDownload toggle even within the None section
         if (showNone) Dim(_noneGdLinkInput, _config.GoogleDriveDownload && !batchActive);
 
@@ -1269,19 +1288,23 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         list.AddNode(_modeSwitcherRow);
 
         _localSectionContent = _atLocalNodes.EssentialNodes;
-        _localSectionToggle = CreateCollapsibleSection(list, Loc.S("Local instance"), w, false, _localSectionContent);
+        _localSectionToggle = CreateTrackedCollapsibleSection(list, Loc.S("Local instance"), w,
+            _localSectionContent, () => _localExpanded, v => _localExpanded = v);
 
         _localAdvancedContent = _atLocalNodes.AdvancedNodes;
-        _localAdvancedToggle = CreateCollapsibleSection(list, Loc.S("Advanced options"), w, true, _localAdvancedContent);
+        _localAdvancedToggle = CreateTrackedCollapsibleSection(list, Loc.S("Advanced options"), w,
+            _localAdvancedContent, () => _localAdvancedExpanded, v => _localAdvancedExpanded = v);
 
         _localPostAdvancedContent = _atLocalNodes.PostAdvancedNodes;
         foreach (var n in _localPostAdvancedContent) list.AddNode(n);
 
         _remoteSectionContent = _atRemoteNodes.AllNodes;
-        _remoteSectionToggle = CreateCollapsibleSection(list, Loc.S("Remote connection"), w, false, _remoteSectionContent);
+        _remoteSectionToggle = CreateTrackedCollapsibleSection(list, Loc.S("Remote connection"), w,
+            _remoteSectionContent, () => _remoteExpanded, v => _remoteExpanded = v);
 
         _noneSectionContent = [_noneInfoLabel, _noneAudioPathInput, _noneGdDownloadCheck, _noneGdLinkInput];
-        _noneSectionToggle = CreateCollapsibleSection(list, Loc.S("Audio Files Only"), w, false, _noneSectionContent);
+        _noneSectionToggle = CreateTrackedCollapsibleSection(list, Loc.S("Audio Files Only"), w,
+            _noneSectionContent, () => _noneExpanded, v => _noneExpanded = v);
 
         return list;
     }
@@ -1453,6 +1476,39 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         if (startCollapsed)
             foreach (var n in contentNodes)
                 n.IsVisible = false;
+
+        list.AddNode(toggle);
+        foreach (var n in contentNodes)
+            list.AddNode(n);
+
+        return toggle;
+    }
+
+    /// <summary>
+    /// Variant of <see cref="CreateCollapsibleSection"/> for sections whose visibility is
+    /// also driven externally (e.g. backend mode-switcher hiding the entire Local/Remote/None
+    /// section). The expanded state is tracked via the supplied getter/setter so OnUpdate can
+    /// compute content visibility as <c>showSection &amp;&amp; expanded</c> without falling
+    /// back to <c>contentNodes[0].IsVisible</c> — that proxy desyncs as soon as OnUpdate
+    /// force-hides the section, leaving the toggle text reading "[-]" while content is gone.
+    ///
+    /// Initial visibility of the content nodes is left to the caller's OnUpdate pass.
+    /// </summary>
+    private static TextButtonNode CreateTrackedCollapsibleSection(
+        ScrollingListNode list, string title, float width, NodeBase[] contentNodes,
+        Func<bool> getExpanded, Action<bool> setExpanded)
+    {
+        var arrow = getExpanded() ? "[-]" : "[+]";
+        TextButtonNode? toggle = null;
+        toggle = new TextButtonNode { Size = new Vector2(width, 24), String = $"{arrow} {title}" };
+        toggle.OnClick = () =>
+        {
+            var expanded = !getExpanded();
+            setExpanded(expanded);
+            foreach (var n in contentNodes) n.IsVisible = expanded;
+            toggle!.String = expanded ? $"[-] {title}" : $"[+] {title}";
+            list.RecalculateLayout();
+        };
 
         list.AddNode(toggle);
         foreach (var n in contentNodes)

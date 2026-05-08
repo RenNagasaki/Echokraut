@@ -676,8 +676,33 @@ public class DatabaseService : IDatabaseService
         }
     }
 
+    public CharacterContextEntity EnsureContext(int characterId, string contextType)
+    {
+        lock (_writeLock)
+        {
+            var existing = _context.CharacterContexts
+                .FirstOrDefault(cc => cc.CharacterId == characterId && cc.ContextType == contextType);
+
+            // Existing rows are returned untouched on purpose: IsEnabled/Volume are user
+            // preferences, not data — re-running the harvest must not reset them.
+            if (existing != null) return existing;
+
+            existing = new CharacterContextEntity
+            {
+                CharacterId = characterId,
+                ContextType = contextType,
+                IsEnabled = true,
+                Volume = 1.0f,
+            };
+            _context.CharacterContexts.Add(existing);
+            _context.SaveChanges();
+            if (!BulkMode) RefreshCharacterCaches();
+            return existing;
+        }
+    }
+
     public CharacterContextEntity UpsertContext(int characterId, string contextType,
-        bool isEnabled = true, float volume = 1.0f)
+        bool isEnabled, float volume)
     {
         lock (_writeLock)
         {

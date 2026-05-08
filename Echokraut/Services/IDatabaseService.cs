@@ -30,7 +30,20 @@ public interface IDatabaseService : IDisposable
 
     // Character contexts
     CharacterContextEntity? GetContext(int characterId, string contextType);
-    CharacterContextEntity UpsertContext(int characterId, string contextType, bool isEnabled = true, float volume = 1.0f);
+
+    /// <summary>
+    /// Ensures a context row exists for (characterId, contextType). Creates with defaults
+    /// (IsEnabled=true, Volume=1.0) if missing; returns the existing row UNCHANGED if it
+    /// already exists. Use this from data-import paths (harvest) where IsEnabled/Volume are
+    /// user preferences, not data — re-importing must not stomp settings the user changed.
+    /// </summary>
+    CharacterContextEntity EnsureContext(int characterId, string contextType);
+
+    /// <summary>
+    /// Creates or fully overwrites the (IsEnabled, Volume) of a context row. Use this from
+    /// UI save paths (NpcDataService) where the caller has explicit values to persist.
+    /// </summary>
+    CharacterContextEntity UpsertContext(int characterId, string contextType, bool isEnabled, float volume);
 
     // Character instances
     CharacterInstanceEntity GetOrCreateInstance(int characterId, uint npcBaseId,
