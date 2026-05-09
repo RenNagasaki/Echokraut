@@ -265,10 +265,39 @@ def post(payload):
         sys.exit(1)
 
 
-# Discord rejects payloads with > 10 embeds. Almost no real changelog will hit
-# that, but we batch-and-paginate for safety.
+# Discord enforces TWO caps per webhook message:
+#   1. Max 10 embeds per payload (hard reject otherwise).
+#   2. Sum of every char across every embed (title + description, plus
+#      author/footer/fields if used) MUST be ≤ 6000. A real changelog with
+#      4 sections at ~2-3k chars each clears this easily, so we batch by
+#      both count AND cumulative size.
 EMBEDS_PER_MSG = 10
-batches = [embeds[i:i + EMBEDS_PER_MSG] for i in range(0, len(embeds), EMBEDS_PER_MSG)]
+TOTAL_CHAR_LIMIT = 6000
+
+def embed_size(emb):
+    # Only title + description are populated by this script. If we ever add
+    # fields/footer/author, factor those in here too.
+    return len(emb.get("title", "")) + len(emb.get("description", ""))
+
+batches = []
+current = []
+current_size = 0
+for emb in embeds:
+    size = embed_size(emb)
+    overflows = (
+        len(current) >= EMBEDS_PER_MSG
+        or (current and current_size + size > TOTAL_CHAR_LIMIT)
+    )
+    if overflows:
+        batches.append(current)
+        current = [emb]
+        current_size = size
+    else:
+        current.append(emb)
+        current_size += size
+if current:
+    batches.append(current)
+
 for idx, batch in enumerate(batches):
     payload = {"embeds": batch}
     if idx == 0:
