@@ -230,6 +230,8 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
             // though SaveToLocal had cached the audio. Voice changes invalidate via the live
             // path's StopPlaying + RecreateInference flow, so cached files always reflect the
             // currently-assigned voice for that (clip, player) pair.
+            // Also adopts orphan WAVs (file on disk, no DB row yet) — covers backups copied
+            // from another install. See TryLoadCachedAudio.
             TryLoadCachedAudio(voiceMessage, eventId);
 
             // Step 9: Process the voice message
@@ -556,11 +558,25 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
     /// If a previous generation of this (clip, player, alias_gender=0) exists on disk, attach
     /// the file stream to <paramref name="voiceMessage"/> and flag it as locally-loaded so
     /// <see cref="IBackendService.GenerationLoopAsync"/> short-circuits the backend call.
-    /// Gated on the user having any caching mode active (SaveToLocal or LoadFromLocalFirst).
+    /// Gated on <see cref="Configuration.LoadFromLocalFirst"/> — SaveToLocal is the write side
+    /// of the cache and not relevant for playback.
+    ///
+    /// Two-stage lookup:
+    /// <list type="number">
+    /// <item>DB <c>voice_clip_generations</c> row — fast path for clips this install has
+    ///     already generated (or previously adopted).</item>
+    /// <item>Disk fallback — if no DB row, probe the deterministic
+    ///     <see cref="IAudioFileService.GetLocalAudioPath"/> path. A hit means the user copied
+    ///     a WAV from elsewhere (friend's backup, manual restore); the file gets adopted into
+    ///     the DB with the speaker's current voice key so the next playthrough takes the fast
+    ///     path. Adoption uses <c>LogVoiceClipGeneration</c> which is upsert-keyed on
+    ///     <c>(voice_clip_id, player_content_id, alias_gender)</c>, so re-firing the same
+    ///     dialog never duplicates rows.</item>
+    /// </list>
     /// </summary>
     private void TryLoadCachedAudio(VoiceMessage voiceMessage, EKEventId eventId)
     {
-        if (!_config.SaveToLocal && !_config.LoadFromLocalFirst) return;
+        if (!_config.LoadFromLocalFirst) return;
         if (voiceMessage.VoiceClipId <= 0) return;
 
         try
@@ -570,7 +586,22 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
                 : 0;
             var gen = _db.GetVoiceClipGeneration(voiceMessage.VoiceClipId, playerId);
             var path = gen?.SavePath;
-            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path)) return;
+            if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
+            {
+                // No DB row (or row points at a missing file). Probe the deterministic
+                // on-disk location — if a WAV lives there it was either written by an
+                // older install, restored from a backup, or copied in by the user.
+                // Promote it to a real generation row so future plays are fast-path.
+                var orphan = _audioFiles.TryFindExistingLocalAudio(_config.LocalSaveLocation, voiceMessage);
+                if (orphan == null) return;
+
+                var voiceKey = voiceMessage.Speaker?.voice ?? "";
+                var playerName = _gameObjects.LocalPlayerName ?? "";
+                _db.LogVoiceClipGeneration(voiceMessage.VoiceClipId, playerId, playerName, orphan, voiceKey);
+                _log.Info(nameof(TryLoadCachedAudio),
+                    $"Adopted on-disk audio (no prior DB row): {orphan}", eventId);
+                path = orphan;
+            }
 
             voiceMessage.Stream = System.IO.File.OpenRead(path);
             voiceMessage.LoadedLocally = true;

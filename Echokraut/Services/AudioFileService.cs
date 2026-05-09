@@ -48,6 +48,22 @@ public class AudioFileService : IAudioFileService
         return filePath;
     }
 
+    public string? TryFindExistingLocalAudio(string localSaveLocation, VoiceMessage voiceMessage)
+    {
+        if (string.IsNullOrWhiteSpace(localSaveLocation)) return null;
+        if (voiceMessage?.Speaker == null) return null;
+
+        try
+        {
+            var path = GetLocalAudioPath(localSaveLocation, voiceMessage);
+            return File.Exists(path) ? path : null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public string RemovePlayerNameInText(string text)
     {
         var name = _gameObjects.LocalPlayerName;
