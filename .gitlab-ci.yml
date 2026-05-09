@@ -32,5 +32,8 @@ mirror-to-github:
   script:
     - git clone --mirror "$CI_REPOSITORY_URL" repo.git
     - cd repo.git
-    - git remote add github "https://${GITHUB_USER}:${GITHUB_PAT}@github.com/${GITHUB_USER}/Echokraut.git"
+    # Target path is hardcoded — the GitHub repo lives under RenNagasaki, but ${GITHUB_USER}
+    # is the CI auth identity and may differ. Using ${GITHUB_USER} on both sides routed the
+    # push to the wrong repo and triggered 403s.
+    - git remote add github "https://${GITHUB_USER}:${GITHUB_PAT}@github.com/RenNagasaki/Echokraut.git"
     - git push github --mirror --force
