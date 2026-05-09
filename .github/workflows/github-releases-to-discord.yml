@@ -1,21 +1,50 @@
+# Posts the embedded plugin changelog (Echokraut/Resources/Changelogs/v{TAG}_{LANG}.txt)
+# to two language-specific Discord channels whenever a non-ELI- release is published.
+#
+# Required GitHub repository secrets:
+#   DISCORD_WEBHOOK_EN  — webhook URL for the English #updates channel
+#   DISCORD_WEBHOOK_DE  — webhook URL for the German  #updates-deutsch channel
+#
+# Optional repository secrets (role pings prepended to the first message):
+#   DISCORD_ROLE_EN     — role ID (numeric) to ping on EN announcements
+#   DISCORD_ROLE_DE     — role ID (numeric) to ping on DE announcements
+#
+# A missing webhook secret skips that language with a warning (workflow does not fail).
+# A missing changelog file (e.g. someone forgot the per-commit changelog rule) skips with a
+# warning too — the release still ships, the announcement just gets manually re-posted.
+
+name: Discord release announcement
+
 on:
   release:
     types: [published]
 
 jobs:
-  github-releases-to-discord:
+  announce:
+    # ELI- tags belong to the standalone EchokrautLocalInstaller, which does not ship
+    # plugin changelog files. Filtering here keeps the workflow from posting empty
+    # messages or failing on missing files.
+    if: ${{ !startsWith(github.event.release.tag_name, 'ELI-') }}
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3 
-      - name: Github Releases To Discord
-        uses: SethCohen/github-releases-to-discord@v1.13.1
+      - name: Checkout at release tag
+        uses: actions/checkout@v4
         with:
-          webhook_url: ${{ secrets.WEBHOOK_URL }}
-          color: "2105893"
-          username: "New Release"
-          avatar_url: "https://cdn.discordapp.com/avatars/487431320314576937/bd64361e4ba6313d561d54e78c9e7171.png"
-          content: "<@&1263501199156445265> - There's a new Release for Echokraut!"
-          footer_title: "New release"
-          footer_icon_url: "https://cdn.discordapp.com/avatars/487431320314576937/bd64361e4ba6313d561d54e78c9e7171.png"
-          footer_timestamp: true
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 1
+
+      - name: Post English changelog
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_EN }}
+          ROLE_PING: ${{ secrets.DISCORD_ROLE_EN }}
+          TAG: ${{ github.event.release.tag_name }}
+          LANG: EN
+        run: python3 .github/scripts/post-changelog-to-discord.py
+
+      - name: Post German changelog
+        env:
+          WEBHOOK: ${{ secrets.DISCORD_WEBHOOK_DE }}
+          ROLE_PING: ${{ secrets.DISCORD_ROLE_DE }}
+          TAG: ${{ github.event.release.tag_name }}
+          LANG: DE
+        run: python3 .github/scripts/post-changelog-to-discord.py
