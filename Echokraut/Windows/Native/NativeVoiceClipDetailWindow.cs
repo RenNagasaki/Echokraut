@@ -50,6 +50,10 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
     private string _npcKey = "";
     private int _characterId;
     private bool _needsRebuild;
+
+    // None-mode hard-disable snapshot — flips IsEnabled on every Generate button when
+    // HasLiveGeneration changes (CLAUDE.md: NodeFlags toggles every frame can crash).
+    private bool? _liveGenSnapshot;
     private int? _playingVoiceClipId;
     private readonly Dictionary<int, bool> _audioExistsCache = new();
     private readonly Dictionary<int, (DynamicIconButtonNode playBtn, DynamicIconButtonNode genBtn, bool wasSaved)> _buttonImages = new();
@@ -300,10 +304,14 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
             // Saved Play stays bright — the file already exists, no backend call needed.
             var liveGen = _config.Alltalk.HasLiveGeneration;
             var lockedOut = isGen || !liveGen;
+            var liveGenChanged = _liveGenSnapshot != liveGen;
 
             // Bulk button — dimmed but not removed, so users can still see the batch
-            // operation exists.
+            // operation exists. In None mode also IsEnabled=false so clicks are swallowed
+            // by ATK before reaching the no-op generation gate.
             if (_genToggleButton != null) _genToggleButton.Alpha = liveGen ? 1.0f : 0.4f;
+            if (_genToggleButton != null && liveGenChanged)
+                _genToggleButton.IsEnabled = liveGen;
 
             try
             {
@@ -339,10 +347,21 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
                         playBtn.ImageNode.MultiplyColor = new Vector3(1f, 1f, 1f);
                     }
 
+                    // Hard-disable in None mode: gen always, play only when clip is unsaved
+                    // (saved play just streams a local file and stays clickable). Apply on
+                    // liveGen flip OR on saved/unsaved transition — IsEnabled writes flags
+                    // and shouldn't run every cycle.
+                    if (liveGenChanged || wasSaved != nowSaved)
+                    {
+                        genBtn.IsEnabled = liveGen;
+                        playBtn.IsEnabled = liveGen || nowSaved;
+                    }
+
                     // Update tracked state
                     if (wasSaved != nowSaved)
                         _buttonImages[id] = (playBtn, genBtn, nowSaved);
                 }
+                _liveGenSnapshot = liveGen;
             }
             catch { /* Buttons may be disposed during rebuild */ }
         }
@@ -417,6 +436,10 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         _panel.Clear();
         _buttonImages.Clear();
         _audioExistsCache.Clear();
+        // Force the next throttled tick to re-apply IsEnabled to the freshly created
+        // buttons — the snapshot is window-level so it survives a page rebuild, which
+        // would otherwise leave new buttons in their default enabled state.
+        _liveGenSnapshot = null;
 
         var pageStart = _paginationBar!.CurrentPage * PageSize;
         var pageEnd = Math.Min(pageStart + PageSize, _voiceClips.Count);

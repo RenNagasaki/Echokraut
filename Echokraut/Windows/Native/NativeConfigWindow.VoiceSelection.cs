@@ -50,6 +50,11 @@ public sealed unsafe partial class NativeConfigWindow
 
     // Pagination bar for Voices tab
     private PaginationBar? _vsPaginationBar;
+    // Deferred page change from PaginationBar's onPageChanged callback. Building synchronously
+    // inside that callback (panel.Clear → TextInputNode.Dispose) crashes the game with ATK
+    // use-after-free, because the click event is still on the engine's stack. Picked up by
+    // UpdateVoiceSelection AFTER PaginationBar.Update() has fully returned.
+    private int? _vsPendingVoicesPage;
 
     // Rebuild flags — only set by filter changes, NOT by tab switches
     private bool _vsNpcNeedRebuild;
@@ -176,11 +181,7 @@ public sealed unsafe partial class NativeConfigWindow
 
         _vsPaginationBar = new PaginationBar(
             new Vector2(_topContentPos.X, headerY + voicesDataH + 4), w,
-            page =>
-            {
-                _vsPage[3] = page;
-                BuildVoicesPage();
-            });
+            page => _vsPendingVoicesPage = page);
     }
 
     private void AddVoiceSelectionNodes()
@@ -297,6 +298,16 @@ public sealed unsafe partial class NativeConfigWindow
 
         // Update pagination bar
         _vsPaginationBar?.Update();
+
+        // Apply a page change queued by the PaginationBar callback. Done here, AFTER
+        // Update() has fully returned, so panel.Clear's node disposal isn't sitting on
+        // top of the engine's click-event stack frame.
+        if (_vsPendingVoicesPage.HasValue)
+        {
+            _vsPage[3] = _vsPendingVoicesPage.Value;
+            _vsPendingVoicesPage = null;
+            BuildVoicesPage();
+        }
 
         // Start new builds
         if (_vsNpcNeedRebuild && _activeVsTab == 0)
