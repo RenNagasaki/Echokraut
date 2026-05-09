@@ -159,6 +159,20 @@ public partial class Plugin : IDalamudPlugin
         if (_configuration.FirstTime && !_windowManager.IsFirstTimeOpen && _clientState.IsLoggedIn)
             _commands.ToggleFirstTimeUi();
 
+        // Show the changelog window after a plugin update — but only AFTER FirstTime
+        // has been completed at least once (else a brand-new install would see the
+        // wizard AND the changelog stacked, which is noisy and shows changes the user
+        // hasn't lived through). The FirstTime "I Understand" callback bumps
+        // LastSeenChangelogVersion to current, so brand-new installs naturally have no
+        // unseen entries the first time this gate fires.
+        if (!_configuration.FirstTime
+            && _clientState.IsLoggedIn
+            && !_windowManager.IsChangelogOpen
+            && _services.GetService<IChangelogService>().HasUnseenChangelogs())
+        {
+            _windowManager.ToggleChangelog();
+        }
+
         if (!_configuration.FirstTime && _clientState.IsLoggedIn
             && _configuration.Alltalk.LocalInstall
             && _configuration.Alltalk.InstanceType == Echokraut.Enums.AlltalkInstanceType.Local
@@ -245,6 +259,16 @@ public partial class Plugin : IDalamudPlugin
  
             if (_configuration.FirstTime && !_windowManager.IsFirstTimeOpen)
                 _commands.ToggleFirstTimeUi();
+
+            // Mirror the changelog gate from HandleStartup: cold-login covers the case
+            // where the plugin was already loaded (HandleStartup ran before login) and
+            // the user only just became eligible to see windows.
+            if (!_configuration.FirstTime
+                && !_windowManager.IsChangelogOpen
+                && _services.GetService<IChangelogService>().HasUnseenChangelogs())
+            {
+                _windowManager.ToggleChangelog();
+            }
 
             if (!_configuration.FirstTime
                 && _configuration.Alltalk.LocalInstall

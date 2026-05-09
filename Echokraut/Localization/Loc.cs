@@ -595,6 +595,12 @@ public static class Loc
         ["Configuration"] = new() { { DE, "Konfiguration" }, { FR, "Configuration" }, { JP, "設定" } },
         ["First Time Setup"] = new() { { DE, "Ersteinrichtung" }, { FR, "Configuration initiale" }, { JP, "初回セットアップ" } },
 
+        // ── Changelog window ──────────────────────────────────────────────
+        ["What's New"] = new() { { DE, "Neuerungen" }, { FR, "Nouveautés" }, { JP, "新機能" } },
+        ["Echokraut Update — What's New"] = new() { { DE, "Echokraut-Update — Neuerungen" }, { FR, "Mise à jour Echokraut — Nouveautés" }, { JP, "Echokrautアップデート — 新機能" } },
+        ["I've read it"] = new() { { DE, "Gelesen" }, { FR, "J'ai lu" }, { JP, "了解" } },
+        ["No changelog available."] = new() { { DE, "Kein Changelog verfügbar." }, { FR, "Aucun changelog disponible." }, { JP, "変更履歴はありません。" } },
+
         // ── Game Data Tools window ────────────────────────────────────────
         ["Game Data Tools"] = new() { { DE, "Spieldaten-Werkzeuge" }, { FR, "Outils de données du jeu" }, { JP, "ゲームデータツール" } },
         ["Quest Dialog Harvest"] = new() { { DE, "Quest-Dialog-Sammlung" }, { FR, "Récolte de dialogues de quête" }, { JP, "クエスト会話の取得" } },

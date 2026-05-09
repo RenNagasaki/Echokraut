@@ -18,10 +18,13 @@ public class NativeWindowManager : IWindowManager
     private readonly NativeVoiceClipManagerWindow _voiceClipManagerWindow;
     private readonly NativeVoiceClipDetailWindow _voiceClipDetailWindow;
     private readonly NativeGameDataToolsWindow _gameDataToolsWindow;
+    private readonly NativeChangelogWindow _changelogWindow;
     private readonly IFramework _framework;
     private readonly Configuration _config;
+    private readonly IChangelogService _changelog;
 
     public bool IsFirstTimeOpen => _firstTimeWindow.IsOpen;
+    public bool IsChangelogOpen => _changelogWindow.IsOpen;
 
     public NativeWindowManager(
         ServiceContainer services,
@@ -33,6 +36,7 @@ public class NativeWindowManager : IWindowManager
     {
         _framework = framework;
         _config = config;
+        _changelog = services.GetService<IChangelogService>();
         var addonTalk = services.GetService<IAddonTalkHelper>();
 
         _dialogController = new DialogTalkController(
@@ -110,11 +114,28 @@ public class NativeWindowManager : IWindowManager
             services.GetService<IBackendService>(),
             framework,
             services.GetService<IBatchModeService>(),
-            () => _configWindow.Toggle())
+            () =>
+            {
+                // Brand-new installs land on this branch when the user finishes the wizard.
+                // Bump LastSeenChangelogVersion to current so the changelog popup doesn't
+                // immediately follow the wizard with notes about features the user already
+                // starts with — they have nothing to "catch up" on. Existing users (who
+                // never see the wizard a second time) keep their stored marker.
+                _changelog.MarkAllSeen();
+                _configWindow.Toggle();
+            })
         {
             InternalName = "EchokrautFirstTime",
             Title = Loc.S("First Time Setup"),
             Size = new Vector2(550, 600),
+            RespectCloseAll = false,
+        };
+
+        _changelogWindow = new NativeChangelogWindow(_changelog)
+        {
+            InternalName = "EchokrautChangelog",
+            Title = Loc.S("What's New"),
+            Size = new Vector2(720, 600),
             RespectCloseAll = false,
         };
 
@@ -143,7 +164,8 @@ public class NativeWindowManager : IWindowManager
             || IsInsideWindow(_firstTimeWindow, pos)
             || IsInsideWindow(_voiceClipManagerWindow, pos)
             || IsInsideWindow(_voiceClipDetailWindow, pos)
-            || IsInsideWindow(_gameDataToolsWindow, pos));
+            || IsInsideWindow(_gameDataToolsWindow, pos)
+            || IsInsideWindow(_changelogWindow, pos));
     }
 
     private static unsafe bool IsInsideWindow(NativeAddon window, Vector2 pos)
@@ -168,6 +190,7 @@ public class NativeWindowManager : IWindowManager
         if (!_config.Alltalk.HasLiveGeneration) return;
         _gameDataToolsWindow.Toggle();
     }
+    public void ToggleChangelog() => _changelogWindow.Toggle();
     public void Draw() { }
 
     public void Dispose()
@@ -182,6 +205,7 @@ public class NativeWindowManager : IWindowManager
         SafeClose(_voiceClipManagerWindow);
         SafeClose(_voiceClipDetailWindow);
         SafeClose(_gameDataToolsWindow);
+        SafeClose(_changelogWindow);
 
         // Give the framework thread a chance to actually process the queued ATK Close calls
         // BEFORE we free our managed handles. We can only block when we're NOT on the
@@ -200,6 +224,7 @@ public class NativeWindowManager : IWindowManager
         SafeDispose(_voiceClipManagerWindow);
         SafeDispose(_voiceClipDetailWindow);
         SafeDispose(_gameDataToolsWindow);
+        SafeDispose(_changelogWindow);
     }
 
     private static void SafeClose(KamiToolKit.NativeAddon? addon)

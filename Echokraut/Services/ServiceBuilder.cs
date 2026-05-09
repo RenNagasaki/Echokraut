@@ -221,6 +221,12 @@ public static class ServiceBuilder
 
         container.RegisterFactory<IEchokrautIpc>(c => new EchokrautIpc(pluginInterface));
 
+        container.RegisterFactory<IChangelogService>(c => new ChangelogService(
+            c.GetService<ILogService>(),
+            configuration,
+            clientState,
+            Plugin.PluginVersion));
+
         container.RegisterFactory<IAddonTalkHelper>(c => new AddonTalkHelper(
             c.GetService<IVoiceMessageProcessor>(),
             addonLifecycle,
