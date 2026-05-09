@@ -1,0 +1,17 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.0.1
+================================================================================
+
+
+==============================================================================
+VERBESSERUNGEN
+==============================================================================
+
+[UI] Auto-Start-Checkbox umpositioniert + standardmäßig aktiv
+  Die "Lokale Instanz beim Plugin-Start automatisch starten"-Checkbox sitzt
+  jetzt direkt über den Start- / Stop-Buttons im Erst-Start-Assistenten und
+  im Einstellungen → Backend-Tab, statt versteckt unter "Erweiterte
+  Optionen". Standardwert von aus auf an geflipped — die meisten Nutzer
+  einer lokalen AllTalk-Installation wollen sie sowieso automatisch beim
+  Plugin-Start hochkommen lassen.

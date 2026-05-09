@@ -1,0 +1,16 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.0.1
+================================================================================
+
+
+==============================================================================
+IMPROVEMENTS
+==============================================================================
+
+[UI] Auto-start checkbox moved + on by default
+  The "Auto-start local instance on plugin load" checkbox now sits directly
+  above the Start / Stop buttons in both the First-Time wizard and the
+  Settings → Backend tab, instead of being hidden under "Advanced options".
+  Default value flipped from off to on — most users running a local AllTalk
+  install want it to come up automatically on plugin load anyway.

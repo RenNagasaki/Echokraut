@@ -41,19 +41,23 @@ public static class NativeAlltalkBuilder
         public NodeBase[] AllNodes => [
             InstallPathInput, ValidationLabel, CpuModeCheck, IsWindows11Check,
             CustomModelUrlInput, CustomVoicesUrlInput, InstallCustomDataRow,
-            AutoStartCheck, InstallRow, StartStopRow,
+            InstallRow, AutoStartCheck, StartStopRow,
         ];
 
         /// <summary>Essential nodes visible by default (install path + validation + CPU mode, then install button + start/stop after advanced).</summary>
         public NodeBase[] EssentialNodes => [InstallPathInput, ValidationLabel, CpuModeCheck];
 
-        /// <summary>Nodes that come after the advanced section (install button + start/stop).</summary>
-        public NodeBase[] PostAdvancedNodes => [InstallRow, StartStopRow];
+        /// <summary>Nodes that come after the advanced section. <see cref="AutoStartCheck"/>
+        /// sits directly above <see cref="StartStopRow"/> so the start-related controls
+        /// cluster together — auto-starting on plugin load is conceptually the same
+        /// decision as clicking Start manually, and burying it under the collapsible
+        /// "Advanced" section made it hard to discover.</summary>
+        public NodeBase[] PostAdvancedNodes => [InstallRow, AutoStartCheck, StartStopRow];
 
         /// <summary>Advanced nodes hidden by default under a collapsible section.</summary>
         public NodeBase[] AdvancedNodes => [
             IsWindows11Check, CustomModelUrlInput, CustomVoicesUrlInput,
-            InstallCustomDataRow, AutoStartCheck,
+            InstallCustomDataRow,
         ];
 
         /// <summary>Updates button labels, dimming, and validation each frame.
