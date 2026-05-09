@@ -1,0 +1,227 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+From release tag 0.18.0.6 (2026-04-03) to current (commit 873d362, 2026-05-09)
+~5 weeks of development, 76 commits, ~64,000 lines changed
+================================================================================
+
+
+==============================================================================
+MAJOR NEW FEATURES
+==============================================================================
+
+[NEW] None-Mode ("Audio Files Only")
+  A complete second mode of operation for users who do not want to run a TTS
+  backend at all. Plays back pre-generated WAVs only.
+  - All "Generate" buttons are fully disabled in None-mode (visual lock + no
+    backend calls + dimmed alpha to make the inactive state obvious).
+  - Backend tab redesigned with a radio-button mode switcher (Local / Remote /
+    None) plus a dedicated None section.
+  - Live-only settings tabs (Chat, Cutscene Choice, Backend) and live-only
+    log sub-tabs are hidden in None-mode.
+  - Voices and Phonetics tabs hidden, Game Data Tools entry points dimmed.
+  - NPC edit dropdowns locked in None-mode.
+  - Misleading "online" backend status removed.
+  - Designed for users distributing pre-generated WAV packs to friends.
+
+[NEW] Live-Path Orphan WAV Adoption
+  When a dialog plays in-game, the plugin now also probes the local audio
+  folder. If a WAV exists at the deterministic path but the database has no
+  record of it, the file is automatically adopted into the database and
+  played back — no regeneration needed.
+  - Works seamlessly with friend-shared backups, Google Drive sync downloads,
+    manual restores, and audio that pre-dates a database wipe.
+  - Works in None-mode (no backend required for adoption).
+  - Adopted clips inherit the NPC's current voice key.
+  - Idempotent: re-firing the same dialog never duplicates database rows.
+  - Gated on "Load From Local First" setting (default on).
+
+[NEW] Voice Clip Manager Window
+  A dedicated UI for managing all logged voice clips per NPC.
+  - Tree view of every NPC the plugin has ever heard speak.
+  - Detail window per NPC instance showing all encountered dialog lines.
+  - Per-clip Play / Generate / Delete actions.
+  - Bulk "Generate All Unsaved" with progress feedback and cancellation.
+  - Bulk "Delete All Saved" cleanup option.
+  - Pagination for large NPCs (100 entries per page) with progressive row
+    loading to avoid stuttering.
+  - Status indicators (generated / not generated / has audio).
+
+[NEW] Game Data Tools Window
+  A new utility window for harvesting dialog and voice data directly from the
+  FFXIV game files.
+  - Dialog Harvester: scans Lumina sheets (DefaultTalk, Balloon) and quest
+    dialog data, persisting linked dialog → NPC mappings into the database
+    with automatic voice assignment.
+  - Filters by quest type (None / MSQ / Side / Tribal / Custom Delivery / etc.)
+    or harvests everything.
+  - Multi-language: harvests per client language (English, German, French,
+    Japanese).
+  - Voice Sample Extractor: builds a per-NPC voice starter set from FFXIV's
+    own SCD voice files, ready to feed AllTalk for cloning.
+
+[NEW] Auto-Generated Shareable Alias Variants
+  For dialog lines that contain player-name placeholders (e.g. "Hello,
+  <PlayerName>!"), the plugin can now automatically generate male and female
+  "Adventurer" variants alongside the user's own version.
+  - Localized aliases per clip language (EN: Adventurer, DE: Abenteurer/-in,
+    FR: Aventurier/-ière, JA: 冒険者).
+  - Variants stored as separate database rows so they do not collide with
+    the user's own generation.
+  - Toggleable in Settings → Save/Loading: "Auto Generate Shareable Aliases".
+  - Off by default (extra backend calls per generation).
+  - Lets players share placeholder clips with friends without leaking real
+    names.
+
+[NEW] SQLite Database Migration
+  All NPC mappings, voices, phonetic corrections, and muted dialogues have
+  been migrated from the JSON config to a proper SQLite database
+  (echokraut.db, 13+ schema versions).
+  - One-time automatic migration on first start of the new version.
+  - Audio-file backfill scans the local save folder and stitches existing
+    WAVs into the new database during migration.
+  - Player-placeholder detection: legacy clips where the literal player
+    name was baked into the filename are correctly attributed.
+  - Per-player and per-alias generation tracking.
+  - Character language dimension: NPCs are now stored per game language
+    so the same NPC in EN/DE/FR/JA can have separate voice configs.
+  - Case-insensitive character name index (Schema v12) — German "[a]"
+    declension stems no longer create lowercase duplicates.
+
+[NEW] Quest NPC Alias System
+  A three-layer alias system for resolving NPC names that appear under
+  fakenames or anonymous markers in quest dialog ("???", "Mysterious Lady",
+  etc.).
+  - Embedded fallback (ships with the plugin).
+  - Remote community-curated layer (downloaded at harvest start).
+  - Per-user local override under <localSaveLocation>/harvest/.
+  - Silent-actor heuristic: when a quest line starts with "(-???-)" or
+    "(-Name-)" and Lua resolution didn't pin down the speaker, the harvester
+    scans the same Lua function for actors that hadn't spoken yet but speak
+    afterwards. Single candidate → auto-attribute.
+  - Unmatched candidates emit to quest_alias_candidates.json with full
+    context (preceding/following dialog) for manual curation.
+
+[NEW] Live Speaker Alias Resolution
+  At runtime, when an NPC appears under a fakename, the plugin resolves the
+  real character via:
+  1. JSON voice-name map (community-curated).
+  2. Database speaker aliases (harvest-discovered "(-Fakename-)" hints).
+  3. Live disambiguation: BaseId match → physical-presence filter →
+     not-yet-spoken-this-dialog tracker.
+  Anonymous "???" speakers are now correctly attributed to specific
+  characters even mid-cutscene.
+
+[NEW] Lodestone Player Enrichment
+  Off-map chat senders (where no game object is reachable) get an async
+  Lodestone lookup to fill in their Race and Gender. Future messages from
+  the same player use the resolved values, ensuring consistent voice
+  assignment across zones.
+
+[NEW] Re-Harvest Context Preservation
+  Re-running the dialog harvester now keeps user customizations (per-NPC
+  volumes, voice picks, mute states, custom voice families) intact —
+  previously a re-harvest could overwrite curated settings.
+
+[NEW] Elder / Adult / Child Voice Support
+  Voices can now be filtered by NPC body type (Adult, Elder, Child) in
+  addition to race and gender. The plugin auto-detects body type per NPC
+  via FFXIV's ENpcBase BodyType column and picks a fitting voice.
+
+[NEW] Changelog Popup After Plugin Update
+  The first plugin start after an update now shows a "What's New" window
+  listing every changelog entry between your last-seen version and the
+  one you just installed. Dismiss with the "I've read it" button — it
+  won't show up again until the next update. Brand-new installs skip the
+  popup (the FirstTime wizard marks all changelogs as seen on completion
+  so users don't get release notes for features they already start with).
+
+
+==============================================================================
+IMPROVEMENTS
+==============================================================================
+
+[UI] First-Time Wizard
+  - Localized finish summary (DE/EN/FR/JA).
+  - Remote test gating: the "test connection" step properly waits for
+    user configuration before firing.
+  - Thread-safe label updates so async progress doesn't crash the wizard.
+  - New CPU/GPU install mode selector for the local AllTalk install.
+  - Custom-data installer mode for advanced setups.
+
+[UI] Backend Tab Cleanup
+  - Removed legacy "Service Options" group.
+  - Streaming and Reload-Voices buttons moved to General.
+  - Cleaner radio-button layout.
+
+[UI] DynamicIconButtonNode
+  A new reusable button node that auto-resizes to fit a localized text label
+  + icon. Used by the dialog extra-options bar (play/stop/settings) and the
+  Voice Clip Manager actions.
+
+[UI] Pagination
+  - Voice Selection list now paginates at 100 entries per page with deferred
+    page-change rebuilds (avoids use-after-free crashes on rapid clicks).
+  - Logs panel paginates with the same engine.
+  - Reusable PaginationBar component lives in Echotools.UI for cross-plugin
+    use.
+
+[UI] Mode Switcher Fixes
+  Fixed sizing and a dead-hitbox click bug on the Local / Remote / None
+  mode switcher buttons.
+
+[UI] Game Data Tools Button Polish
+  Properly disabled state — full mouse-inert (no cursor change, no hover
+  highlight) when the button shouldn't be clickable. Mirrors FFXIV's native
+  disabled-button behavior.
+
+[UI] Dialog Buttons Position Fix
+  Play/stop and settings buttons in the dialog extra options shifted 2px
+  down to align correctly with the dialog box chrome.
+
+[Commands]
+  - New `/ekdata` command opens the Game Data Tools window directly.
+  - All window-opening commands now respect the FirstTime gate (don't open
+    the main UI before the wizard is complete).
+  - Removed unused legacy commands.
+
+[Architecture]
+  - Cross-component communication is now event-based throughout; no more
+    setter-based post-construction wiring.
+  - Service Builder / Service Container pattern for clean DI.
+  - LiveGenerationLogger service: live-generated audio now appears in the
+    Voice Clip Manager (was previously bulk-only).
+
+[Logging]
+  - Echotools.Logging shared library is now the canonical logging facade.
+  - Per-source log filters (LogSourceConfig) persist in config.
+  - Live-only log sub-tabs (Chat / Cutscene / Choice / Backend) are hidden
+    in None-mode.
+
+[Localization]
+  - Major expansion of DE/FR/JA translations across all new UI surfaces.
+  - Shared loc keys between ImGui and Native UI prevent translation drift.
+
+
+==============================================================================
+BUG FIXES
+==============================================================================
+
+- Voice picks no longer appear "one behind" after editing an NPC during a
+  dialog session (in-memory canonical sync added to NpcDataService).
+- TextDropDownNode crash on Uncollapse → bypass UpdateLabel and use
+  OptionListNode directly (workaround documented).
+- Pagination page-change crashes (use-after-free on ATK nodes) fixed by
+  deferring rebuilds to the next OnUpdate frame.
+- FindCharacter no longer defaults to English language — silent miss-then-
+  duplicate bugs on non-EN clients eliminated.
+- DefaultTalk coverage improved with multi-hop sheet chains and cutscene
+  alias map (more NPCs match correctly).
+- Voice clip orphan resolution: a fallback lookup by (CharacterId,
+  WavFileName) rescues legacy on-disk audio that lost its text mapping.
+- LGB Balloon scan replaced with a structured parser that correctly
+  resolves Behavior → Balloon chains across all territory files
+  (planevent, planmap, planlive, planner, bg).
+- Battle Talk and Bubble dialog now properly support 3D audio when enabled.
+- Re-harvest no longer wipes user-curated NPC settings.
+- Cutscene unvoiced harvest correctly filters out lines that already have
+  FFXIV-shipped SCD audio (avoids duplicate voicing).

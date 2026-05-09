@@ -56,6 +56,21 @@ public class Configuration : IPluginConfiguration
     /// who arrive after the rewrite never trigger a useless filesystem walk.
     /// </summary>
     public bool AudioFilesBackfillPending { get; set; } = false;
+    /// <summary>
+    /// Last plugin version whose changelog was shown to (and dismissed by) the user.
+    /// Compared against <c>Plugin.PluginVersion</c> on startup; if any embedded changelog
+    /// entries fall in (LastSeen, current], the changelog window pops up after login.
+    /// Format mirrors <c>PluginVersion</c> ("v0.19.0.0") — strip the leading "v" before
+    /// parsing as <c>System.Version</c> for ordered comparison; plain string comparison
+    /// would mis-sort across digit-count boundaries.
+    ///
+    /// Default "v0.18.0.6" is the last release before the changelog system landed:
+    /// existing users upgrading from there see the v0.19.0.0 changelog on next start.
+    /// Brand-new installs get this value bumped to the current version when the
+    /// First-Time wizard completes (so they don't see a changelog about features they
+    /// already start with).
+    /// </summary>
+    public string LastSeenChangelogVersion { get; set; } = "v0.18.0.6";
     public bool VoiceRetainers { get; set; } = false;
     public bool VoiceBubble { get; set; } = false;
     public bool VoiceBubblesInCity { get; set; } = false;

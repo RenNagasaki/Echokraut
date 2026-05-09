@@ -58,6 +58,16 @@
     <EmbeddedResource Include="Resources\NpcRaces.json" />
     <EmbeddedResource Include="Resources\QuestNpcAliases.json" />
     <EmbeddedResource Include="Resources\VoiceExtractAliases.json" />
+    <!--
+      In-game changelog content. ChangelogService enumerates these via
+      Assembly.GetManifestResourceNames(), parses the version out of the filename,
+      and shows entries newer than Configuration.LastSeenChangelogVersion.
+      Filename convention: v{MAJOR}.{MINOR}.{BUILD}.{REVISION}_{LANG}.txt — the
+      "v" prefix anchors the version regex against the surrounding dots. Add
+      one EN + one DE entry per release; FR/JA fall back to EN at runtime.
+    -->
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.0.0_EN.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.0.0_DE.txt" />
   </ItemGroup>
 
   <ItemGroup>

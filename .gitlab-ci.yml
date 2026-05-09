@@ -36,4 +36,14 @@ mirror-to-github:
     # is the CI auth identity and may differ. Using ${GITHUB_USER} on both sides routed the
     # push to the wrong repo and triggered 403s.
     - git remote add github "https://${GITHUB_USER}:${GITHUB_PAT}@github.com/RenNagasaki/Echokraut.git"
-    - git push github --mirror --force
+    # Additive mirror — push branches and tags without deleting GitHub-only refs.
+    # `git push --mirror` would delete tags/branches present on GitHub but missing
+    # on GitLab; that wipes the tag a GitHub Release is anchored to, and the
+    # Release breaks. Tags created via the GitHub Release UI live ONLY on GitHub
+    # until something pushes them back to GitLab, so the destructive variant ate
+    # at least one release before this change. `--all --force` covers branches
+    # (force-update on rewrites is fine), `--tags` is intentionally non-force so
+    # an existing GitHub tag is never overwritten — if a tag's content drifts it
+    # has to be resolved manually rather than silently rewritten.
+    - git push github --all --force
+    - git push github --tags
