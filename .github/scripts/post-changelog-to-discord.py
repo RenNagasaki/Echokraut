@@ -243,7 +243,15 @@ def post(payload):
     req = urllib.request.Request(
         WEBHOOK,
         data=body,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            # Discord's Cloudflare layer rejects Python's default
+            # "Python-urllib/X.Y" UA with HTTP 403 + Cloudflare error 1010
+            # (browser signature ban). A descriptive UA matching Discord's
+            # API user-agent guideline (<product> (<url>, <version>)) gets
+            # let through.
+            "User-Agent": "Echokraut-ReleaseAnnouncer/1.0 (+https://github.com/RenNagasaki/Echokraut)",
+        },
         method="POST",
     )
     try:
