@@ -585,6 +585,40 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
                 ? (long)_gameObjects.LocalPlayerContentId
                 : 0;
             var gen = _db.GetVoiceClipGeneration(voiceMessage.VoiceClipId, playerId);
+
+            // Voice-key staleness gate. The cached generation row stores the voice that was
+            // used when the WAV was originally generated. If the user has since switched the
+            // NPC's voice (e.g. NPC10 → NPC11), the on-disk audio is now stale — replaying
+            // it would silently ignore the user's voice change. Treat as cache miss so the
+            // backend regenerates; LogVoiceClipGeneration upserts the row in place with the
+            // new voice_key + new save_path (filenames are voice-key-INDEPENDENT, so the
+            // fresh WAV overwrites the stale one).
+            //
+            // Skipped when:
+            //   - the speaker has no voice configured at all (Speaker.voice empty) — there's
+            //     nothing to compare against, and the user can't have wanted a "different"
+            //     voice without picking one
+            //   - None-mode is active (HasLiveGeneration == false) — backend can't regenerate,
+            //     so playing whatever's cached is the best we can do
+            // Multi-epoch NPCs (per Issue 3 in voice-sample-improvements plan) will need a
+            // valid-voice-set check here once that feature lands; today every NPC has at most
+            // one configured voice so a plain equality compare is correct.
+            var currentVoice = voiceMessage.Speaker?.voice ?? "";
+            if (gen != null
+                && _config.Alltalk.HasLiveGeneration
+                && !string.IsNullOrEmpty(currentVoice)
+                && !string.Equals(gen.VoiceKey ?? "", currentVoice, StringComparison.Ordinal))
+            {
+                _log.Info(nameof(TryLoadCachedAudio),
+                    $"Cache invalidated for clip {voiceMessage.VoiceClipId}: " +
+                    $"saved voice='{gen.VoiceKey}' != current voice='{currentVoice}'. Regenerating.",
+                    eventId);
+                // Don't fall through to disk-adopt either — the orphan WAV would be the SAME
+                // stale file, and adopting it under the new voice_key would just re-cache the
+                // bug. Hand off to the backend cleanly.
+                return;
+            }
+
             var path = gen?.SavePath;
             if (string.IsNullOrEmpty(path) || !System.IO.File.Exists(path))
             {

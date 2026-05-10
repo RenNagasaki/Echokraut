@@ -23,3 +23,16 @@ IMPROVEMENTS
   whose audio file ships in the client language — same rule the cutscene-
   dialog harvester already followed. Existing voiced rows in the database
   stay where they are; rerun the harvest to clean them out.
+
+
+==============================================================================
+BUG FIXES
+==============================================================================
+
+- Switching an NPC's voice now actually changes what you hear: when a
+  cached audio file exists from a previous voice (e.g. you generated lines
+  with NPC voice 10, then switched to NPC voice 11), the playback path
+  used to silently keep loading the old voice's WAV. The cache lookup now
+  rejects rows whose saved voice doesn't match the speaker's currently-
+  assigned voice and lets the backend regenerate cleanly. None-mode users
+  (no live generation) are unaffected — cached audio still plays as before.

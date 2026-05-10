@@ -24,3 +24,17 @@ VERBESSERUNGEN
   Audio-Datei in der Client-Sprache existiert — gleiche Regel wie der
   Cutscene-Dialog-Harvester sie schon hatte. Bestehende vertonte Einträge
   in der Datenbank bleiben drin; ein erneuter Harvest bereinigt sie.
+
+
+==============================================================================
+BUGFIXES
+==============================================================================
+
+- NPC-Stimmenwechsel klingt jetzt wirklich anders: wenn eine zwischen-
+  gespeicherte Audio-Datei mit einer alten Stimme existiert (z.B. Zeilen
+  generiert mit NPC-Stimme 10, dann auf NPC-Stimme 11 gewechselt), hat
+  der Playback-Pfad bisher stillschweigend weiter die alte WAV abgespielt.
+  Der Cache-Lookup verwirft jetzt Einträge deren gespeicherter voice_key
+  nicht zur aktuell zugewiesenen Stimme passt und lässt das Backend sauber
+  neu generieren. None-Mode-Nutzer (keine Live-Generation) sind nicht
+  betroffen — bei denen läuft der gecachte Sound weiter wie bisher.
