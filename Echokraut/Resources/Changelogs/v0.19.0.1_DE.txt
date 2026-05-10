@@ -38,3 +38,16 @@ BUGFIXES
   nicht zur aktuell zugewiesenen Stimme passt und lässt das Backend sauber
   neu generieren. None-Mode-Nutzer (keine Live-Generation) sind nicht
   betroffen — bei denen läuft der gecachte Sound weiter wie bisher.
+
+- AllTalk-Installation mit einem Laufwerksroot als Pfad (z.B. C:\) blieb
+  stillschweigend bei "Preparing installer..." hängen. Laufwerksroot-Pfade
+  werden jetzt vorab abgelehnt mit einer klaren Meldung ("Pfad muss in
+  einen Unterordner zeigen, nicht den Root eines Laufwerks"). Fehler die
+  im Install-Task auftreten werden jetzt zusätzlich im Wizard-Status
+  sichtbar gemacht, statt verschluckt zu werden.
+
+- Das Eingabefeld für den AllTalk-Installationspfad blieb bei Nutzern mit
+  älteren Configs leer; der C#-Default ("C:\alltalk_tts") griff nur bei
+  Neuinstallationen. Das Feld wird jetzt beim ersten leeren Wert auf den
+  Default zurückgesetzt, sodass der Wizard immer einen sinnvollen Start-
+  pfad zum Übernehmen oder Ändern anzeigt.

@@ -77,6 +77,8 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
                 Installing = true;
                 CurrentInstallStatus = "Preparing installer...";
                 CurrentInstallProgress = 0.05f;
+                try
+                {
                 var localInstallerLocation = CheckAndDownloadLocalInstaller(eventId);
 
                 // Args: install <installFolder> <customModelUrl> <customVoicesUrl> <reinstall>
@@ -175,6 +177,21 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
 
                 if (_config.Alltalk.AutoStartLocalInstance)
                     StartInstance();
+                }
+                catch (Exception ex)
+                {
+                    // Errors raised inside Task.Run are otherwise swallowed (the outer catch
+                    // below only sees synchronous failures of the Task-START, not of its body).
+                    // Without this wrapper, an UnauthorizedAccessException from writing to a
+                    // protected install path leaves the UI stuck at "Preparing installer..."
+                    // with no error indication. Surface it via the same status text the outer
+                    // catch uses so the First-Time wizard's progress label tells the user.
+                    _log.Error(nameof(Install),
+                        $"Install task failed: {ex}", eventId);
+                    CurrentInstallStatus = $"Failed: {ex.Message}";
+                    CurrentInstallProgress = 0f;
+                    Installing = false;
+                }
             });
         }
         catch (Exception ex)
