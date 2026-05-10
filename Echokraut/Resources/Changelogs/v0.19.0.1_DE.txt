@@ -15,3 +15,12 @@ VERBESSERUNGEN
   Optionen". Standardwert von aus auf an geflipped — die meisten Nutzer
   einer lokalen AllTalk-Installation wollen sie sowieso automatisch beim
   Plugin-Start hochkommen lassen.
+
+[Harvest] Quest-Dialog-Harvest überspringt jetzt vertonte Zeilen
+  Der Quest-Dialog-Harvester hat bisher jede Zeile mitgeschrieben, auch
+  solche die FFXIV selbst schon vertont. Die spielt Echokraut-TTS sowieso
+  nicht ab (der Original-Dub hat Vorrang), sie sorgten nur für Rauschen
+  in der Datenbank. Ab jetzt wird jede Quest-Dialog-Zeile verworfen, deren
+  Audio-Datei in der Client-Sprache existiert — gleiche Regel wie der
+  Cutscene-Dialog-Harvester sie schon hatte. Bestehende vertonte Einträge
+  in der Datenbank bleiben drin; ein erneuter Harvest bereinigt sie.

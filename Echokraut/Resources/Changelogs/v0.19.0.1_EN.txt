@@ -14,3 +14,12 @@ IMPROVEMENTS
   Settings → Backend tab, instead of being hidden under "Advanced options".
   Default value flipped from off to on — most users running a local AllTalk
   install want it to come up automatically on plugin load anyway.
+
+[Harvest] Quest dialog harvest now skips voiced lines
+  The quest-dialog harvester previously recorded every line, including ones
+  FFXIV already voices itself. Those won't be played by Echokraut TTS
+  anyway (the original dub takes priority), so they were just adding noise
+  to the database. Going forward the harvester drops any quest-dialog row
+  whose audio file ships in the client language — same rule the cutscene-
+  dialog harvester already followed. Existing voiced rows in the database
+  stay where they are; rerun the harvest to clean them out.
