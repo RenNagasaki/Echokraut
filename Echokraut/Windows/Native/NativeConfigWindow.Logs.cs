@@ -102,7 +102,7 @@ public sealed unsafe partial class NativeConfigWindow
     /// <summary>
     /// (Re)populates the Logs sub-tab bar. LiveOnly tabs (Chat / Cutscene / Choice / Backend)
     /// are omitted in None mode — same rule as the Settings sub-tab bar. Panel + pagination
-    /// arrays keep their full size so source-indexed lookups (OnLogUpdated, accessor switches)
+    /// arrays keep their full size so source-indexed lookups (OnLogUpdated, per-source filters)
     /// stay valid; only the visible tab buttons shrink. Order is preserved by Clear()+AddTab.
     /// </summary>
     private void BuildLogsTabs(bool liveGen)
@@ -222,20 +222,18 @@ public sealed unsafe partial class NativeConfigWindow
         panel.Clear();
 
         // ── Filter options (collapsible) ─────────────────────────────────
-        var showDebug = GetShowDebug(source);
-        var showError = GetShowError(source);
-        var showId0 = GetShowId0(source);
+        var logCfg = _config.GetLogSource(source);
 
-        var debugCheck = Check(Loc.S("Show debug logs"), w, showDebug, v =>
+        var debugCheck = Check(Loc.S("Show debug logs"), w, logCfg.ShowDebugLog, v =>
         {
-            SetShowDebug(source, v);
+            logCfg.ShowDebugLog = v;
             _config.Save();
             _logsDirty[index] = true;
         });
 
-        var errorCheck = Check(Loc.S("Show error logs"), w, showError, v =>
+        var errorCheck = Check(Loc.S("Show error logs"), w, logCfg.ShowErrorLog, v =>
         {
-            SetShowError(source, v);
+            logCfg.ShowErrorLog = v;
             _config.Save();
             _logsDirty[index] = true;
         });
@@ -248,17 +246,16 @@ public sealed unsafe partial class NativeConfigWindow
         var clearRow = new HorizontalListNode { Size = new Vector2(w, 26), ItemSpacing = 4 };
         clearRow.AddNode(clearButton);
 
-        var id0Check = Check(Loc.S("Show ID 0 entries"), w, showId0, v =>
+        var id0Check = Check(Loc.S("Show ID 0 entries"), w, logCfg.ShowId0, v =>
         {
-            SetShowId0(source, v);
+            logCfg.ShowId0 = v;
             _config.Save();
             _logsDirty[index] = true;
         });
 
-        var jumpToBottom = GetJumpToBottom(source);
-        var jumpCheck = Check(Loc.S("Always jump to bottom"), w, jumpToBottom, v =>
+        var jumpCheck = Check(Loc.S("Always jump to bottom"), w, logCfg.JumpToBottom, v =>
         {
-            SetJumpToBottom(source, v);
+            logCfg.JumpToBottom = v;
             _config.Save();
         });
 
@@ -307,9 +304,9 @@ public sealed unsafe partial class NativeConfigWindow
         IEnumerable<LogMessage> filtered = _log.GetLogsForSource(source);
 
         // Visibility filters
-        if (!showDebug) filtered = filtered.Where(log => log.Type != LogType.Debug);
-        if (!showError) filtered = filtered.Where(log => log.Type != LogType.Error);
-        if (!showId0) filtered = filtered.Where(log => log.EventId?.Id != 0);
+        if (!logCfg.ShowDebugLog) filtered = filtered.Where(log => log.Type != LogType.Debug);
+        if (!logCfg.ShowErrorLog) filtered = filtered.Where(log => log.Type != LogType.Error);
+        if (!logCfg.ShowId0) filtered = filtered.Where(log => log.EventId?.Id != 0);
 
         // Text filters
         if (!string.IsNullOrEmpty(_logsFilterMethod))
@@ -323,7 +320,7 @@ public sealed unsafe partial class NativeConfigWindow
         _logsFilteredData[index] = list;
 
         // Jump to last page when "jump to bottom" is enabled
-        if (GetJumpToBottom(source) && list.Count > 0)
+        if (_config.GetLogSource(source).JumpToBottom && list.Count > 0)
             _logsPage[index] = Math.Max(0, (list.Count - 1) / LogsPageSize);
 
         // ── Data rows (current page, progressively loaded) ────────────
@@ -420,125 +417,9 @@ public sealed unsafe partial class NativeConfigWindow
             _logsProgressiveTab = -1;
 
             var source = LogTabs[index].Source;
-            if (GetJumpToBottom(source))
+            if (_config.GetLogSource(source).JumpToBottom)
                 panel.ScrollPosition = int.MaxValue;
         }
     }
 
-    // ── Logs pagination ──────────────────────────────────────────────────────
-
-
-    // ── LogConfig accessor helpers ───────────────────────────────────────────
-
-    private bool GetShowDebug(TextSource source) => source switch
-    {
-        TextSource.None                    => _config.logConfig.ShowGeneralDebugLog,
-        TextSource.Chat                    => _config.logConfig.ShowChatDebugLog,
-        TextSource.AddonTalk               => _config.logConfig.ShowTalkDebugLog,
-        TextSource.AddonBattleTalk         => _config.logConfig.ShowBattleTalkDebugLog,
-        TextSource.AddonBubble             => _config.logConfig.ShowBubbleDebugLog,
-        TextSource.AddonCutsceneSelectString => _config.logConfig.ShowCutsceneSelectStringDebugLog,
-        TextSource.AddonSelectString       => _config.logConfig.ShowSelectStringDebugLog,
-        TextSource.Backend                 => _config.logConfig.ShowBackendDebugLog,
-        _ => true,
-    };
-
-    private void SetShowDebug(TextSource source, bool value)
-    {
-        switch (source)
-        {
-            case TextSource.None:                    _config.logConfig.ShowGeneralDebugLog = value; break;
-            case TextSource.Chat:                    _config.logConfig.ShowChatDebugLog = value; break;
-            case TextSource.AddonTalk:               _config.logConfig.ShowTalkDebugLog = value; break;
-            case TextSource.AddonBattleTalk:         _config.logConfig.ShowBattleTalkDebugLog = value; break;
-            case TextSource.AddonBubble:             _config.logConfig.ShowBubbleDebugLog = value; break;
-            case TextSource.AddonCutsceneSelectString: _config.logConfig.ShowCutsceneSelectStringDebugLog = value; break;
-            case TextSource.AddonSelectString:       _config.logConfig.ShowSelectStringDebugLog = value; break;
-            case TextSource.Backend:                 _config.logConfig.ShowBackendDebugLog = value; break;
-        }
-    }
-
-    private bool GetShowError(TextSource source) => source switch
-    {
-        TextSource.None                    => _config.logConfig.ShowGeneralErrorLog,
-        TextSource.Chat                    => _config.logConfig.ShowChatErrorLog,
-        TextSource.AddonTalk               => _config.logConfig.ShowTalkErrorLog,
-        TextSource.AddonBattleTalk         => _config.logConfig.ShowBattleTalkErrorLog,
-        TextSource.AddonBubble             => _config.logConfig.ShowBubbleErrorLog,
-        TextSource.AddonCutsceneSelectString => _config.logConfig.ShowCutsceneSelectStringErrorLog,
-        TextSource.AddonSelectString       => _config.logConfig.ShowSelectStringErrorLog,
-        TextSource.Backend                 => _config.logConfig.ShowBackendErrorLog,
-        _ => true,
-    };
-
-    private void SetShowError(TextSource source, bool value)
-    {
-        switch (source)
-        {
-            case TextSource.None:                    _config.logConfig.ShowGeneralErrorLog = value; break;
-            case TextSource.Chat:                    _config.logConfig.ShowChatErrorLog = value; break;
-            case TextSource.AddonTalk:               _config.logConfig.ShowTalkErrorLog = value; break;
-            case TextSource.AddonBattleTalk:         _config.logConfig.ShowBattleTalkErrorLog = value; break;
-            case TextSource.AddonBubble:             _config.logConfig.ShowBubbleErrorLog = value; break;
-            case TextSource.AddonCutsceneSelectString: _config.logConfig.ShowCutsceneSelectStringErrorLog = value; break;
-            case TextSource.AddonSelectString:       _config.logConfig.ShowSelectStringErrorLog = value; break;
-            case TextSource.Backend:                 _config.logConfig.ShowBackendErrorLog = value; break;
-        }
-    }
-
-    private bool GetShowId0(TextSource source) => source switch
-    {
-        TextSource.None                    => _config.logConfig.ShowGeneralId0,
-        TextSource.Chat                    => _config.logConfig.ShowChatId0,
-        TextSource.AddonTalk               => _config.logConfig.ShowTalkId0,
-        TextSource.AddonBattleTalk         => _config.logConfig.ShowBattleTalkId0,
-        TextSource.AddonBubble             => _config.logConfig.ShowBubbleId0,
-        TextSource.AddonCutsceneSelectString => _config.logConfig.ShowCutsceneSelectStringId0,
-        TextSource.AddonSelectString       => _config.logConfig.ShowSelectStringId0,
-        TextSource.Backend                 => _config.logConfig.ShowBackendId0,
-        _ => true,
-    };
-
-    private void SetShowId0(TextSource source, bool value)
-    {
-        switch (source)
-        {
-            case TextSource.None:                    _config.logConfig.ShowGeneralId0 = value; break;
-            case TextSource.Chat:                    _config.logConfig.ShowChatId0 = value; break;
-            case TextSource.AddonTalk:               _config.logConfig.ShowTalkId0 = value; break;
-            case TextSource.AddonBattleTalk:         _config.logConfig.ShowBattleTalkId0 = value; break;
-            case TextSource.AddonBubble:             _config.logConfig.ShowBubbleId0 = value; break;
-            case TextSource.AddonCutsceneSelectString: _config.logConfig.ShowCutsceneSelectStringId0 = value; break;
-            case TextSource.AddonSelectString:       _config.logConfig.ShowSelectStringId0 = value; break;
-            case TextSource.Backend:                 _config.logConfig.ShowBackendId0 = value; break;
-        }
-    }
-
-    private bool GetJumpToBottom(TextSource source) => source switch
-    {
-        TextSource.None                    => _config.logConfig.GeneralJumpToBottom,
-        TextSource.Chat                    => _config.logConfig.ChatJumpToBottom,
-        TextSource.AddonTalk               => _config.logConfig.TalkJumpToBottom,
-        TextSource.AddonBattleTalk         => _config.logConfig.BattleTalkJumpToBottom,
-        TextSource.AddonBubble             => _config.logConfig.BubbleJumpToBottom,
-        TextSource.AddonCutsceneSelectString => _config.logConfig.CutsceneSelectStringJumpToBottom,
-        TextSource.AddonSelectString       => _config.logConfig.SelectStringJumpToBottom,
-        TextSource.Backend                 => _config.logConfig.BackendJumpToBottom,
-        _ => true,
-    };
-
-    private void SetJumpToBottom(TextSource source, bool value)
-    {
-        switch (source)
-        {
-            case TextSource.None:                    _config.logConfig.GeneralJumpToBottom = value; break;
-            case TextSource.Chat:                    _config.logConfig.ChatJumpToBottom = value; break;
-            case TextSource.AddonTalk:               _config.logConfig.TalkJumpToBottom = value; break;
-            case TextSource.AddonBattleTalk:         _config.logConfig.BattleTalkJumpToBottom = value; break;
-            case TextSource.AddonBubble:             _config.logConfig.BubbleJumpToBottom = value; break;
-            case TextSource.AddonCutsceneSelectString: _config.logConfig.CutsceneSelectStringJumpToBottom = value; break;
-            case TextSource.AddonSelectString:       _config.logConfig.SelectStringJumpToBottom = value; break;
-            case TextSource.Backend:                 _config.logConfig.BackendJumpToBottom = value; break;
-        }
-    }
 }
