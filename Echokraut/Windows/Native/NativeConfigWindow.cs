@@ -18,6 +18,7 @@ using KamiToolKit;
 using KamiToolKit.Nodes;
 using EKConfig = Echokraut.DataClasses.Configuration;
 
+using static Echokraut.Windows.Native.NativeNodeFactory;
 namespace Echokraut.Windows.Native;
 
 /// <summary>
@@ -783,16 +784,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         UpdateLogs();
     }
 
-    private static void Dim(NodeBase? node, bool enabled)
-    {
-        if (node != null) node.Alpha = enabled ? 1.0f : 0.4f;
-    }
 
 
-    private static void SetVisible(NodeBase? node, bool visible)
-    {
-        if (node != null) node.IsVisible = visible;
-    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // General tab
@@ -1430,59 +1423,13 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         return node;
     }
 
-    private static TextButtonNode Button(string label, float minWidth, Action onClick)
-    {
-        var node = new TextButtonNode { Size = new Vector2(minWidth, 24), String = label };
-        var textW = node.LabelNode.GetTextDrawSize(label).X + 36;
-        if (textW > minWidth) node.Size = new Vector2(textW, 24);
-        node.OnClick = onClick;
-        return node;
-    }
 
-    private static TextInputNode Input(string placeholder, float width, int maxChars, string initial, Action<string> onComplete)
-    {
-        var node = new TextInputNode
-        {
-            Size              = new Vector2(width, 28),
-            MaxCharacters     = maxChars,
-            PlaceholderString = placeholder,
-            String            = initial,
-        };
-        node.OnInputReceived = s => onComplete(s.ToString());
-        return node;
-    }
 
     /// <summary>
     /// Adds a collapsible section to a ScrollingListNode using a TextButtonNode toggle.
     /// Uses component events (no CollisionNode), so it works inside nested containers.
     /// Returns the toggle button so the caller can position it.
     /// </summary>
-    private static TextButtonNode CreateCollapsibleSection(
-        ScrollingListNode list, string title, float width, bool startCollapsed, NodeBase[] contentNodes)
-    {
-        var arrow = startCollapsed ? "[+]" : "[-]";
-        TextButtonNode? toggle = null;
-        toggle = new TextButtonNode { Size = new Vector2(width, 24), String = $"{arrow} {title}" };
-        toggle.OnClick = () =>
-        {
-            var isHidden = contentNodes.Length > 0 && !contentNodes[0].IsVisible;
-            foreach (var n in contentNodes)
-                n.IsVisible = isHidden;
-            toggle!.String = isHidden ? $"[-] {title}" : $"[+] {title}";
-            list.RecalculateLayout();
-        };
-
-        // Set initial visibility
-        if (startCollapsed)
-            foreach (var n in contentNodes)
-                n.IsVisible = false;
-
-        list.AddNode(toggle);
-        foreach (var n in contentNodes)
-            list.AddNode(n);
-
-        return toggle;
-    }
 
     /// <summary>
     /// Variant of <see cref="CreateCollapsibleSection"/> for sections whose visibility is

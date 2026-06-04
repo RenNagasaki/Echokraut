@@ -14,6 +14,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
 
+using static Echokraut.Windows.Native.NativeNodeFactory;
 namespace Echokraut.Windows.Native;
 
 public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
@@ -676,14 +677,6 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         Alpha = 0,
     };
 
-    private static TextButtonNode Button(string label, float minWidth, Action onClick)
-    {
-        var node = new TextButtonNode { Size = new Vector2(minWidth, 24), String = label };
-        var textW = node.LabelNode.GetTextDrawSize(label).X + 36;
-        if (textW > minWidth) node.Size = new Vector2(textW, 24);
-        node.OnClick = onClick;
-        return node;
-    }
 
     public override void Dispose()
     {

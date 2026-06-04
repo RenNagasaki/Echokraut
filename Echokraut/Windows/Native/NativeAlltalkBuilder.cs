@@ -11,6 +11,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
 
+using static Echokraut.Windows.Native.NativeNodeFactory;
 namespace Echokraut.Windows.Native;
 
 /// <summary>
@@ -267,10 +268,6 @@ public static class NativeAlltalkBuilder
 
     // ── Private helpers (mirror NativeConfigWindow's factory methods) ─────────
 
-    private static void Dim(NodeBase? node, bool enabled)
-    {
-        if (node != null) node.Alpha = enabled ? 1.0f : 0.4f;
-    }
 
     private static CheckboxNode MakeCheck(string label, float width, bool initial, Action<bool> onChange) => new()
     {
