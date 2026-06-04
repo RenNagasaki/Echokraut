@@ -17,3 +17,5 @@ CLAUDE.md
 .claude/*
 !.claude/settings.json
 !.claude/hooks/
+!.claude/commands/
+!.claude/workflows/
