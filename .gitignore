@@ -10,3 +10,10 @@ CLAUDE.md
 # Local test secrets — copy .example.env to .env and fill in values.
 .env
 !.example.env
+
+# --- Shared Claude Code project config (global ~/.gitignore_global ignores .claude/) ---
+# Re-include only the committed gate hook + its registration; keep local/agent state ignored.
+!.claude/
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
