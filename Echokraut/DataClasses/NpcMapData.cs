@@ -8,7 +8,7 @@ using System.Collections.Generic;
 
 namespace Echokraut.DataClasses
 {
-    public class NpcMapData : IComparable
+    public class NpcMapData : StringKeyedComparable
     {
         public string Name { get; set; } = null!;
         public NpcRaces Race { get; set; }
@@ -50,24 +50,6 @@ namespace Echokraut.DataClasses
         {
             var raceString = Race == NpcRaces.Unknown ? RaceStr : Race.ToString();
             return $"{Gender} - {raceString} - {Name}";
-        }
-        public override int GetHashCode() => ToString().ToLowerInvariant().GetHashCode();
-        public override bool Equals(object? obj)
-        {
-            var item = obj as NpcMapData;
-
-            if (item == null)
-            {
-                return false;
-            }
-
-            return this.ToString().Equals(item.ToString(), System.StringComparison.OrdinalIgnoreCase);
-        }
-
-        public int CompareTo(object? obj)
-        {
-            var otherObj = obj as NpcMapData;
-            return otherObj?.ToString().ToLower().CompareTo(ToString().ToLower()) ?? -1;
         }
 
     }
