@@ -21,6 +21,19 @@ namespace Echokraut.Backend
         private readonly IAudioFileService _audioFiles;
         private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
 
+        // Single long-lived streaming client. Creating a fresh HttpClient + SocketsHttpHandler
+        // per generation leaked sockets into TIME_WAIT and could exhaust the pool under sustained
+        // dialogue. Requests use absolute URIs built from the *current* BaseUrl, so this client
+        // needs no BaseAddress and stays correct across runtime server-URL changes.
+        private static readonly HttpClient _streamingClient = new HttpClient(new SocketsHttpHandler
+        {
+            AutomaticDecompression = DecompressionMethods.None,
+            KeepAlivePingPolicy = HttpKeepAlivePingPolicy.Always,
+            KeepAlivePingDelay = TimeSpan.FromSeconds(30),
+            KeepAlivePingTimeout = TimeSpan.FromSeconds(10),
+        })
+        { Timeout = TimeSpan.FromSeconds(2) };
+
         public AlltalkBackend(Configuration configuration, ILogService log, IAudioFileService audioFiles)
         {
             _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
@@ -31,15 +44,6 @@ namespace Echokraut.Backend
         public async Task<Stream?> GenerateAudioStreamFromVoice(EKEventId eventId, VoiceMessage message, string voice, ClientLanguage language)
         {
             _log.Info(nameof(GenerateAudioStreamFromVoice), "Generating Alltalk Audio", eventId);
-            var handler = new SocketsHttpHandler {
-                AutomaticDecompression = System.Net.DecompressionMethods.None,
-                KeepAlivePingPolicy = HttpKeepAlivePingPolicy.Always,
-                KeepAlivePingDelay = TimeSpan.FromSeconds(30),
-                KeepAlivePingTimeout = TimeSpan.FromSeconds(10)
-            };
-            using var streamingClient = new HttpClient(handler);
-            streamingClient.BaseAddress = new Uri(_configuration.Alltalk.BaseUrl);
-            streamingClient.Timeout = TimeSpan.FromSeconds(2);
 
             HttpResponseMessage? res = null;
             try
@@ -59,7 +63,7 @@ namespace Echokraut.Backend
                 req.Headers.TryAddWithoutValidation("Accept-Encoding", "identity");
                 req.Headers.TryAddWithoutValidation("Cache-Control", "no-transform");
 
-                res = await streamingClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
+                res = await _streamingClient.SendAsync(req, HttpCompletionOption.ResponseHeadersRead).ConfigureAwait(false);
                 EnsureSuccessStatusCode(res);
 
                 _log.Info(nameof(GenerateAudioStreamFromVoice), "Getting response...", eventId);
@@ -112,7 +116,7 @@ namespace Echokraut.Backend
             try
             {
                 var content = new StringContent("");
-                await _httpClient.PutAsync(_configuration.Alltalk.BaseUrl.TrimEnd('/') + _configuration.Alltalk.StopPath, content).ConfigureAwait(false);
+                await _httpClient.PutAsync(BuildUrl(_configuration.Alltalk.BaseUrl, _configuration.Alltalk.StopPath), content).ConfigureAwait(false);
             }
             catch (Exception ex)
             {
@@ -125,7 +129,7 @@ namespace Echokraut.Backend
             _log.Info(nameof(CheckReady), "Checking if Alltalk is ready", eventId);
             try
             {
-                var url = _configuration.Alltalk.BaseUrl.TrimEnd('/') + _configuration.Alltalk.ReadyPath;
+                var url = BuildUrl(_configuration.Alltalk.BaseUrl, _configuration.Alltalk.ReadyPath);
                 var res = await _httpClient.GetAsync(url).ConfigureAwait(false);
                 if (!res.IsSuccessStatusCode)
                 {
@@ -166,6 +170,9 @@ namespace Echokraut.Backend
                 throw new AlltalkFailedException(res.StatusCode, "Failed to make request.");
         }
 
+        /// <summary>Joins the configured base URL and an endpoint path, collapsing any double slash.</summary>
+        internal static string BuildUrl(string baseUrl, string path) => baseUrl.TrimEnd('/') + path;
+
         static string getAlltalkLanguage(ClientLanguage language)
         {
             switch (language)
@@ -185,7 +192,7 @@ namespace Echokraut.Backend
             try
             {
                 var content = new StringContent("");
-                await _httpClient.PostAsync(_configuration.Alltalk.BaseUrl.TrimEnd('/') + _configuration.Alltalk.ReloadPath + reloadModel, content).ConfigureAwait(false);
+                await _httpClient.PostAsync(BuildUrl(_configuration.Alltalk.BaseUrl, _configuration.Alltalk.ReloadPath) + reloadModel, content).ConfigureAwait(false);
                 return true;
             }
             catch (Exception ex)
