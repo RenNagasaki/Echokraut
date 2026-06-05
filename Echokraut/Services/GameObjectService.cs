@@ -50,6 +50,9 @@ public class GameObjectService : IGameObjectService
     public ulong LocalPlayerContentId => _localPlayerContentId;
     public bool LocalPlayerIsMale => _localPlayerIsMale;
 
+    public long GetEffectivePlayerContentId(bool hasPlayerPlaceholder)
+        => hasPlayerPlaceholder ? (long)_localPlayerContentId : 0L;
+
     public IGameObject? NextUnknownCharacter => _nextUnknownCharacter;
 
     public GameObjectService(

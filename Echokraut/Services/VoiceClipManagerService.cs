@@ -58,7 +58,7 @@ public class VoiceClipManagerService : IVoiceClipManagerService
     /// </summary>
     private long GetEffectivePlayerId(VoiceClipEntity voiceClip)
     {
-        return voiceClip.HasPlayerPlaceholder ? (long)_gameObjects.LocalPlayerContentId : 0;
+        return _gameObjects.GetEffectivePlayerContentId(voiceClip.HasPlayerPlaceholder);
     }
 
     public VoiceMessage BuildVoiceMessage(VoiceClipEntity voiceClip)

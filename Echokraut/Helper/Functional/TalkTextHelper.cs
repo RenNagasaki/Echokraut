@@ -283,26 +283,20 @@ namespace Echokraut.Helper.Functional
             return cleanText;
         }
 
+        /// <summary>Maps the FFXIV client language to the matching specific culture (defaults to en-US).</summary>
+        public static CultureInfo GetCulture(ClientLanguage language) => language switch
+        {
+            ClientLanguage.German => CultureInfo.CreateSpecificCulture("de-DE"),
+            ClientLanguage.Japanese => CultureInfo.CreateSpecificCulture("ja-JP"),
+            ClientLanguage.French => CultureInfo.CreateSpecificCulture("fr-FR"),
+            _ => CultureInfo.CreateSpecificCulture("en-US"),
+        };
+
         public static string ReplaceDate(ILogService log, EKEventId eventId, string cleanText, ClientLanguage language)
         {
             try
             {
-                var culture = new CultureInfo("en-US");
-                switch (language)
-                {
-                    case ClientLanguage.English:
-                        culture = CultureInfo.CreateSpecificCulture("en-US");
-                        break;
-                    case ClientLanguage.German:
-                        culture = CultureInfo.CreateSpecificCulture("de-DE");
-                        break;
-                    case ClientLanguage.Japanese:
-                        culture = CultureInfo.CreateSpecificCulture("ja-JP");
-                        break;
-                    case ClientLanguage.French:
-                        culture = CultureInfo.CreateSpecificCulture("fr-FR");
-                        break;
-                }
+                var culture = GetCulture(language);
                 var formats = new[] { "M-d-yyyy", "dd-MM-yyyy", "MM-dd-yyyy", "dd/MM/yyyy", "MM/dd/yyyy", "M.d.yyyy", "dd.MM.yyyy" }
                         .Union(culture.DateTimeFormat.GetAllDateTimePatterns()).ToArray();
                 var dateRxResult = DateRx.Match(cleanText);
@@ -336,22 +330,7 @@ namespace Echokraut.Helper.Functional
         {
             try
             {
-                CultureInfo culture = CultureInfo.CreateSpecificCulture("en-US");
-                switch (language)
-                {
-                    case ClientLanguage.English:
-                        culture = CultureInfo.CreateSpecificCulture("en-US");
-                        break;
-                    case ClientLanguage.German:
-                        culture = CultureInfo.CreateSpecificCulture("de-DE");
-                        break;
-                    case ClientLanguage.Japanese:
-                        culture = CultureInfo.CreateSpecificCulture("ja-JP");
-                        break;
-                    case ClientLanguage.French:
-                        culture = CultureInfo.CreateSpecificCulture("fr-FR");
-                        break;
-                }
+                CultureInfo culture = GetCulture(language);
 
                 var timeRxResult = TimeRx.Match(cleanText);
                 int i = 0;
@@ -469,22 +448,7 @@ namespace Echokraut.Helper.Functional
         {
             try
             {
-                CultureInfo culture = CultureInfo.CreateSpecificCulture("en-US");
-                switch (language)
-                {
-                    case ClientLanguage.English:
-                        culture = CultureInfo.CreateSpecificCulture("en-US");
-                        break;
-                    case ClientLanguage.German:
-                        culture = CultureInfo.CreateSpecificCulture("de-DE");
-                        break;
-                    case ClientLanguage.Japanese:
-                        culture = CultureInfo.CreateSpecificCulture("ja-JP");
-                        break;
-                    case ClientLanguage.French:
-                        culture = CultureInfo.CreateSpecificCulture("fr-FR");
-                        break;
-                }
+                CultureInfo culture = GetCulture(language);
 
                 var integer = IntegerRx.Match(cleanText);
                 int i = 0;
