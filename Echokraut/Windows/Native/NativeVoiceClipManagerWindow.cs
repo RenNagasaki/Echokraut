@@ -314,21 +314,8 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         // The Tooltip setter registers MouseOver/MouseOut on the button itself, which never
         // fires here, so we drive ShowTooltip/HideTooltip manually from the ImageNode events
         // we know work.
-        var normalTint = new Vector3(1f, 1f, 1f);
-        var hoverTint = new Vector3(1.4f, 1.4f, 1.4f);
-        _settingsButton.ImageNode.MultiplyColor = normalTint;
-        _settingsButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
-        {
-            if (_settingsButton == null) return;
-            _settingsButton.ImageNode.MultiplyColor = hoverTint;
-            _settingsButton.ShowTooltip();
-        });
-        _settingsButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
-        {
-            if (_settingsButton == null) return;
-            _settingsButton.ImageNode.MultiplyColor = normalTint;
-            _settingsButton.HideTooltip();
-        });
+        WireIconButtonHover(_settingsButton, () => _settingsButton != null,
+            _settingsButton.ShowTooltip, _settingsButton.HideTooltip);
         AddNode(_settingsButton);
 
         // Game Data Tools button — opens the bulk-data window (harvest + voice starter set).
@@ -343,23 +330,13 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
             Tooltip = Loc.S("Open Game Data Tools window"),
             OnClick = () => _toggleGameDataTools(),
         };
-        _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
         // Both MouseOver and MouseOut bail when disabled so the None-mode dimmed look is
         // owned exclusively by ATK's disabled timeline; without the MouseOut gate, the
         // cursor leaving a dimmed button reset MultiplyColor to (1,1,1) and the icon
         // snapped brighter than its disabled state.
-        _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
-        {
-            if (_gameDataToolsButton == null || !_gameDataToolsButton.IsEnabled) return;
-            _gameDataToolsButton.ImageNode.MultiplyColor = hoverTint;
-            _gameDataToolsButton.ShowTooltip();
-        });
-        _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
-        {
-            if (_gameDataToolsButton == null || !_gameDataToolsButton.IsEnabled) return;
-            _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
-            _gameDataToolsButton.HideTooltip();
-        });
+        WireIconButtonHover(_gameDataToolsButton,
+            () => _gameDataToolsButton != null && _gameDataToolsButton.IsEnabled,
+            _gameDataToolsButton.ShowTooltip, _gameDataToolsButton.HideTooltip);
         AddNode(_gameDataToolsButton);
 
         // Backend reachability indicator — to the right of both icon buttons, on the pagination row.

@@ -20,6 +20,8 @@ using KamiToolKit.Nodes;
 using ManagedBass;
 using EKConfig = Echokraut.DataClasses.Configuration;
 
+using static Echokraut.Windows.Native.NativeNodeFactory;
+
 namespace Echokraut.Windows.Native;
 
 /// <summary>
@@ -237,27 +239,13 @@ public sealed unsafe class DialogTalkController : IDisposable
         // - AtkTooltipManager places its tooltip in a separate addon layer that ends up below
         //   Talk during NPC dialog, so we render a custom tooltip via ShowToolbarTooltip
         //   instead — see _tooltipBg / _tooltipText below.
-        var normalTint = new Vector3(1f, 1f, 1f);
-        var hoverTint = new Vector3(1.4f, 1.4f, 1.4f);
-
         _playStopTooltipText = Loc.S("Play");
         _playStopButton = new DynamicIconButtonNode { Size = new Vector2(28, 28), Position = new Vector2(0, 2) };
         _playStopButton.Icon = ButtonIcon.Volume;
         _playStopButton.OnClick = OnPlayStopClick;
         _playStopButton.ImageNode.AddNodeFlags(NodeFlags.HasCollision);
-        _playStopButton.ImageNode.MultiplyColor = normalTint;
-        _playStopButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
-        {
-            if (_playStopButton == null) return;
-            _playStopButton.ImageNode.MultiplyColor = hoverTint;
-            ShowToolbarTooltip(_playStopTooltipText, _playStopButton);
-        });
-        _playStopButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
-        {
-            if (_playStopButton == null) return;
-            _playStopButton.ImageNode.MultiplyColor = normalTint;
-            HideToolbarTooltip();
-        });
+        WireIconButtonHover(_playStopButton, () => _playStopButton != null,
+            () => ShowToolbarTooltip(_playStopTooltipText, _playStopButton), HideToolbarTooltip);
 
         _muteCheckbox = new CheckboxNode { Size = new Vector2(60, 24), String = Loc.S("Mute"), Position = new Vector2(0, 5) };
         _muteCheckbox.OnClick = OnMuteClick;
@@ -274,19 +262,8 @@ public sealed unsafe class DialogTalkController : IDisposable
         _settingsButton.Icon = ButtonIcon.MusicNote;
         _settingsButton.OnClick = () => _openVoiceClipManager();
         _settingsButton.ImageNode.AddNodeFlags(NodeFlags.HasCollision);
-        _settingsButton.ImageNode.MultiplyColor = normalTint;
-        _settingsButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
-        {
-            if (_settingsButton == null) return;
-            _settingsButton.ImageNode.MultiplyColor = hoverTint;
-            ShowToolbarTooltip(settingsTooltipText, _settingsButton);
-        });
-        _settingsButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
-        {
-            if (_settingsButton == null) return;
-            _settingsButton.ImageNode.MultiplyColor = normalTint;
-            HideToolbarTooltip();
-        });
+        WireIconButtonHover(_settingsButton, () => _settingsButton != null,
+            () => ShowToolbarTooltip(settingsTooltipText, _settingsButton), HideToolbarTooltip);
 
         // OnOptionSelected fires as the first line of OptionSelectedHandler, before UpdateLabel.
         // UpdateLabel then crashes (LabelNode.Node null after Uncollapse's ReattachNode triggers

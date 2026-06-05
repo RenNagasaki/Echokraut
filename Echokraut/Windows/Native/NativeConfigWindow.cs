@@ -370,9 +370,6 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         // Always visible regardless of active tab; mirrors the pattern in
         // NativeVoiceClipManagerWindow / NativeGameDataToolsWindow. ImageNode-routed events
         // are mandatory in NativeAddon contexts (only those fire reliably).
-        var normalTint = new Vector3(1f, 1f, 1f);
-        var hoverTint = new Vector3(1.4f, 1.4f, 1.4f);
-
         // Voice Clip Manager — UV (112, 28) on Character.tex = ButtonIcon.MusicNote.
         _voiceClipManagerButton = new DynamicIconButtonNode
         {
@@ -382,19 +379,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             Tooltip = Loc.S("Open Voice Clip Manager"),
             OnClick = () => OnToggleVoiceClipManager?.Invoke(),
         };
-        _voiceClipManagerButton.ImageNode.MultiplyColor = normalTint;
-        _voiceClipManagerButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
-        {
-            if (_voiceClipManagerButton == null) return;
-            _voiceClipManagerButton.ImageNode.MultiplyColor = hoverTint;
-            _voiceClipManagerButton.ShowTooltip();
-        });
-        _voiceClipManagerButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
-        {
-            if (_voiceClipManagerButton == null) return;
-            _voiceClipManagerButton.ImageNode.MultiplyColor = normalTint;
-            _voiceClipManagerButton.HideTooltip();
-        });
+        WireIconButtonHover(_voiceClipManagerButton, () => _voiceClipManagerButton != null,
+            _voiceClipManagerButton.ShowTooltip, _voiceClipManagerButton.HideTooltip);
         AddNode(_voiceClipManagerButton);
 
         // Game Data Tools — UV (168, 84) on Character.tex = ButtonIcon.GearCogWithChatBubble.
@@ -406,27 +392,14 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             Tooltip = Loc.S("Open Game Data Tools window"),
             OnClick = () => OnToggleGameDataTools?.Invoke(),
         };
-        _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
-        // Hover handlers wired on ImageNode fire independently of the parent component's
-        // SetEnabledState pipeline — the icon node has its own RespondToMouse + EmitsEvents
-        // flags. Both MouseOver and MouseOut bail when the button is disabled so the
-        // None-mode dimmed look is owned exclusively by ATK's disabled timeline (alpha
-        // 178 + multiplier 0.5). Without the MouseOut gate, sweeping the cursor off a
-        // disabled button reset MultiplyColor to (1,1,1) and the icon snapped brighter
-        // than its disabled state. Any stuck hover state from an enabled→disabled
-        // transition while hovered is force-cleared by the OnUpdate transition handler.
-        _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
-        {
-            if (_gameDataToolsButton == null || !_gameDataToolsButton.IsEnabled) return;
-            _gameDataToolsButton.ImageNode.MultiplyColor = hoverTint;
-            _gameDataToolsButton.ShowTooltip();
-        });
-        _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
-        {
-            if (_gameDataToolsButton == null || !_gameDataToolsButton.IsEnabled) return;
-            _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
-            _gameDataToolsButton.HideTooltip();
-        });
+        // Hover gates on IsEnabled: in None-mode the button is disabled and its dimmed look is
+        // owned by ATK's disabled timeline (alpha 178 + multiplier 0.5). Bailing on disabled in
+        // BOTH over and out stops a cursor sweep from resetting MultiplyColor to (1,1,1) and
+        // snapping the icon brighter than its disabled state. A stuck hover from an enabled→
+        // disabled transition while hovered is force-cleared by the OnUpdate transition handler.
+        WireIconButtonHover(_gameDataToolsButton,
+            () => _gameDataToolsButton != null && _gameDataToolsButton.IsEnabled,
+            _gameDataToolsButton.ShowTooltip, _gameDataToolsButton.HideTooltip);
         AddNode(_gameDataToolsButton);
 
         ShowTopPanel(0);

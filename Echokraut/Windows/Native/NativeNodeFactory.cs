@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using Echotools.UI.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
@@ -110,4 +111,32 @@ internal static class NativeNodeFactory
         Size = new Vector2(width, height),
         Alpha = 0,
     };
+
+    /// <summary>Standard icon-button tints: full colour, brightened on hover.</summary>
+    public static readonly Vector3 NormalTint = new(1f, 1f, 1f);
+    public static readonly Vector3 HoverTint = new(1.4f, 1.4f, 1.4f);
+
+    /// <summary>
+    /// Wires the standard hover behaviour for a <see cref="DynamicIconButtonNode"/>: brighten the
+    /// icon on MouseOver, restore on MouseOut, and show/hide the tooltip via <paramref name="onHover"/>
+    /// / <paramref name="onOut"/>. <paramref name="isAlive"/> is checked inside the events so they
+    /// no-op once the owning window has dropped its node references during teardown — this preserves
+    /// the per-site null guards the inline copies used to carry.
+    /// </summary>
+    public static void WireIconButtonHover(DynamicIconButtonNode node, Func<bool> isAlive, Action onHover, Action onOut)
+    {
+        node.ImageNode.MultiplyColor = NormalTint;
+        node.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
+        {
+            if (!isAlive()) return;
+            node.ImageNode.MultiplyColor = HoverTint;
+            onHover();
+        });
+        node.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
+        {
+            if (!isAlive()) return;
+            node.ImageNode.MultiplyColor = NormalTint;
+            onOut();
+        });
+    }
 }
