@@ -60,7 +60,7 @@ public class AddonCutSceneSelectStringHelper : IAddonCutSceneSelectStringHelper
         if (!_configuration.Enabled) return;
         if (!_configuration.VoicePlayerChoicesCutscene) return;
 
-        GetAddonStrings(((AddonCutSceneSelectString*)args.Addon.Address)->OptionList);
+        TalkTextHelper.ReadAddonOptions(((AddonCutSceneSelectString*)args.Addon.Address)->OptionList, options);
     }
 
     private unsafe void OnPreFinalize(AddonEvent type, AddonArgs args)
@@ -69,26 +69,6 @@ public class AddonCutSceneSelectStringHelper : IAddonCutSceneSelectStringHelper
         if (!_configuration.VoicePlayerChoicesCutscene) return;
 
         HandleSelectedString(((AddonCutSceneSelectString*)args.Addon.Address)->OptionList);
-    }
-
-    private unsafe void GetAddonStrings(AtkComponentList* list)
-    {
-        if (list is null) return;
-
-        options.Clear();
-
-        foreach (var index in Enumerable.Range(0, list->ListLength))
-        {
-            var listItemRenderer = list->ItemRendererList[index].AtkComponentListItemRenderer;
-            if (listItemRenderer is null) continue;
-
-            var buttonTextNode = listItemRenderer->AtkComponentButton.ButtonTextNode;
-            if (buttonTextNode is null) continue;
-
-            var buttonText = TalkTextHelper.ReadStringNode(buttonTextNode->NodeText);
-
-            options.Add(buttonText);
-        }
     }
 
     private unsafe void HandleSelectedString(AtkComponentList* list)

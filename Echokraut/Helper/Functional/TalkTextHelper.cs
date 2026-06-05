@@ -129,6 +129,31 @@ namespace Echokraut.Helper.Functional
                 .Replace("\r", "");
         }
 
+        /// <summary>
+        /// Reads every option label out of an addon's <c>AtkComponentList</c> into
+        /// <paramref name="options"/> (cleared first). Shared by the SelectString /
+        /// CutSceneSelectString helpers.
+        /// </summary>
+        public static unsafe void ReadAddonOptions(AtkComponentList* list, List<string> options)
+        {
+            if (list is null) return;
+
+            options.Clear();
+
+            foreach (var index in Enumerable.Range(0, list->ListLength))
+            {
+                var listItemRenderer = list->ItemRendererList[index].AtkComponentListItemRenderer;
+                if (listItemRenderer is null) continue;
+
+                var buttonTextNode = listItemRenderer->AtkComponentButton.ButtonTextNode;
+                if (buttonTextNode is null) continue;
+
+                var buttonText = ReadStringNode(buttonTextNode->NodeText);
+
+                options.Add(buttonText);
+            }
+        }
+
         public static unsafe string ReadStringNode(Utf8String textNode)
         {
             var textPtr = textNode.StringPtr;
