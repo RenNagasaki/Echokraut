@@ -1396,32 +1396,9 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         return node;
     }
 
-    private static HorizontalLineNode Separator(float width) => new()
-    {
-        Size = new Vector2(width, 4),
-    };
 
-    /// <summary>Invisible node that reserves layout space in a HorizontalListNode.</summary>
-    private static ResNode Spacer(float width, float height) => new()
-    {
-        Size = new Vector2(width, height),
-        Alpha = 0,
-    };
 
-    private static TextNode Label(string text, float width) => new()
-    {
-        Size     = new Vector2(width, 18),
-        String   = text,
-        FontType = FontType.Axis,
-        FontSize = 12,
-    };
 
-    private static TextNode HeaderLabel(string text, float width)
-    {
-        var node = Label(text, width);
-        node.AddTextFlags(TextFlags.Ellipsis);
-        return node;
-    }
 
 
 

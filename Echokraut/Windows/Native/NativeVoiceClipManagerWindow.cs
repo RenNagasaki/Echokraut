@@ -955,13 +955,6 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
 
     // ── Helpers ──────────────────────────────────────────────
 
-    private static TextNode Label(string text, float width) => new()
-    {
-        Size = new Vector2(width, 18),
-        String = text,
-        FontType = FontType.Axis,
-        FontSize = 12,
-    };
 
     private void OpenNpcEdit(NpcMapData mapData)
     {

@@ -1,5 +1,6 @@
 using System;
 using System.Numerics;
+using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
 
@@ -79,4 +80,34 @@ internal static class NativeNodeFactory
 
         return toggle;
     }
+
+    /// <summary>FFXIV-Axis text label, 12pt, sized to <paramref name="width"/>.</summary>
+    public static TextNode Label(string text, float width) => new()
+    {
+        Size = new Vector2(width, 18),
+        String = text,
+        FontType = FontType.Axis,
+        FontSize = 12,
+    };
+
+    /// <summary>Column-header label that ellipsizes overflow instead of bleeding into the next column.</summary>
+    public static TextNode HeaderLabel(string text, float width)
+    {
+        var node = Label(text, width);
+        node.AddTextFlags(TextFlags.Ellipsis);
+        return node;
+    }
+
+    /// <summary>Thin horizontal divider line.</summary>
+    public static HorizontalLineNode Separator(float width) => new()
+    {
+        Size = new Vector2(width, 4),
+    };
+
+    /// <summary>Invisible node that reserves layout space in a HorizontalListNode.</summary>
+    public static ResNode Spacer(float width, float height) => new()
+    {
+        Size = new Vector2(width, height),
+        Alpha = 0,
+    };
 }

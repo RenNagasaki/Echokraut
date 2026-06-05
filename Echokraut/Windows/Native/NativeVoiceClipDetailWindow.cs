@@ -655,6 +655,8 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
 
     // ── Helpers ──────────────────────────────────────────────
 
+    // Kept local (intentionally shadows NativeNodeFactory.Label/HeaderLabel): this window
+    // offsets its labels by y=5, which the shared factory version does not.
     private static TextNode Label(string text, float width) => new()
     {
         Size = new Vector2(width, 18),
@@ -671,11 +673,6 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         return node;
     }
 
-    private static ResNode Spacer(float width, float height) => new()
-    {
-        Size = new Vector2(width, height),
-        Alpha = 0,
-    };
 
 
     public override void Dispose()
