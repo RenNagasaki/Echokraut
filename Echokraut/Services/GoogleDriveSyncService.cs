@@ -68,7 +68,7 @@ public partial class GoogleDriveSyncService : IGoogleDriveSyncService
                 _log.Debug(nameof(RunAsync), $"Syncing GoogleDrive", eventId);
                 try
                 {
-                    DownloadFolder(_config.LocalSaveLocation, _config.GoogleDriveShareLink);
+                    await DownloadFolder(_config.LocalSaveLocation, _config.GoogleDriveShareLink);
                 }
                 catch (TaskCanceledException) { throw; }
                 catch (Exception ex)
@@ -154,7 +154,7 @@ public partial class GoogleDriveSyncService : IGoogleDriveSyncService
         await CreateDriveServiceAsync();
     }
 
-    public async void DownloadFolder(string localSavePath, string shareLink)
+    public async Task DownloadFolder(string localSavePath, string shareLink)
     {
         try
         {
@@ -443,60 +443,11 @@ public partial class GoogleDriveSyncService : IGoogleDriveSyncService
             var existing = await FindFile(service, fileName, parentId);
 
             using var stream = new FileStream(filePath, FileMode.Open);
-            if (existing != null)
-            {
-                var update = service.Files.Update(
-                    new Google.Apis.Drive.v3.Data.File(),
-                    existing.Id,
-                    stream,
-                    "audio/wav"
-                );
-
-                await update.UploadAsync();
-            }
-            else
-            {
-                var fileMetadata = new Google.Apis.Drive.v3.Data.File
-                {
-                    Name = fileName,
-                    Parents = new List<string> { parentId }
-                };
-                var request = service.Files.Create(fileMetadata, stream, "audio/wav");
-                request.Fields = "id";
-                var progress = await request.UploadAsync();
-                var uploadedFile = request.ResponseBody;
-            }
+            await UpsertFileAsync(service, existing, fileName, parentId, stream, "audio/wav");
 
             using var echokrautStream = new MemoryStream(
-                Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString(
-                                           "O",
-                                           CultureInfo.InvariantCulture
-                                       ))
-            );
-
-            if (echokrautFile != null)
-            {
-                var update = service.Files.Update(
-                    new Google.Apis.Drive.v3.Data.File(),
-                    echokrautFile.Id,
-                    echokrautStream,
-                    "text/plain"
-                );
-
-                await update.UploadAsync();
-            }
-            else
-            {
-                var fileMetadata = new Google.Apis.Drive.v3.Data.File
-                {
-                    Name = $"{LASTUPLOAD}.txt",
-                    Parents = new List<string> { echokrautId }
-                };
-                var request = service.Files.Create(fileMetadata, echokrautStream, "text/plain");
-                request.Fields = "id";
-                var progress = await request.UploadAsync();
-                var uploadedFile = request.ResponseBody;
-            }
+                Encoding.UTF8.GetBytes(DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture)));
+            await UpsertFileAsync(service, echokrautFile, $"{LASTUPLOAD}.txt", echokrautId, echokrautStream, "text/plain");
 
             return true;
         }
@@ -515,6 +466,34 @@ public partial class GoogleDriveSyncService : IGoogleDriveSyncService
         return value
                .Replace("\\", "\\\\")
                .Replace("'", "\\'");
+    }
+
+    /// <summary>Creates <paramref name="name"/> under <paramref name="parentId"/>, or updates it in
+    /// place when <paramref name="existing"/> is non-null. Shared by both uploads in UploadFile.</summary>
+    private static async Task UpsertFileAsync(
+        DriveService service,
+        Google.Apis.Drive.v3.Data.File? existing,
+        string name,
+        string parentId,
+        Stream content,
+        string mimeType)
+    {
+        if (existing != null)
+        {
+            var update = service.Files.Update(new Google.Apis.Drive.v3.Data.File(), existing.Id, content, mimeType);
+            await update.UploadAsync();
+        }
+        else
+        {
+            var fileMetadata = new Google.Apis.Drive.v3.Data.File
+            {
+                Name = name,
+                Parents = new List<string> { parentId }
+            };
+            var request = service.Files.Create(fileMetadata, content, mimeType);
+            request.Fields = "id";
+            await request.UploadAsync();
+        }
     }
 
     private async Task<Google.Apis.Drive.v3.Data.File?> FindFile(

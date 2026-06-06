@@ -255,7 +255,7 @@ public partial class Plugin : IDalamudPlugin
         try 
         { 
             if (_configuration.GoogleDriveDownload)
-                _googleDrive.DownloadFolder(_configuration.LocalSaveLocation, _configuration.GoogleDriveShareLink);
+                _ = _googleDrive.DownloadFolder(_configuration.LocalSaveLocation, _configuration.GoogleDriveShareLink);
  
             if (_configuration.FirstTime && !_windowManager.IsFirstTimeOpen)
                 _commands.ToggleFirstTimeUi();
