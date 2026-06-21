@@ -18,6 +18,7 @@ using KamiToolKit;
 using KamiToolKit.Nodes;
 using EKConfig = Echokraut.DataClasses.Configuration;
 
+using static Echokraut.Windows.Native.NativeNodeFactory;
 namespace Echokraut.Windows.Native;
 
 /// <summary>
@@ -369,9 +370,6 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         // Always visible regardless of active tab; mirrors the pattern in
         // NativeVoiceClipManagerWindow / NativeGameDataToolsWindow. ImageNode-routed events
         // are mandatory in NativeAddon contexts (only those fire reliably).
-        var normalTint = new Vector3(1f, 1f, 1f);
-        var hoverTint = new Vector3(1.4f, 1.4f, 1.4f);
-
         // Voice Clip Manager — UV (112, 28) on Character.tex = ButtonIcon.MusicNote.
         _voiceClipManagerButton = new DynamicIconButtonNode
         {
@@ -381,19 +379,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             Tooltip = Loc.S("Open Voice Clip Manager"),
             OnClick = () => OnToggleVoiceClipManager?.Invoke(),
         };
-        _voiceClipManagerButton.ImageNode.MultiplyColor = normalTint;
-        _voiceClipManagerButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
-        {
-            if (_voiceClipManagerButton == null) return;
-            _voiceClipManagerButton.ImageNode.MultiplyColor = hoverTint;
-            _voiceClipManagerButton.ShowTooltip();
-        });
-        _voiceClipManagerButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
-        {
-            if (_voiceClipManagerButton == null) return;
-            _voiceClipManagerButton.ImageNode.MultiplyColor = normalTint;
-            _voiceClipManagerButton.HideTooltip();
-        });
+        WireIconButtonHover(_voiceClipManagerButton, () => _voiceClipManagerButton != null,
+            _voiceClipManagerButton.ShowTooltip, _voiceClipManagerButton.HideTooltip);
         AddNode(_voiceClipManagerButton);
 
         // Game Data Tools — UV (168, 84) on Character.tex = ButtonIcon.GearCogWithChatBubble.
@@ -405,27 +392,14 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             Tooltip = Loc.S("Open Game Data Tools window"),
             OnClick = () => OnToggleGameDataTools?.Invoke(),
         };
-        _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
-        // Hover handlers wired on ImageNode fire independently of the parent component's
-        // SetEnabledState pipeline — the icon node has its own RespondToMouse + EmitsEvents
-        // flags. Both MouseOver and MouseOut bail when the button is disabled so the
-        // None-mode dimmed look is owned exclusively by ATK's disabled timeline (alpha
-        // 178 + multiplier 0.5). Without the MouseOut gate, sweeping the cursor off a
-        // disabled button reset MultiplyColor to (1,1,1) and the icon snapped brighter
-        // than its disabled state. Any stuck hover state from an enabled→disabled
-        // transition while hovered is force-cleared by the OnUpdate transition handler.
-        _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
-        {
-            if (_gameDataToolsButton == null || !_gameDataToolsButton.IsEnabled) return;
-            _gameDataToolsButton.ImageNode.MultiplyColor = hoverTint;
-            _gameDataToolsButton.ShowTooltip();
-        });
-        _gameDataToolsButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
-        {
-            if (_gameDataToolsButton == null || !_gameDataToolsButton.IsEnabled) return;
-            _gameDataToolsButton.ImageNode.MultiplyColor = normalTint;
-            _gameDataToolsButton.HideTooltip();
-        });
+        // Hover gates on IsEnabled: in None-mode the button is disabled and its dimmed look is
+        // owned by ATK's disabled timeline (alpha 178 + multiplier 0.5). Bailing on disabled in
+        // BOTH over and out stops a cursor sweep from resetting MultiplyColor to (1,1,1) and
+        // snapping the icon brighter than its disabled state. A stuck hover from an enabled→
+        // disabled transition while hovered is force-cleared by the OnUpdate transition handler.
+        WireIconButtonHover(_gameDataToolsButton,
+            () => _gameDataToolsButton != null && _gameDataToolsButton.IsEnabled,
+            _gameDataToolsButton.ShowTooltip, _gameDataToolsButton.HideTooltip);
         AddNode(_gameDataToolsButton);
 
         ShowTopPanel(0);
@@ -783,16 +757,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         UpdateLogs();
     }
 
-    private static void Dim(NodeBase? node, bool enabled)
-    {
-        if (node != null) node.Alpha = enabled ? 1.0f : 0.4f;
-    }
 
 
-    private static void SetVisible(NodeBase? node, bool visible)
-    {
-        if (node != null) node.IsVisible = visible;
-    }
 
     // ─────────────────────────────────────────────────────────────────────────
     // General tab
@@ -1403,86 +1369,17 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         return node;
     }
 
-    private static HorizontalLineNode Separator(float width) => new()
-    {
-        Size = new Vector2(width, 4),
-    };
 
-    /// <summary>Invisible node that reserves layout space in a HorizontalListNode.</summary>
-    private static ResNode Spacer(float width, float height) => new()
-    {
-        Size = new Vector2(width, height),
-        Alpha = 0,
-    };
 
-    private static TextNode Label(string text, float width) => new()
-    {
-        Size     = new Vector2(width, 18),
-        String   = text,
-        FontType = FontType.Axis,
-        FontSize = 12,
-    };
 
-    private static TextNode HeaderLabel(string text, float width)
-    {
-        var node = Label(text, width);
-        node.AddTextFlags(TextFlags.Ellipsis);
-        return node;
-    }
 
-    private static TextButtonNode Button(string label, float minWidth, Action onClick)
-    {
-        var node = new TextButtonNode { Size = new Vector2(minWidth, 24), String = label };
-        var textW = node.LabelNode.GetTextDrawSize(label).X + 36;
-        if (textW > minWidth) node.Size = new Vector2(textW, 24);
-        node.OnClick = onClick;
-        return node;
-    }
 
-    private static TextInputNode Input(string placeholder, float width, int maxChars, string initial, Action<string> onComplete)
-    {
-        var node = new TextInputNode
-        {
-            Size              = new Vector2(width, 28),
-            MaxCharacters     = maxChars,
-            PlaceholderString = placeholder,
-            String            = initial,
-        };
-        node.OnInputReceived = s => onComplete(s.ToString());
-        return node;
-    }
 
     /// <summary>
     /// Adds a collapsible section to a ScrollingListNode using a TextButtonNode toggle.
     /// Uses component events (no CollisionNode), so it works inside nested containers.
     /// Returns the toggle button so the caller can position it.
     /// </summary>
-    private static TextButtonNode CreateCollapsibleSection(
-        ScrollingListNode list, string title, float width, bool startCollapsed, NodeBase[] contentNodes)
-    {
-        var arrow = startCollapsed ? "[+]" : "[-]";
-        TextButtonNode? toggle = null;
-        toggle = new TextButtonNode { Size = new Vector2(width, 24), String = $"{arrow} {title}" };
-        toggle.OnClick = () =>
-        {
-            var isHidden = contentNodes.Length > 0 && !contentNodes[0].IsVisible;
-            foreach (var n in contentNodes)
-                n.IsVisible = isHidden;
-            toggle!.String = isHidden ? $"[-] {title}" : $"[+] {title}";
-            list.RecalculateLayout();
-        };
-
-        // Set initial visibility
-        if (startCollapsed)
-            foreach (var n in contentNodes)
-                n.IsVisible = false;
-
-        list.AddNode(toggle);
-        foreach (var n in contentNodes)
-            list.AddNode(n);
-
-        return toggle;
-    }
 
     /// <summary>
     /// Variant of <see cref="CreateCollapsibleSection"/> for sections whose visibility is

@@ -6,6 +6,12 @@ using System.Threading.Tasks;
 
 namespace Echokraut.DataClasses
 {
+    /// <summary>
+    /// Legacy per-source log-filter blob. No longer used at runtime — kept only so older saved
+    /// configs still deserialize. <see cref="Configuration.MigrateLegacyLogConfig"/> folds it into
+    /// <c>Configuration.LogSources</c> (Echotools <c>LogSourceConfig</c> per <c>TextSource</c>) on
+    /// startup and nulls it out. Do not add new fields here.
+    /// </summary>
     public class LogConfig
     {
         #region General

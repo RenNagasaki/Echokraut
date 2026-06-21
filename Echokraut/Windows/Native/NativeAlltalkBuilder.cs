@@ -11,6 +11,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
 
+using static Echokraut.Windows.Native.NativeNodeFactory;
 namespace Echokraut.Windows.Native;
 
 /// <summary>
@@ -41,19 +42,23 @@ public static class NativeAlltalkBuilder
         public NodeBase[] AllNodes => [
             InstallPathInput, ValidationLabel, CpuModeCheck, IsWindows11Check,
             CustomModelUrlInput, CustomVoicesUrlInput, InstallCustomDataRow,
-            AutoStartCheck, InstallRow, StartStopRow,
+            InstallRow, AutoStartCheck, StartStopRow,
         ];
 
         /// <summary>Essential nodes visible by default (install path + validation + CPU mode, then install button + start/stop after advanced).</summary>
         public NodeBase[] EssentialNodes => [InstallPathInput, ValidationLabel, CpuModeCheck];
 
-        /// <summary>Nodes that come after the advanced section (install button + start/stop).</summary>
-        public NodeBase[] PostAdvancedNodes => [InstallRow, StartStopRow];
+        /// <summary>Nodes that come after the advanced section. <see cref="AutoStartCheck"/>
+        /// sits directly above <see cref="StartStopRow"/> so the start-related controls
+        /// cluster together — auto-starting on plugin load is conceptually the same
+        /// decision as clicking Start manually, and burying it under the collapsible
+        /// "Advanced" section made it hard to discover.</summary>
+        public NodeBase[] PostAdvancedNodes => [InstallRow, AutoStartCheck, StartStopRow];
 
         /// <summary>Advanced nodes hidden by default under a collapsible section.</summary>
         public NodeBase[] AdvancedNodes => [
             IsWindows11Check, CustomModelUrlInput, CustomVoicesUrlInput,
-            InstallCustomDataRow, AutoStartCheck,
+            InstallCustomDataRow,
         ];
 
         /// <summary>Updates button labels, dimming, and validation each frame.
@@ -112,6 +117,18 @@ public static class NativeAlltalkBuilder
     public static LocalInstanceNodes BuildLocalInstance(float width, Configuration config, IAlltalkInstanceService alltalkInstance)
     {
         var nodes = new LocalInstanceNodes();
+
+        // Backfill the canonical default into existing configs that have an empty
+        // LocalInstallPath. The property's C#-side default ("C:\\alltalk_tts") only
+        // applies on fresh deserialize — old configs with `"LocalInstallPath": ""` keep
+        // the empty string, which renders an empty input field and looks broken to the
+        // user. Persist the default once so the UI shows a sensible starting value the
+        // user can review/edit/replace.
+        if (string.IsNullOrWhiteSpace(config.Alltalk.LocalInstallPath))
+        {
+            config.Alltalk.LocalInstallPath = "C:\\alltalk_tts";
+            config.Save();
+        }
 
         // Install path
         nodes.InstallPathInput = MakeInput(Loc.S("Local install path (no spaces or dashes)"), width, 128,
@@ -223,7 +240,7 @@ public static class NativeAlltalkBuilder
 
         // Must be an absolute/rooted path (e.g. C:\... or /home/...)
         if (!System.IO.Path.IsPathRooted(path))
-            return (false, Loc.S("Please enter an absolute path (e.g. C:\\Alltalk)."));
+            return (false, Loc.S("Please enter an absolute path (e.g. C:\\alltalk_tts)."));
 
         // Check for invalid path characters
         var invalidChars = System.IO.Path.GetInvalidPathChars();
@@ -234,15 +251,23 @@ public static class NativeAlltalkBuilder
         if (path.Contains(' ') || path.Contains('-'))
             return (false, Loc.S("The path must not contain spaces or dashes."));
 
+        // Reject drive-root-only paths like "C:\" or "C:". The installer drops a ZIP
+        // alongside other content directly into the install path, then extracts a
+        // sub-folder, then runs a sub-process whose working dir is that folder. Writing
+        // to a drive root requires admin on Windows; without it File.WriteAllBytes throws
+        // UnauthorizedAccessException, which on the Task-Run thread isn't observed by the
+        // outer catch and the UI sticks at "Preparing installer..." forever. Force a
+        // subfolder so we get fail-fast validation here instead of a silent hang.
+        var trimmed = path.TrimEnd('\\', '/').Trim();
+        var parent = System.IO.Path.GetDirectoryName(trimmed);
+        if (string.IsNullOrEmpty(parent))
+            return (false, Loc.S("The path must point to a subfolder, not the root of a drive (e.g. C:\\alltalk_tts)."));
+
         return (true, string.Empty);
     }
 
     // ── Private helpers (mirror NativeConfigWindow's factory methods) ─────────
 
-    private static void Dim(NodeBase? node, bool enabled)
-    {
-        if (node != null) node.Alpha = enabled ? 1.0f : 0.4f;
-    }
 
     private static CheckboxNode MakeCheck(string label, float width, bool initial, Action<bool> onChange) => new()
     {

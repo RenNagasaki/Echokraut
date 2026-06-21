@@ -35,7 +35,7 @@ public class LiveGenerationLoggerTests
     {
         // Most NPC dialog has no <Player> placeholder. UI's GetEffectivePlayerId returns 0 for
         // these — we must store under 0 too, otherwise the manager's "is generated" lookup misses.
-        _gameObjects.Setup(g => g.LocalPlayerContentId).Returns(0x1122334455667788UL);
+        _gameObjects.Setup(g => g.GetEffectivePlayerContentId(false)).Returns(0L);
         _gameObjects.Setup(g => g.LocalPlayerName).Returns("Test Player");
 
         _sut.LogIfApplicable(42, hasPlayerPlaceholder: false, "C:/audio/clip.wav", "Female_Hyur_Iceheart", new EKEventId(0, TextSource.AddonTalk));
@@ -50,7 +50,7 @@ public class LiveGenerationLoggerTests
         // Placeholder clips embed the local player's name, so their generations must be tied
         // to the local player's content id (matching VoiceClipManagerService.GetEffectivePlayerId).
         const ulong contentId = 0x1122334455667788UL;
-        _gameObjects.Setup(g => g.LocalPlayerContentId).Returns(contentId);
+        _gameObjects.Setup(g => g.GetEffectivePlayerContentId(true)).Returns((long)contentId);
         _gameObjects.Setup(g => g.LocalPlayerName).Returns("Test Player");
 
         _sut.LogIfApplicable(42, hasPlayerPlaceholder: true, "C:/audio/clip.wav", "VoiceX", new EKEventId(0, TextSource.AddonTalk));

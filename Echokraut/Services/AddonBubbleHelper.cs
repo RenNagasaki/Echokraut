@@ -40,14 +40,9 @@ namespace Echokraut.Services
         private readonly Hook<OpenChatBubbleDelegate> mOpenChatBubbleHook = null!;
         private readonly object mSpeechBubbleInfoLockObj = new();
         private readonly List<SpeechBubbleInfo> mSpeechBubbleInfo = new();
-        private bool nextIsVoice = false;
-        private DateTime timeNextVoice = DateTime.Now;
+        private readonly VoiceLineSkipGuard _voiceSkip = new();
 
-        public void NotifyNextIsVoice()
-        {
-            nextIsVoice = true;
-            timeNextVoice = DateTime.Now;
-        }
+        public void NotifyNextIsVoice() => _voiceSkip.Notify();
 
         public unsafe AddonBubbleHelper(
             IVoiceMessageProcessor voiceProcessor,
@@ -96,11 +91,7 @@ namespace Echokraut.Services
                 if (!_configuration.Enabled || !_configuration.VoiceBubble || _condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.WatchingCutscene] || _condition[Dalamud.Game.ClientState.Conditions.ConditionFlag.OccupiedInCutSceneEvent])
                     return mOpenChatBubbleHook.Original(pThis, pActor, pString, param3, attachmentPointID);
 
-                var voiceNext = nextIsVoice;
-                nextIsVoice = false;
-
-                if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(1000))
-                    voiceNext = false;
+                var voiceNext = _voiceSkip.ConsumeIsVoice(1000);
 
                 var territory = _lumina.GetTerritory();
                 if (!_configuration.VoiceBubblesInCity && territory?.Mount != true)

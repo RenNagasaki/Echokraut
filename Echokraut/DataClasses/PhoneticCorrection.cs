@@ -6,7 +6,7 @@ using System.Threading.Tasks;
 
 namespace Echokraut.DataClasses
 {
-    public class PhoneticCorrection : IComparable
+    public class PhoneticCorrection : StringKeyedComparable
     {
         public string OriginalText = "";
         public string CorrectedText = "";
@@ -21,16 +21,12 @@ namespace Echokraut.DataClasses
             return $"{OriginalText} - {CorrectedText}";
         }
 
-        public override int GetHashCode() => ToString().ToLowerInvariant().GetHashCode();
+        // Legacy: culture-ToLower equality (differs from the base's OrdinalIgnoreCase). Kept
+        // verbatim — phonetic-correction text is user-entered and effectively ASCII/Latin, so the
+        // two agree in practice, but we don't change persisted-dedup semantics here.
         public override bool Equals(object? obj)
         {
             return (obj as PhoneticCorrection)?.ToString().ToLower() == ToString().ToLower();
-        }
-
-        public int CompareTo(object? obj)
-        {
-            var otherObj = obj as PhoneticCorrection;
-            return otherObj?.ToString().ToLower().CompareTo(ToString().ToLower()) ?? -1;
         }
     }
 }

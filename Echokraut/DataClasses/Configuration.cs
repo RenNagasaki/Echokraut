@@ -1,6 +1,7 @@
 using Dalamud.Configuration;
 using Dalamud.Plugin;
 using Echokraut.Enums;
+using Echotools.Logging.DataClasses;
 using Echotools.Logging.Enums;
 using System;
 using System.Collections.Generic;
@@ -34,7 +35,12 @@ public class Configuration : IPluginConfiguration
     public bool AutoAdvanceTextAfterSpeechCompleted { get; set; } = true;
     public bool RemoveStutters { get; set; } = true;
     public bool HideUiInCutscenes { get; set; } = true;
-    public LogConfig logConfig { get; set; } = new LogConfig();
+    // Legacy per-source log-filter blob. Kept only so older saved configs still deserialize;
+    // MigrateLegacyLogConfig() folds it into LogSources on startup and nulls it out.
+    public LogConfig? logConfig { get; set; }
+
+    // Per-source log-filter prefs (Echotools LogSourceConfig), keyed by TextSource.
+    public Dictionary<TextSource, LogSourceConfig> LogSources { get; set; } = new();
     public bool SaveToLocal { get; set; } = true;
     public bool LoadFromLocalFirst { get; set; } = true;
     public string LocalSaveLocation { get; set; } = @"C:\alltalk_tts\LocalSaves";
@@ -109,10 +115,42 @@ public class Configuration : IPluginConfiguration
         // One-shot migrations from older config schemas. Each call must be idempotent —
         // it runs every time the plugin starts.
         Alltalk?.MigrateLegacyInstanceTypeFields();
+        MigrateLegacyLogConfig();
     }
 
     public void Save()
     {
         PluginInterface?.SavePluginConfig(this);
+    }
+
+    /// <summary>Per-source log-filter prefs for <paramref name="source"/>, creating defaults on first use.</summary>
+    public LogSourceConfig GetLogSource(TextSource source)
+    {
+        if (!LogSources.TryGetValue(source, out var cfg))
+        {
+            cfg = new LogSourceConfig();
+            LogSources[source] = cfg;
+        }
+        return cfg;
+    }
+
+    /// <summary>
+    /// One-shot migration of the legacy <see cref="logConfig"/> blob into <see cref="LogSources"/>.
+    /// Idempotent — a no-op once <see cref="logConfig"/> is null. Persisted on the next Save().
+    /// </summary>
+    public void MigrateLegacyLogConfig()
+    {
+        if (logConfig is not { } c) return;
+
+        LogSources[TextSource.None]                      = new LogSourceConfig { ShowDebugLog = c.ShowGeneralDebugLog,              ShowErrorLog = c.ShowGeneralErrorLog,              ShowId0 = c.ShowGeneralId0,              JumpToBottom = c.GeneralJumpToBottom };
+        LogSources[TextSource.Chat]                      = new LogSourceConfig { ShowDebugLog = c.ShowChatDebugLog,                 ShowErrorLog = c.ShowChatErrorLog,                 ShowId0 = c.ShowChatId0,                 JumpToBottom = c.ChatJumpToBottom };
+        LogSources[TextSource.AddonTalk]                 = new LogSourceConfig { ShowDebugLog = c.ShowTalkDebugLog,                 ShowErrorLog = c.ShowTalkErrorLog,                 ShowId0 = c.ShowTalkId0,                 JumpToBottom = c.TalkJumpToBottom };
+        LogSources[TextSource.AddonBattleTalk]           = new LogSourceConfig { ShowDebugLog = c.ShowBattleTalkDebugLog,           ShowErrorLog = c.ShowBattleTalkErrorLog,           ShowId0 = c.ShowBattleTalkId0,           JumpToBottom = c.BattleTalkJumpToBottom };
+        LogSources[TextSource.AddonBubble]               = new LogSourceConfig { ShowDebugLog = c.ShowBubbleDebugLog,               ShowErrorLog = c.ShowBubbleErrorLog,               ShowId0 = c.ShowBubbleId0,               JumpToBottom = c.BubbleJumpToBottom };
+        LogSources[TextSource.AddonCutsceneSelectString] = new LogSourceConfig { ShowDebugLog = c.ShowCutsceneSelectStringDebugLog, ShowErrorLog = c.ShowCutsceneSelectStringErrorLog, ShowId0 = c.ShowCutsceneSelectStringId0, JumpToBottom = c.CutsceneSelectStringJumpToBottom };
+        LogSources[TextSource.AddonSelectString]         = new LogSourceConfig { ShowDebugLog = c.ShowSelectStringDebugLog,         ShowErrorLog = c.ShowSelectStringErrorLog,         ShowId0 = c.ShowSelectStringId0,         JumpToBottom = c.SelectStringJumpToBottom };
+        LogSources[TextSource.Backend]                   = new LogSourceConfig { ShowDebugLog = c.ShowBackendDebugLog,              ShowErrorLog = c.ShowBackendErrorLog,              ShowId0 = c.ShowBackendId0,              JumpToBottom = c.BackendJumpToBottom };
+
+        logConfig = null;
     }
 }

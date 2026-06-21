@@ -1,0 +1,50 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.0.1
+================================================================================
+
+
+==============================================================================
+IMPROVEMENTS
+==============================================================================
+
+[UI] Auto-start checkbox moved + on by default
+  The "Auto-start local instance on plugin load" checkbox now sits directly
+  above the Start / Stop buttons in both the First-Time wizard and the
+  Settings → Backend tab, instead of being hidden under "Advanced options".
+  Default value flipped from off to on — most users running a local AllTalk
+  install want it to come up automatically on plugin load anyway.
+
+[Harvest] Quest dialog harvest now skips voiced lines
+  The quest-dialog harvester previously recorded every line, including ones
+  FFXIV already voices itself. Those won't be played by Echokraut TTS
+  anyway (the original dub takes priority), so they were just adding noise
+  to the database. Going forward the harvester drops any quest-dialog row
+  whose audio file ships in the client language — same rule the cutscene-
+  dialog harvester already followed. Existing voiced rows in the database
+  stay where they are; rerun the harvest to clean them out.
+
+
+==============================================================================
+BUG FIXES
+==============================================================================
+
+- Switching an NPC's voice now actually changes what you hear: when a
+  cached audio file exists from a previous voice (e.g. you generated lines
+  with NPC voice 10, then switched to NPC voice 11), the playback path
+  used to silently keep loading the old voice's WAV. The cache lookup now
+  rejects rows whose saved voice doesn't match the speaker's currently-
+  assigned voice and lets the backend regenerate cleanly. None-mode users
+  (no live generation) are unaffected — cached audio still plays as before.
+
+- AllTalk install with a drive-root path (e.g. C:\) used to hang silently
+  at "Preparing installer...". Drive-root paths are now rejected up front
+  with a clear message ("path must point to a subfolder, not the root of
+  a drive"). Errors that do reach the install task are also surfaced to
+  the wizard's status text instead of being swallowed.
+
+- AllTalk install path field stayed empty for users with older configs;
+  the C# default ("C:\alltalk_tts") only kicked in for fresh installs.
+  The field now backfills the default the first time an empty value is
+  encountered, so the wizard always shows a sensible starting path the
+  user can review or replace.

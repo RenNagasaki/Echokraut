@@ -2,15 +2,15 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
 
   <PropertyGroup>
-    <Version>0.19.0.0</Version>
+    <Version>0.19.0.1</Version>
     <Description>A TTS Dalamud Plugin that breaks the silence! For self hosted TTS Services.</Description>
     <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
     <IsPackable>false</IsPackable>
     <RepositoryUrl>https://github.com/RenNagasaki/Echokraut</RepositoryUrl>
     <Authors>RenNagasaki</Authors>
-    <AssemblyVersion>0.19.0.0</AssemblyVersion>
-    <FileVersion>0.19.0.0</FileVersion>
+    <AssemblyVersion></AssemblyVersion>
+    <FileVersion></FileVersion>
   </PropertyGroup>
 
   <ItemGroup>
@@ -37,7 +37,18 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.3" />
     <PackageReference Include="HtmlAgilityPack" Version="1.11.65" />
     <PackageReference Include="Reloaded.Memory" Version="7.1.0" />
-    <PackageReference Remove="DalamudPackager" />
+    <!--
+      Do NOT add `<PackageReference Remove="DalamudPackager" />` here. The
+      Dalamud.NET.Sdk auto-includes DalamudPackager (Sdk.props line ~75) and
+      the packager is what:
+        - reads Echokraut.json,
+        - injects AssemblyVersion (from <Version>) + DalamudApiLevel + RepoUrl,
+        - writes the enriched manifest into bin/.../Echokraut.json,
+        - assembles the distributed Echokraut.zip.
+      Removing it leaves the source manifest unmodified and Dalamud's installer
+      rejects the install with "Distributed plugin version does not match repo
+      version, distributed: " (empty).
+    -->
   </ItemGroup>
 
   <ItemGroup>
@@ -70,6 +81,8 @@
     -->
     <EmbeddedResource Include="Resources\Changelogs\v0.19.0.0_EN.txt" />
     <EmbeddedResource Include="Resources\Changelogs\v0.19.0.0_DE.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.0.1_EN.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.0.1_DE.txt" />
   </ItemGroup>
 
   <ItemGroup>
@@ -90,11 +103,16 @@
     </None>
   </ItemGroup>
 
-  <ItemGroup>
-    <Content Include="Echokraut.json">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Content>
-  </ItemGroup>
+  <!--
+    Do NOT add an explicit <Content Include="Echokraut.json"> with
+    CopyToOutputDirectory here. The Dalamud.NET.Sdk handles the plugin manifest
+    itself: it reads Echokraut.json, injects AssemblyVersion (from <Version>) +
+    DalamudApiLevel + RepoUrl, and writes the enriched manifest into the build
+    output and into the distributed Echokraut.zip. An explicit Content Include
+    short-circuits that pipeline — the source JSON gets copied through as-is and
+    Dalamud's installer rejects the install with "Distributed plugin version does
+    not match repo version, distributed: " (empty).
+  -->
 
   <ItemGroup>
     <ProjectReference Include="..\KamiToolKit\KamiToolKit.csproj" />

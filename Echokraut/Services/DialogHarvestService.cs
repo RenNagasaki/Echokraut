@@ -44,13 +44,6 @@ public class DialogHarvestService : IDialogHarvestService
         Dalamud.Game.ClientLanguage.French
     };
 
-    private static readonly Dictionary<string, string> RaceNameMap = new(StringComparer.OrdinalIgnoreCase)
-    {
-        { "Hyuran", "Hyur" },
-        { "Miqo'te", "Miqote" },
-        { "Au Ra", "AuRa" },
-    };
-
     /// <summary>
     /// Manual NPC name alias → ENpcResident ID for cutscene NPCs that can't be resolved
     /// through Lua bytecode analysis (dialog played by native cutscene system, not Lua Talk()).
@@ -617,7 +610,7 @@ public class DialogHarvestService : IDialogHarvestService
 
             var raceStr = GetRaceString(npcBase);
             var race = ParseNpcRace(raceStr);
-            var gender = DetermineGender(npcBase, race);
+            var gender = NpcIdentityHelper.DetermineGender(npcBase, race, _jsonData.ModelGenderMap);
 
             // Build appearance key for named NPC lookup
             var appearanceKey = $"{npcBase.Race.RowId}_{npcBase.Gender}_{npcBase.Face}_{npcBase.HairStyle}";
@@ -1034,7 +1027,7 @@ public class DialogHarvestService : IDialogHarvestService
 
             var raceStr = GetRaceString(npcBase.Value);
             var race = ParseNpcRace(raceStr);
-            var gender = DetermineGender(npcBase.Value, race);
+            var gender = NpcIdentityHelper.DetermineGender(npcBase.Value, race, _jsonData.ModelGenderMap);
 
             // Try to get NPC name (might be unnamed)
             var lgbNames = npcNames.TryGetValue(npcId, out var nn) && nn.Values.Any(v => !string.IsNullOrEmpty(v))
@@ -1680,7 +1673,7 @@ public class DialogHarvestService : IDialogHarvestService
                 if (enRace != null)
                 {
                     var raceName = enRace.Value.Masculine.ExtractText();
-                    return RaceNameMap.TryGetValue(raceName, out var mapped) ? mapped : raceName;
+                    return NpcIdentityHelper.CanonicalRaceName(raceName);
                 }
             }
 
@@ -1753,44 +1746,6 @@ public class DialogHarvestService : IDialogHarvestService
         return resolved;
     }
 
-
-    private Genders DetermineGender(ENpcBase npcBase, NpcRaces race)
-    {
-        var gender = (Genders)npcBase.Gender;
-
-        // For wild races with Male gender, apply ModelBody heuristic
-        if (gender == Genders.Male && IsWildRace(race))
-        {
-            var modelBody = npcBase.ModelBody;
-            if (modelBody < 256)
-            {
-                var localModelBody = (byte)modelBody;
-                var npcGenderMap = _jsonData.ModelGenderMap.Find(p =>
-                    p.race == race && p.maleDefault && p.male != localModelBody);
-
-                if (npcGenderMap == null)
-                {
-                    npcGenderMap = _jsonData.ModelGenderMap.Find(p =>
-                        p.race == race && !p.maleDefault && p.female == localModelBody);
-                }
-
-                if (npcGenderMap != null)
-                    gender = Genders.Female;
-            }
-        }
-
-        return gender;
-    }
-
-    private static bool IsWildRace(NpcRaces race)
-    {
-        return race switch
-        {
-            NpcRaces.Hyur or NpcRaces.AuRa or NpcRaces.Miqote or NpcRaces.Roegadyn or
-            NpcRaces.Hrothgar or NpcRaces.Lalafell or NpcRaces.Elezen or NpcRaces.Viera => false,
-            _ => true
-        };
-    }
 
     private static List<uint> GetENpcDataValues(ENpcBase npcBase)
     {
@@ -2394,6 +2349,13 @@ public class DialogHarvestService : IDialogHarvestService
         var questCount = 0;
         var questTotal = questSheet.Count();
         var questsWithDialog = 0;
+        var skippedVoiced = 0;
+
+        // SCD-language code used by the voiced-filter below. Mirrors HarvestCutsceneDialogs:
+        // a quest dialog row whose audio file actually ships in the harvest language is
+        // dropped because FFXIV already plays its own voice acting for that line — there's
+        // nothing for Echokraut TTS to fill in. Only the silent residue gets harvested.
+        var scdLangCode = VoiceScdPaths.LanguageCodeForScd(language);
 
         BeginPhase(Loc.S("Scanning for quest dialogs..."), questTotal);
         _log.Info(nameof(HarvestQuestDialogs),
@@ -2468,6 +2430,17 @@ public class DialogHarvestService : IDialogHarvestService
 
                         if (!keyTexts.TryGetValue(key, out var langDict))
                         {
+                            // First sighting of this textKey across the 4-language scan — apply
+                            // the voiced filter once, on the harvest (= client) language. If the
+                            // text-key parses to an audioBase that has a matching SCD audio file,
+                            // FFXIV already voices the line and we drop it for ALL languages of
+                            // this textKey (the user spec: "only client language matters").
+                            if (VoiceExtractKey.TryParse(key, out _, out var audioBase)
+                                && VoiceScdPaths.Exists(_dataManager, audioBase, scdLangCode))
+                            {
+                                skippedVoiced++;
+                                continue;
+                            }
                             langDict = new Dictionary<string, string>();
                             keyTexts[key] = langDict;
                         }
@@ -2615,7 +2588,7 @@ public class DialogHarvestService : IDialogHarvestService
                         {
                             raceStr = GetRaceString(nb);
                             var race = ParseNpcRace(raceStr);
-                            gender = DetermineGender(nb, race);
+                            gender = NpcIdentityHelper.DetermineGender(nb, race, _jsonData.ModelGenderMap);
                         }
                         matchedNames = npcNames.TryGetValue(npcId, out var en) ? en : new Dictionary<string, string>();
                     }
@@ -2690,6 +2663,7 @@ public class DialogHarvestService : IDialogHarvestService
         _log.Info(nameof(HarvestQuestDialogs),
             $"Quest harvest: {linked.Count} linked, {unmatched.Count} unmatched, " +
             $"{questCount} quests scanned ({questsWithDialog} text entries), " +
+            $"{skippedVoiced} voiced lines skipped (FFXIV ships dub for them), " +
             $"{linked.Count(d => d.MatchSource == DialogMatchSource.SilentActorHeuristic.ToString())} via silent-actor heuristic, " +
             $"{parenCandidates.Count} multi-candidate paren-prefix entries needing manual mapping",
             eventId);
@@ -2874,7 +2848,7 @@ public class DialogHarvestService : IDialogHarvestService
                     var npcBase = npcBaseSheet.GetRow(npcId);
                     raceStr = GetRaceString(npcBase);
                     var race = ParseNpcRace(raceStr);
-                    gender = DetermineGender(npcBase, race);
+                    gender = NpcIdentityHelper.DetermineGender(npcBase, race, _jsonData.ModelGenderMap);
                 }
                 catch
                 {

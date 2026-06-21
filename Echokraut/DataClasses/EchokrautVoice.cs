@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace Echokraut.DataClasses
 {
-    public class EchokrautVoice
+    public class EchokrautVoice : StringKeyedComparable
     {
         public bool IsDefault { get; set; }
         public bool IsEnabled { get; set; } = true;
@@ -83,24 +83,6 @@ namespace Echokraut.DataClasses
         public override string ToString()
         {
             return $"{voiceName}";
-        }
-        public override int GetHashCode() => ToString().ToLowerInvariant().GetHashCode();
-        public override bool Equals(object? obj)
-        {
-            var item = obj as EchokrautVoice;
-
-            if (item == null)
-            {
-                return false;
-            }
-
-            return this.ToString().Equals(item.ToString(), System.StringComparison.OrdinalIgnoreCase);
-        }
-
-        public int CompareTo(object? obj)
-        {
-            var otherObj = obj as EchokrautVoice;
-            return otherObj?.ToString().ToLower().CompareTo(ToString().ToLower()) ?? -1;
         }
 
         public bool FitsNpcData(Genders gender, NpcRaces race, BodyType bodyType, bool isGenderedRace)

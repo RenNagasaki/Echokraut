@@ -16,8 +16,8 @@ namespace Echokraut.DataClasses
         public string CustomModelUrl = "";
         public string CustomVoicesUrl = "";
         public bool LocalInstall { get; set; } = false;
-        public bool AutoStartLocalInstance { get; set; } = false;
-        public string LocalInstallPath { get; set; }  = "";
+        public bool AutoStartLocalInstance { get; set; } = true;
+        public string LocalInstallPath { get; set; }  = "C:\\alltalk_tts";
         public bool StreamingGeneration { get; set; } = true;
         public bool IsWindows11 { get; set; } = true;
         public bool CpuMode { get; set; } = false;

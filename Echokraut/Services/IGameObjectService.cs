@@ -14,6 +14,12 @@ public interface IGameObjectService
     IGameObject? LocalPlayer { get; }
     string LocalPlayerName { get; }
     ulong LocalPlayerContentId { get; }
+
+    /// <summary>
+    /// The player content ID to persist for a voice clip: the real local-player content ID when
+    /// the clip text contains a player placeholder, otherwise 0 (player-independent).
+    /// </summary>
+    long GetEffectivePlayerContentId(bool hasPlayerPlaceholder);
     bool LocalPlayerIsMale { get; }
     IGameObject? NextUnknownCharacter { get; }
     /// <summary>

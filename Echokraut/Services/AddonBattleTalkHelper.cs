@@ -25,14 +25,9 @@ public class AddonBattleTalkHelper : IAddonBattleTalkHelper
     private readonly ITextProcessingService _textProcessing;
     private readonly ISoundHelper _soundHelper;
 
-    private bool nextIsVoice = false;
-    private DateTime timeNextVoice = DateTime.Now;
+    private readonly VoiceLineSkipGuard _voiceSkip = new();
 
-    public void NotifyNextIsVoice()
-    {
-        nextIsVoice = true;
-        timeNextVoice = DateTime.Now;
-    }
+    public void NotifyNextIsVoice() => _voiceSkip.Notify();
     private AddonBattleTalkState lastValue;
 
     public AddonBattleTalkHelper(
@@ -103,11 +98,7 @@ public class AddonBattleTalkHelper : IAddonBattleTalkHelper
     private void HandleChange(AddonBattleTalkState state)
     {
         var (speaker, text) = state;
-        var voiceNext = nextIsVoice;
-        nextIsVoice = false;
-
-        if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(1000))
-            voiceNext = false;
+        var voiceNext = _voiceSkip.ConsumeIsVoice(1000);
 
         var _baseId = _log.Start(nameof(HandleChange), TextSource.AddonBattleTalk);
         var eventId = new EKEventId(_baseId.Id, _baseId.TextSource);

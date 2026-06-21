@@ -14,6 +14,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
 
+using static Echokraut.Windows.Native.NativeNodeFactory;
 namespace Echokraut.Windows.Native;
 
 public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
@@ -654,6 +655,8 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
 
     // ── Helpers ──────────────────────────────────────────────
 
+    // Kept local (intentionally shadows NativeNodeFactory.Label/HeaderLabel): this window
+    // offsets its labels by y=5, which the shared factory version does not.
     private static TextNode Label(string text, float width) => new()
     {
         Size = new Vector2(width, 18),
@@ -670,20 +673,7 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         return node;
     }
 
-    private static ResNode Spacer(float width, float height) => new()
-    {
-        Size = new Vector2(width, height),
-        Alpha = 0,
-    };
 
-    private static TextButtonNode Button(string label, float minWidth, Action onClick)
-    {
-        var node = new TextButtonNode { Size = new Vector2(minWidth, 24), String = label };
-        var textW = node.LabelNode.GetTextDrawSize(label).X + 36;
-        if (textW > minWidth) node.Size = new Vector2(textW, 24);
-        node.OnClick = onClick;
-        return node;
-    }
 
     public override void Dispose()
     {

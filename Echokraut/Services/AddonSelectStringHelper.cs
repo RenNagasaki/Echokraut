@@ -66,7 +66,7 @@ public unsafe class AddonSelectStringHelper : IAddonSelectStringHelper
         if (!_configuration.VoicePlayerChoices) return;
         if (!_condition[ConditionFlag.OccupiedInQuestEvent]) return;
 
-        GetAddonStrings(((AddonSelectString*)args.Addon.Address)->PopupMenu.PopupMenu.List);
+        TalkTextHelper.ReadAddonOptions(((AddonSelectString*)args.Addon.Address)->PopupMenu.PopupMenu.List, options);
     }
 
     private unsafe void OnPreFinalize(AddonEvent type, AddonArgs args)
@@ -76,26 +76,6 @@ public unsafe class AddonSelectStringHelper : IAddonSelectStringHelper
         if (!_condition[ConditionFlag.OccupiedInQuestEvent]) return;
 
         HandleSelectedString(((AddonSelectString*)args.Addon.Address)->PopupMenu.PopupMenu.List);
-    }
-
-    private unsafe void GetAddonStrings(AtkComponentList* list)
-    {
-        if (list is null) return;
-
-        options.Clear();
-
-        foreach (var index in Enumerable.Range(0, list->ListLength))
-        {
-            var listItemRenderer = list->ItemRendererList[index].AtkComponentListItemRenderer;
-            if (listItemRenderer is null) continue;
-
-            var buttonTextNode = listItemRenderer->AtkComponentButton.ButtonTextNode;
-            if (buttonTextNode is null) continue;
-
-            var buttonText = TalkTextHelper.ReadStringNode(buttonTextNode->NodeText);
-
-            options.Add(buttonText);
-        }
     }
 
     private unsafe void HandleSelectedString(AtkComponentList* list)

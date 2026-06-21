@@ -2,6 +2,7 @@ using Echotools.Logging.Services;
 using Dalamud.Game.ClientState.Objects.Enums;
 using Dalamud.Game.ClientState.Objects.Types;
 using Echokraut.DataClasses;
+using Echokraut.Helper.Functional;
 using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
 using Echotools.Logging.Enums;
@@ -49,7 +50,7 @@ public class CharacterDataService : ICharacterDataService
             return actorGender;
         }
 
-        if (actorGender == Genders.Male && IsWildRace(race))
+        if (actorGender == Genders.Male && NpcIdentityHelper.IsWildRace(race))
         {
             var npcBase = _lumina.GetENpcBase(speaker.BaseId, eventId);
             if (npcBase != null && npcBase.Value.ModelBody < 256)
@@ -117,16 +118,6 @@ public class CharacterDataService : ICharacterDataService
         }
 
         return raceEnum;
-    }
-
-    private static bool IsWildRace(NpcRaces race)
-    {
-        return race switch
-        {
-            NpcRaces.Hyur or NpcRaces.AuRa or NpcRaces.Miqote or NpcRaces.Roegadyn or
-            NpcRaces.Hrothgar or NpcRaces.Lalafell or NpcRaces.Elezen or NpcRaces.Viera => false,
-            _ => true
-        };
     }
 
     private static string GetRaceEng(string race)

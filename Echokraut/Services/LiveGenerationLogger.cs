@@ -27,9 +27,7 @@ public class LiveGenerationLogger : ILiveGenerationLogger
             return;
         }
 
-        // Mirror VoiceClipManagerService.GetEffectivePlayerId so the read side (HasLocalAudio,
-        // GetAudioPath) finds the row.
-        var playerContentId = hasPlayerPlaceholder ? (long)_gameObjects.LocalPlayerContentId : 0L;
+        var playerContentId = _gameObjects.GetEffectivePlayerContentId(hasPlayerPlaceholder);
 
         try
         {

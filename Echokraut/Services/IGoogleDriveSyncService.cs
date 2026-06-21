@@ -9,7 +9,7 @@ public interface IGoogleDriveSyncService
 {
     void StartSync();
     void StopSync();
-    void DownloadFolder(string localSavePath, string shareLink);
+    Task DownloadFolder(string localSavePath, string shareLink);
     Task CreateDriveServicePkceAsync();
     Task<bool> UploadFile(string drivePath, string fileName, string filePath, EKEventId eventId);
     Task<bool> UploadVoiceLine(string driveLink, VoiceLine voiceLine, EKEventId eventId);

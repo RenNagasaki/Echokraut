@@ -1,0 +1,53 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.0.1
+================================================================================
+
+
+==============================================================================
+VERBESSERUNGEN
+==============================================================================
+
+[UI] Auto-Start-Checkbox umpositioniert + standardmäßig aktiv
+  Die "Lokale Instanz beim Plugin-Start automatisch starten"-Checkbox sitzt
+  jetzt direkt über den Start- / Stop-Buttons im Erst-Start-Assistenten und
+  im Einstellungen → Backend-Tab, statt versteckt unter "Erweiterte
+  Optionen". Standardwert von aus auf an geflipped — die meisten Nutzer
+  einer lokalen AllTalk-Installation wollen sie sowieso automatisch beim
+  Plugin-Start hochkommen lassen.
+
+[Harvest] Quest-Dialog-Harvest überspringt jetzt vertonte Zeilen
+  Der Quest-Dialog-Harvester hat bisher jede Zeile mitgeschrieben, auch
+  solche die FFXIV selbst schon vertont. Die spielt Echokraut-TTS sowieso
+  nicht ab (der Original-Dub hat Vorrang), sie sorgten nur für Rauschen
+  in der Datenbank. Ab jetzt wird jede Quest-Dialog-Zeile verworfen, deren
+  Audio-Datei in der Client-Sprache existiert — gleiche Regel wie der
+  Cutscene-Dialog-Harvester sie schon hatte. Bestehende vertonte Einträge
+  in der Datenbank bleiben drin; ein erneuter Harvest bereinigt sie.
+
+
+==============================================================================
+BUGFIXES
+==============================================================================
+
+- NPC-Stimmenwechsel klingt jetzt wirklich anders: wenn eine zwischen-
+  gespeicherte Audio-Datei mit einer alten Stimme existiert (z.B. Zeilen
+  generiert mit NPC-Stimme 10, dann auf NPC-Stimme 11 gewechselt), hat
+  der Playback-Pfad bisher stillschweigend weiter die alte WAV abgespielt.
+  Der Cache-Lookup verwirft jetzt Einträge deren gespeicherter voice_key
+  nicht zur aktuell zugewiesenen Stimme passt und lässt das Backend sauber
+  neu generieren. None-Mode-Nutzer (keine Live-Generation) sind nicht
+  betroffen — bei denen läuft der gecachte Sound weiter wie bisher.
+
+- AllTalk-Installation mit einem Laufwerksroot als Pfad (z.B. C:\) blieb
+  stillschweigend bei "Preparing installer..." hängen. Laufwerksroot-Pfade
+  werden jetzt vorab abgelehnt mit einer klaren Meldung ("Pfad muss in
+  einen Unterordner zeigen, nicht den Root eines Laufwerks"). Fehler die
+  im Install-Task auftreten werden jetzt zusätzlich im Wizard-Status
+  sichtbar gemacht, statt verschluckt zu werden.
+
+- Das Eingabefeld für den AllTalk-Installationspfad blieb bei Nutzern mit
+  älteren Configs leer; der C#-Default ("C:\alltalk_tts") griff nur bei
+  Neuinstallationen. Das Feld wird jetzt beim ersten leeren Wert auf den
+  Default zurückgesetzt, sodass der Wizard immer einen sinnvollen Start-
+  pfad zum Übernehmen oder Ändern anzeigt.

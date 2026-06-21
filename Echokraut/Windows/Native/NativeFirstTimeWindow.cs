@@ -13,6 +13,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
 
+using static Echokraut.Windows.Native.NativeNodeFactory;
 namespace Echokraut.Windows.Native;
 
 /// <summary>
@@ -508,15 +509,7 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         return string.Join("\n", lines);
     }
 
-    private static void Dim(NodeBase? node, bool enabled)
-    {
-        if (node != null) node.Alpha = enabled ? 1.0f : 0.4f;
-    }
 
-    private static void SetVisible(NodeBase? node, bool visible)
-    {
-        if (node != null) node.IsVisible = visible;
-    }
 
     private static TextNode Lbl(string text, float width, int fontSize = 12) => new()
     {

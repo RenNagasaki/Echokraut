@@ -39,16 +39,11 @@ public unsafe class AddonTalkHelper : IAddonTalkHelper
     public static float AddonHeight { get; private set; }
     public static float AddonScale { get; private set; } = 1f;
 
-    private bool nextIsVoice = false;
     private bool wasTalking = false;
     private bool wasWatchingCutscene = false;
-    private DateTime timeNextVoice = DateTime.Now;
+    private readonly VoiceLineSkipGuard _voiceSkip = new();
 
-    public void NotifyNextIsVoice()
-    {
-        nextIsVoice = true;
-        timeNextVoice = DateTime.Now;
-    }
+    public void NotifyNextIsVoice() => _voiceSkip.Notify();
 
     public static nint Address { get; set; }
     private static AddonTalkState lastValue;
@@ -186,12 +181,8 @@ public unsafe class AddonTalkHelper : IAddonTalkHelper
     {
         _audioPlayback.RecreationStarted = true;
         var (speaker, text) = state;
-        var voiceNext = nextIsVoice;
-        nextIsVoice = false;
+        var voiceNext = _voiceSkip.ConsumeIsVoice(500);
         DialogState.IsVoiced = false;
-
-        if (voiceNext && DateTime.Now > timeNextVoice.AddMilliseconds(500))
-            voiceNext = false;
 
         var _baseId = _log.Start(nameof(HandleChange), TextSource.AddonTalk);
         var eventId = new EKEventId(_baseId.Id, _baseId.TextSource);
