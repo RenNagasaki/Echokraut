@@ -315,22 +315,32 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
     /// </summary>
     private int? ResolveCharacterByAlias(string fakename, Dalamud.Game.ClientLanguage language, IGameObject? speaker, EKEventId eventId)
     {
+        // BaseId is authoritative — when the live speaker has a known ENpcBase AND a
+        // character_instance row exists for it, that character row beats any name-based
+        // alias lookup (even an unambiguous single-candidate match). The alias map can
+        // be missing the real speaker entirely; falling through to a wrong-but-popular
+        // candidate is what caused dialogues to land under unrelated NPCs.
+        var fastPath = TryResolveByBaseId(speaker, language, fakename, eventId);
+        if (fastPath.HasValue) return fastPath;
+
         var candidates = _db.FindCharacterIdsByAlias(fakename, (int)language);
         if (candidates.Count == 0) return null;
         if (candidates.Count == 1) return candidates[0];
 
-        // BaseId match wins outright — it's the actual ENpcBase of the speaker the game
-        // is currently rendering. The alias→character mapping is only useful as a name
-        // canonicalizer; the BaseId already pinpoints which character row to use.
-        if (speaker != null && speaker.DataId != 0)
+        // Multi-match alias and no direct BaseId hit. Try matching candidates against
+        // the speaker's ENpcBase via their instance lists — slower than the direct lookup
+        // but covers edge cases where the instance row hasn't been seen recently enough
+        // to win the OrderBy in FindCharacterIdByNpcBaseId.
+        var speakerBaseId = speaker?.BaseId ?? 0u;
+        if (speakerBaseId != 0)
         {
             foreach (var charId in candidates)
             {
                 var instances = _db.GetInstancesForCharacter(charId);
-                if (instances.Any(i => (uint)i.NpcBaseId == speaker.DataId))
+                if (instances.Any(i => (uint)i.NpcBaseId == speakerBaseId))
                 {
                     _log.Debug(nameof(ResolveCharacterByAlias),
-                        $"Alias '{fakename}' has {candidates.Count} candidates — picked {charId} via speaker.BaseId={speaker.DataId} match.",
+                        $"Alias '{fakename}' has {candidates.Count} candidates — picked {charId} via speaker.BaseId={speakerBaseId} match.",
                         eventId);
                     return charId;
                 }
@@ -367,6 +377,26 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
             $"Alias '{fakename}' has {present.Count} present candidates — picked {pick} (not-yet-spoken tie-break={notYetSpoken != 0}).",
             eventId);
         return pick;
+    }
+
+    /// <summary>
+    /// Fast-path of <see cref="ResolveCharacterByAlias"/>: if the live speaker exposes a
+    /// known ENpcBase and a <c>character_instance</c> row for it exists in the same
+    /// language, return that character row directly. Cutscene actors keep their real
+    /// ENpcBase even when the dialog box hides the name as "???" or a fakename, so this
+    /// is the most reliable identifier we have. Returns <c>null</c> when speaker is
+    /// missing/zero or no instance row matches.
+    /// </summary>
+    private int? TryResolveByBaseId(IGameObject? speaker, Dalamud.Game.ClientLanguage language, string fakename, EKEventId eventId)
+    {
+        var baseId = speaker?.BaseId ?? 0u;
+        if (baseId == 0) return null;
+        var hit = _db.FindCharacterIdByNpcBaseId(baseId, (int)language);
+        if (!hit.HasValue) return null;
+        _log.Debug(nameof(ResolveCharacterByAlias),
+            $"Speaker '{fakename}' resolved by BaseId={baseId} → character {hit.Value} (BaseId beats alias).",
+            eventId);
+        return hit;
     }
 
     private async Task<NpcMapData> GetOrCreateNpcDataAsync(IGameObject? speaker, SeString speakerName, string cleanText, TextSource source, EKEventId eventId, string worldEnglish = "")
@@ -581,9 +611,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
 
         try
         {
-            var playerId = voiceMessage.HasPlayerPlaceholder
-                ? (long)_gameObjects.LocalPlayerContentId
-                : 0;
+            var playerId = _gameObjects.GetEffectivePlayerContentId(voiceMessage.HasPlayerPlaceholder);
             var gen = _db.GetVoiceClipGeneration(voiceMessage.VoiceClipId, playerId);
 
             // Voice-key staleness gate. The cached generation row stores the voice that was

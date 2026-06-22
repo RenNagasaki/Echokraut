@@ -100,6 +100,12 @@ public static class ServiceBuilder
             c.GetService<IDialogHarvestService>(),
             c.GetService<IVoiceSampleExtractorService>()));
 
+        container.RegisterFactory<INpcAttributionRepairService>(c => new NpcAttributionRepairService(
+            c.GetService<IDatabaseService>(),
+            dataManager,
+            c.GetService<IJsonDataService>(),
+            c.GetService<ILogService>()));
+
         container.RegisterFactory<ILipSyncHelper>(c => new LipSyncHelper(
             c.GetService<ILogService>(),
             framework,

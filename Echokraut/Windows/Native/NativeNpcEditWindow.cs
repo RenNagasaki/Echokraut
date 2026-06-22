@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -94,6 +94,7 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
             String = Loc.S("Race"),
             FontType = FontType.Axis,
             FontSize = 13,
+            TextColor = LabelColor,
         });
         y += 20;
 
@@ -124,6 +125,7 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
             String = Loc.S("Gender"),
             FontType = FontType.Axis,
             FontSize = 13,
+            TextColor = LabelColor,
         });
         y += 20;
 
@@ -154,6 +156,7 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
             String = Loc.S("Voice"),
             FontType = FontType.Axis,
             FontSize = 13,
+            TextColor = LabelColor,
         });
         y += 20;
 
@@ -221,6 +224,7 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
             String = Loc.S("Volume"),
             FontType = FontType.Axis,
             FontSize = 13,
+            TextColor = LabelColor,
         });
         y += 20;
 
@@ -240,14 +244,14 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
         // Whole-character toggle (CharacterContext.IsEnabled). Distinct from the
         // per-instance mute in DialogExtraOptions which only silences this NPC's specific
         // ENpcBase ID (CharacterInstance.IsMuted).
-        var enabledCheck = new CheckboxNode
+        var enabledCheck = WithLabelColor(new CheckboxNode
         {
             Position = new Vector2(pos.X, pos.Y + y),
             Size = new Vector2(w, 24),
             String = Loc.S("Enabled"),
             IsChecked = _npc.IsEnabled,
             OnClick = v => _pendingEnabled = v,
-        };
+        });
         AddNode(enabledCheck);
         y += 32;
 

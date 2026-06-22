@@ -46,6 +46,7 @@ public class NativeWindowManager : IWindowManager
             () => addonTalk.RecreateInference(),
             () => _voiceClipManagerWindow.Toggle(),
             addonLifecycle,
+            framework,
             services.GetService<ILogService>(),
             services.GetService<INpcDataService>(),
             services.GetService<IEchokrautIpc>());
@@ -142,6 +143,7 @@ public class NativeWindowManager : IWindowManager
         _gameDataToolsWindow = new NativeGameDataToolsWindow(
             services.GetService<IDialogHarvestService>(),
             services.GetService<IVoiceSampleExtractorService>(),
+            services.GetService<INpcAttributionRepairService>(),
             clientState,
             services.GetService<ILogService>(),
             config,
@@ -227,13 +229,13 @@ public class NativeWindowManager : IWindowManager
         SafeDispose(_changelogWindow);
     }
 
-    private static void SafeClose(KamiToolKit.NativeAddon? addon)
+    private static void SafeClose(KamiToolKit.BaseTypes.NativeAddon? addon)
     {
         if (addon == null) return;
         try { if (addon.IsOpen) addon.Close(); } catch { }
     }
 
-    private static void SafeDispose(KamiToolKit.NativeAddon? addon)
+    private static void SafeDispose(KamiToolKit.BaseTypes.NativeAddon? addon)
     {
         if (addon == null) return;
         try { addon.Dispose(); } catch { }

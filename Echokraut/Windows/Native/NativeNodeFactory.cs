@@ -3,6 +3,7 @@ using System.Numerics;
 using Echotools.UI.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
+using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 
 namespace Echokraut.Windows.Native;
@@ -82,6 +83,29 @@ internal static class NativeNodeFactory
         return toggle;
     }
 
+    /// <summary>
+    /// Theme-adaptive text colour for text rendered directly on the window background — follows the
+    /// in-game UI design (dark on the light parchment theme, light on dark themes).
+    ///
+    /// KamiToolKit's <see cref="TextNode"/> defaults TextColor to <c>GetColor(8)</c> (renders white/
+    /// illegible under the latest KTK). <c>GetColor(50)</c> is the *interactive* label colour — it's
+    /// only readable because buttons/dropdowns sit on a darker element background; on the lighter
+    /// window background it's washed out. The colour that's actually meant for text on the window
+    /// surface is what KTK's own <c>WindowNode</c> uses for its Axis subtitle: <c>GetColor(3)</c>.
+    /// </summary>
+    public static Vector4 LabelColor => ColorHelper.GetColor(3);
+
+    /// <summary>
+    /// Applies <see cref="LabelColor"/> to a <see cref="CheckboxNode"/>'s label. KTK's CheckboxNode
+    /// hard-codes its label to GetColor(8) (renders white under the latest KTK); this re-colours it
+    /// to the theme-adaptive label colour. Returns the node so it can wrap an initializer inline.
+    /// </summary>
+    public static CheckboxNode WithLabelColor(CheckboxNode checkbox)
+    {
+        checkbox.Label.TextColor = LabelColor;
+        return checkbox;
+    }
+
     /// <summary>FFXIV-Axis text label, 12pt, sized to <paramref name="width"/>.</summary>
     public static TextNode Label(string text, float width) => new()
     {
@@ -89,6 +113,7 @@ internal static class NativeNodeFactory
         String = text,
         FontType = FontType.Axis,
         FontSize = 12,
+        TextColor = LabelColor,
     };
 
     /// <summary>Column-header label that ellipsizes overflow instead of bleeding into the next column.</summary>

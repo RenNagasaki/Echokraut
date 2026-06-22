@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Numerics;
 using Echokraut.DataClasses;
@@ -224,6 +224,7 @@ public static class NativeAlltalkBuilder
             String = " ",
             FontType = FontType.Axis,
             FontSize = 12,
+            TextColor = LabelColor,
         };
 
         return nodes;

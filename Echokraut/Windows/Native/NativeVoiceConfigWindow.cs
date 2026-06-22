@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Numerics;
 using Echokraut.DataClasses;
@@ -7,10 +7,12 @@ using Echokraut.Helper.Functional;
 using Echokraut.Localization;
 using Echokraut.Services;
 using Echotools.Logging.Services;
+using Echotools.UI.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Nodes;
-using KamiToolKit.Premade.Node.Simple;
+
+using static Echokraut.Windows.Native.NativeNodeFactory;
 
 namespace Echokraut.Windows.Native;
 
@@ -59,45 +61,45 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
 
         // ── Options ──────────────────────────────────────────────────────────
 
-        var enabledCheck = new CheckboxNode
+        var enabledCheck = WithLabelColor(new CheckboxNode
         {
             Size = new Vector2(w, 24),
             String = Loc.S("Enabled"),
             IsChecked = _voice.IsEnabled,
             OnClick = v => { _voice.IsEnabled = v; Save(); },
-        };
+        });
 
-        var randomCheck = new CheckboxNode
+        var randomCheck = WithLabelColor(new CheckboxNode
         {
             Size = new Vector2(w, 24),
             String = Loc.S("Use as random NPC voice"),
             IsChecked = _voice.UseAsRandom,
             OnClick = v => { _voice.UseAsRandom = v; Save(); },
-        };
+        });
 
-        var adultCheck = new CheckboxNode
+        var adultCheck = WithLabelColor(new CheckboxNode
         {
             Size = new Vector2(w, 24),
             String = Loc.S("Adult Voice"),
             IsChecked = _voice.IsAdultVoice,
             OnClick = v => { _voice.IsAdultVoice = v; Save(); },
-        };
+        });
 
-        var childCheck = new CheckboxNode
+        var childCheck = WithLabelColor(new CheckboxNode
         {
             Size = new Vector2(w, 24),
             String = Loc.S("Child Voice"),
             IsChecked = _voice.IsChildVoice,
             OnClick = v => { _voice.IsChildVoice = v; Save(); },
-        };
+        });
 
-        var elderCheck = new CheckboxNode
+        var elderCheck = WithLabelColor(new CheckboxNode
         {
             Size = new Vector2(w, 24),
             String = Loc.S("Elder Voice"),
             IsChecked = _voice.IsElderVoice,
             OnClick = v => { _voice.IsElderVoice = v; Save(); },
-        };
+        });
 
         // Note
         var noteInput = new TextInputNode
@@ -158,13 +160,14 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
             String = Loc.S("Allowed genders"),
             FontType = FontType.Axis,
             FontSize = 14,
+            TextColor = LabelColor,
         };
         list.AddNode(genderLabel);
 
         foreach (var gender in Constants.GENDERLIST)
         {
             var g = gender;
-            var gCheck = new CheckboxNode
+            var gCheck = WithLabelColor(new CheckboxNode
             {
                 Size = new Vector2(w, 24),
                 String = Loc.S(g.ToString()),
@@ -177,7 +180,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
                         _voice.AllowedGenders.Remove(g);
                     Save();
                 },
-            };
+            });
             list.AddNode(gCheck);
         }
 
@@ -203,12 +206,13 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
             String = Loc.S("Allowed races"),
             FontType = FontType.Axis,
             FontSize = 14,
+            TextColor = LabelColor,
         };
         list.AddNode(raceLabel);
 
         // All checkbox
         var allRaces = _voice.AllowedRaces.Count == Constants.RACELIST.Count;
-        var allCheck = new CheckboxNode
+        var allCheck = WithLabelColor(new CheckboxNode
         {
             Size = new Vector2(w, 24),
             String = Loc.S("All"),
@@ -226,7 +230,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
                 _npcData.RefreshSelectables(_npcData.GetEchokrautVoices());
                 Save();
             },
-        };
+        });
         list.AddNode(allCheck);
 
         // Individual race checkboxes — absolute grid positioning for uniform columns
@@ -243,7 +247,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
             var race = raceList[i];
             var col = i % cols;
             var row = i / cols;
-            var rCheck = new CheckboxNode
+            var rCheck = WithLabelColor(new CheckboxNode
             {
                 Size = new Vector2(colW, 24),
                 Position = new Vector2(col * colW, row * rowH),
@@ -257,7 +261,7 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
                         _voice.AllowedRaces.Remove(race);
                     Save();
                 },
-            };
+            });
             rCheck.AttachNode(raceGrid);
         }
         list.AddNode(raceGrid);

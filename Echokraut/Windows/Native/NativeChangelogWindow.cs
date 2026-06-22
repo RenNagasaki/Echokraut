@@ -1,14 +1,17 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
 using System.Text;
 using Echokraut.Localization;
 using Echokraut.Services;
+using Echotools.UI.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
+
+using static Echokraut.Windows.Native.NativeNodeFactory;
 
 namespace Echokraut.Windows.Native;
 
@@ -105,6 +108,7 @@ public sealed unsafe class NativeChangelogWindow : NativeAddon
                     String = section,
                     FontType = FontType.Axis,
                     FontSize = 12,
+                    TextColor = LabelColor,
                 };
                 sectionNode.AddTextFlags(TextFlags.WordWrap, TextFlags.MultiLine);
                 list.AddNode(sectionNode);

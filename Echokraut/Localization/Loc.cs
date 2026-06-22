@@ -643,6 +643,48 @@ public static class Loc
         ["Done — {0} files written"] = new() { { DE, "Fertig — {0} Dateien geschrieben" }, { FR, "Terminé — {0} fichiers écrits" }, { JP, "完了 — {0} ファイル書き込み済み" } },
         ["Open Voice Clip Manager"] = new() { { DE, "Voice-Clip-Manager öffnen" }, { FR, "Ouvrir le Gestionnaire de clips vocaux" }, { JP, "ボイスクリップマネージャーを開く" } },
 
+        // ── NPC Attribution Repair (Game Data Tools section) ─────────────
+        ["NPC Attribution Repair"] = new() { { DE, "NPC-Zuordnung reparieren" }, { FR, "Réparer l'attribution des PNJ" }, { JP, "NPC帰属の修復" } },
+        ["Walk the database and fix NPC dialogues that ended up under the wrong character (e.g. anonymous \"???\" speakers attributed to the first match instead of the real NPC). Dry-Run shows what would change; Apply moves the dialogues to the correct character and deletes empty character rows. No audio files are deleted."]
+            = new() {
+                { DE, "Datenbank durchgehen und Dialoge reparieren, die unter dem falschen NPC gelandet sind (z.B. anonyme \"???\"-Sprecher wurden dem ersten Treffer statt dem echten NPC zugeordnet). Probelauf zeigt, was geändert würde; Anwenden verschiebt die Dialoge zum richtigen Charakter und löscht leere Charakter-Einträge. Es werden keine Audiodateien gelöscht." },
+                { FR, "Parcourt la base de données et corrige les dialogues PNJ associés au mauvais personnage (par ex. locuteurs anonymes \"???\" attribués au premier résultat plutôt qu'au vrai PNJ). L'aperçu indique ce qui changerait ; Appliquer déplace les dialogues vers le bon personnage et supprime les entrées de personnage vides. Aucun fichier audio n'est supprimé." },
+                { JP, "データベースをスキャンし、誤ったキャラクターに紐づいた NPC のセリフを修復します（例：匿名「???」の発話が最初の候補に割り当てられ、実際の NPC ではないケース）。プレビューでは変更内容を表示し、適用すると正しいキャラクターへ移動し、空になったキャラクター行を削除します。音声ファイルは削除されません。" } },
+        ["Dry Run"] = new() { { DE, "Probelauf" }, { FR, "Aperçu" }, { JP, "プレビュー" } },
+        ["Apply Repair"] = new() { { DE, "Reparatur anwenden" }, { FR, "Appliquer la réparation" }, { JP, "修復を適用" } },
+        ["Press Dry Run to scan the database."] = new() {
+            { DE, "Probelauf drücken, um die Datenbank zu scannen." },
+            { FR, "Appuyez sur Aperçu pour analyser la base de données." },
+            { JP, "プレビューを押してデータベースをスキャンします。" } },
+        ["Scanning database — please wait..."] = new() {
+            { DE, "Datenbank wird durchsucht — bitte warten..." },
+            { FR, "Analyse de la base de données — veuillez patienter..." },
+            { JP, "データベースをスキャン中 — お待ちください..." } },
+        ["Dry run cancelled."] = new() { { DE, "Probelauf abgebrochen." }, { FR, "Aperçu annulé." }, { JP, "プレビューを中止しました。" } },
+        ["Dry run failed: {0}"] = new() { { DE, "Probelauf fehlgeschlagen: {0}" }, { FR, "Échec de l'aperçu : {0}" }, { JP, "プレビューに失敗しました: {0}" } },
+        ["Applying repair to {0} entries..."] = new() {
+            { DE, "Reparatur wird auf {0} Einträge angewendet..." },
+            { FR, "Application de la réparation à {0} entrées..." },
+            { JP, "{0} 件の項目に修復を適用中..." } },
+        ["Apply cancelled."] = new() { { DE, "Anwenden abgebrochen." }, { FR, "Application annulée." }, { JP, "適用を中止しました。" } },
+        ["Apply failed: {0}"] = new() { { DE, "Anwenden fehlgeschlagen: {0}" }, { FR, "Échec de l'application : {0}" }, { JP, "適用に失敗しました: {0}" } },
+        ["Scanned {0} instances. No repairs needed — every dialog is attributed to its canonical NPC. Skipped: {1} without Lumina row, {2} without a canonical character row in the DB."]
+            = new() {
+                { DE, "{0} Einträge geprüft. Keine Reparatur nötig — alle Dialoge sind dem kanonischen NPC zugeordnet. Übersprungen: {1} ohne Lumina-Eintrag, {2} ohne kanonische Charakterzeile in der DB." },
+                { FR, "{0} entrées analysées. Aucune réparation nécessaire — chaque dialogue est attribué à son PNJ canonique. Ignorés : {1} sans entrée Lumina, {2} sans personnage canonique en base." },
+                { JP, "{0} 件をスキャンしました。修復は不要です — すべてのセリフが正しい NPC に紐付いています。スキップ: Lumina 行なし {1} 件、DB に正規キャラクター行なし {2} 件。" } },
+        ["...and {0} more."] = new() { { DE, "...und {0} weitere." }, { FR, "...et {0} de plus." }, { JP, "...他 {0} 件。" } },
+        ["Found {0} mis-attributed instances out of {1} scanned. Skipped: {2} without Lumina row, {3} without canonical character row.\n\n{4}{5}\n\nPress Apply Repair to move the dialogues to the correct characters."]
+            = new() {
+                { DE, "{0} falsch zugeordnete Einträge von {1} geprüften gefunden. Übersprungen: {2} ohne Lumina-Eintrag, {3} ohne kanonische Charakterzeile.\n\n{4}{5}\n\nReparatur anwenden drücken, um die Dialoge dem richtigen Charakter zuzuordnen." },
+                { FR, "{0} entrées mal attribuées sur {1} analysées. Ignorées : {2} sans entrée Lumina, {3} sans personnage canonique.\n\n{4}{5}\n\nAppuyez sur Appliquer la réparation pour déplacer les dialogues vers les bons personnages." },
+                { JP, "{1} 件のうち {0} 件で誤った帰属を検出しました。スキップ: Lumina 行なし {2} 件、正規キャラクター行なし {3} 件。\n\n{4}{5}\n\n「修復を適用」を押して、セリフを正しいキャラクターに移動します。" } },
+        ["Repair applied. Reassigned {0} instances, moved {1} voice clips, merged-and-deleted {2} duplicate clips, deleted {3} emptied character rows. Re-open the Voice Clip Manager to see the cleaned view."]
+            = new() {
+                { DE, "Reparatur abgeschlossen. {0} Zuordnungen verschoben, {1} Voice-Clips bewegt, {2} doppelte Clips zusammengeführt und gelöscht, {3} leere Charakter-Einträge gelöscht. Voice-Clip-Manager neu öffnen, um die bereinigte Sicht zu sehen." },
+                { FR, "Réparation appliquée. {0} attributions réassignées, {1} clips vocaux déplacés, {2} clips dupliqués fusionnés et supprimés, {3} personnages vides supprimés. Rouvrez le Gestionnaire de clips vocaux pour voir la vue nettoyée." },
+                { JP, "修復を適用しました。{0} 件の帰属を移動、{1} 件のボイスクリップを移動、{2} 件の重複クリップをマージ＆削除、{3} 件の空キャラクター行を削除しました。クリーンな表示を確認するにはボイスクリップマネージャーを再度開いてください。" } },
+
         ["Select a directory via dialog."] = new() { { DE, "Verzeichnis über Dialog auswählen." }, { FR, "Sélectionner un dossier via le dialogue." }, { JP, "ダイアログでフォルダを選択。" } },
         ["Choose audio files directory"] = new() { { DE, "Audiodateien-Verzeichnis wählen" }, { FR, "Choisir le dossier des fichiers audio" }, { JP, "音声ファイルディレクトリを選択" } },
         ["Choose alltalk instance directory"] = new() { { DE, "Alltalk-Instanzverzeichnis wählen" }, { FR, "Choisir le dossier de l'instance Alltalk" }, { JP, "Alltalkインスタンスディレクトリを選択" } },

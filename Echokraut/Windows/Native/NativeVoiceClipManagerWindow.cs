@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -16,6 +16,7 @@ using Echotools.Logging.Enums;
 using Echotools.Logging.Services;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
+using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 
 using static Echokraut.Windows.Native.NativeNodeFactory;
@@ -305,7 +306,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         {
             Position = new Vector2(pos.X, pagY),
             Size = new Vector2(settingsBtnSize, settingsBtnSize),
-            Icon = ButtonIcon.GearCog,
+            Icon = CircleButtonIcon.GearCog,
             Tooltip = Loc.S("Open configuration window"),
             OnClick = () => _toggleConfig(),
         };
@@ -320,13 +321,13 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
 
         // Game Data Tools button — opens the bulk-data window (harvest + voice starter set).
         // Same DynamicIconButtonNode pattern as the settings button; sits one slot to its right.
-        // Icon UV (168, 84) on Character.tex matches ButtonIcon.GearCogWithChatBubble — a gear
+        // Icon UV (168, 84) on Character.tex matches CircleButtonIcon.GearCogWithChatBubble — a gear
         // wedded to a speech bubble, fitting for "data + dialog tooling".
         _gameDataToolsButton = new DynamicIconButtonNode
         {
             Position = new Vector2(pos.X + settingsBtnSize + settingsBtnGap, pagY),
             Size = new Vector2(settingsBtnSize, settingsBtnSize),
-            Icon = ButtonIcon.GearCogWithChatBubble,
+            Icon = CircleButtonIcon.GearCogWithChatBubble,
             Tooltip = Loc.S("Open Game Data Tools window"),
             OnClick = () => _toggleGameDataTools(),
         };
@@ -349,6 +350,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
             FontType = FontType.Axis,
             FontSize = 12,
             AlignmentType = AlignmentType.Left,
+            TextColor = LabelColor,
         };
         AddNode(_backendStatusLabel);
 

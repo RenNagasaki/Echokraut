@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Linq;
 using System.Numerics;
 using System.Threading;
@@ -15,6 +15,7 @@ using Echotools.Logging.Services;
 using Echotools.UI.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
+using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 using EKConfig = Echokraut.DataClasses.Configuration;
 
@@ -370,12 +371,12 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         // Always visible regardless of active tab; mirrors the pattern in
         // NativeVoiceClipManagerWindow / NativeGameDataToolsWindow. ImageNode-routed events
         // are mandatory in NativeAddon contexts (only those fire reliably).
-        // Voice Clip Manager — UV (112, 28) on Character.tex = ButtonIcon.MusicNote.
+        // Voice Clip Manager — UV (112, 28) on Character.tex = CircleButtonIcon.MusicNote.
         _voiceClipManagerButton = new DynamicIconButtonNode
         {
             Position = new Vector2(pos.X, bottomRowY),
             Size = new Vector2(bottomBtnSize, bottomBtnSize),
-            Icon = ButtonIcon.MusicNote,
+            Icon = CircleButtonIcon.MusicNote,
             Tooltip = Loc.S("Open Voice Clip Manager"),
             OnClick = () => OnToggleVoiceClipManager?.Invoke(),
         };
@@ -383,12 +384,12 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             _voiceClipManagerButton.ShowTooltip, _voiceClipManagerButton.HideTooltip);
         AddNode(_voiceClipManagerButton);
 
-        // Game Data Tools — UV (168, 84) on Character.tex = ButtonIcon.GearCogWithChatBubble.
+        // Game Data Tools — UV (168, 84) on Character.tex = CircleButtonIcon.GearCogWithChatBubble.
         _gameDataToolsButton = new DynamicIconButtonNode
         {
             Position = new Vector2(pos.X + bottomBtnSize + bottomBtnGap, bottomRowY),
             Size = new Vector2(bottomBtnSize, bottomBtnSize),
-            Icon = ButtonIcon.GearCogWithChatBubble,
+            Icon = CircleButtonIcon.GearCogWithChatBubble,
             Tooltip = Loc.S("Open Game Data Tools window"),
             OnClick = () => OnToggleGameDataTools?.Invoke(),
         };
@@ -1238,6 +1239,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             String = Loc.S("No live generation. Echokraut will only play pre-existing audio files."),
             FontType = FontType.Axis,
             FontSize = 12,
+            TextColor = LabelColor,
         };
         _noneInfoLabel.AddTextFlags(TextFlags.WordWrap | TextFlags.MultiLine);
         _noneAudioPathInput = Input(Loc.S("Local audio directory"), w, 260,

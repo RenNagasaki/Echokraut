@@ -1541,6 +1541,186 @@ public class DatabaseService : IDatabaseService
         }
     }
 
+    public int? FindCharacterIdByNpcBaseId(uint npcBaseId, int language)
+    {
+        if (npcBaseId == 0) return null;
+        lock (_writeLock)
+        {
+            if (_disposed) return null;
+            var baseId = (long)npcBaseId;
+            // Join character_instances → characters and filter by language. Order by
+            // last_seen desc so a corrupted DB with duplicate instances under multiple
+            // characters returns the row that's been seen most recently — the attribution
+            // repair tool is what cleans the duplicates up properly.
+            var hit = _context.CharacterInstances
+                .AsNoTracking()
+                .Where(ci => ci.NpcBaseId == baseId && ci.Character != null && ci.Character.Language == language)
+                .OrderByDescending(ci => ci.LastSeen)
+                .Select(ci => (int?)ci.CharacterId)
+                .FirstOrDefault();
+            return hit;
+        }
+    }
+
+    public List<AttributionInstanceRow> GetAllInstancesForRepair()
+    {
+        lock (_writeLock)
+        {
+            if (_disposed) return new List<AttributionInstanceRow>();
+            // Single round-trip via Join so we don't load every CharacterEntity nav into
+            // the change tracker. Projection is flat — the consumer doesn't need EF state.
+            var rows = (from ci in _context.CharacterInstances.AsNoTracking()
+                        join c in _context.Characters.AsNoTracking() on ci.CharacterId equals c.Id
+                        select new
+                        {
+                            ci.CharacterId,
+                            CharacterName = c.Name,
+                            CharacterGender = c.Gender,
+                            CharacterRace = c.Race,
+                            c.Language,
+                            ci.NpcBaseId
+                        })
+                .ToList();
+            return rows
+                .Select(r => new AttributionInstanceRow(
+                    r.CharacterId,
+                    r.CharacterName ?? string.Empty,
+                    (Genders)r.CharacterGender,
+                    (NpcRaces)r.CharacterRace,
+                    r.Language,
+                    r.NpcBaseId))
+                .ToList();
+        }
+    }
+
+    public (int moved, int mergedAndDeleted) ReassignAttribution(int oldCharacterId, int newCharacterId, uint npcBaseId)
+    {
+        if (oldCharacterId == newCharacterId || oldCharacterId <= 0 || newCharacterId <= 0 || npcBaseId == 0)
+            return (0, 0);
+
+        lock (_writeLock)
+        {
+            if (_disposed) return (0, 0);
+            var baseId = (long)npcBaseId;
+            using var tx = _context.Database.BeginTransaction();
+
+            MoveInstanceRow(oldCharacterId, newCharacterId, baseId);
+            var (moved, merged) = MoveOrMergeVoiceClips(oldCharacterId, newCharacterId, baseId);
+
+            _context.SaveChanges();
+            tx.Commit();
+
+            // Caches: character_instances feeds GetMutedBaseIds via the muted-cache, refresh
+            // is the cheapest correct option.
+            RefreshMutedCache();
+            return (moved, merged);
+        }
+    }
+
+    /// <summary>
+    /// Step 1 of <see cref="ReassignAttribution"/>: move (or merge) the single
+    /// <c>character_instance</c> row for (oldCharacterId, baseId) onto newCharacterId.
+    /// </summary>
+    private void MoveInstanceRow(int oldCharacterId, int newCharacterId, long baseId)
+    {
+        // PK is composite (CharacterId, NpcBaseId), so we delete + reinsert under the new
+        // CharacterId. If the canonical character already has an instance for this baseId
+        // (defensive — shouldn't happen for a well-formed dry-run), the old one is dropped.
+        var oldInstance = _context.CharacterInstances
+            .FirstOrDefault(ci => ci.CharacterId == oldCharacterId && ci.NpcBaseId == baseId);
+        if (oldInstance == null) return;
+
+        var canonicalInstance = _context.CharacterInstances
+            .FirstOrDefault(ci => ci.CharacterId == newCharacterId && ci.NpcBaseId == baseId);
+
+        if (canonicalInstance == null)
+        {
+            var moved = new CharacterInstanceEntity
+            {
+                CharacterId = newCharacterId,
+                NpcBaseId = oldInstance.NpcBaseId,
+                FirstSeen = oldInstance.FirstSeen,
+                LastSeen = oldInstance.LastSeen,
+                IsMuted = oldInstance.IsMuted,
+                ZoneName = oldInstance.ZoneName,
+                MapX = oldInstance.MapX,
+                MapY = oldInstance.MapY,
+            };
+            _context.CharacterInstances.Remove(oldInstance);
+            _context.SaveChanges();
+            _context.CharacterInstances.Add(moved);
+        }
+        else
+        {
+            // Canonical already had an instance; keep canonical's row and drop the orphan.
+            // Propagate the mute flag — user intent shouldn't be silently lost.
+            if (oldInstance.IsMuted) canonicalInstance.IsMuted = true;
+            _context.CharacterInstances.Remove(oldInstance);
+        }
+        _context.SaveChanges();
+    }
+
+    /// <summary>
+    /// Step 2 of <see cref="ReassignAttribution"/>: move voice_clips for (oldCharacterId,
+    /// baseId) to newCharacterId. On unique-index collision (canonical row already has the
+    /// same OriginalText for the same baseId), the canonical row wins and the orphan +
+    /// its generations are deleted via cascade.
+    /// </summary>
+    private (int moved, int mergedAndDeleted) MoveOrMergeVoiceClips(int oldCharacterId, int newCharacterId, long baseId)
+    {
+        var orphanClips = _context.VoiceClips
+            .Where(vc => vc.CharacterId == oldCharacterId && vc.NpcBaseId == baseId)
+            .ToList();
+
+        int moved = 0;
+        int mergedAndDeleted = 0;
+        foreach (var orphan in orphanClips)
+        {
+            var existing = _context.VoiceClips.FirstOrDefault(vc =>
+                vc.CharacterId == newCharacterId
+                && vc.NpcBaseId == baseId
+                && vc.OriginalText == orphan.OriginalText);
+            if (existing == null)
+            {
+                orphan.CharacterId = newCharacterId;
+                moved++;
+            }
+            else
+            {
+                _context.VoiceClips.Remove(orphan);
+                mergedAndDeleted++;
+            }
+        }
+        return (moved, mergedAndDeleted);
+    }
+
+    public bool DeleteCharacterIfEmpty(int characterId)
+    {
+        if (characterId <= 0) return false;
+        lock (_writeLock)
+        {
+            if (_disposed) return false;
+
+            var hasInstances = _context.CharacterInstances.Any(ci => ci.CharacterId == characterId);
+            if (hasInstances) return false;
+            var hasClips = _context.VoiceClips.Any(vc => vc.CharacterId == characterId);
+            if (hasClips) return false;
+
+            var character = _context.Characters.FirstOrDefault(c => c.Id == characterId);
+            if (character == null) return false;
+
+            // Cascade rules drop dependent rows (contexts, speaker_aliases, etc.); explicit
+            // Remove on the parent is enough.
+            _context.Characters.Remove(character);
+            _context.SaveChanges();
+
+            // The npc / player list caches reference CharacterEntity by Id, so a deleted
+            // character would leak into the VCM until the next plugin start without this.
+            RefreshCharacterCaches();
+            return true;
+        }
+    }
+
     // ── Lodestone lookup cache ──────────────────────────────
 
     public LodestoneLookupEntity? GetLodestoneLookup(string name, string world)

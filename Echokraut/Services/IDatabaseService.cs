@@ -148,4 +148,44 @@ public interface IDatabaseService : IDisposable
     /// </summary>
     List<int> FindCharacterIdsByAlias(string alias, int language);
     List<CharacterSpeakerAliasEntity> GetSpeakerAliases(int characterId);
+
+    /// <summary>
+    /// Resolve a Dalamud ENpcBase ID to the character row that owns the matching
+    /// <c>character_instance</c>, restricted to the given language. Authoritative when the
+    /// live <c>IGameObject.DataId</c> is known: FFXIV cutscene actors keep their real
+    /// ENpcBase even when the dialog box hides the name as "???" or some fakename, so this
+    /// lookup beats name-based heuristics. Returns <c>null</c> when no matching instance
+    /// exists in the given language. If multiple characters share the same instance row
+    /// (only possible via prior mis-attribution), the most recently seen one is returned —
+    /// the attribution repair tool is the long-term fix for that case.
+    /// </summary>
+    int? FindCharacterIdByNpcBaseId(uint npcBaseId, int language);
+
+    // ── NPC attribution repair (one-shot DB cleanup used by NpcAttributionRepairService) ──
+
+    /// <summary>
+    /// Returns every <c>character_instance</c> row in the database, joined with its parent
+    /// character's identity (Name, Gender, Race, Language). Used by the attribution repair
+    /// tool to walk the entire DB without holding an EF Core change-tracking entity graph.
+    /// </summary>
+    List<AttributionInstanceRow> GetAllInstancesForRepair();
+
+    /// <summary>
+    /// Atomically reassigns a single <c>character_instance</c> (identified by
+    /// <paramref name="oldCharacterId"/> + <paramref name="npcBaseId"/>) AND every
+    /// <c>voice_clip</c> with the same <c>(CharacterId, NpcBaseId)</c> pair from the wrong
+    /// character to the canonical one. On unique-index collision in <c>voice_clips</c>
+    /// (canonical row already has the same <c>OriginalText</c>), the canonical row wins —
+    /// the orphan voice_clip plus its voice_clip_generations are deleted. Returns a count
+    /// of (clips moved, clips merged-and-deleted). Caller decides whether to delete the
+    /// emptied <c>oldCharacterId</c> via <see cref="DeleteCharacterIfEmpty"/>.
+    /// </summary>
+    (int moved, int mergedAndDeleted) ReassignAttribution(int oldCharacterId, int newCharacterId, uint npcBaseId);
+
+    /// <summary>
+    /// Deletes <paramref name="characterId"/> if it has no character_instances and no
+    /// voice_clips left. Returns true when deleted. Idempotent — safe to call on
+    /// a character that still has data (returns false) or already deleted (returns false).
+    /// </summary>
+    bool DeleteCharacterIfEmpty(int characterId);
 }

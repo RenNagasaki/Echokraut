@@ -51,3 +51,27 @@ BUGFIXES
   Neuinstallationen. Das Feld wird jetzt beim ersten leeren Wert auf den
   Default zurückgesetzt, sodass der Wizard immer einen sinnvollen Start-
   pfad zum Übernehmen oder Ändern anzeigt.
+
+- Anonyme "???"-Sprecher in Cutscenes landen nicht mehr unter dem falschen
+  NPC. Die Live-Auflösung benutzt jetzt die tatsächliche ENpcBase des
+  Sprechers (die das Spiel behält, auch wenn die Dialogbox den Namen
+  versteckt), um die kanonische Charakterzeile direkt zu finden, bevor
+  auf die namensbasierte Alias-Auflösung zurückgefallen wird. Bisher
+  konnte der Resolver einen anderen physisch anwesenden NPC wählen, wenn
+  der echte Sprecher nicht in der Alias-Tabelle stand — z.B. landeten
+  Alisaies "???"-Zeilen unter einem komplett anderen Charakter.
+
+- Game Data Tools: neuer Abschnitt "NPC-Zuordnung reparieren". Geht die
+  Datenbank durch, nutzt Lumina um für jede gespeicherte ENpcBase den
+  kanonischen NPC zu bestimmen, und verschiebt Voice-Clips + Instance-
+  Zeilen vom falschen Charakter zum richtigen. Probelauf zeigt was
+  passieren würde, bevor du Anwendest; Anwenden führt die Verschiebungen
+  durch und löscht jetzt leere Charakterzeilen. Es werden keine Audio-
+  Dateien gelöscht — nur DB-Einträge umgehängt.
+
+- Die AllTalk-Audioerzeugung verliert keine Netzwerk-Sockets mehr. Bisher
+  wurde pro gesprochener Zeile ein komplett neuer HTTP-Client samt
+  Verbindung aufgebaut, was bei längeren Dialogsitzungen den Socket-Pool
+  des Systems erschöpfen und die Erzeugung bis zum Spielneustart lahmlegen
+  konnte. Jetzt wird ein einziger, langlebiger Client (Keep-Alive)
+  wiederverwendet, sodass auch intensive Sitzungen stabil bleiben.

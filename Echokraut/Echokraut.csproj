@@ -11,6 +11,13 @@
     <Authors>RenNagasaki</Authors>
     <AssemblyVersion></AssemblyVersion>
     <FileVersion></FileVersion>
+    <!--
+      KamiToolKit (latest) marks the tree-view nodes (TreeListNode,
+      TreeListCategoryNode, ...) as [Experimental], which is an ERROR by default.
+      The Voice Clip Manager's journal-style tree has no non-experimental
+      alternative, so opt in to the experimental surface project-wide.
+    -->
+    <NoWarn>$(NoWarn);KamiToolKit_Experimental</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

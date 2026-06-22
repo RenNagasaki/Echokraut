@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Numerics;
@@ -12,6 +12,7 @@ using Echokraut.Services;
 using Echotools.Logging.Enums;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
+using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
 
 using static Echokraut.Windows.Native.NativeNodeFactory;
@@ -324,13 +325,13 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
 
                     // Play/Stop icon + tooltip swap
                     var isPlaying = _playingVoiceClipId == id;
-                    playBtn.Icon = isPlaying ? ButtonIcon.Mute : ButtonIcon.Volume;
+                    playBtn.Icon = isPlaying ? CircleButtonIcon.Mute : CircleButtonIcon.Volume;
                     playBtn.Tooltip = isPlaying ? Loc.S("Stop voice clip")
                         : nowSaved ? Loc.S("Play voice clip")
                         : Loc.S("Generate and play voice clip");
 
                     // Gen icon + tooltip swap
-                    genBtn.Icon = nowSaved ? ButtonIcon.Refresh : ButtonIcon.MusicNote;
+                    genBtn.Icon = nowSaved ? CircleButtonIcon.Refresh : CircleButtonIcon.MusicNote;
                     genBtn.Tooltip = nowSaved ? Loc.S("Generate again") : Loc.S("Generate");
 
                     // Dim gen buttons + unsaved play buttons during batch OR in None mode
@@ -374,7 +375,7 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
                 foreach (var (id, (playBtn, _, _)) in _buttonImages)
                 {
                     if (playBtn == null) continue;
-                    playBtn.Icon = _playingVoiceClipId == id ? ButtonIcon.Mute : ButtonIcon.Volume;
+                    playBtn.Icon = _playingVoiceClipId == id ? CircleButtonIcon.Mute : CircleButtonIcon.Volume;
                 }
             }
             catch { }
@@ -473,6 +474,7 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
             String = TalkTextHelper.SubstitutePlaceholders(vc.OriginalText, _gameObjects.LocalPlayerName, _gameObjects.LocalPlayerIsMale),
             FontType = FontType.Axis,
             FontSize = 12,
+            TextColor = LabelColor,
         };
         textNode.AddTextFlags(TextFlags.WordWrap | TextFlags.MultiLine);
         var textHeight = textNode.GetTextDrawSize(false).Y;
@@ -486,7 +488,7 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         // Play/Stop button — icon swapped in OnUpdate
         var playTooltip = hasSaved ? Loc.S("Play voice clip") : Loc.S("Generate and play voice clip");
         var playBtn = new DynamicIconButtonNode { Size = new Vector2(28, 28) };
-        playBtn.Icon = ButtonIcon.Volume;
+        playBtn.Icon = CircleButtonIcon.Volume;
         playBtn.Tooltip = playTooltip;
         // Hover highlight + manual tooltip drive — see NativeVoiceClipManagerWindow for the
         // pattern. The Tooltip setter's auto-wired MouseOver fires on the wrapping component
@@ -541,7 +543,7 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         var genTooltip = hasSaved ? Loc.S("Generate again") : Loc.S("Generate");
         var capturedHasSaved = hasSaved;
         var genBtn = new DynamicIconButtonNode { Size = new Vector2(28, 28) };
-        genBtn.Icon = hasSaved ? ButtonIcon.Refresh : ButtonIcon.MusicNote;
+        genBtn.Icon = hasSaved ? CircleButtonIcon.Refresh : CircleButtonIcon.MusicNote;
         genBtn.Tooltip = genTooltip;
         var genNormalTint = new Vector3(1f, 1f, 1f);
         var genHoverTint = new Vector3(1.4f, 1.4f, 1.4f);

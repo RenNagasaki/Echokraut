@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Numerics;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
@@ -42,7 +42,7 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
     private string _remoteTestUrlSnapshot = string.Empty;
     private bool _remoteTestRunning;
 
-    // ── Step 0: Welcome ──────────────────────────────────────────────────
+    // ── Step 0: Welcome ───────────────────────────────────────── ─────────
     private TextNode? _welcomeTitle;
     private TextNode? _welcomeDesc;
     private HorizontalLineNode? _welcomeSep;
@@ -257,6 +257,7 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
             String = string.Empty,
             FontType = FontType.Axis,
             FontSize = 12,
+            TextColor = LabelColor,
         };
         _finishDetails.AddTextFlags(TextFlags.MultiLine);
         _finishHelp = Lbl(Loc.S("Use /ek in chat to open the full configuration window."), w);

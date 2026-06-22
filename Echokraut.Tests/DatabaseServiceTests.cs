@@ -792,4 +792,167 @@ public class DatabaseServiceTests : IDisposable
         Assert.Single(players);
         Assert.Equal("PlayerTest", players[0].Name);
     }
+
+    // ── BaseId-first character lookup (live alias-resolver fast path) ──────
+
+    [Fact]
+    public void FindCharacterIdByNpcBaseId_ReturnsOwnerOfInstance()
+    {
+        var alisaie = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Alisaie Leveilleur", Race = (int)NpcRaces.Elezen, Gender = (int)Genders.Female, Language = 2,
+        });
+        _db.GetOrCreateInstance(alisaie.Id, 1010057);
+
+        Assert.Equal(alisaie.Id, _db.FindCharacterIdByNpcBaseId(1010057, language: 2));
+    }
+
+    [Fact]
+    public void FindCharacterIdByNpcBaseId_ScopedByLanguage()
+    {
+        // Same NpcBaseId across two language-scoped character rows must resolve per locale.
+        // The live runtime always queries with the client language; cross-language picks would
+        // mis-attribute a German cutscene line to an English character row.
+        var de = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Alisaie DE", Race = (int)NpcRaces.Elezen, Gender = (int)Genders.Female, Language = 2,
+        });
+        var en = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Alisaie EN", Race = (int)NpcRaces.Elezen, Gender = (int)Genders.Female, Language = 1,
+        });
+        _db.GetOrCreateInstance(de.Id, 1010057);
+        _db.GetOrCreateInstance(en.Id, 1010057);
+
+        Assert.Equal(de.Id, _db.FindCharacterIdByNpcBaseId(1010057, language: 2));
+        Assert.Equal(en.Id, _db.FindCharacterIdByNpcBaseId(1010057, language: 1));
+        Assert.Null(_db.FindCharacterIdByNpcBaseId(1010057, language: 3)); // FR
+    }
+
+    [Fact]
+    public void FindCharacterIdByNpcBaseId_ReturnsNullForUnknownOrZero()
+    {
+        Assert.Null(_db.FindCharacterIdByNpcBaseId(0, language: 1));
+        Assert.Null(_db.FindCharacterIdByNpcBaseId(99999999, language: 1));
+    }
+
+    // ── Attribution repair helpers ──────────────────────────────────────────
+
+    [Fact]
+    public void GetAllInstancesForRepair_ReturnsJoinedIdentity()
+    {
+        var charA = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Alisaie", Race = (int)NpcRaces.Elezen, Gender = (int)Genders.Female, Language = 2,
+        });
+        var charB = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Estinien", Race = (int)NpcRaces.Elezen, Gender = (int)Genders.Male, Language = 2,
+        });
+        _db.GetOrCreateInstance(charA.Id, 1010057);
+        _db.GetOrCreateInstance(charA.Id, 1010058);
+        _db.GetOrCreateInstance(charB.Id, 1009945);
+
+        var rows = _db.GetAllInstancesForRepair();
+        Assert.Equal(3, rows.Count);
+        Assert.Contains(rows, r => r.CharacterId == charA.Id && r.NpcBaseId == 1010057 && r.CharacterName == "Alisaie");
+        Assert.Contains(rows, r => r.CharacterId == charB.Id && r.CharacterName == "Estinien" && r.NpcBaseId == 1009945);
+    }
+
+    [Fact]
+    public void ReassignAttribution_MovesInstanceAndClipsToCanonical()
+    {
+        var wrong = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "???", Race = (int)NpcRaces.Elezen, Gender = (int)Genders.Female, Language = 2,
+        });
+        var alisaie = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Alisaie", Race = (int)NpcRaces.Elezen, Gender = (int)Genders.Female, Language = 2,
+        });
+        _db.GetOrCreateInstance(wrong.Id, 1010057);
+        _db.LogVoiceClip(new VoiceClipEntity
+        {
+            CharacterId = wrong.Id, NpcBaseId = 1010057, OriginalText = "Was geht hier vor?",
+            CleanedText = "Was geht hier vor", VoiceKey = "v1", Language = 2, TextSource = 2,
+        });
+
+        var (moved, merged) = _db.ReassignAttribution(wrong.Id, alisaie.Id, 1010057);
+        Assert.Equal(1, moved);
+        Assert.Equal(0, merged);
+
+        // Instance now belongs to Alisaie; voice clip too.
+        Assert.Equal(alisaie.Id, _db.FindCharacterIdByNpcBaseId(1010057, language: 2));
+        var alisaiClips = _db.GetVoiceClipsForCharacter(alisaie.Id);
+        Assert.Single(alisaiClips);
+        Assert.Equal(1010057L, alisaiClips[0].NpcBaseId);
+
+        // The orphan character row still exists (no other rows clean it up automatically).
+        Assert.True(_db.DeleteCharacterIfEmpty(wrong.Id));
+        Assert.Null(_db.FindCharacter("???", Genders.Female, NpcRaces.Elezen, language: 2));
+    }
+
+    [Fact]
+    public void ReassignAttribution_CollidingClipText_MergesIntoCanonicalAndDeletesOrphan()
+    {
+        var wrong = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Wrong", Race = (int)NpcRaces.Elezen, Gender = (int)Genders.Female, Language = 2,
+        });
+        var canonical = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Alisaie", Race = (int)NpcRaces.Elezen, Gender = (int)Genders.Female, Language = 2,
+        });
+        _db.GetOrCreateInstance(wrong.Id, 1010057);
+        _db.GetOrCreateInstance(canonical.Id, 1010057);
+
+        // Same OriginalText on both characters for the same baseId — the canonical row must win.
+        var sameText = "Hier ist es kalt.";
+        _db.LogVoiceClip(new VoiceClipEntity
+        {
+            CharacterId = canonical.Id, NpcBaseId = 1010057, OriginalText = sameText,
+            CleanedText = sameText, VoiceKey = "voice_canon", Language = 2, TextSource = 2,
+        });
+        _db.LogVoiceClip(new VoiceClipEntity
+        {
+            CharacterId = wrong.Id, NpcBaseId = 1010057, OriginalText = sameText,
+            CleanedText = sameText, VoiceKey = "voice_orphan", Language = 2, TextSource = 2,
+        });
+
+        var (moved, merged) = _db.ReassignAttribution(wrong.Id, canonical.Id, 1010057);
+        Assert.Equal(0, moved);
+        Assert.Equal(1, merged);
+
+        var canonClips = _db.GetVoiceClipsForCharacter(canonical.Id);
+        Assert.Single(canonClips);
+        // Canonical row's existing OriginalText/VoiceKey survives — orphan loses.
+        Assert.Equal("voice_canon", canonClips[0].VoiceKey);
+    }
+
+    [Fact]
+    public void ReassignAttribution_IgnoresIdenticalCharacterIds()
+    {
+        var c = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "Solo", Race = (int)NpcRaces.Hyur, Gender = (int)Genders.Male, Language = 1,
+        });
+        _db.GetOrCreateInstance(c.Id, 12345);
+
+        var (moved, merged) = _db.ReassignAttribution(c.Id, c.Id, 12345);
+        Assert.Equal(0, moved);
+        Assert.Equal(0, merged);
+    }
+
+    [Fact]
+    public void DeleteCharacterIfEmpty_KeepsCharacterWithRemainingData()
+    {
+        var c = _db.UpsertCharacter(new CharacterEntity
+        {
+            Name = "WithClips", Race = (int)NpcRaces.Hyur, Gender = (int)Genders.Male, Language = 1,
+        });
+        _db.GetOrCreateInstance(c.Id, 42);
+
+        Assert.False(_db.DeleteCharacterIfEmpty(c.Id));
+        Assert.NotNull(_db.FindCharacter("WithClips", Genders.Male, NpcRaces.Hyur, language: 1));
+    }
 }

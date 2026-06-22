@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Numerics;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -13,7 +13,6 @@ using Echotools.UI.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Classes;
-using KamiToolKit.Premade.Node.Simple;
 using KamiToolKit.Controllers;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
@@ -41,6 +40,7 @@ public sealed unsafe class DialogTalkController : IDisposable
     private readonly Action _openVoiceClipManager;
     private readonly ILogService _log;
     private readonly IAddonLifecycle _addonLifecycle;
+    private readonly IFramework _framework;
     private readonly INpcDataService _npcData;
     private readonly IEchokrautIpc _ipc;
     private Func<Vector2, bool>? _isInsideOwnedWindow;
@@ -102,6 +102,7 @@ public sealed unsafe class DialogTalkController : IDisposable
         Action recreateInference,
         Action openVoiceClipManager,
         IAddonLifecycle addonLifecycle,
+        IFramework framework,
         ILogService log,
         INpcDataService npcData,
         IEchokrautIpc ipc)
@@ -114,6 +115,7 @@ public sealed unsafe class DialogTalkController : IDisposable
         _openVoiceClipManager = openVoiceClipManager;
         _npcData = npcData;
         _addonLifecycle = addonLifecycle;
+        _framework = framework;
         _ipc = ipc;
 
         _talkController = new AddonController
@@ -123,7 +125,12 @@ public sealed unsafe class DialogTalkController : IDisposable
             OnUpdate = OnUpdate,
             OnFinalize = OnDetach,
         };
-        _talkController.Enable();
+        // KamiToolKit (latest) asserts the main/framework thread inside
+        // AddonController.Enable() (and OnSetup runs synchronously there if Talk is
+        // already open). Plugin construction runs off the framework thread, so enable
+        // on the framework thread to satisfy the assert. Runs synchronously if we're
+        // already on it.
+        _framework.RunOnFrameworkThread(() => _talkController.Enable());
 
         _addonLifecycle.RegisterListener(AddonEvent.PreReceiveEvent, "Talk", OnPreReceiveEvent);
 
@@ -241,25 +248,25 @@ public sealed unsafe class DialogTalkController : IDisposable
         //   instead — see _tooltipBg / _tooltipText below.
         _playStopTooltipText = Loc.S("Play");
         _playStopButton = new DynamicIconButtonNode { Size = new Vector2(28, 28), Position = new Vector2(0, 2) };
-        _playStopButton.Icon = ButtonIcon.Volume;
+        _playStopButton.Icon = CircleButtonIcon.Volume;
         _playStopButton.OnClick = OnPlayStopClick;
         _playStopButton.ImageNode.AddNodeFlags(NodeFlags.HasCollision);
         WireIconButtonHover(_playStopButton, () => _playStopButton != null,
             () => ShowToolbarTooltip(_playStopTooltipText, _playStopButton), HideToolbarTooltip);
 
-        _muteCheckbox = new CheckboxNode { Size = new Vector2(60, 24), String = Loc.S("Mute"), Position = new Vector2(0, 5) };
+        _muteCheckbox = WithLabelColor(new CheckboxNode { Size = new Vector2(60, 24), String = Loc.S("Mute"), Position = new Vector2(0, 5) });
         _muteCheckbox.OnClick = OnMuteClick;
 
-        _autoAdvanceCheckbox = new CheckboxNode { Size = new Vector2(130, 24), String = Loc.S("Auto-advance"), Position = new Vector2(0, 5) };
+        _autoAdvanceCheckbox = WithLabelColor(new CheckboxNode { Size = new Vector2(130, 24), String = Loc.S("Auto-advance"), Position = new Vector2(0, 5) });
         _autoAdvanceCheckbox.OnClick = OnAutoAdvanceClick;
 
         _voiceDropDown = new TextDropDownNode { Size = new Vector2(185, 24), Options = [], Position = new Vector2(0, 5) };
 
         var settingsTooltipText = Loc.S("Open Voice Clip Manager");
         _settingsButton = new DynamicIconButtonNode { Size = new Vector2(28, 28), Position = new Vector2(0, 2) };
-        // UV (112, 28) on Character.tex = ButtonIcon.MusicNote — visually distinct from the
+        // UV (112, 28) on Character.tex = CircleButtonIcon.MusicNote — visually distinct from the
         // gear icon (which now lives on the config-window opener buttons).
-        _settingsButton.Icon = ButtonIcon.MusicNote;
+        _settingsButton.Icon = CircleButtonIcon.MusicNote;
         _settingsButton.OnClick = () => _openVoiceClipManager();
         _settingsButton.ImageNode.AddNodeFlags(NodeFlags.HasCollision);
         WireIconButtonHover(_settingsButton, () => _settingsButton != null,
@@ -456,7 +463,7 @@ public sealed unsafe class DialogTalkController : IDisposable
         // Play/Stop — Icon + tooltip text only flip when the active state flips.
         if (_lastIsActive != isActive)
         {
-            _playStopButton!.Icon = isActive ? ButtonIcon.Mute : ButtonIcon.Volume;
+            _playStopButton!.Icon = isActive ? CircleButtonIcon.Mute : CircleButtonIcon.Volume;
             _playStopTooltipText  = isActive ? Loc.S("Stop") : Loc.S("Play");
             _lastIsActive = isActive;
         }

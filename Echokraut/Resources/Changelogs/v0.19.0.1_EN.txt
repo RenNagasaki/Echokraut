@@ -48,3 +48,26 @@ BUG FIXES
   The field now backfills the default the first time an empty value is
   encountered, so the wizard always shows a sensible starting path the
   user can review or replace.
+
+- Anonymous "???" speakers in cutscenes no longer land under the wrong
+  NPC. The live runtime now uses the speaker's actual ENpcBase (which
+  the game keeps even when the dialog box hides the name) to look up
+  the canonical character row before falling back to alias-based
+  matching. Previously, if the alias map didn't include the real
+  speaker, the resolver could pick a different physically-present NPC
+  and silently attribute the line to them — so e.g. Alisaie's "???"
+  lines could end up under another character entirely.
+
+- Game Data Tools: new "NPC Attribution Repair" section. Walks the
+  database, uses Lumina to determine the canonical NPC for every
+  recorded ENpcBase, and moves voice clips + instance rows from the
+  wrong character to the correct one. Dry-Run shows what would change
+  before you apply; Apply does the moves and deletes orphaned, now-
+  empty character rows. No audio files are deleted — only DB rows are
+  re-attributed.
+
+- AllTalk audio generation no longer leaks network sockets. Each spoken
+  line used to spin up a brand-new HTTP client + connection, which under
+  sustained dialogue could exhaust the OS socket pool and make generation
+  start failing until the game was restarted. Generation now reuses a
+  single long-lived client (keep-alive), so heavy sessions stay stable.

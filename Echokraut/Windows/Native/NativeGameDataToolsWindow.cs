@@ -1,6 +1,8 @@
-using System;
+﻿using System;
+using System.Linq;
 using System.Numerics;
 using System.Threading;
+using System.Threading.Tasks;
 using Dalamud.Plugin.Services;
 using Echokraut.DataClasses;
 using Echotools.Logging.DataClasses;
@@ -12,9 +14,11 @@ using Echotools.Logging.Services;
 using Echotools.UI.Nodes;
 using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
+using KamiToolKit.Enums;
 using KamiToolKit.Classes;
 using KamiToolKit.Nodes;
 
+using static Echokraut.Windows.Native.NativeNodeFactory;
 namespace Echokraut.Windows.Native;
 
 /// <summary>
@@ -26,6 +30,7 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
 {
     private readonly IDialogHarvestService _dialogHarvest;
     private readonly IVoiceSampleExtractorService _voiceExtract;
+    private readonly INpcAttributionRepairService _repair;
     private readonly IClientState _clientState;
     private readonly ILogService _log;
     private readonly Configuration _config;
@@ -56,6 +61,20 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
     // harvest + voice-extractor progress and idle status.
     private StatusProgressBar? _progressBar;
 
+    // ── NPC Attribution Repair section ───────────────────────────────────────
+    // Walks character_instances + Lumina to detect mis-attributed instances (e.g. Alisaie's
+    // dialog landing under "???" or another NPC because the live alias resolver picked the
+    // wrong candidate before the BaseId-first fix). Dry-run renders a report; apply executes
+    // the moves and merges.
+    private TextButtonNode? _repairDryRunButton;
+    private TextButtonNode? _repairApplyButton;
+    private TextNode? _repairOutput;
+    private NpcAttributionRepairReport? _lastRepairReport;
+    private CancellationTokenSource? _repairCts;
+    private volatile bool _repairBusy;
+    private string _repairOutputText = string.Empty;
+    private volatile bool _repairOutputDirty;
+
     // ── Bottom row: shortcuts to other plugin windows ────────────────────────
     private DynamicIconButtonNode? _configButton;
     private DynamicIconButtonNode? _voiceClipManagerButton;
@@ -77,6 +96,7 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
     public NativeGameDataToolsWindow(
         IDialogHarvestService dialogHarvest,
         IVoiceSampleExtractorService voiceExtract,
+        INpcAttributionRepairService repair,
         IClientState clientState,
         ILogService log,
         Configuration config,
@@ -85,6 +105,7 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
     {
         _dialogHarvest = dialogHarvest;
         _voiceExtract = voiceExtract;
+        _repair = repair;
         _clientState = clientState;
         _log = log;
         _config = config;
@@ -105,6 +126,8 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
         _harvestCts?.Dispose();
         _starterCts?.Cancel();
         _starterCts?.Dispose();
+        _repairCts?.Cancel();
+        _repairCts?.Dispose();
         base.Dispose();
     }
 
@@ -204,6 +227,38 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
 
         list.AddNode(Separator(w));
 
+        // ── NPC Attribution Repair ───────────────────────────────────────────
+        var repairDesc = WrappedLabel(
+            Loc.S("Walk the database and fix NPC dialogues that ended up under the wrong character " +
+                  "(e.g. anonymous \"???\" speakers attributed to the first match instead of the real NPC). " +
+                  "Dry-Run shows what would change; Apply moves the dialogues to the correct character " +
+                  "and deletes empty character rows. No audio files are deleted."),
+            w);
+
+        _repairDryRunButton = Button(Loc.S("Dry Run"), 140, OnRepairDryRunClick);
+        _repairApplyButton = Button(Loc.S("Apply Repair"), 160, OnRepairApplyClick);
+        // Apply stays disabled until a dry-run produced a non-empty report.
+        _repairApplyButton.IsEnabled = false;
+
+        var repairRow = new HorizontalListNode { Size = new Vector2(w, 28), ItemSpacing = 6 };
+        repairRow.AddNode(_repairDryRunButton);
+        repairRow.AddNode(_repairApplyButton);
+
+        _repairOutput = new TextNode
+        {
+            Size = new Vector2(w, 140),
+            String = Loc.S("Press Dry Run to scan the database."),
+            FontType = FontType.Axis,
+            FontSize = 12,
+            TextColor = LabelColor,
+        };
+        _repairOutput.AddTextFlags(TextFlags.WordWrap | TextFlags.MultiLine);
+
+        CreateCollapsibleSection(list, Loc.S("NPC Attribution Repair"), w, true,
+            [repairDesc, repairRow, _repairOutput]);
+
+        list.AddNode(Separator(w));
+
         // ── Import / Export (placeholder) ────────────────────────────────────
         var importDesc = WrappedLabel(
             Loc.S("Coming soon: backup / restore of database + configuration, and import/export " +
@@ -246,54 +301,29 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
         // Same DynamicIconButtonNode pattern as the VCM window so the visual language is
         // shared across plugin windows. ImageNode-routed events are mandatory in NativeAddon
         // contexts (only those fire reliably; ButtonClick is silent here).
-        var normalTint = new Vector3(1f, 1f, 1f);
-        var hoverTint = new Vector3(1.4f, 1.4f, 1.4f);
-
         _configButton = new DynamicIconButtonNode
         {
             Position = new Vector2(pos.X, bottomRowY),
             Size = new Vector2(bottomBtnSize, bottomBtnSize),
-            Icon = ButtonIcon.GearCog,
+            Icon = CircleButtonIcon.GearCog,
             Tooltip = Loc.S("Open configuration window"),
             OnClick = () => _toggleConfig(),
         };
-        _configButton.ImageNode.MultiplyColor = normalTint;
-        _configButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
-        {
-            if (_configButton == null) return;
-            _configButton.ImageNode.MultiplyColor = hoverTint;
-            _configButton.ShowTooltip();
-        });
-        _configButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
-        {
-            if (_configButton == null) return;
-            _configButton.ImageNode.MultiplyColor = normalTint;
-            _configButton.HideTooltip();
-        });
+        WireIconButtonHover(_configButton, () => _configButton != null,
+            _configButton.ShowTooltip, _configButton.HideTooltip);
         AddNode(_configButton);
 
-        // Voice Clip Manager button — UV (112, 28) on Character.tex = ButtonIcon.MusicNote.
+        // Voice Clip Manager button — UV (112, 28) on Character.tex = CircleButtonIcon.MusicNote.
         _voiceClipManagerButton = new DynamicIconButtonNode
         {
             Position = new Vector2(pos.X + bottomBtnSize + gap, bottomRowY),
             Size = new Vector2(bottomBtnSize, bottomBtnSize),
-            Icon = ButtonIcon.MusicNote,
+            Icon = CircleButtonIcon.MusicNote,
             Tooltip = Loc.S("Open Voice Clip Manager"),
             OnClick = () => _toggleVoiceClipManager(),
         };
-        _voiceClipManagerButton.ImageNode.MultiplyColor = normalTint;
-        _voiceClipManagerButton.ImageNode.AddEvent(AtkEventType.MouseOver, () =>
-        {
-            if (_voiceClipManagerButton == null) return;
-            _voiceClipManagerButton.ImageNode.MultiplyColor = hoverTint;
-            _voiceClipManagerButton.ShowTooltip();
-        });
-        _voiceClipManagerButton.ImageNode.AddEvent(AtkEventType.MouseOut, () =>
-        {
-            if (_voiceClipManagerButton == null) return;
-            _voiceClipManagerButton.ImageNode.MultiplyColor = normalTint;
-            _voiceClipManagerButton.HideTooltip();
-        });
+        WireIconButtonHover(_voiceClipManagerButton, () => _voiceClipManagerButton != null,
+            _voiceClipManagerButton.ShowTooltip, _voiceClipManagerButton.HideTooltip);
         AddNode(_voiceClipManagerButton);
     }
 
@@ -310,7 +340,30 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
         }
 
         UpdateProgressBar();
+        UpdateRepairOutput();
         ClampToScreen(addon);
+    }
+
+    private void UpdateRepairOutput()
+    {
+        if (!_repairOutputDirty || _repairOutput == null) return;
+        string text;
+        lock (_statusLock)
+        {
+            text = _repairOutputText;
+            _repairOutputDirty = false;
+        }
+        _repairOutput.String = text ?? string.Empty;
+        // Resize the node so wrapped multi-line content stays fully visible.
+        var measured = _repairOutput.GetTextDrawSize(false).Y;
+        if (measured > 0)
+            _repairOutput.Size = new Vector2(_repairOutput.Size.X, measured + 6);
+
+        // Enable/disable Apply based on whether the latest report has actionable rows.
+        if (_repairApplyButton != null)
+            _repairApplyButton.IsEnabled = !_repairBusy && _lastRepairReport != null && _lastRepairReport.Actions.Count > 0;
+        if (_repairDryRunButton != null)
+            _repairDryRunButton.IsEnabled = !_repairBusy;
     }
 
     /// <summary>Translates the dropdown selection into the <c>questTypeFilter</c> argument
@@ -505,15 +558,123 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
         }
     }
 
+    // ── NPC Attribution Repair handlers ──────────────────────────────────────
+
+    private void OnRepairDryRunClick()
+    {
+        if (_repairBusy) return;
+        _repairBusy = true;
+        SetRepairOutput(Loc.S("Scanning database — please wait..."));
+        _repairCts?.Dispose();
+        _repairCts = new CancellationTokenSource();
+        var ct = _repairCts.Token;
+
+        Task.Run(() =>
+        {
+            try
+            {
+                var report = _repair.BuildDryRunReport(ct);
+                _lastRepairReport = report;
+                SetRepairOutput(FormatRepairReport(report));
+            }
+            catch (OperationCanceledException)
+            {
+                SetRepairOutput(Loc.S("Dry run cancelled."));
+            }
+            catch (Exception ex)
+            {
+                SetRepairOutput(string.Format(Loc.S("Dry run failed: {0}"), ex.Message));
+            }
+            finally
+            {
+                _repairBusy = false;
+            }
+        }, ct);
+    }
+
+    private void OnRepairApplyClick()
+    {
+        if (_repairBusy) return;
+        var report = _lastRepairReport;
+        if (report == null || report.Actions.Count == 0) return;
+
+        _repairBusy = true;
+        SetRepairOutput(string.Format(Loc.S("Applying repair to {0} entries..."), report.Actions.Count));
+        _repairCts?.Dispose();
+        _repairCts = new CancellationTokenSource();
+        var ct = _repairCts.Token;
+
+        Task.Run(() =>
+        {
+            try
+            {
+                var result = _repair.Apply(report, ct);
+                SetRepairOutput(FormatRepairResult(result));
+                // Clear the report — applying it consumes it; a fresh dry-run is required
+                // to surface anything that's now drifted.
+                _lastRepairReport = null;
+            }
+            catch (OperationCanceledException)
+            {
+                SetRepairOutput(Loc.S("Apply cancelled."));
+            }
+            catch (Exception ex)
+            {
+                SetRepairOutput(string.Format(Loc.S("Apply failed: {0}"), ex.Message));
+            }
+            finally
+            {
+                _repairBusy = false;
+            }
+        }, ct);
+    }
+
+    private void SetRepairOutput(string text)
+    {
+        lock (_statusLock)
+        {
+            _repairOutputText = text;
+            _repairOutputDirty = true;
+        }
+    }
+
+    private static string FormatRepairReport(NpcAttributionRepairReport report)
+    {
+        if (report.Actions.Count == 0)
+        {
+            return string.Format(
+                Loc.S("Scanned {0} instances. No repairs needed — every dialog is attributed to its canonical NPC. Skipped: {1} without Lumina row, {2} without a canonical character row in the DB."),
+                report.TotalInstancesScanned, report.SkippedNoLuminaRow, report.SkippedNoCanonicalInDb);
+        }
+
+        // Cap the per-action preview so the multi-line text stays readable; surface aggregate
+        // counts for the rest. Apply still processes the full list.
+        const int previewCount = 15;
+        var preview = string.Join("\n", report.Actions
+            .Take(previewCount)
+            .Select(a => string.Format(
+                "  {0} #{1} (clips~{2}) -> {3} #{4} [baseId={5}, lang={6}]",
+                a.OldCharacterName, a.OldCharacterId, a.VoiceClipCount,
+                a.CanonicalName, a.NewCharacterId, a.NpcBaseId, a.Language)));
+
+        var rest = report.Actions.Count - previewCount;
+        var more = rest > 0 ? "\n" + string.Format(Loc.S("...and {0} more."), rest) : string.Empty;
+
+        return string.Format(
+            Loc.S("Found {0} mis-attributed instances out of {1} scanned. Skipped: {2} without Lumina row, {3} without canonical character row.\n\n{4}{5}\n\nPress Apply Repair to move the dialogues to the correct characters."),
+            report.Actions.Count, report.TotalInstancesScanned, report.SkippedNoLuminaRow, report.SkippedNoCanonicalInDb,
+            preview, more);
+    }
+
+    private static string FormatRepairResult(NpcAttributionRepairResult result)
+    {
+        return string.Format(
+            Loc.S("Repair applied. Reassigned {0} instances, moved {1} voice clips, merged-and-deleted {2} duplicate clips, deleted {3} emptied character rows. Re-open the Voice Clip Manager to see the cleaned view."),
+            result.InstancesReassigned, result.VoiceClipsMoved, result.VoiceClipsMergedAndDeleted, result.CharactersDeleted);
+    }
+
     // ── Local node factories ─────────────────────────────────────────────────
 
-    private static TextNode Label(string text, float width) => new()
-    {
-        Size = new Vector2(width, 18),
-        String = text,
-        FontType = FontType.Axis,
-        FontSize = 12,
-    };
 
     /// <summary>Multi-line word-wrapped label sized for a row width.</summary>
     private static TextNode WrappedLabel(string text, float width)
@@ -524,6 +685,7 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
             String = text,
             FontType = FontType.Axis,
             FontSize = 12,
+            TextColor = LabelColor,
         };
         node.AddTextFlags(TextFlags.WordWrap | TextFlags.MultiLine);
         // Estimate height after wrapping; KamiToolKit doesn't auto-resize TextNode height.
@@ -533,55 +695,7 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
         return node;
     }
 
-    private static HorizontalLineNode Separator(float width) => new()
-    {
-        Size = new Vector2(width, 4),
-    };
 
-    private static TextButtonNode Button(string label, float minWidth, Action onClick)
-    {
-        var node = new TextButtonNode { Size = new Vector2(minWidth, 24), String = label };
-        var textW = node.LabelNode.GetTextDrawSize(label).X + 36;
-        if (textW > minWidth) node.Size = new Vector2(textW, 24);
-        node.OnClick = onClick;
-        return node;
-    }
 
-    private static TextInputNode Input(string placeholder, float width, int maxChars, string initial, Action<string> onComplete)
-    {
-        var node = new TextInputNode
-        {
-            Size = new Vector2(width, 28),
-            MaxCharacters = maxChars,
-            PlaceholderString = placeholder,
-            String = initial,
-        };
-        node.OnInputReceived = s => onComplete(s.ToString());
-        return node;
-    }
 
-    private static TextButtonNode CreateCollapsibleSection(
-        ScrollingListNode list, string title, float width, bool startCollapsed, NodeBase[] contentNodes)
-    {
-        var arrow = startCollapsed ? "[+]" : "[-]";
-        TextButtonNode? toggle = null;
-        toggle = new TextButtonNode { Size = new Vector2(width, 24), String = $"{arrow} {title}" };
-        toggle.OnClick = () =>
-        {
-            var isHidden = contentNodes.Length > 0 && !contentNodes[0].IsVisible;
-            foreach (var n in contentNodes)
-                n.IsVisible = isHidden;
-            toggle!.String = isHidden ? $"[-] {title}" : $"[+] {title}";
-            list.RecalculateLayout();
-        };
-
-        if (startCollapsed)
-            foreach (var n in contentNodes)
-                n.IsVisible = false;
-
-        list.AddNode(toggle);
-        foreach (var n in contentNodes)
-            list.AddNode(n);
-        return toggle;
-    }
 }
