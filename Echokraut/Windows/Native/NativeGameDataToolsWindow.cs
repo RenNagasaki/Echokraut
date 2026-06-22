@@ -562,65 +562,65 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
 
     private void OnRepairDryRunClick()
     {
-        if (_repairBusy) return;
-        _repairBusy = true;
-        SetRepairOutput(Loc.S("Scanning database — please wait..."));
-        _repairCts?.Dispose();
-        _repairCts = new CancellationTokenSource();
-        var ct = _repairCts.Token;
-
-        Task.Run(() =>
-        {
-            try
+        RunRepairOperation(
+            Loc.S("Scanning database — please wait..."),
+            Loc.S("Dry run cancelled."),
+            Loc.S("Dry run failed: {0}"),
+            ct =>
             {
                 var report = _repair.BuildDryRunReport(ct);
                 _lastRepairReport = report;
                 SetRepairOutput(FormatRepairReport(report));
-            }
-            catch (OperationCanceledException)
-            {
-                SetRepairOutput(Loc.S("Dry run cancelled."));
-            }
-            catch (Exception ex)
-            {
-                SetRepairOutput(string.Format(Loc.S("Dry run failed: {0}"), ex.Message));
-            }
-            finally
-            {
-                _repairBusy = false;
-            }
-        }, ct);
+            });
     }
 
     private void OnRepairApplyClick()
     {
-        if (_repairBusy) return;
         var report = _lastRepairReport;
         if (report == null || report.Actions.Count == 0) return;
 
-        _repairBusy = true;
-        SetRepairOutput(string.Format(Loc.S("Applying repair to {0} entries..."), report.Actions.Count));
-        _repairCts?.Dispose();
-        _repairCts = new CancellationTokenSource();
-        var ct = _repairCts.Token;
-
-        Task.Run(() =>
-        {
-            try
+        RunRepairOperation(
+            string.Format(Loc.S("Applying repair to {0} entries..."), report.Actions.Count),
+            Loc.S("Apply cancelled."),
+            Loc.S("Apply failed: {0}"),
+            ct =>
             {
                 var result = _repair.Apply(report, ct);
                 SetRepairOutput(FormatRepairResult(result));
                 // Clear the report — applying it consumes it; a fresh dry-run is required
                 // to surface anything that's now drifted.
                 _lastRepairReport = null;
+            });
+    }
+
+    /// <summary>
+    /// Shared scaffolding for the repair handlers: guards against re-entrancy, shows the start
+    /// message, runs <paramref name="body"/> on a background task with a fresh cancellation token,
+    /// and reports cancellation/failure uniformly. <paramref name="failFormat"/> is a "{0}"
+    /// format string for the exception message.
+    /// </summary>
+    private void RunRepairOperation(string startMessage, string cancelMessage, string failFormat, Action<CancellationToken> body)
+    {
+        if (_repairBusy) return;
+        _repairBusy = true;
+        SetRepairOutput(startMessage);
+        _repairCts?.Dispose();
+        _repairCts = new CancellationTokenSource();
+        var ct = _repairCts.Token;
+
+        Task.Run(() =>
+        {
+            try
+            {
+                body(ct);
             }
             catch (OperationCanceledException)
             {
-                SetRepairOutput(Loc.S("Apply cancelled."));
+                SetRepairOutput(cancelMessage);
             }
             catch (Exception ex)
             {
-                SetRepairOutput(string.Format(Loc.S("Apply failed: {0}"), ex.Message));
+                SetRepairOutput(string.Format(failFormat, ex.Message));
             }
             finally
             {
