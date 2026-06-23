@@ -110,6 +110,36 @@ public class VoiceSampleExtractorTests
         Assert.Null(VoiceExtractKey.Resolve("redbellygutter", index));
     }
 
+    [Fact]
+    public void Resolve_PrefixOfDifferentName_DoesNotMatch()
+    {
+        // Regression: speaker token "ABEL" must NOT resolve to the unrelated "Abelie" just
+        // because "abelie" starts with "abel". The old greedy prefix match did exactly that,
+        // mislabelling a male character's line as Female_Elezen_Abelie.
+        var npcNames = new Dictionary<uint, Dictionary<string, string>>
+        {
+            [100] = new() { ["en"] = "Abelie" },
+        };
+        var index = VoiceExtractKey.BuildNormalizedNameIndex(npcNames);
+        Assert.Null(VoiceExtractKey.Resolve("abel", index));
+        // The real name still resolves exactly.
+        Assert.Equal(100u, VoiceExtractKey.Resolve("abelie", index)![0]);
+    }
+
+    [Fact]
+    public void Resolve_FirstNameToken_ResolvesViaFirstNameIndex()
+    {
+        // "alisaie" is the given name of "Alisaie Leveilleur" — resolves via the first-name
+        // index, but "alis" (a non-name prefix) does not.
+        var npcNames = new Dictionary<uint, Dictionary<string, string>>
+        {
+            [7] = new() { ["en"] = "Alisaie Leveilleur" },
+        };
+        var index = VoiceExtractKey.BuildNormalizedNameIndex(npcNames);
+        Assert.Equal(7u, VoiceExtractKey.Resolve("alisaie", index)![0]);
+        Assert.Null(VoiceExtractKey.Resolve("alis", index));
+    }
+
     // ── VoiceExtractTextCleaner ──────────────────────────────────────────────
 
     [Fact]
@@ -147,6 +177,113 @@ public class VoiceSampleExtractorTests
         Assert.NotNull(result);
         Assert.DoesNotContain("(-", result![0]);
         Assert.Contains("Who goes there?", result[0]);
+    }
+
+    // ── VoiceExtractTextCleaner.IsSpeech ─────────────────────────────────────
+    // Pure static predicate — no game runtime / Lumina needed. Thresholds are the
+    // plan's starting estimates (EN/FR 4 words, DE 3 words, JP 8 chars); Open Question #1
+    // tracks empirical re-tuning. Test names document the chosen boundary values.
+
+    [Theory]
+    [InlineData("...")]
+    [InlineData("!?")]
+    [InlineData("……")]
+    [InlineData("。。。")]
+    [InlineData("?!?!")]
+    public void IsSpeech_RejectsPurePunctuation(string text)
+    {
+        Assert.False(VoiceExtractTextCleaner.IsSpeech(text, ClientLanguage.English));
+        Assert.False(VoiceExtractTextCleaner.IsSpeech(text, ClientLanguage.Japanese));
+    }
+
+    [Theory]
+    [InlineData("Hahaha!")]     // reduplication (Ha)+
+    [InlineData("Wahaha")]      // single token, 1 word < EN min 4
+    [InlineData("Heeheehee")]   // reduplication (Hee)+
+    [InlineData("Noooo")]       // char-run: o repeated 4×
+    [InlineData("Aaaah!")]      // char-run: a repeated 4×
+    [InlineData("haha")]        // reduplication (ha)+
+    public void IsSpeech_RejectsRepeatedCharOrSyllableNoises(string text)
+    {
+        Assert.False(VoiceExtractTextCleaner.IsSpeech(text, ClientLanguage.English));
+    }
+
+    [Theory]
+    [InlineData("*sigh*")]
+    [InlineData("[laughter]")]
+    public void IsSpeech_RejectsBracketedSoundDescription(string text)
+    {
+        Assert.False(VoiceExtractTextCleaner.IsSpeech(text, ClientLanguage.English));
+    }
+
+    [Theory]
+    [InlineData("Ha ha ha ha")]   // 4 "words" but collapses to a reduplication
+    [InlineData("Ho ho ho!")]
+    [InlineData("He he he")]
+    public void IsSpeech_RejectsSpacedOutLaughs(string text)
+    {
+        Assert.False(VoiceExtractTextCleaner.IsSpeech(text, ClientLanguage.English));
+    }
+
+    [Theory]
+    [InlineData("Hmph.")]
+    [InlineData("Yes.")]
+    [InlineData("I see.")]          // 2 words < EN min 4
+    [InlineData("I trust you.")]    // 3 words < EN min 4 — boundary case, documented as non-speech
+    public void IsSpeech_RejectsShortLines_EN(string text)
+    {
+        Assert.False(VoiceExtractTextCleaner.IsSpeech(text, ClientLanguage.English));
+    }
+
+    [Theory]
+    [InlineData("Thank you for coming.")]                          // exactly 4 words → accepted
+    [InlineData("She speaks so softly, yet carries great resolve.")]
+    [InlineData("Ha, that was unexpected.")]                       // contains "Ha" but not a pure repeat run
+    public void IsSpeech_AcceptsRealLines_EN(string text)
+    {
+        Assert.True(VoiceExtractTextCleaner.IsSpeech(text, ClientLanguage.English));
+    }
+
+    [Theory]
+    [InlineData("Ich verstehe.", false)]            // 2 words < DE min 3
+    [InlineData("Ich verstehe das.", true)]         // 3 words → accepted (DE threshold)
+    [InlineData("Das ist eine gute Idee.", true)]
+    public void IsSpeech_GermanWordThreshold(string text, bool expected)
+    {
+        Assert.Equal(expected, VoiceExtractTextCleaner.IsSpeech(text, ClientLanguage.German));
+    }
+
+    [Theory]
+    [InlineData("あいうえお", false)]              // 5 chars < JP min 8
+    [InlineData("あいうえおかき", false)]          // 7 chars < JP min 8
+    [InlineData("あいうえおかきく", true)]         // 8 chars → accepted (JP boundary)
+    [InlineData("これは普通の会話の文章です。", true)]
+    public void IsSpeech_JapaneseCharThreshold(string text, bool expected)
+    {
+        Assert.Equal(expected, VoiceExtractTextCleaner.IsSpeech(text, ClientLanguage.Japanese));
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void IsSpeech_RejectsBlank(string text)
+    {
+        Assert.False(VoiceExtractTextCleaner.IsSpeech(text, ClientLanguage.English));
+    }
+
+    [Fact]
+    public void IsSpeech_AgreesAcrossGenderVariants()
+    {
+        // The extractor only checks cleaned[0] (male). This locks in the assumption that the
+        // female variant yields the same verdict — gender expansion swaps tokens, not structure.
+        var result = VoiceExtractTextCleaner.Clean(
+            "<If(PlayerParameter(4))>my dear lady<Else/>my good sir</If>, you are most welcome here.",
+            ClientLanguage.English);
+        Assert.NotNull(result);
+        Assert.Equal(2, result!.Length);
+        Assert.Equal(
+            VoiceExtractTextCleaner.IsSpeech(result[0], ClientLanguage.English),
+            VoiceExtractTextCleaner.IsSpeech(result[1], ClientLanguage.English));
     }
 
     // ── VoiceExtractFileNames ────────────────────────────────────────────────
@@ -279,6 +416,33 @@ public class VoiceSampleExtractorTests
         var path = VoiceExtractFileNames.GetNamedTargetPath(
             @"C:\save", "Female", "Hyur", "Child", "Tataru", 1, 1);
         Assert.EndsWith("Female_Hyur-Child_Tataru.wav", path);
+    }
+
+    [Fact]
+    public void GetNamedTargetPath_AppendsEpochSuffix_SingleSample()
+    {
+        var path = VoiceExtractFileNames.GetNamedTargetPath(
+            @"C:\save", "Female", "Hyur", "Adult", "Iceheart", 1, 1, "FF14-Voices", "Pre06010");
+        Assert.EndsWith("Female_Hyur_Iceheart_Pre06010.wav", path);
+    }
+
+    [Fact]
+    public void GetNamedTargetPath_AppendsEpochSuffix_MultiSample()
+    {
+        var path = VoiceExtractFileNames.GetNamedTargetPath(
+            @"C:\save", "Female", "Hyur", "Adult", "Iceheart", 2, 3, "FF14-Voices", "Post06010");
+        var sep = System.IO.Path.DirectorySeparatorChar;
+        Assert.EndsWith("Female_Hyur_Iceheart_Post06010_2.wav", path);
+        // Subfolder stays keyed on the name alone so both epochs group together.
+        Assert.Contains("Iceheart" + sep, path);
+    }
+
+    [Fact]
+    public void GetNamedTargetPath_EmptyEpoch_UnchangedFilename()
+    {
+        var path = VoiceExtractFileNames.GetNamedTargetPath(
+            @"C:\save", "Female", "Hyur", "Adult", "Tataru", 1, 1, "FF14-Voices", "");
+        Assert.EndsWith("Female_Hyur_Tataru.wav", path);
     }
 
     [Fact]
@@ -446,6 +610,51 @@ public class VoiceSampleExtractorTests
         var a = VoiceExtractSampleSelector.PickN(clips, 3, seed: 1);
         var b = VoiceExtractSampleSelector.PickN(clips, 3, seed: 2);
         Assert.NotEqual(a, b);
+    }
+
+    // ── VoiceExtractSampleSelector.PickDiverse ───────────────────────────────
+
+    [Fact]
+    public void PickDiverse_IncludesShortestAndLongest()
+    {
+        var clips = new[] { 10.0, 1.0, 5.0, 8.0, 3.0, 7.0 };
+        var picked = VoiceExtractSampleSelector.PickDiverse(clips, 3, x => x);
+        Assert.Equal(3, picked.Count);
+        Assert.Equal(1.0, picked[0]);    // shortest first (sorted ascending)
+        Assert.Equal(10.0, picked[^1]);  // longest last
+    }
+
+    [Fact]
+    public void PickDiverse_SinglePick_ReturnsMedianNotExtreme()
+    {
+        var clips = new[] { 1.0, 2.0, 3.0, 4.0, 5.0 };
+        var picked = VoiceExtractSampleSelector.PickDiverse(clips, 1, x => x);
+        Assert.Single(picked);
+        Assert.Equal(3.0, picked[0]); // middle of the sorted set, not 1.0 or 5.0
+    }
+
+    [Fact]
+    public void PickDiverse_ReturnsAllSorted_WhenCountAtMostN()
+    {
+        var clips = new[] { 5.0, 1.0, 3.0 };
+        var picked = VoiceExtractSampleSelector.PickDiverse(clips, 5, x => x);
+        Assert.Equal(new[] { 1.0, 3.0, 5.0 }, picked);
+    }
+
+    [Fact]
+    public void PickDiverse_Deterministic()
+    {
+        var clips = new[] { 9.0, 2.0, 7.0, 4.0, 1.0, 6.0, 3.0, 8.0, 5.0, 10.0 };
+        var a = VoiceExtractSampleSelector.PickDiverse(clips, 4, x => x);
+        var b = VoiceExtractSampleSelector.PickDiverse(clips, 4, x => x);
+        Assert.Equal(a, b);
+    }
+
+    [Fact]
+    public void PickDiverse_EmptyInput_ReturnsEmpty()
+    {
+        var picked = VoiceExtractSampleSelector.PickDiverse(Array.Empty<double>(), 3, x => x);
+        Assert.Empty(picked);
     }
 
     // ── WavInspector ─────────────────────────────────────────────────────────

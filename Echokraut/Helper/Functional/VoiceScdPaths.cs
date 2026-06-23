@@ -48,6 +48,10 @@ public static class VoiceScdPaths
     /// gender marker is empty (single underscore separator) for non-gender-branching lines,
     /// or <c>m</c>/<c>f</c> for the gendered variants. We iterate all expansions and all
     /// three gender suffixes — caller short-circuits on the first hit.
+    ///
+    /// <para>Note: the <c>_m_</c>/<c>_f_</c> suffix is NOT the speaker's gender — it marks
+    /// player-gender-specific TEXT variants ("he"/"she" etc.) of the same line spoken by the
+    /// same voice actor. So which one resolves first does not change the voice in the clip.</para>
     /// </summary>
     public static List<string> Build(string audioBase, string langCode)
     {

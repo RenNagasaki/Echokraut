@@ -78,6 +78,7 @@
     <EmbeddedResource Include="Resources\NpcRaces.json" />
     <EmbeddedResource Include="Resources\QuestNpcAliases.json" />
     <EmbeddedResource Include="Resources\VoiceExtractAliases.json" />
+    <EmbeddedResource Include="Resources\VoiceActorSplits.json" />
     <!--
       In-game changelog content. ChangelogService enumerates these via
       Assembly.GetManifestResourceNames(), parses the version out of the filename,

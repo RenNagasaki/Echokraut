@@ -25,6 +25,29 @@ VERBESSERUNGEN
   Cutscene-Dialog-Harvester sie schon hatte. Bestehende vertonte Einträge
   in der Datenbank bleiben drin; ein erneuter Harvest bereinigt sie.
 
+[Voices] Voice-Sample-Extractor verwirft Nicht-Sprache-Zeilen
+  Der Starter-Set-Extractor filtert jetzt Nicht-Sprache-Zeilen heraus
+  (Lachen, Grunzen, einzelne Ausrufe, Lautmalerei, Klammer-Geräusch-
+  hinweise), bevor Samples ausgewählt werden. NPCs mit vielen beiläufigen
+  Lautäußerungen bekommen so sauberere Starter-Sets, die besser fürs
+  Stimmen-Klonen geeignet sind.
+
+[Voices] Starter-Set-Samples decken jetzt verschiedene Längen ab
+  Wenn mehr als ein Sample pro NPC angefordert wird, wählt der Extractor
+  jetzt Clips über die gesamte Längenspanne verteilt (kurz, mittel, lang)
+  statt eines zufälligen Häufchens — so hört die geklonte Stimme variantere
+  Sprachmelodie.
+
+[Voices] Synchronsprecher-Wechsel-Splits
+  Charaktere, deren Synchronsprecher mitten im Spiel gewechselt wurde,
+  lassen sich jetzt in getrennte Sample-Sets pro "Epoche" aufteilen, mit
+  dem Spiel-Patch im Dateinamen (z.B. Female_Hyur_Iceheart_Pre06010 /
+  _Post06010), damit eine geklonte Stimme nie zwei verschiedene Sprecher
+  vermischt. Splits werden in Resources/VoiceActorSplits.json (wird leer
+  ausgeliefert) oder lokal unter <LocalSaveLocation>/FF14-Voices/
+  voice_actor_splits.json konfiguriert. Stimmen ohne Eintrag bleiben
+  unverändert.
+
 
 ==============================================================================
 BUGFIXES
@@ -68,6 +91,14 @@ BUGFIXES
   passieren würde, bevor du Anwendest; Anwenden führt die Verschiebungen
   durch und löscht jetzt leere Charakterzeilen. Es werden keine Audio-
   Dateien gelöscht — nur DB-Einträge umgehängt.
+
+- Der Voice-Sample-Extractor beschriftet eine Zeile nicht mehr falsch, wenn
+  der Sprechername ein Präfix eines anderen NPC-Namens ist. Die Sprecher-
+  zuordnung verlangt jetzt einen exakten Voll- oder Vornamen-Treffer statt
+  eines losen Präfix-Matches — eine Zeile von "Abel" wird also nicht mehr als
+  "Female_Elezen_Abelie" geschrieben. Dieselbe Verschärfung gilt für das
+  Cutscene-Dialog-Harvesting. Nicht zugeordnete Sprecher lassen sich weiterhin
+  über voice_extract_aliases.json zuordnen.
 
 - Die AllTalk-Audioerzeugung verliert keine Netzwerk-Sockets mehr. Bisher
   wurde pro gesprochener Zeile ein komplett neuer HTTP-Client samt

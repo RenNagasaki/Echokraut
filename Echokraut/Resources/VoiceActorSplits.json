@@ -1,0 +1,11 @@
+{
+  "_comment": "Voice-actor change splits for the Voice Sample Extractor. See Echokraut/Services/CLAUDE.md. Add entries to 'splits', or override everything locally at <LocalSaveLocation>/FF14-Voices/voice_actor_splits.json (the local file fully replaces this one; no merge). 'splits' ships empty so no voice is split until a boundary patch has been verified against real game data.",
+  "_example": {
+    "voiceKey": "Female_Hyur_Iceheart",
+    "language": "DE",
+    "comment": "Example only (NOT active). The German dub actor reportedly changed around patch 6.01 - verify the exact 5-digit boundary token before enabling. voiceKey is the Gender_Race[-BodyType]_Name token the extractor produces.",
+    "boundaryPatches": ["06010"]
+  },
+  "version": 1,
+  "splits": []
+}

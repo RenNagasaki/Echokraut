@@ -24,6 +24,26 @@ IMPROVEMENTS
   dialog harvester already followed. Existing voiced rows in the database
   stay where they are; rerun the harvest to clean them out.
 
+[Voices] Voice Sample Extractor drops non-speech lines
+  The starter-set extractor now filters out non-speech voice lines (laughs,
+  grunts, single-word exclamations, onomatopoeia, bracketed sound cues)
+  before picking samples. NPCs with lots of incidental vocalizations get
+  cleaner starter sets that are better suited for voice cloning.
+
+[Voices] Starter-set samples now span varied lengths
+  When more than one sample per NPC is requested, the extractor now picks
+  clips spread across the duration range (short, medium, long) instead of a
+  random cluster, so the cloned voice hears more varied prosody.
+
+[Voices] Voice-actor change splits
+  Characters whose dub voice actor changed mid-game can now be split into
+  separate sample sets per "epoch", with the game patch encoded in the
+  filename (e.g. Female_Hyur_Iceheart_Pre06010 / _Post06010), so a cloned
+  voice never blends two different actors. Splits are configured in
+  Resources/VoiceActorSplits.json (ships empty) or a local override at
+  <LocalSaveLocation>/FF14-Voices/voice_actor_splits.json. Voices without an
+  entry are unaffected.
+
 
 ==============================================================================
 BUG FIXES
@@ -65,6 +85,13 @@ BUG FIXES
   before you apply; Apply does the moves and deletes orphaned, now-
   empty character rows. No audio files are deleted — only DB rows are
   re-attributed.
+
+- Voice Sample Extractor no longer mislabels a line whose speaker name is a
+  prefix of an unrelated NPC's name. Speaker matching now requires an exact
+  full-name or first-name hit instead of a loose prefix match, so e.g. a line
+  by "Abel" is no longer written as "Female_Elezen_Abelie". The same tightening
+  applies to cutscene-dialog harvesting. Unmatched speakers can still be mapped
+  via voice_extract_aliases.json.
 
 - AllTalk audio generation no longer leaks network sockets. Each spoken
   line used to spin up a brand-new HTTP client + connection, which under

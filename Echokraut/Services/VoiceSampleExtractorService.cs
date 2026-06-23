@@ -44,6 +44,11 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
     /// "FFXIV uses OGG for music, MS-ADPCM for sound"); we don't bundle an OGG decoder, so
     /// any OGG entries we hit are counted and reported once at the end.</summary>
     private int _oggSkipCount;
+    /// <summary>Counter for candidates dropped by the speech-content filter
+    /// (<see cref="VoiceExtractTextCleaner.IsSpeech"/>) during the current run. Surfaced in the
+    /// run summary so the per-language thresholds can be re-tuned against real data (Open
+    /// Question #1 in docs/plans/voice-sample-improvements.md).</summary>
+    private int _nonSpeechSkipCount;
     /// <summary>Cache of speaker shortnames already warned about for multi-NPC ambiguity, so
     /// the same warning isn't emitted hundreds of times during a single run.</summary>
     private readonly HashSet<string> _multiNpcWarned = new(StringComparer.OrdinalIgnoreCase);
@@ -102,6 +107,7 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
     {
         samplesPerNpc = Math.Clamp(samplesPerNpc, 1, 5);
         _oggSkipCount = 0;
+        _nonSpeechSkipCount = 0;
         _multiNpcWarned.Clear();
         _firstHitLogged = 0;
         _scdResolveCount = 0;
@@ -143,6 +149,12 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
         // get overruled accidentally. Built once before the iteration loop.
         var aliasMap = LoadVoiceExtractAliases(nameIndex, eventId);
 
+        // Voice-actor splits (embedded + optional local override). For voices whose dub actor
+        // changed mid-game, this partitions the clips into per-epoch sample sets so a cloned
+        // voice doesn't blend two actors. Voices without an entry behave exactly as before.
+        var splits = LoadVoiceActorSplits(eventId);
+        var langCode = VoiceScdPaths.LanguageCodeForScd(language);
+
         ProgressChanged?.Invoke(Loc.S("Scanning voice text sheets"), 0, 1);
         var perNpcKeys = new Dictionary<uint, List<VoiceClipCandidate>>();
         var unmatched = new Dictionary<string, UnmatchedShortName>(StringComparer.OrdinalIgnoreCase);
@@ -169,6 +181,11 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
             sheetParsed[sheetName] = sp + 1;
             var cleaned = VoiceExtractTextCleaner.Clean(text, language);
             if (cleaned == null || cleaned.Length == 0 || string.IsNullOrWhiteSpace(cleaned[0])) continue;
+
+            // Speech-content filter: drop laughs / grunts / single-word exclamations /
+            // onomatopoeia before they reach the candidate list. cleaned[0] (male variant)
+            // is sufficient — both gender variants share the same structural content type.
+            if (!VoiceExtractTextCleaner.IsSpeech(cleaned[0], language)) { _nonSpeechSkipCount++; continue; }
 
             var resolved = VoiceExtractKey.Resolve(shortName, nameIndex);
             uint npcId;
@@ -217,7 +234,8 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
 
         _log.Info(nameof(RunInternal),
             $"Voice scan: {totalKeys} keys, {perNpcKeys.Count} matched NPCs, " +
-            $"{unmatched.Count} unmatched shortnames",
+            $"{unmatched.Count} unmatched shortnames, " +
+            $"{_nonSpeechSkipCount} non-speech lines dropped",
             eventId);
 
         // Per-sheet diagnostic: top 10 sources by row count, with TryParse hit rate and a
@@ -302,13 +320,27 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
             }
             if (decoded.Count == 0) continue;
 
+            // Voice-actor split: write one named sample set per epoch (epoch encoded in the
+            // filename, e.g. _Pre06010 / _Post06010) so pre/post-actor-change voices stay
+            // distinct. Split voices are main characters (far more than the catalog's 20-clip
+            // threshold), so they never produce catalog entries — handled in the branch.
+            var voiceKey = VoiceExtractFileNames.CanonicalNamePart(gender, race, bodyType, locName);
+            if (splits.HasSplit(voiceKey, langCode))
+            {
+                var target = new NamedOutputTarget(outputRoot, gender, race, bodyType, locName, outputSubfolder);
+                totalClipsWritten += WriteSplitVoiceSets(
+                    decoded, ab => splits.ResolveEpoch(voiceKey, langCode, ab), samplesPerNpc, target, ct, eventId);
+                continue;
+            }
+
             // Length filter (with closest-fallback if no clip in 6—12s).
             var filtered = VoiceExtractSampleSelector.ApplyLengthFilter(
                 decoded, c => c.Seconds, MinSeconds, MaxSeconds);
             if (filtered.Count == 0) continue;
 
-            // Pick N deterministically (seeded by NpcId).
-            var picked = VoiceExtractSampleSelector.PickN(filtered, samplesPerNpc, seed: (int)npcId);
+            // Pick a duration-diverse sample set (short/medium/long) so the cloned voice sees
+            // varied prosody instead of a random length cluster. Deterministic, no RNG.
+            var picked = VoiceExtractSampleSelector.PickDiverse(filtered, samplesPerNpc, c => c.Seconds);
 
             // Resample each picked clip once (downmix → 22050 mono → PCM-WAV bytes), then
             // write to the named folder and (when eligible) the random-voice catalog.
@@ -357,6 +389,50 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
                 "voice content is overwhelmingly MS-ADPCM, but a few OGG entries exist).",
                 eventId);
         ProgressChanged?.Invoke(string.Format(Loc.S("Done — {0} files written"), totalClipsWritten), npcsProcessed, npcCount);
+    }
+
+    /// <summary>
+    /// Write the per-epoch named sample sets for a voice that has a configured actor split.
+    /// Partitions the decoded clips by epoch, then length-filters + duration-diverse-picks +
+    /// resamples each epoch independently, tagging the epoch onto the filename
+    /// (e.g. <c>_Pre06010</c> / <c>_Post06010</c>). Returns the number of files written.
+    /// Catalog output is intentionally skipped — split voices are main characters well above
+    /// the catalog's clip threshold, so they never produced catalog entries anyway.
+    /// </summary>
+    private int WriteSplitVoiceSets(
+        List<DecodedClip> decoded, Func<string, string> resolveEpoch, int samplesPerNpc,
+        NamedOutputTarget target, CancellationToken ct, EKEventId eventId)
+    {
+        var byEpoch = new Dictionary<string, List<DecodedClip>>();
+        foreach (var d in decoded)
+        {
+            var epoch = resolveEpoch(d.Candidate.AudioFileBase);
+            if (!byEpoch.TryGetValue(epoch, out var list)) byEpoch[epoch] = list = new List<DecodedClip>();
+            list.Add(d);
+        }
+
+        var written = 0;
+        foreach (var (epoch, epochClips) in byEpoch)
+        {
+            ct.ThrowIfCancellationRequested();
+            var filtered = VoiceExtractSampleSelector.ApplyLengthFilter(
+                epochClips, c => c.Seconds, MinSeconds, MaxSeconds);
+            if (filtered.Count == 0) continue;
+            var picked = VoiceExtractSampleSelector.PickDiverse(filtered, samplesPerNpc, c => c.Seconds);
+            for (var i = 0; i < picked.Count; i++)
+            {
+                ct.ThrowIfCancellationRequested();
+                var bytes = ResampleToMonoWavBytes(picked[i].Pcm);
+                var path = VoiceExtractFileNames.GetNamedTargetPath(
+                    target.OutputRoot, target.Gender, target.Race, target.BodyType, target.LocName,
+                    i + 1, picked.Count, target.OutputSubfolder, epoch);
+                WriteWavToFile(bytes, path, eventId);
+                written++;
+            }
+        }
+        _log.Debug(nameof(WriteSplitVoiceSets),
+            $"Split voice '{target.LocName}': {byEpoch.Count} epoch(s), {written} files written", eventId);
+        return written;
     }
 
     /// <summary>
@@ -698,6 +774,64 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
             eventId);
     }
 
+    // ── Voice-actor splits: embedded baseline, optional local override (replaces) ──
+    /// <summary>
+    /// Load the voice-actor split config. Two layers: the embedded
+    /// <c>Resources/VoiceActorSplits.json</c> baseline, and an optional user override at
+    /// <c>&lt;localSaveLocation&gt;/FF14-Voices/voice_actor_splits.json</c> that, when present and
+    /// readable, **fully replaces** the embedded file (no merge, no remote layer). Validation
+    /// warnings (bad boundary tokens, non-ascending lists) are logged; invalid entries are
+    /// dropped and the rest still load.
+    /// </summary>
+    private VoiceActorSplits LoadVoiceActorSplits(EKEventId eventId)
+    {
+        var baseDir = string.IsNullOrEmpty(_config.LocalSaveLocation) ? @"C:\alltalk_tts" : _config.LocalSaveLocation;
+        var localPath = Path.Combine(baseDir, "FF14-Voices", "voice_actor_splits.json");
+        string? json = null;
+        var source = "embedded";
+
+        if (File.Exists(localPath))
+        {
+            try
+            {
+                json = File.ReadAllText(localPath);
+                source = $"local ({localPath})";
+            }
+            catch (Exception ex)
+            {
+                _log.Warning(nameof(LoadVoiceActorSplits),
+                    $"Failed to read {localPath}: {ex.Message} — using embedded splits", eventId);
+            }
+        }
+
+        if (json == null)
+        {
+            try
+            {
+                using var stream = typeof(VoiceSampleExtractorService).Assembly
+                    .GetManifestResourceStream("Echokraut.Resources.VoiceActorSplits.json");
+                if (stream != null)
+                {
+                    using var reader = new StreamReader(stream);
+                    json = reader.ReadToEnd();
+                }
+            }
+            catch (Exception ex)
+            {
+                _log.Warning(nameof(LoadVoiceActorSplits),
+                    $"Failed to read embedded VoiceActorSplits.json: {ex.Message}", eventId);
+            }
+        }
+
+        var splits = VoiceActorSplits.Parse(json, out var warnings);
+        foreach (var w in warnings)
+            _log.Warning(nameof(LoadVoiceActorSplits), w, eventId);
+        _log.Info(nameof(LoadVoiceActorSplits),
+            $"Voice actor splits loaded from {source}: {(splits.HasAnySplits ? "active" : "none configured")}",
+            eventId);
+        return splits;
+    }
+
     private void WriteUnmatchedJson(string outputRoot, string outputSubfolder,
         Dictionary<string, UnmatchedShortName> unmatched, EKEventId eventId)
     {
@@ -862,6 +996,11 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
     };
 
     // ── DTOs ────────────────────────────────────────────────────────────────
+
+    /// <summary>Bundles the per-NPC output identity passed to the split-voice writer so the
+    /// helper stays under the parameter-count limit.</summary>
+    private readonly record struct NamedOutputTarget(
+        string OutputRoot, string Gender, string Race, string BodyType, string LocName, string OutputSubfolder);
 
     private sealed class VoiceClipCandidate
     {

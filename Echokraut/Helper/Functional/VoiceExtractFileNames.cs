@@ -124,11 +124,18 @@ public static class VoiceExtractFileNames
     /// produces no suffix. <c>outputSubfolder</c> defaults to <c>"FF14-Voices"</c> for the
     /// regular Game-Data-Tools run; the First-Time install flow overrides it to <c>"voices"</c>
     /// so files land directly inside AllTalk's expected voices folder.
+    /// <para><c>epochName</c> (from <c>VoiceActorSplits</c>) tags a voice-actor epoch onto the
+    /// canonical name when non-empty: <c>Female_Hyur_Iceheart_Pre06010.wav</c>. Empty keeps the
+    /// current single-voice filename unchanged. The per-character subfolder (multi-sample case)
+    /// stays keyed on the name alone so both epochs group under the same character folder.</para>
     /// </summary>
     public static string GetNamedTargetPath(string root, string gender, string race, string bodyType,
-        string localizedName, int sampleIndex, int totalSamplesPerNpc, string outputSubfolder = "FF14-Voices")
+        string localizedName, int sampleIndex, int totalSamplesPerNpc, string outputSubfolder = "FF14-Voices",
+        string epochName = "")
     {
         var canonical = CanonicalNamePart(gender, race, bodyType, localizedName);
+        if (!string.IsNullOrEmpty(epochName))
+            canonical = $"{canonical}_{Sanitize(epochName)}";
         if (totalSamplesPerNpc <= 1)
             return Path.Combine(root, outputSubfolder, canonical + ".wav");
 
