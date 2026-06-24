@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text.RegularExpressions;
 using Dalamud.Game;
 
@@ -167,6 +168,96 @@ public static class VoiceExtractTextCleaner
             line = line.Substring(1);
 
         return line.Trim();
+    }
+
+    // ── Speech-content filter ────────────────────────────────────────────────
+    // Drops non-speech voice candidates (laughs, grunts, single-word exclamations,
+    // onomatopoeia, bracketed sound descriptions) before they reach the starter-set /
+    // dataset candidate list. Pure + allocation-light; operates on already-Clean()ed text.
+
+    /// <summary>Minimum word count for a Latin-script line to count as speech.
+    /// "Yes." / "I see." / "Hmph." are non-speech; "Thank you for coming." qualifies.</summary>
+    public const int EnglishMinWords = 4;
+
+    /// <summary>German tends to compound words, so 4 EN words ≈ 3 DE words.</summary>
+    public const int GermanMinWords = 3;
+
+    /// <summary>French structure is close to English.</summary>
+    public const int FrenchMinWords = 4;
+
+    /// <summary>Japanese uses a char count instead of word count — whitespace splitting is
+    /// unreliable for CJK. Kanji density means ~8 chars ≈ 3-4 EN words of content.</summary>
+    public const int JapaneseMinChars = 8;
+
+    // A single letter immediately repeated 4+ times in a row (Noooo, Aaaah, Wheee, ははは).
+    private static readonly Regex OnomatopoeiaCharRun =
+        new(@"(\p{L})\1{3,}", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    // The whole (whitespace-collapsed) string is a 1-3 char unit repeated (Hahaha, Heehee, "Ho ho ho").
+    private static readonly Regex OnomatopoeiaReduplication =
+        new(@"^(\p{L}{1,3})\1+$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
+    // Bracketed / asterisked sound descriptions: *sigh*, [laughter]. (CleanLine strips most
+    // [..] already; this is belt-and-suspenders plus the *..* form it doesn't touch.)
+    private static readonly Regex BracketedSound =
+        new(@"^(\*.*\*|\[.*\])$", RegexOptions.Compiled);
+
+    // Outer punctuation stripped before analysis so "..." / "!?" / "……" / "。。。" collapse to
+    // empty and word-count runs on bare content. Includes common JP punctuation.
+    private static readonly char[] OuterPunctuation =
+    {
+        ' ', '\t', '\n', '\r', '.', '…', '!', '?', ',', ';', ':', '"', '“', '”', '\'',
+        '-', '—', '~', '〜', '★', '。', '、', '！', '？', '「', '」', '『', '』', '・',
+    };
+
+    /// <summary>
+    /// True when <paramref name="cleanedText"/> looks like real spoken dialogue rather than a
+    /// non-speech vocalization (laugh, grunt, single-word exclamation, onomatopoeia, sound
+    /// description). Operates on already-<see cref="Clean"/>ed text — callers pass
+    /// <c>cleaned[0]</c> (the male variant is sufficient; both gender variants share the same
+    /// structural content type, so if one is non-speech the other is too).
+    ///
+    /// <para>Thresholds (<see cref="EnglishMinWords"/> etc.) are starting estimates; per the
+    /// plan's Open Question #1 they should be re-tuned against a real SCD text dump if the drop
+    /// rate looks off for any language.</para>
+    /// </summary>
+    public static bool IsSpeech(string cleanedText, ClientLanguage language)
+    {
+        if (string.IsNullOrWhiteSpace(cleanedText))
+            return false;
+
+        var core = cleanedText.Trim();
+
+        // Bracketed / asterisked sound description → not speech.
+        if (BracketedSound.IsMatch(core))
+            return false;
+
+        // Strip surrounding punctuation; pure-punctuation lines collapse to empty here.
+        var stripped = core.Trim(OuterPunctuation);
+        if (stripped.Length == 0)
+            return false;
+
+        // Whitespace-collapsed form so spaced-out laughs ("Ha ha ha" → "hahaha") are caught
+        // by the reduplication check; also the char count used for Japanese.
+        var collapsed = new string(stripped.Where(c => !char.IsWhiteSpace(c)).ToArray());
+
+        // Reduplicated-syllable noises (Hahaha, Heehee, "Ho ho ho") — match the collapsed form
+        // since the whole token must be a repeated unit. Char-run cries (Noooo, Aaaah) match the
+        // spaced form so runs are never fabricated across word boundaries ("see eels").
+        if (OnomatopoeiaReduplication.IsMatch(collapsed))
+            return false;
+        if (OnomatopoeiaCharRun.IsMatch(stripped))
+            return false;
+
+        if (language == ClientLanguage.Japanese)
+            return collapsed.Length >= JapaneseMinChars;
+
+        var minWords = language switch
+        {
+            ClientLanguage.German => GermanMinWords,
+            ClientLanguage.French => FrenchMinWords,
+            _ => EnglishMinWords,
+        };
+        var words = stripped.Split((char[]?)null, System.StringSplitOptions.RemoveEmptyEntries).Length;
+        return words >= minWords;
     }
 
     /// <summary>

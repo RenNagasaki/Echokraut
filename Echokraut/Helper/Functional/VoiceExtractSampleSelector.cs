@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 
 namespace Echokraut.Helper.Functional;
 
@@ -69,5 +70,34 @@ public static class VoiceExtractSampleSelector
             (pool[i], pool[j]) = (pool[j], pool[i]);
         }
         return pool.GetRange(0, n);
+    }
+
+    /// <summary>
+    /// Pick up to <paramref name="n"/> samples spread across the clip-duration range, so a
+    /// multi-sample voice set captures varied prosody (short, medium, long lines) instead of
+    /// a random cluster that might all sit near one length. Deterministic — no RNG: sorts by
+    /// duration ascending and takes <paramref name="n"/> evenly-spaced picks with both
+    /// endpoints (shortest + longest) included. For <c>n == 1</c> the median-duration clip is
+    /// returned (a representative middle, not an extreme).
+    /// <list type="bullet">
+    /// <item>If <c>clips.Count &lt;= n</c>: returns a copy of the input (length-sorted).</item>
+    /// </list>
+    /// </summary>
+    public static List<T> PickDiverse<T>(IReadOnlyList<T> clips, int n, System.Func<T, double> lengthSec)
+    {
+        if (n <= 0 || clips.Count == 0) return new List<T>();
+
+        var sorted = clips.OrderBy(lengthSec).ToList();
+        if (sorted.Count <= n) return sorted;
+        if (n == 1) return new List<T> { sorted[sorted.Count / 2] };
+
+        var result = new List<T>(n);
+        for (var i = 0; i < n; i++)
+        {
+            // Evenly map i ∈ [0, n-1] onto [0, count-1], inclusive of both endpoints.
+            var idx = (int)System.Math.Round(i * (sorted.Count - 1) / (double)(n - 1));
+            result.Add(sorted[idx]);
+        }
+        return result;
     }
 }

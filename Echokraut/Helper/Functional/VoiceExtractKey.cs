@@ -40,6 +40,13 @@ public static class VoiceExtractKey
     /// <summary>
     /// Build a normalized name index: lowercase, strip spaces / apostrophes / hyphens.
     /// Mirrors the convention used elsewhere in <c>DialogHarvestService</c>.
+    ///
+    /// <para>Indexes BOTH the full normalized name AND the normalized first-name token (the
+    /// part before the first space). The first-name key lets a speaker shortname that is just
+    /// the character's given name (e.g. <c>"alisaie"</c> for "Alisaie Leveilleur") resolve
+    /// precisely via an exact lookup — replacing the old greedy <c>StartsWith</c> prefix match,
+    /// which also mapped unrelated names that merely shared a prefix (the speaker token
+    /// <c>"ABEL"</c> wrongly resolving to "Abelie").</para>
     /// </summary>
     public static Dictionary<string, List<uint>> BuildNormalizedNameIndex(
         Dictionary<uint, Dictionary<string, string>> npcNames)
@@ -48,48 +55,39 @@ public static class VoiceExtractKey
         foreach (var (npcId, names) in npcNames)
         {
             if (!names.TryGetValue("en", out var enName) || string.IsNullOrEmpty(enName)) continue;
-            var norm = Normalize(enName);
-            if (norm.Length == 0) continue;
-            if (!index.TryGetValue(norm, out var ids))
-                index[norm] = ids = new List<uint>();
-            if (!ids.Contains(npcId)) ids.Add(npcId);
+
+            AddIndexKey(index, Normalize(enName), npcId);
+
+            var firstSpace = enName.IndexOf(' ');
+            if (firstSpace > 0)
+                AddIndexKey(index, Normalize(enName.Substring(0, firstSpace)), npcId);
         }
         return index;
     }
 
+    private static void AddIndexKey(Dictionary<string, List<uint>> index, string key, uint npcId)
+    {
+        if (key.Length == 0) return;
+        if (!index.TryGetValue(key, out var ids))
+            index[key] = ids = new List<uint>();
+        if (!ids.Contains(npcId)) ids.Add(npcId);
+    }
+
     /// <summary>
-    /// Resolve a speaker shortname against the normalized name index.
-    /// <list type="number">
-    /// <item>Direct match — shortname == normalized name.</item>
-    /// <item>Substring — normalized name <c>StartsWith(shortname)</c> (e.g. "alisaie"
-    /// matches "alisaieleveilleur").</item>
-    /// <item>No match — caller emits to unmatched JSON.</item>
-    /// </list>
-    /// On multi-match (e.g. several "Aymeric" spawns), returns the first NpcId; the caller
-    /// can log alternatives.
+    /// Resolve a speaker shortname against the normalized name index by EXACT match against
+    /// either a full name or a first-name token (both are indexed by
+    /// <see cref="BuildNormalizedNameIndex"/>). No prefix/substring matching — that previously
+    /// caused false positives (speaker token "ABEL" matching "Abelie"). A token that matches
+    /// nothing is left for the caller to emit to the unmatched JSON / resolve via the alias map.
+    /// On multi-match (e.g. several NPCs sharing a first name), returns the first NpcId; the
+    /// caller can log alternatives.
     /// </summary>
     public static List<uint>? Resolve(string shortname, Dictionary<string, List<uint>> index)
     {
         if (string.IsNullOrEmpty(shortname)) return null;
         var norm = Normalize(shortname);
-        if (index.TryGetValue(norm, out var direct) && direct.Count > 0)
-            return direct;
-
-        // Substring fallback: any indexed name whose normalized form starts with shortname.
-        // Cap to avoid pathological matches for very short names ("a" matching everything).
-        if (norm.Length < 4) return null;
-
-        List<uint>? collected = null;
-        foreach (var (key, ids) in index)
-        {
-            if (key.StartsWith(norm, StringComparison.OrdinalIgnoreCase))
-            {
-                collected ??= new List<uint>();
-                foreach (var id in ids)
-                    if (!collected.Contains(id)) collected.Add(id);
-            }
-        }
-        return collected;
+        if (norm.Length == 0) return null;
+        return index.TryGetValue(norm, out var ids) && ids.Count > 0 ? ids : null;
     }
 
     /// <summary>Lowercase, strip ASCII spaces / apostrophes / hyphens. Pure transform.</summary>
