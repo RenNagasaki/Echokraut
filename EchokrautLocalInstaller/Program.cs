@@ -169,6 +169,15 @@ public class Program
                             args[11].Split(';'),
                             Convert.ToBoolean(args[12]));
                     break;
+                case "echokrautts":
+                    // echokrautts <installRoot> <echokrauTtsUrl-or-empty> <isWindows> <port> <language> <parentPid>
+                    // One mode for both install + start: the wrapper bootstrap installs (idempotent)
+                    // AND serves in a single long-running process. When a URL is given the wrapper is
+                    // (re)downloaded first; otherwise we just run the existing install.
+                    Log($"Mode: echokrautts | installRoot={args[1]} | url={(string.IsNullOrEmpty(args[2]) ? "(none)" : args[2])} | isWindows={args[3]} | port={args[4]} | language={args[5]} | parentPid={args[6]}");
+                    IsWindows = Convert.ToBoolean(args[3]);
+                    StartEchokrauTts(args[1], args[2], args[4], args[5], args[6]).Wait();
+                    break;
                 case "installcustomdata":
                     // Args: installcustomdata <installFolder> <customModelUrl> <customVoicesUrl> <isWindows> <shouldRestart>
                     // Note: any running installer (and its AllTalk instance) is already killed by the named pipe shutdown above.
@@ -509,6 +518,122 @@ public class Program
         }
     }
 
+    /// <summary>
+    /// Install (optionally download first) + run the EchokrauTTS wrapper. The wrapper's bootstrap is
+    /// a single long-running process that installs (idempotent, skips completed steps) and then
+    /// serves; it emits NDJSON progress/ready/error on stdout. We forward those lines to the log and,
+    /// on the <c>ready</c> event, write <c>Ready.EchokrauTTS.txt</c> next to this exe (the plugin
+    /// polls it). The process stays alive serving until killed.
+    /// </summary>
+    static async Task StartEchokrauTts(string installRoot, string echokrauTtsUrl, string port,
+        string language, string parentPid)
+    {
+        try
+        {
+            var wrapperFolder = Path.Join(installRoot, Constants.ECHOKRAUTTSFOLDERNAME);
+
+            if (!string.IsNullOrEmpty(echokrauTtsUrl))
+            {
+                Log($"Downloading EchokrauTTS wrapper to {wrapperFolder}");
+                Directory.CreateDirectory(installRoot);
+                var zipPath = Path.Join(installRoot, "echokrautts.zip");
+                using (var client = new HttpClient { Timeout = TimeSpan.FromMinutes(30) })
+                    await DownloadFileAsync(client, echokrauTtsUrl, zipPath, "EchokrauTTS wrapper");
+                Directory.CreateDirectory(wrapperFolder);
+                System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, wrapperFolder, overwriteFiles: true);
+                try { File.Delete(zipPath); } catch { }
+                Log("EchokrauTTS wrapper extracted");
+            }
+
+            InstanceProcess = new Process();
+            var fileName = IsWindows ? "powershell.exe" : "/bin/bash";
+            var bootstrapDir = Path.Join(wrapperFolder, "bootstrap");
+            var processInfo = new ProcessStartInfo(fileName)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = wrapperFolder,
+            };
+            if (IsWindows)
+            {
+                processInfo.ArgumentList.Add("-NoProfile");
+                processInfo.ArgumentList.Add("-ExecutionPolicy");
+                processInfo.ArgumentList.Add("Bypass");
+                processInfo.ArgumentList.Add("-WindowStyle");
+                processInfo.ArgumentList.Add("Hidden");
+                processInfo.ArgumentList.Add("-File");
+                processInfo.ArgumentList.Add(Path.Join(bootstrapDir, "install_win.ps1"));
+            }
+            else
+            {
+                processInfo.ArgumentList.Add(Path.Join(bootstrapDir, "install_linux.sh"));
+            }
+            // Forwarded to bootstrap.py (the .ps1/.sh pass @args through to it).
+            processInfo.ArgumentList.Add("--host");
+            processInfo.ArgumentList.Add("127.0.0.1");
+            processInfo.ArgumentList.Add("--port");
+            processInfo.ArgumentList.Add(port);
+            processInfo.ArgumentList.Add("--language");
+            processInfo.ArgumentList.Add(language);
+            processInfo.ArgumentList.Add("--parent-pid");
+            processInfo.ArgumentList.Add(parentPid);
+
+            InstanceProcess.StartInfo = processInfo;
+            InstanceProcess.OutputDataReceived += (_, e) => HandleEchokrauTtsNdjson(e.Data);
+            InstanceProcess.ErrorDataReceived += (_, e) => { if (!string.IsNullOrEmpty(e.Data)) Log(CleanAnsi(e.Data), ConsoleColor.Red); };
+            InstanceProcess.Start();
+            InstanceProcessIsRunning = true;
+            InstanceProcess.BeginOutputReadLine();
+            InstanceProcess.BeginErrorReadLine();
+            Log("EchokrauTTS bootstrap started (install + serve)");
+
+            InstanceProcess.WaitForExit();
+            InstanceProcessIsRunning = false;
+            Log("EchokrauTTS bootstrap exited");
+        }
+        catch (Exception ex)
+        {
+            Log($"Error while running EchokrauTTS: {ex}", ConsoleColor.Red);
+            StopInstance();
+        }
+    }
+
+    /// <summary>Parse one NDJSON line from the wrapper bootstrap; log it and, on <c>ready</c>, write
+    /// the ready file the plugin polls. Tolerant of non-JSON lines (logged verbatim).</summary>
+    static void HandleEchokrauTtsNdjson(string? line)
+    {
+        if (string.IsNullOrWhiteSpace(line)) return;
+        var trimmed = line.Trim();
+        string? ev = null;
+        if (trimmed.StartsWith("{"))
+        {
+            try
+            {
+                var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(trimmed);
+                if (obj != null && obj.TryGetValue("event", out var evVal))
+                    ev = evVal?.ToString();
+            }
+            catch { /* not JSON — fall through to plain log */ }
+        }
+
+        switch (ev)
+        {
+            case "ready":
+                Log("EchokrauTTS is ready", ConsoleColor.Green);
+                var readyFile = Path.Join(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), Constants.ECHOKRAUTTSREADYFILE);
+                if (!File.Exists(readyFile)) File.WriteAllText(readyFile, " ");
+                break;
+            case "error":
+                Log($"EchokrauTTS error: {trimmed}", ConsoleColor.Red);
+                break;
+            default:
+                Log(trimmed, ConsoleColor.Yellow);
+                break;
+        }
+    }
+
     static void StopInstance()
     {
         try
@@ -522,9 +647,13 @@ public class Program
             }
             InstanceProcess?.Dispose();
             InstanceProcess = null;
-            var readyFile = Path.Join(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Ready.txt");
-            if (File.Exists(readyFile))
-                File.Delete(readyFile);
+            var exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            foreach (var rf in new[] { "Ready.txt", Constants.ECHOKRAUTTSREADYFILE })
+            {
+                var readyFile = Path.Join(exeDir, rf);
+                if (File.Exists(readyFile))
+                    File.Delete(readyFile);
+            }
         }
         catch (Exception ex)
         {
