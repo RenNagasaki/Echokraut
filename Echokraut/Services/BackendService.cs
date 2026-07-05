@@ -107,6 +107,10 @@ public class BackendService : IBackendService, IDisposable
         var eventId = new EKEventId(0, TextSource.None);
         _log.Info(nameof(RefreshBackend), $"Initializing backend: {_config.BackendSelection}", eventId);
         _backend = CreateActiveBackend();
+        // The backend just (re)connected — e.g. a local instance became ready. Drop the cached
+        // reachability so the next status check re-probes immediately instead of showing a stale
+        // "offline" for up to the 30s TTL.
+        InvalidateReachabilityCache();
         MapVoices(eventId);
     }
 
@@ -262,11 +266,16 @@ public class BackendService : IBackendService, IDisposable
         // GoogleDriveRequestVoiceLine flows aren't blocked by this check.
         if (it == AlltalkInstanceType.None) return true;
 
-        // Local install — trust the instance-running flag of the active engine.
-        if (it == AlltalkInstanceType.Local)
-            return ActiveLocalRunning();
+        // Local install — the instance-running flag is the cheap happy path. But it only reflects
+        // whether THIS session spawned-and-detected the server; a wrapper that survived a plugin
+        // reload or was started externally would leave it false forever. So when the flag is not
+        // set, fall through to the same real HTTP probe Remote uses instead of reporting a
+        // permanent "offline".
+        if (it == AlltalkInstanceType.Local && ActiveLocalRunning())
+            return true;
 
-        // Remote — actual HTTP GET on the active engine's ready/health endpoint.
+        // Remote (or Local with the running flag unset) — actual HTTP GET on the active engine's
+        // ready/health endpoint.
         try
         {
             var baseUrl = (ActiveBaseUrl() ?? "").TrimEnd('/');

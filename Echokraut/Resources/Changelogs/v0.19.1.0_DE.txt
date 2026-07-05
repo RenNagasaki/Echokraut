@@ -32,6 +32,12 @@ NEUE HAUPTFUNKTIONEN
 VERBESSERUNGEN
 ==============================================================================
 
+[Backend] Lokale EchokrauTTS-Voice-Engine waehlen (XTTS oder F5)
+  Lokales EchokrauTTS laesst dich jetzt seine Voice-Engine waehlen -- XTTS
+  (Standard, bessere Qualitaet) oder F5 -- im Erst-Start-Assistenten und unter
+  Einstellungen -> Backend. Beide Engines sind installiert, ein Wechsel startet
+  nur die lokale Instanz neu (keine Neuinstallation).
+
 [Spieldaten-Tools] Voice-Starterset schreibt jetzt einen Transkripttext je Sample
   Zu jedem extrahierten Voice-Sample wird jetzt eine gleichnamige .txt-Datei mit
   dem gesprochenen Text angelegt (z. B. Female_Hyur_Tataru.wav +
@@ -73,3 +79,13 @@ FEHLERBEHEBUNGEN
   Changelog-Popup nach einem Update beim Start aufging) wurde das Fenster nicht
   im Haupt-Thread erzeugt, wodurch das Plugin mit „Not on main thread" gar nicht
   laden konnte. Start-Fenster oeffnen jetzt im richtigen Thread.
+
+[Konfiguration] EchokrauTTS-Backend-Einstellungen verschwinden nicht mehr nach Reopen
+  Das Schliessen und erneute Oeffnen des Konfigurationsfensters konnte den
+  EchokrauTTS-Bereich unter Einstellungen -> Backend leer lassen. Er wird jetzt
+  bei jedem Oeffnen korrekt angezeigt.
+
+[Voice-Clip-Manager] Backend-Status haengt nicht mehr auf „offline" bei laufendem Backend
+  Die Erreichbarkeitsanzeige aktualisiert sich jetzt sofort, sobald ein lokales
+  Backend bereit ist, und faellt auf einen echten Health-Check zurueck -- so
+  zeigt sie kein veraltetes „offline" mehr, waehrend die Generierung laeuft.

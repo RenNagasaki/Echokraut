@@ -336,6 +336,12 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _settingsPanels[2] = BuildChatPanel(_innerContentPos, _innerContentSize);
         _settingsPanels[3] = BuildSaveLoadPanel(_innerContentPos, _innerContentSize);
         _settingsPanels[4] = BuildBackendPanel(_innerContentPos, _innerContentSize);
+        // OnSetup re-runs on every (re)open with a fresh, fully-expanded backend panel, but the
+        // per-frame section-visibility recalc is transition-gated on these instance fields, which
+        // survive close/reopen. Reset them so the first post-open OnUpdate sees a transition and
+        // compacts the layout — otherwise the active section (EchokrauTTS is added last) stays
+        // pushed below the viewport by the now-hidden sections above it and appears to vanish.
+        _prevShowLocal = _prevShowRemote = _prevShowNone = _prevShowEkLocal = _prevShowEkRemote = false;
 
         _settingsTabsLiveGenSnapshot = _config.HasLiveGeneration;
         BuildSettingsTabs(_settingsTabsLiveGenSnapshot.Value);

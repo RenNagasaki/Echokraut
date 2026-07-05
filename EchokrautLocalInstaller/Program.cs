@@ -175,13 +175,15 @@ public class Program
                             Convert.ToBoolean(args[12]));
                     break;
                 case "echokrautts":
-                    // echokrautts <installRoot> <echokrauTtsUrl-or-empty> <isWindows> <port> <language> <parentPid>
+                    // echokrautts <installRoot> <echokrauTtsUrl-or-empty> <isWindows> <port> <language> <parentPid> [ttsBackend]
                     // One mode for both install + start: the wrapper bootstrap installs (idempotent)
                     // AND serves in a single long-running process. When a URL is given the wrapper is
-                    // (re)downloaded first; otherwise we just run the existing install.
-                    Log($"Mode: echokrautts | installRoot={args[1]} | url={(string.IsNullOrEmpty(args[2]) ? "(none)" : args[2])} | isWindows={args[3]} | port={args[4]} | language={args[5]} | parentPid={args[6]}");
+                    // (re)downloaded first; otherwise we just run the existing install. ttsBackend
+                    // (f5/xtts) is optional for back-compat with older plugins; defaults to xtts.
+                    var ttsBackend = args.Length > 7 && !string.IsNullOrWhiteSpace(args[7]) ? args[7] : "xtts";
+                    Log($"Mode: echokrautts | installRoot={args[1]} | url={(string.IsNullOrEmpty(args[2]) ? "(none)" : args[2])} | isWindows={args[3]} | port={args[4]} | language={args[5]} | parentPid={args[6]} | ttsBackend={ttsBackend}");
                     IsWindows = Convert.ToBoolean(args[3]);
-                    StartEchokrauTts(args[1], args[2], args[4], args[5], args[6]).Wait();
+                    StartEchokrauTts(args[1], args[2], args[4], args[5], args[6], ttsBackend).Wait();
                     break;
                 case "installcustomdata":
                     // Args: installcustomdata <installFolder> <customModelUrl> <customVoicesUrl> <isWindows> <shouldRestart>
@@ -531,7 +533,7 @@ public class Program
     /// polls it). The process stays alive serving until killed.
     /// </summary>
     static async Task StartEchokrauTts(string installRoot, string echokrauTtsUrl, string port,
-        string language, string parentPid)
+        string language, string parentPid, string ttsBackend = "xtts")
     {
         try
         {
@@ -587,6 +589,9 @@ public class Program
             processInfo.ArgumentList.Add(language);
             processInfo.ArgumentList.Add("--parent-pid");
             processInfo.ArgumentList.Add(parentPid);
+            // Sub-engine (f5/xtts). Both are installed by the bootstrap; this picks which one serves.
+            processInfo.ArgumentList.Add("--tts-backend");
+            processInfo.ArgumentList.Add(ttsBackend);
 
             InstanceProcess.StartInfo = processInfo;
             InstanceProcess.OutputDataReceived += (_, e) => HandleEchokrauTtsNdjson(e.Data);

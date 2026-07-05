@@ -204,6 +204,7 @@ public static class Loc
         },
         ["Auto-start local instance on plugin load"] = new() { { DE, "Lokale Instanz beim Laden des Plugins automatisch starten" }, { FR, "Démarrer l'instance locale au chargement du plugin" }, { JP, "プラグイン読み込み時にローカルインスタンスを自動起動" } },
         ["CPU mode (no GPU required, slower)"] = new() { { DE, "CPU-Modus (keine GPU erforderlich, langsamer)" }, { FR, "Mode CPU (pas de GPU requis, plus lent)" }, { JP, "CPUモード（GPU不要、低速）" } },
+        ["TTS engine (restarts local instance on change)"] = new() { { DE, "TTS-Engine (startet lokale Instanz bei Änderung neu)" }, { FR, "Moteur TTS (redémarre l'instance locale en cas de changement)" }, { JP, "TTSエンジン（変更時にローカルインスタンスを再起動）" } },
         ["Is Windows 11"] = new() { { DE, "Windows 11" }, { FR, "Windows 11" }, { JP, "Windows 11" } },
         ["Local install path (no spaces or dashes)"] = new() { { DE, "Lokaler Installationspfad (keine Leerzeichen oder Bindestriche)" }, { FR, "Chemin d'installation local (sans espaces ni tirets)" }, { JP, "ローカルインストールパス（スペースやダッシュなし）" } },
         ["Custom model URL (zip with one root folder)"] = new() { { DE, "Benutzerdefinierte Modell-URL (ZIP mit einem Stammordner)" }, { FR, "URL du modèle personnalisé (zip avec un dossier racine)" }, { JP, "カスタムモデルURL（ルートフォルダ1つのzip）" } },

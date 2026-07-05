@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Numerics;
 using Echokraut.DataClasses;
+using Echokraut.Enums;
 using Echotools.Logging.DataClasses;
 using Echotools.Logging.Enums;
 using Echokraut.Localization;
@@ -26,13 +27,15 @@ public static class NativeEchokrauTtsBuilder
         public TextInputNode InstallPathInput = null!;
         public TextNode ValidationLabel = null!;
         public CheckboxNode AutoStartCheck = null!;
+        public TextNode EngineCaption = null!;
+        public StringDropDownNode EngineDropDown = null!;
         public TextButtonNode InstallButton = null!;
         public HorizontalListNode InstallRow = null!;
         public TextButtonNode StartButton = null!;
         public TextButtonNode StopButton = null!;
         public HorizontalListNode StartStopRow = null!;
 
-        public NodeBase[] AllNodes => [InstallPathInput, ValidationLabel, AutoStartCheck, InstallRow, StartStopRow];
+        public NodeBase[] AllNodes => [InstallPathInput, ValidationLabel, AutoStartCheck, EngineCaption, EngineDropDown, InstallRow, StartStopRow];
 
         public void Update(Configuration config, IEchokrauTtsInstanceService instance, bool batchActive = false)
         {
@@ -106,6 +109,31 @@ public static class NativeEchokrauTtsBuilder
                 if (v && config.EchokrauTts.LocalInstall && !instance.InstanceRunning && !instance.InstanceStarting)
                     instance.StartInstance();
             });
+
+        // Sub-engine (F5 / XTTS) chosen at wrapper startup. Both are installed, so a change just
+        // restarts the local instance (handled in SwitchTtsBackend). Only meaningful for Local.
+        nodes.EngineCaption = new TextNode
+        {
+            Size = new Vector2(width, 18),
+            String = Loc.S("TTS engine (restarts local instance on change)"),
+            FontType = FontType.Axis,
+            FontSize = 12,
+            TextColor = LabelColor,
+        };
+        var engines = Enum.GetNames<EchokrauTtsEngine>().ToList();
+        var currentEngine = config.EchokrauTts.TtsBackend.ToString();
+        nodes.EngineDropDown = new StringDropDownNode { Size = new Vector2(width, 24), Options = engines };
+        nodes.EngineDropDown.SelectedOption = currentEngine;
+        nodes.EngineDropDown.LabelNode.String = currentEngine;
+        nodes.EngineDropDown.OnOptionSelected = option =>
+        {
+            if (!Enum.TryParse<EchokrauTtsEngine>(option, out var engine)
+                || engine == config.EchokrauTts.TtsBackend)
+                return;
+            nodes.EngineDropDown.SelectedOption = option;
+            nodes.EngineDropDown.LabelNode.String = option;
+            instance.SwitchTtsBackend(engine); // persists + restarts if running
+        };
 
         nodes.InstallButton = Button(config.EchokrauTts.LocalInstall ? Loc.S("Reinstall") : Loc.S("Install"), 100, () =>
         {

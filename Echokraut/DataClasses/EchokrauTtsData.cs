@@ -36,6 +36,17 @@ namespace Echokraut.DataClasses
         /// <summary>Local / Remote / None — reuses the AllTalk instance-type enum.</summary>
         public AlltalkInstanceType InstanceType { get; set; } = AlltalkInstanceType.None;
 
+        /// <summary>
+        /// Sub-engine the LOCAL wrapper loads at startup (passed as <c>--tts-backend</c>). Default
+        /// <see cref="EchokrauTtsEngine.XTTS"/> (better quality). Only meaningful for Local — a Remote
+        /// server's engine is fixed by whoever started it. Both engines are installed by the
+        /// bootstrap, so changing this restarts the local instance rather than reinstalling.
+        /// </summary>
+        public EchokrauTtsEngine TtsBackend { get; set; } = EchokrauTtsEngine.XTTS;
+
+        /// <summary>The lower-cased wrapper arg value for <see cref="TtsBackend"/> (<c>xtts</c>/<c>f5</c>).</summary>
+        public string TtsBackendArg => TtsBackend.ToString().ToLowerInvariant();
+
         // NOTE: no CpuMode in v1 — the wrapper auto-detects GPU/CPU (gpu_detect.py) and exposes no
         // CPU override. A force-CPU option is a tracked TODO (needs a wrapper-side flag + checkbox).
 

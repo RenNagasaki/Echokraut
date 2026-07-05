@@ -1,4 +1,5 @@
 using Echokraut.DataClasses;
+using Echokraut.Enums;
 using System;
 
 namespace Echokraut.Services;
@@ -27,4 +28,12 @@ public interface IEchokrauTtsInstanceService
     void Install();
     void StartInstance();
     void StopInstance(EKEventId eventId);
+
+    /// <summary>
+    /// Change the local sub-engine (F5/XTTS). Persists the choice; if a local instance is currently
+    /// running or starting, restarts it so the wrapper reloads with the new <c>--tts-backend</c>
+    /// (both engines are already installed, so this is a restart, not a reinstall). No-op when the
+    /// engine is unchanged.
+    /// </summary>
+    void SwitchTtsBackend(EchokrauTtsEngine engine);
 }

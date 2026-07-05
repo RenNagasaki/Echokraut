@@ -30,6 +30,11 @@ MAJOR NEW FEATURES
 IMPROVEMENTS
 ==============================================================================
 
+[Backend] Choose the local EchokrauTTS voice engine (XTTS or F5)
+  Local EchokrauTTS now lets you pick its voice engine — XTTS (default, better
+  quality) or F5 — in the First-Time wizard and Settings -> Backend. Both engines
+  are installed, so switching just restarts the local instance (no reinstall).
+
 [Game Data Tools] Voice starter set now writes a transcript next to each sample
   Every extracted voice sample now gets a matching .txt file with the same name
   containing the spoken line (e.g. Female_Hyur_Tataru.wav + Female_Hyur_Tataru.txt).
@@ -70,3 +75,12 @@ BUG FIXES
   changelog popup opened during startup) the window was created off the main
   thread, which could make the plugin fail to load with a "Not on main thread"
   error. Startup windows now open on the correct thread.
+
+[Config] EchokrauTTS backend settings no longer vanish after reopening the window
+  Closing and reopening the config window could leave the EchokrauTTS section in
+  Settings -> Backend blank. It now lays out correctly on every open.
+
+[Voice Clip Manager] Backend status no longer sticks on "offline" for a live backend
+  The reachability indicator now refreshes the moment a local backend becomes
+  ready and falls back to a real health check, so it stops briefly showing a
+  stale "offline" while generation is actually working.

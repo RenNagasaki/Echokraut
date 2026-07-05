@@ -66,6 +66,26 @@ public sealed class EchokrauTtsInstanceService : IEchokrauTtsInstanceService, ID
     /// <summary>Run the wrapper bootstrap (install-if-needed) + serve, without re-downloading.</summary>
     public void StartInstance() => Launch(download: false);
 
+    /// <inheritdoc/>
+    public void SwitchTtsBackend(Echokraut.Enums.EchokrauTtsEngine engine)
+    {
+        if (_config.EchokrauTts.TtsBackend == engine) return;
+
+        var eventId = new EKEventId(0, TextSource.Backend);
+        _config.EchokrauTts.TtsBackend = engine;
+        _config.Save();
+        _log.Info(nameof(SwitchTtsBackend), $"EchokrauTTS engine set to {engine}", eventId);
+
+        // A running/starting local instance must restart to pick up the new --tts-backend.
+        // Both engines are already installed, so this is a plain restart (no re-download).
+        if (InstanceRunning || InstanceStarting)
+        {
+            _log.Info(nameof(SwitchTtsBackend), "Restarting local instance for engine switch", eventId);
+            StopInstance(eventId);
+            StartInstance();
+        }
+    }
+
     private string EnsureInstaller(EKEventId eventId)
     {
         var exe = LocalInstallerProvisioner.Ensure(
@@ -118,7 +138,7 @@ public sealed class EchokrauTtsInstanceService : IEchokrauTtsInstanceService, ID
         }
     }
 
-    // echokrautts <installRoot> <echokrauTtsUrl-or-empty> <isWindows> <port> <language> <parentPid>
+    // echokrautts <installRoot> <echokrauTtsUrl-or-empty> <isWindows> <port> <language> <parentPid> <ttsBackend>
     private ProcessStartInfo BuildProcessInfo(bool download, string installerExe) => new(installerExe)
     {
         UseShellExecute = true,
@@ -132,6 +152,7 @@ public sealed class EchokrauTtsInstanceService : IEchokrauTtsInstanceService, ID
             Port().ToString(),
             LanguageCode(_clientState.ClientLanguage),
             Environment.ProcessId.ToString(),
+            _config.EchokrauTts.TtsBackendArg,
         }
     };
 

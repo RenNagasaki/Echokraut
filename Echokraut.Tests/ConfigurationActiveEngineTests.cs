@@ -59,6 +59,17 @@ public class ConfigurationActiveEngineTests
         Assert.False(d.LocalInstall);
         Assert.True(d.AutoStartLocalInstance);
         Assert.False(d.HasLiveGeneration);
+        Assert.Equal(EchokrauTtsEngine.XTTS, d.TtsBackend); // default: better quality
+        Assert.Equal("xtts", d.TtsBackendArg);
+    }
+
+    [Theory]
+    [InlineData(EchokrauTtsEngine.XTTS, "xtts")]
+    [InlineData(EchokrauTtsEngine.F5, "f5")]
+    public void TtsBackendArg_IsLowerCasedEngineName(EchokrauTtsEngine engine, string expectedArg)
+    {
+        var d = new EchokrauTtsData { TtsBackend = engine };
+        Assert.Equal(expectedArg, d.TtsBackendArg);
     }
 
     // ── BackendSelection default-flip migration ──────────────────────────────
