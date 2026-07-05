@@ -57,6 +57,8 @@ public class NativeWindowManager : IWindowManager
             services.GetService<IBackendService>(),
             services.GetService<IGoogleDriveSyncService>(),
             services.GetService<IAlltalkInstanceService>(),
+            services.GetService<IEchokrauTtsInstanceService>(),
+            services.GetService<ITtsVoiceSyncService>(),
             services.GetService<IAudioFileService>(),
             services.GetService<IJsonDataService>(),
             services.GetService<ICommandService>(),
@@ -112,6 +114,7 @@ public class NativeWindowManager : IWindowManager
         _firstTimeWindow = new NativeFirstTimeWindow(
             config,
             services.GetService<IAlltalkInstanceService>(),
+            services.GetService<IEchokrauTtsInstanceService>(),
             services.GetService<IBackendService>(),
             framework,
             services.GetService<IBatchModeService>(),
@@ -189,7 +192,7 @@ public class NativeWindowManager : IWindowManager
         // None-mode users have no live backend, so the harvest + voice-extract operations
         // exposed by Game Data Tools have nothing useful to drive. Refusing to open the
         // window is the functional twin of the dimmed buttons in NativeConfigWindow / VCM.
-        if (!_config.Alltalk.HasLiveGeneration) return;
+        if (!_config.HasLiveGeneration) return;
         _gameDataToolsWindow.Toggle();
     }
     public void ToggleChangelog() => _changelogWindow.Toggle();

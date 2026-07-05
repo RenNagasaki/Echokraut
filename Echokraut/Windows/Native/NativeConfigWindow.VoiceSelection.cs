@@ -460,11 +460,9 @@ public sealed unsafe partial class NativeConfigWindow
         var voiceNames = voices.ConvertAll(v => v.VoiceName);
         var currentVoice = npc.Voice?.VoiceName ?? "";
 
-        var voiceDropDown = new TextDropDownNode { Size = new Vector2(ColVoice, 24), Options = [] };
-        voiceDropDown.OptionListNode.Options = voiceNames;
-        voiceDropDown.OptionListNode.SelectedOption = currentVoice;
-        if (voiceDropDown.LabelNode.Node != null)
-            voiceDropDown.LabelNode.String = currentVoice;
+        var voiceDropDown = new StringDropDownNode { Size = new Vector2(ColVoice, 24), MaxListOptions = 8, Options = voiceNames };
+        voiceDropDown.SelectedOption = currentVoice;
+        voiceDropDown.LabelNode.String = currentVoice;
 
         var capturedNpc = npc;
         voiceDropDown.OnOptionSelected = option =>
@@ -483,7 +481,6 @@ public sealed unsafe partial class NativeConfigWindow
         {
             Size = new Vector2(VsVolWidth, 20),
             Range = 0..200,
-            DecimalPlaces = 2,
             Value = (int)(vol * 100),
         };
         volSlider.OnValueChanged = v =>
@@ -636,14 +633,15 @@ public sealed unsafe partial class NativeConfigWindow
             row.AddNode(Check("   ", 30, voice.IsEnabled, v =>
             { voice.IsEnabled = v; _config.Save(); }));
             row.AddNode(Label(voice.VoiceName, 200));
-            row.AddNode(Input(Loc.S("Note"), noteFixedW2, 80, voice.Note, v =>
-            { voice.Note = v; _config.Save(); }));
+            // Note shown read-only here; edited via the per-row Configure window. An inline editable
+            // TextInputNode gets disposed by panel.Clear() on rebuild and KamiToolKit's
+            // TextInputNode.Dispose crashes the game natively (C0000005).
+            row.AddNode(Label(voice.Note ?? "", noteFixedW2));
 
             var volSlider = new SliderNode
             {
                 Size = new Vector2(volWidth, 20),
                 Range = 0..200,
-                DecimalPlaces = 2,
                 Value = (int)(voice.Volume * 100),
             };
             volSlider.OnValueChanged = v => { voice.Volume = v / 100.0f; _config.Save(); };

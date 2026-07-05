@@ -75,6 +75,8 @@ public class RemoteUrlService : IRemoteUrlService, IDisposable
             Version = remote.Version,
             AlltalkUrl = StringOrFallback(remote.AlltalkUrl, fallback.AlltalkUrl),
             InstallerUrl = StringOrFallback(remote.InstallerUrl, fallback.InstallerUrl),
+            InstallerVersion = StringOrFallback(remote.InstallerVersion, fallback.InstallerVersion),
+            EchokrauTtsUrl = StringOrFallback(remote.EchokrauTtsUrl, fallback.EchokrauTtsUrl),
             VoicesUrl = StringOrFallback(remote.VoicesUrl, fallback.VoicesUrl),
             Voices2Url = StringOrFallback(remote.Voices2Url, fallback.Voices2Url),
             MsBuildToolsUrl = StringOrFallback(remote.MsBuildToolsUrl, fallback.MsBuildToolsUrl),

@@ -6,7 +6,7 @@ Bring your dialogue to life in Final Fantasy XIV: Fully voiced NPC storylines an
 
 ## Disclaimer
 
-- The plugin supports three modes: **Local TTS** (GPU-based), **Remote Server**, and **Audio Files Only**. Local TTS currently requires an Nvidia GPU on Windows; AMD GPUs are supported on Linux. A dedicated GPU with at least 6 GB VRAM (e.g. RTX 3060 or AMD equivalent on Linux) is recommended for local inference.
+- Echokraut supports **two TTS engines** — **EchokrauTTS** (the default) and **AllTalk_TTS** — each usable in **Local** (runs on your own machine), **Remote** (connect to a server), or **Audio Files Only** (no generation) mode. Local generation is GPU-based: it currently requires an Nvidia GPU on Windows (AMD GPUs are supported on Linux), with a dedicated GPU of at least 6 GB VRAM (e.g. RTX 3060 or AMD equivalent on Linux) recommended for local inference. Remote mode offloads generation to another machine, so no local GPU is needed.
 - The plugin supports English, German, French, and Japanese clients.
 - This plugin is still in active development. Please report issues on [GitHub](https://github.com/RenNagasaki/Echokraut/issues) or on [![Discord](https://img.shields.io/badge/Discord-blue)](https://discord.gg/5gesjDfDBr) (preferred).
 
@@ -77,15 +77,17 @@ Search for **Echokraut** in the Dalamud plugin installer and install it.
 
 On first launch, a setup wizard guides you through three steps:
 
-**Step 1 — Choose your mode:**
+**Step 1 — Choose your engine and mode:**
+
+First pick a TTS engine — **EchokrauTTS** (selected by default) or **AllTalk_TTS** — then choose how it runs:
 
 | Mode | Description |
 |------|-------------|
-| **Local TTS** | Installs a local [AllTalk_TTS](https://github.com/erew123/alltalk_tts) instance on your GPU. Best quality, requires ~20 GB disk space and a supported GPU. The installation is fully automated on Windows. |
-| **Remote Server** | Connect to an existing AllTalk instance running on your network or another machine. Enter the server URL and you're ready to go. |
+| **Local** | Downloads and installs the chosen engine on your machine. Best quality/privacy, requires disk space and a supported GPU (see Disclaimer). The installation is fully automated on Windows. |
+| **Remote** | Connect to an existing engine instance running on your network or another machine. Enter the server URL and you're ready to go — no local GPU needed. |
 | **Audio Files Only** | No TTS generation. Play pre-made audio files from a local folder or download shared voice packs from Google Drive. |
 
-**Step 2 — Configure your chosen mode** (install progress, server URL, or file paths).
+**Step 2 — Configure your chosen engine** (install progress, server URL, or file paths) and test the connection.
 
 **Step 3 — Done!** Open settings anytime with `/ek`.
 
@@ -119,14 +121,17 @@ The configuration window (`/ek`) has four main tabs:
   - *Dialogue* — Dialogue/battle dialogue/bubble voicing, 3D audio options
   - *Chat* — Per-channel chat voicing toggles, 3D audio
   - *Storage* — Local save paths, Google Drive sync
-  - *Backend* — AllTalk instance type selection, install/connection, advanced options
+  - *Backend* — Engine selection (EchokrauTTS / AllTalk), instance type (Local/Remote/Audio Files), install/connection, advanced options
 - **Voice Selection** — Search and reassign NPC voices (unified search across gender, race, name, and voice)
 - **Phonetic Corrections** — Manage pronunciation rules
 - **Logs** — View logs per category (Talk, Battle Talk, Bubbles, Chat, Choices, Backend)
 
-## Supported TTS Backend
+## Supported TTS Engines
 
-Currently supports [AllTalk_TTS](https://github.com/erew123/alltalk_tts) (v2 beta recommended), which provides XTTS, Piper, VITS and more engines for streaming inference.
+Echokraut supports two interchangeable TTS engines — switch between them anytime in the Backend settings tab:
+
+- **EchokrauTTS** (default) — [EchokrauTTS](https://github.com/RenNagasaki/Echokrautts), the purpose-built engine for Echokraut. Available in Local and Remote modes.
+- **AllTalk_TTS** — [AllTalk_TTS](https://github.com/erew123/alltalk_tts) (v2 beta recommended), which provides XTTS, Piper, VITS and more engines for streaming inference.
 
 ## Thanks
 

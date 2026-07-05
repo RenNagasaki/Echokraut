@@ -2,6 +2,7 @@ using Echotools.Logging.Services;
 using Echokraut.DataClasses;
 using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
+using Echokraut.Helper.Functional;
 using Echotools.Logging.Enums;
 using System;
 using System.Diagnostics;
@@ -63,7 +64,7 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
     public void Install()
     {
         var eventId = new EKEventId(0, TextSource.Backend);
-        var (pathValid, _) = Windows.Native.NativeAlltalkBuilder.ValidateInstallPath(_config.Alltalk.LocalInstallPath);
+        var (pathValid, _) = Windows.Native.NativeAlltalkBuilder.ValidateInstallPath(_config.TtsInstallRoot);
         if (!pathValid)
         {
             _log.Warning(nameof(Install), "Install path is invalid, aborting.", eventId);
@@ -95,7 +96,7 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
                     ArgumentList =
                     {
                         "install",
-                        _config.Alltalk.LocalInstallPath,
+                        _config.TtsInstallRoot,
                         _config.Alltalk.CustomModelUrl,
                         _config.Alltalk.CustomVoicesUrl,
                         "true",
@@ -123,7 +124,7 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
                 // voice list. samplesPerNpc=1 keeps the install fast (decode + resample of
                 // ~hundreds of NPCs once); user can rebuild with more samples later via the
                 // Game Data Tools window.
-                var alltalkFolder = Path.Join(_config.Alltalk.LocalInstallPath, "alltalk_tts");
+                var alltalkFolder = TtsPaths.AllTalkRoot(_config.TtsInstallRoot);
                 var voicesDir = Path.Join(alltalkFolder, "voices");
                 _log.Info(nameof(Install),
                     $"Building voice starter set into {voicesDir} (this replaces the old voices.zip download)...",
@@ -227,7 +228,7 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
     public void StartInstance()
     {
         var eventId = new EKEventId(0, TextSource.Backend);
-        var (pathValid, _) = Windows.Native.NativeAlltalkBuilder.ValidateInstallPath(_config.Alltalk.LocalInstallPath);
+        var (pathValid, _) = Windows.Native.NativeAlltalkBuilder.ValidateInstallPath(_config.TtsInstallRoot);
         if (!pathValid)
         {
             _log.Warning(nameof(StartInstance), "Install path is invalid, aborting.", eventId);
@@ -251,7 +252,7 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
                     {
                         UseShellExecute = true,
                         CreateNoWindow = false,
-                        ArgumentList = { "start", _config.Alltalk.LocalInstallPath, IsWindows.ToString() }
+                        ArgumentList = { "start", _config.TtsInstallRoot, IsWindows.ToString() }
                     };
 
                     _instanceProcess = new Process { StartInfo = processInfo };
@@ -294,7 +295,7 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
             if (_instanceThread != null)
             {
                 _log.Info(nameof(StopInstance), "Stopping alltalk instance process", eventId);
-                var readyFile = Path.Join(_config.Alltalk.LocalInstallPath, "EchokrautLocalInstaller", "Ready.txt");
+                var readyFile = Path.Join(_config.TtsInstallRoot, "EchokrautLocalInstaller", "Ready.txt");
                 if (File.Exists(readyFile))
                     File.Delete(readyFile);
 
@@ -319,7 +320,7 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
 
     public Task InstallCustomData(EKEventId eventId, bool installProcess = true)
     {
-        var (pathValid, _) = Windows.Native.NativeAlltalkBuilder.ValidateInstallPath(_config.Alltalk.LocalInstallPath);
+        var (pathValid, _) = Windows.Native.NativeAlltalkBuilder.ValidateInstallPath(_config.TtsInstallRoot);
         if (!pathValid)
         {
             _log.Warning(nameof(InstallCustomData), "Install path is invalid, aborting.", eventId);
@@ -353,7 +354,7 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
                     ArgumentList =
                     {
                         "installcustomdata",
-                        _config.Alltalk.LocalInstallPath,
+                        _config.TtsInstallRoot,
                         _config.Alltalk.CustomModelUrl,
                         _config.Alltalk.CustomVoicesUrl,
                         IsWindows.ToString(),
@@ -447,28 +448,15 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
 
     private string CheckAndDownloadLocalInstaller(EKEventId eventId)
     {
-        var localInstallerLocation = Path.Join(_config.Alltalk.LocalInstallPath, "EchokrautLocalInstaller");
-        var localInstallerExeLocation = Path.Join(localInstallerLocation, "EchokrautLocalInstaller.exe");
-
-        if (!File.Exists(localInstallerExeLocation))
+        var exe = LocalInstallerProvisioner.Ensure(
+            _config.TtsInstallRoot, _remoteUrls.Urls.InstallerUrl, _remoteUrls.Urls.InstallerVersion,
+            _config.InstalledInstallerVersion, _log, eventId, out var downloadedVersion);
+        if (downloadedVersion != null)
         {
-            _log.Info(nameof(CheckAndDownloadLocalInstaller), "Downloading local installer", eventId);
-            Directory.CreateDirectory(_config.Alltalk.LocalInstallPath);
-            using var http = new HttpClient { Timeout = TimeSpan.FromMinutes(5) };
-            var installerUrl = _remoteUrls.Urls.InstallerUrl;
-            string fileName = Path.GetFileName(new Uri(installerUrl).LocalPath);
-            string zipPath = Path.Combine(_config.Alltalk.LocalInstallPath, fileName);
-            _log.Debug(nameof(CheckAndDownloadLocalInstaller), $"URL: {installerUrl} → {zipPath}", eventId);
-            var bytes = http.GetByteArrayAsync(installerUrl).GetAwaiter().GetResult();
-            _log.Debug(nameof(CheckAndDownloadLocalInstaller), $"Downloaded {bytes.Length} bytes", eventId);
-            File.WriteAllBytes(zipPath, bytes);
-            Directory.CreateDirectory(localInstallerLocation);
-            ZipFile.ExtractToDirectory(zipPath, localInstallerLocation, overwriteFiles: true);
-            _log.Info(nameof(CheckAndDownloadLocalInstaller), "Installer extracted", eventId);
+            _config.InstalledInstallerVersion = downloadedVersion;
+            _config.Save();
         }
-
-        _log.Debug(nameof(CheckAndDownloadLocalInstaller), $"Location: {localInstallerExeLocation}", eventId);
-        return localInstallerExeLocation;
+        return exe;
     }
 
     public void Dispose()

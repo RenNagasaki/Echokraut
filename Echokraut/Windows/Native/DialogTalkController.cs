@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Linq;
 using System.Numerics;
 using Dalamud.Game.Addon.Lifecycle;
 using Dalamud.Game.Addon.Lifecycle.AddonArgTypes;
@@ -53,7 +54,7 @@ public sealed unsafe class DialogTalkController : IDisposable
     private DynamicIconButtonNode? _settingsButton;
     private CheckboxNode?     _muteCheckbox;
     private CheckboxNode?     _autoAdvanceCheckbox;
-    private TextDropDownNode? _voiceDropDown;
+    private StringDropDownNode? _voiceDropDown;
 
     // Custom tooltip rendered as children of the Talk addon. AtkTooltipManager places its
     // tooltip in a separate addon layer that ends up below Talk during NPC dialog, so the
@@ -260,7 +261,7 @@ public sealed unsafe class DialogTalkController : IDisposable
         _autoAdvanceCheckbox = WithLabelColor(new CheckboxNode { Size = new Vector2(130, 24), String = Loc.S("Auto-advance"), Position = new Vector2(0, 5) });
         _autoAdvanceCheckbox.OnClick = OnAutoAdvanceClick;
 
-        _voiceDropDown = new TextDropDownNode { Size = new Vector2(185, 24), Options = [], Position = new Vector2(0, 5) };
+        _voiceDropDown = new StringDropDownNode { Size = new Vector2(185, 24), MaxListOptions = 8, Options = [], Position = new Vector2(0, 5) };
 
         var settingsTooltipText = Loc.S("Open Voice Clip Manager");
         _settingsButton = new DynamicIconButtonNode { Size = new Vector2(28, 28), Position = new Vector2(0, 2) };
@@ -520,14 +521,19 @@ public sealed unsafe class DialogTalkController : IDisposable
                     .FindAll(f => f.IsSelectable(speaker.Name, speaker.Gender, speaker.Race, speaker.BodyType));
                 var voiceNames    = voices.ConvertAll(v => v.VoiceName);
                 var selectedVoice = speaker.Voice?.VoiceName ?? string.Empty;
-                // Bypass TextDropDownNode.Options and DropDownNode.SelectedOption setters —
-                // both call UpdateLabel → LabelNode.Node->SetText which crashes when LabelNode.Node is null.
-                _voiceDropDown!.OptionListNode.Options = voiceNames;
-                _voiceDropDown.OptionListNode.SelectedOption = selectedVoice;
-                if (_voiceDropDown.LabelNode.Node != null)
-                    _voiceDropDown.LabelNode.String = selectedVoice;
+                // Only assign Options when the list actually changed in content. The reworked
+                // DropDownNode pools its popup buttons (RebuildPopupList only reallocates when the
+                // visible-button count changes) and guards disposals, so re-assigning is far safer
+                // than the old node — but skipping identical rebuilds still avoids needless work
+                // when consecutive speakers share the same selectable-voice list.
+                var currentOptions = _voiceDropDown!.Options;
+                var optionsChanged = currentOptions is null || !currentOptions.SequenceEqual(voiceNames);
+                if (optionsChanged)
+                    _voiceDropDown.Options = voiceNames;
+                _voiceDropDown.SelectedOption = selectedVoice; // setter refreshes the label safely
                 // Layout content changed (option list rebuilt) — recompute layout once here.
-                _layout?.RecalculateLayout();
+                if (optionsChanged)
+                    _layout?.RecalculateLayout();
             }
         }
     }
@@ -570,15 +576,15 @@ public sealed unsafe class DialogTalkController : IDisposable
             // No change: leave _pausedForDropDown as-is so the resume logic in OnUpdateInner fires.
         }
 
-        // Collapse the dropdown — bypass DropDownNode.SelectedOption setter to avoid UpdateLabel crash.
-        // Wrapped in try/catch: if ReattachNode crashes, flags are reset so dialogue can still advance.
+        // Sync the selection + collapse. The reworked DropDownNode already collapses itself and
+        // refreshes its label when a popup option is clicked, so this is usually a no-op by the
+        // time the deferred handler runs — but a picked voice can also be applied from other paths,
+        // so keep it. Wrapped in try/catch so dialogue can still advance if a native call throws.
         try
         {
             if (_voiceDropDown != null && !_voiceDropDown.IsCollapsed)
             {
-                _voiceDropDown.OptionListNode.SelectedOption = voiceName;
-                if (_voiceDropDown.LabelNode.Node != null)
-                    _voiceDropDown.LabelNode.String = voiceName;
+                _voiceDropDown.SelectedOption = voiceName; // setter refreshes the label safely
                 _voiceDropDown.Collapse(false);      // fires OnCollapsed
                 _suppressNextAdvance = false;        // deferred context has no pending click to suppress
             }

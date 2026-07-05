@@ -17,6 +17,9 @@ namespace Echokraut.DataClasses
         public string CustomVoicesUrl = "";
         public bool LocalInstall { get; set; } = false;
         public bool AutoStartLocalInstance { get; set; } = true;
+        // LEGACY: superseded by the engine-agnostic Configuration.TtsInstallRoot. Kept only so
+        // older configs still deserialize; Configuration.MigrateTtsInstallRoot() copies a custom
+        // value into TtsInstallRoot once. No live code reads this field anymore.
         public string LocalInstallPath { get; set; }  = "C:\\alltalk_tts";
         public bool StreamingGeneration { get; set; } = true;
         public bool IsWindows11 { get; set; } = true;

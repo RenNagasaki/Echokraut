@@ -26,6 +26,15 @@ internal static class NativeNodeFactory
         return node;
     }
 
+    /// <summary>Checkbox with label, fixed height, initial state + change callback.</summary>
+    public static CheckboxNode Check(string label, float width, bool initial, Action<bool> onChange) => new()
+    {
+        Size      = new Vector2(width, 24),
+        String    = label,
+        IsChecked = initial,
+        OnClick   = onChange,
+    };
+
     /// <summary>Single-line text input with placeholder + completion callback.</summary>
     public static TextInputNode Input(string placeholder, float width, int maxChars, string initial, Action<string> onComplete)
     {

@@ -1,0 +1,60 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.1.0
+================================================================================
+
+
+==============================================================================
+MAJOR NEW FEATURES
+==============================================================================
+
+[Backend] EchokrauTTS — a new local TTS engine alongside AllTalk
+  Echokraut can now use EchokrauTTS (a self-contained F5-TTS voice-cloning
+  engine) as an alternative to AllTalk. EchokrauTTS is the default engine for
+  new installs; existing setups keep their current AllTalk configuration. You
+  can pick the engine in the First-Time wizard and in Settings -> Backend,
+  install and run it locally, or point at a remote instance. AllTalk and
+  EchokrauTTS live side by side under the same install folder, and switching
+  engines copies your voices over so both stay ready to use.
+
+  - Local EchokrauTTS: install and run the engine on your own machine, fully
+    automated on Windows (same one-click flow as local AllTalk).
+  - Remote EchokrauTTS: connect Echokraut to a running EchokrauTTS server by URL
+    (Settings -> Backend), same as a remote AllTalk.
+  - Engine selection everywhere: pick AllTalk or EchokrauTTS in the First-Time
+    wizard (Step 1 now shows the chosen engine's setup) and switch anytime in
+    Settings -> Backend.
+
+
+==============================================================================
+IMPROVEMENTS
+==============================================================================
+
+[Game Data Tools] Voice starter set now writes a transcript next to each sample
+  Every extracted voice sample now gets a matching .txt file with the same name
+  containing the spoken line (e.g. Female_Hyur_Tataru.wav + Female_Hyur_Tataru.txt).
+  This makes the starter set ready for voice-training tools that expect a
+  transcript per clip.
+
+[Voice Clip Manager] Smoother, crash-free NPC browsing
+  The NPC list now uses a virtualized tree that scrolls large catalogs without
+  the occasional native crash. Per-NPC actions (Generate All Unsaved, Delete All
+  Saved, Edit Character) now live at the top of the voice-clip detail window that
+  opens when you pick a category.
+
+
+==============================================================================
+BUG FIXES
+==============================================================================
+
+[Dialogue] Switching an NPC's voice in the dialogue toolbar no longer crashes
+  Changing the voice from the dropdown in the dialogue window (especially twice
+  in a row) could hard-crash the game. The native UI toolkit was updated and the
+  voice dropdown reworked so this is gone.
+
+[Backend] NPCs stayed silent after connecting a backend that was offline at startup
+  If the TTS backend wasn't reachable when the plugin loaded and you connected it
+  later (e.g. via the Backend tab), talking to an NPC failed with "No voice
+  assigned" even though a voice was set. Voice generation now uses the assigned
+  voice directly, and a successful connection test refreshes the voice list so
+  everything lines up again without a restart.

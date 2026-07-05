@@ -25,6 +25,7 @@ public class BackendService : IBackendService, IDisposable
     private readonly ILogService _log;
     private readonly Configuration _config;
     private readonly IAlltalkInstanceService _alltalkInstance;
+    private readonly IEchokrauTtsInstanceService _echokrauTtsInstance;
     private readonly INpcDataService _npcData;
     private readonly IAudioFileService _audioFiles;
     private readonly IDatabaseService _db;
@@ -43,6 +44,7 @@ public class BackendService : IBackendService, IDisposable
         ILogService log,
         Configuration config,
         IAlltalkInstanceService alltalkInstance,
+        IEchokrauTtsInstanceService echokrauTtsInstance,
         INpcDataService npcData,
         IAudioFileService audioFiles,
         IDatabaseService db,
@@ -52,6 +54,7 @@ public class BackendService : IBackendService, IDisposable
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _config = config ?? throw new ArgumentNullException(nameof(config));
         _alltalkInstance = alltalkInstance ?? throw new ArgumentNullException(nameof(alltalkInstance));
+        _echokrauTtsInstance = echokrauTtsInstance ?? throw new ArgumentNullException(nameof(echokrauTtsInstance));
         _npcData = npcData ?? throw new ArgumentNullException(nameof(npcData));
         _audioFiles = audioFiles ?? throw new ArgumentNullException(nameof(audioFiles));
         _db = db ?? throw new ArgumentNullException(nameof(db));
@@ -61,37 +64,60 @@ public class BackendService : IBackendService, IDisposable
         _cancellationTokenSource = new CancellationTokenSource();
         _generationTask = Task.Run(() => GenerationLoopAsync(_cancellationTokenSource.Token));
         _alltalkInstance.OnInstanceReady += RefreshBackend;
+        _echokrauTtsInstance.OnInstanceReady += RefreshBackend;
         _db.DatabaseWiped += RefreshBackend;
         Task.Run(RefreshBackend);
     }
 
+    // ── Active-engine helpers (route by Configuration.BackendSelection) ───────
+    // Single place that knows which engine is active, so the gates below stay engine-agnostic.
+    private ITTSBackend CreateActiveBackend() =>
+        _config.BackendSelection == TTSBackends.EchokrauTTS
+            ? new EchokrauTtsBackend(_config, _log)
+            : new AlltalkBackend(_config, _log, _audioFiles);
+
+    private string ActiveBaseUrl() =>
+        _config.BackendSelection == TTSBackends.EchokrauTTS ? _config.EchokrauTts.BaseUrl : _config.Alltalk.BaseUrl;
+
+    private string ActiveReadyPath() =>
+        _config.BackendSelection == TTSBackends.EchokrauTTS ? _config.EchokrauTts.HealthPath : _config.Alltalk.ReadyPath;
+
+    private bool ActiveLocalInstall() =>
+        _config.BackendSelection == TTSBackends.EchokrauTTS ? _config.EchokrauTts.LocalInstall : _config.Alltalk.LocalInstall;
+
+    /// <summary>Is the active engine's LOCAL instance running? Each engine has its own instance
+    /// service tracking the spawned process.</summary>
+    private bool ActiveLocalRunning() =>
+        _config.BackendSelection == TTSBackends.EchokrauTTS
+            ? _echokrauTtsInstance.InstanceRunning
+            : _alltalkInstance.InstanceRunning;
+
+    private bool CanConnectActive()
+    {
+        var it = _config.ActiveInstanceType;
+        if (it == AlltalkInstanceType.Remote) return true;        // reachability checked elsewhere
+        if (it == AlltalkInstanceType.Local) return ActiveLocalRunning();
+        return false;                                             // None
+    }
+
     public void RefreshBackend()
     {
-        if (_config.BackendSelection != TTSBackends.Alltalk) return;
-
-        var canConnect = _config.Alltalk.InstanceType == AlltalkInstanceType.Remote ||
-                         (_config.Alltalk.InstanceType == AlltalkInstanceType.Local && _alltalkInstance.InstanceRunning);
-
-        if (!canConnect) return;
+        if (!CanConnectActive()) return;
 
         var eventId = new EKEventId(0, TextSource.None);
         _log.Info(nameof(RefreshBackend), $"Initializing backend: {_config.BackendSelection}", eventId);
-        _backend = new AlltalkBackend(_config, _log, _audioFiles);
+        _backend = CreateActiveBackend();
         MapVoices(eventId);
     }
 
     public void SetBackendType(TTSBackends backendType)
     {
-        if (backendType != TTSBackends.Alltalk) return;
+        if (!CanConnectActive()) return;
 
-        if (_config.Alltalk.InstanceType == AlltalkInstanceType.Remote ||
-            (_config.Alltalk.InstanceType == AlltalkInstanceType.Local && _alltalkInstance.InstanceRunning))
-        {
-            var eventId = new EKEventId(0, TextSource.None);
-            _log.Info(nameof(SetBackendType), $"Creating backend instance: {backendType}", eventId);
-            _backend = new AlltalkBackend(_config, _log, _audioFiles);
-            MapVoices(eventId);
-        }
+        var eventId = new EKEventId(0, TextSource.None);
+        _log.Info(nameof(SetBackendType), $"Creating backend instance: {backendType}", eventId);
+        _backend = CreateActiveBackend();
+        MapVoices(eventId);
     }
 
     public bool ReloadService(string reloadModel, EKEventId eventId)
@@ -180,20 +206,10 @@ public class BackendService : IBackendService, IDisposable
 
     public bool IsBackendAvailable()
     {
-        switch (_config.BackendSelection)
-        {
-            case TTSBackends.Alltalk:
-                if (_config.Alltalk.InstanceType == AlltalkInstanceType.Local && _config.Alltalk.LocalInstall)
-                    return true; // Checked elsewhere if actually running
-
-                if (_config.Alltalk.InstanceType == AlltalkInstanceType.Remote && !string.IsNullOrWhiteSpace(_config.Alltalk.BaseUrl))
-                    return true;
-
-                if (_config.Alltalk.InstanceType == AlltalkInstanceType.None)
-                    return true;
-                break;
-        }
-
+        var it = _config.ActiveInstanceType;
+        if (it == AlltalkInstanceType.None) return true;
+        if (it == AlltalkInstanceType.Local) return ActiveLocalInstall();     // running checked elsewhere
+        if (it == AlltalkInstanceType.Remote) return !string.IsNullOrWhiteSpace(ActiveBaseUrl());
         return false;
     }
 
@@ -239,21 +255,22 @@ public class BackendService : IBackendService, IDisposable
     {
         // First gate on the config-only availability check.
         if (!IsBackendAvailable()) return false;
-        if (_config.BackendSelection != TTSBackends.Alltalk) return false;
+
+        var it = _config.ActiveInstanceType;
 
         // "None" instance type means no local generation is expected — treat as reachable so
         // GoogleDriveRequestVoiceLine flows aren't blocked by this check.
-        if (_config.Alltalk.InstanceType == AlltalkInstanceType.None) return true;
+        if (it == AlltalkInstanceType.None) return true;
 
-        // Local install — trust the instance-running flag maintained by AlltalkInstanceService.
-        if (_config.Alltalk.InstanceType == AlltalkInstanceType.Local)
-            return _alltalkInstance.InstanceRunning;
+        // Local install — trust the instance-running flag of the active engine.
+        if (it == AlltalkInstanceType.Local)
+            return ActiveLocalRunning();
 
-        // Remote — actual HTTP GET on AllTalk's ready endpoint.
+        // Remote — actual HTTP GET on the active engine's ready/health endpoint.
         try
         {
-            var baseUrl = (_config.Alltalk.BaseUrl ?? "").TrimEnd('/');
-            var readyPath = _config.Alltalk.ReadyPath ?? "/api/ready";
+            var baseUrl = (ActiveBaseUrl() ?? "").TrimEnd('/');
+            var readyPath = ActiveReadyPath() ?? "/";
             if (!readyPath.StartsWith('/')) readyPath = "/" + readyPath;
             var url = baseUrl + readyPath;
 
@@ -294,7 +311,7 @@ public class BackendService : IBackendService, IDisposable
         // backend. Today this only fires from VoiceClipManager actions and the runtime
         // pipeline if the upstream NPC routing path slips through; either way we drop
         // silently at Debug level (no warning spam — None mode is a valid configuration).
-        if (!_config.Alltalk.HasLiveGeneration)
+        if (!_config.HasLiveGeneration)
         {
             _log.Debug(nameof(GenerateVoice), "Skipping generation: live generation disabled (InstanceType=None)", message.EventId);
             return false;
@@ -311,7 +328,14 @@ public class BackendService : IBackendService, IDisposable
         
         try
         {
+            // The resolved Voice object is derived from Speaker.Voices (the in-memory selectable
+            // list), which can be stale/empty when the backend was unavailable at startup and only
+            // connected later — MapVoices never ran, so the getter can't resolve the key even though
+            // one is assigned. The persisted `voice` key is the source of truth for generation, so
+            // fall back to it rather than failing just because the selectable snapshot is out of date.
             var voice = message.Speaker.Voice?.BackendVoice;
+            if (string.IsNullOrEmpty(voice))
+                voice = message.Speaker.voice;
             if (string.IsNullOrEmpty(voice))
             {
                 _log.Warning(nameof(GenerateVoice), "No voice assigned to speaker", eventId);
@@ -343,11 +367,8 @@ public class BackendService : IBackendService, IDisposable
     {
         if (_backend == null)
         {
-            if (_config.BackendSelection != TTSBackends.Alltalk)
-                return "No backend selected";
-
             _log.Info(nameof(CheckReady), "Backend not initialized, creating instance for connection test", eventId);
-            _backend = new AlltalkBackend(_config, _log, _audioFiles);
+            _backend = CreateActiveBackend();
         }
 
         return await _backend.CheckReady(eventId);
@@ -622,6 +643,7 @@ public class BackendService : IBackendService, IDisposable
     public void Dispose()
     {
         _alltalkInstance.OnInstanceReady -= RefreshBackend;
+        _echokrauTtsInstance.OnInstanceReady -= RefreshBackend;
         _db.DatabaseWiped -= RefreshBackend;
         try
         {

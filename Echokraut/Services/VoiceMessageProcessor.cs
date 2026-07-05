@@ -153,20 +153,20 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
             }
 
             // Step 5: Assign voice if needed
-            if (string.IsNullOrEmpty(npcData.voice) && !onlyRequest && _config.Alltalk.InstanceType != AlltalkInstanceType.None)
+            if (string.IsNullOrEmpty(npcData.voice) && !onlyRequest && _config.HasLiveGeneration)
             {
                 _log.Info(nameof(ProcessSpeechAsync), "Getting voice since not set.", eventId);
                 _backend.GetVoiceOrRandom(eventId, npcData);
             }
 
-            if (string.IsNullOrEmpty(npcData.voice) && !onlyRequest && _config.Alltalk.InstanceType != AlltalkInstanceType.None)
+            if (string.IsNullOrEmpty(npcData.voice) && !onlyRequest && _config.HasLiveGeneration)
             {
                 _log.Info(nameof(ProcessSpeechAsync), "Skipping voice inference. No Voice set.", eventId);
                 _log.End(nameof(ProcessSpeechAsync), eventId);
                 return;
             }
 
-            if (npcData.Voice != null && npcData.Voice.Volume == 0f && !onlyRequest && _config.Alltalk.InstanceType != AlltalkInstanceType.None)
+            if (npcData.Voice != null && npcData.Voice.Volume == 0f && !onlyRequest && _config.HasLiveGeneration)
             {
                 _log.Info(nameof(ProcessSpeechAsync), $"Voice is muted: {npcData}", eventId);
                 _log.End(nameof(ProcessSpeechAsync), eventId);
@@ -633,7 +633,7 @@ public class VoiceMessageProcessor : IVoiceMessageProcessor
             // one configured voice so a plain equality compare is correct.
             var currentVoice = voiceMessage.Speaker?.voice ?? "";
             if (gen != null
-                && _config.Alltalk.HasLiveGeneration
+                && _config.HasLiveGeneration
                 && !string.IsNullOrEmpty(currentVoice)
                 && !string.Equals(gen.VoiceKey ?? "", currentVoice, StringComparison.Ordinal))
             {

@@ -545,6 +545,57 @@ public class VoiceSampleExtractorTests
         Assert.Contains($"FF14-Voices{sep}NPC1234{sep}", path);
     }
 
+    // ── VoiceExtractFileNames.GetTranscriptPath ──────────────────────────────
+
+    [Theory]
+    [InlineData(@"C:\save\FF14-Voices\Female_Hyur_Tataru.wav", @"C:\save\FF14-Voices\Female_Hyur_Tataru.txt")]
+    [InlineData(@"C:\save\FF14-Voices\Tataru\Female_Hyur_Tataru_3.wav", @"C:\save\FF14-Voices\Tataru\Female_Hyur_Tataru_3.txt")]
+    public void GetTranscriptPath_SwapsWavForTxt(string wavPath, string expected)
+    {
+        Assert.Equal(expected, VoiceExtractFileNames.GetTranscriptPath(wavPath));
+    }
+
+    [Fact]
+    public void GetTranscriptPath_KeepsDirectoryAndBaseName()
+    {
+        // The sidecar must sit right next to its WAV (same folder, same stem) so training tools
+        // pair them by name.
+        var wav = VoiceExtractFileNames.GetNamedTargetPath(@"C:\save", "Male", "Elezen", "Adult", "Estinien", 2, 3);
+        var txt = VoiceExtractFileNames.GetTranscriptPath(wav);
+        Assert.Equal(System.IO.Path.GetDirectoryName(wav), System.IO.Path.GetDirectoryName(txt));
+        Assert.Equal(System.IO.Path.GetFileNameWithoutExtension(wav), System.IO.Path.GetFileNameWithoutExtension(txt));
+        Assert.EndsWith(".txt", txt);
+    }
+
+    // ── VoiceSampleExtractorService.SampleTranscript ─────────────────────────
+
+    [Fact]
+    public void SampleTranscript_Male_UsesMaleText()
+    {
+        Assert.Equal("good sir", VoiceSampleExtractorService.SampleTranscript("good sir", "dear lady", "Male"));
+    }
+
+    [Fact]
+    public void SampleTranscript_Female_PrefersFemaleVariant()
+    {
+        Assert.Equal("dear lady", VoiceSampleExtractorService.SampleTranscript("good sir", "dear lady", "Female"));
+    }
+
+    [Fact]
+    public void SampleTranscript_Female_FallsBackToMaleWhenNoFemaleVariant()
+    {
+        // Most lines have no gender branch → FemaleText is null; the female NPC still gets text.
+        Assert.Equal("hello there", VoiceSampleExtractorService.SampleTranscript("hello there", null, "Female"));
+        Assert.Equal("hello there", VoiceSampleExtractorService.SampleTranscript("hello there", "  ", "Female"));
+    }
+
+    [Fact]
+    public void SampleTranscript_TrimsWhitespace_AndNeverNull()
+    {
+        Assert.Equal("trimmed", VoiceSampleExtractorService.SampleTranscript("  trimmed  ", null, "Male"));
+        Assert.Equal(string.Empty, VoiceSampleExtractorService.SampleTranscript(null!, null, "None"));
+    }
+
     // ── VoiceExtractSampleSelector.ApplyLengthFilter ─────────────────────────
 
     [Fact]

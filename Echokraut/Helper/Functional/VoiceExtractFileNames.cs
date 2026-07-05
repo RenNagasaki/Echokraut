@@ -168,6 +168,14 @@ public static class VoiceExtractFileNames
     /// <c>outputSubfolder</c> defaults to <c>"FF14-Voices"</c> for the regular Game-Data-Tools
     /// run; the First-Time install flow overrides it to <c>"voices"</c>.
     /// </summary>
+    /// <summary>
+    /// Sidecar transcript path for a generated sample: same folder + base name, <c>.txt</c>
+    /// extension instead of <c>.wav</c> (e.g. <c>Female_Hyur_Tataru.wav</c> →
+    /// <c>Female_Hyur_Tataru.txt</c>). The starter-set extractor drops the spoken line next to
+    /// each sample so voice-training tools (and users) can read what each clip says.
+    /// </summary>
+    public static string GetTranscriptPath(string wavPath) => Path.ChangeExtension(wavPath, ".txt");
+
     public static string GetCatalogTargetPath(string root, string gender, string race, string bodyType,
         int globalId, int sampleIndex, int totalSamplesPerNpc, string outputSubfolder = "FF14-Voices")
     {

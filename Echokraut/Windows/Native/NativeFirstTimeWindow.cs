@@ -27,6 +27,7 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
 {
     private readonly Configuration _config;
     private readonly IAlltalkInstanceService _alltalkInstance;
+    private readonly IEchokrauTtsInstanceService _echokrauTtsInstance;
     private readonly IBackendService _backend;
     private readonly IFramework _framework;
     private readonly IBatchModeService _batchMode;
@@ -46,6 +47,13 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
     private TextNode? _welcomeTitle;
     private TextNode? _welcomeDesc;
     private HorizontalLineNode? _welcomeSep;
+    // Engine selector — sits above the Local/Remote/None mode buttons. Sets BackendSelection
+    // (which engine); the mode buttons below then set the *active* engine's InstanceType.
+    private TextNode? _engineLabel;
+    private TextButtonNode? _engineAlltalkBtn;
+    private TextButtonNode? _engineEkBtn;
+    private HorizontalListNode? _engineRow;
+    private HorizontalLineNode? _engineSep;
     private TextButtonNode? _choiceLocalBtn;
     private TextNode? _choiceLocalDesc;
     private TextButtonNode? _choiceRemoteBtn;
@@ -69,6 +77,12 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
     // Remote instance nodes
     private NativeAlltalkBuilder.RemoteInstanceNodes? _remoteNodes;
     private NodeBase[]? _remoteAllNodes;
+
+    // EchokrauTTS instance nodes (shown in Step 1 when BackendSelection == EchokrauTTS)
+    private NativeEchokrauTtsBuilder.LocalInstanceNodes? _ekLocalNodes;
+    private NodeBase[]? _ekLocalAllNodes;
+    private NativeEchokrauTtsBuilder.RemoteInstanceNodes? _ekRemoteNodes;
+    private NodeBase[]? _ekRemoteAllNodes;
 
     // No instance nodes
     private TextNode? _noInstanceWarning;
@@ -94,7 +108,7 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
     // and Step-1 content appears pushed way down. Track the (step, instanceType)
     // tuple as the visibility signature and recompute layout only on transitions.
     private ScrollingListNode? _list;
-    private (int step, AlltalkInstanceType type)? _lastVisibilitySignature;
+    private (int step, AlltalkInstanceType type, bool isEk)? _lastVisibilitySignature;
 
     // Install progress bar pinned at the very top of the window. Driven by
     // IAlltalkInstanceService.CurrentInstallStatus / CurrentInstallProgress. Visible only
@@ -105,6 +119,7 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
     public NativeFirstTimeWindow(
         Configuration config,
         IAlltalkInstanceService alltalkInstance,
+        IEchokrauTtsInstanceService echokrauTtsInstance,
         IBackendService backend,
         IFramework framework,
         IBatchModeService batchMode,
@@ -112,6 +127,7 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
     {
         _config = config;
         _alltalkInstance = alltalkInstance;
+        _echokrauTtsInstance = echokrauTtsInstance;
         _backend = backend;
         _framework = framework;
         _batchMode = batchMode;
@@ -156,26 +172,43 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         _welcomeDesc = Lbl(Loc.S("Choose how you want to set up text-to-speech:"), w);
         _welcomeSep = Sep(w);
 
+        // Engine selector (AllTalk / EchokrauTTS). Product names are not localized. These set
+        // BackendSelection only — the Local/Remote/None buttons below then write the active
+        // engine's InstanceType. None mode is engine-independent; the engine choice only matters
+        // for Local/Remote.
+        _engineLabel = Lbl(Loc.S("Choose your TTS engine:"), w);
+        _engineAlltalkBtn = Btn("AllTalk", w / 2 - 4, () =>
+        {
+            _config.BackendSelection = TTSBackends.Alltalk;
+            _config.Save();
+        });
+        _engineEkBtn = Btn("EchokrauTTS", w / 2 - 4, () =>
+        {
+            _config.BackendSelection = TTSBackends.EchokrauTTS;
+            _config.Save();
+        });
+        _engineRow = new HorizontalListNode { Size = new Vector2(w, 26), ItemSpacing = 4 };
+        _engineRow.AddNode(_engineAlltalkBtn);
+        _engineRow.AddNode(_engineEkBtn);
+        _engineSep = Sep(w);
+
         _choiceLocalBtn = Btn(Loc.S("Local TTS"), w, () =>
         {
-            _config.Alltalk.InstanceType = AlltalkInstanceType.Local;
-            _config.Save();
+            SetActiveInstanceType(AlltalkInstanceType.Local);
             _wizardStep = 1;
         });
         _choiceLocalDesc = Lbl(Loc.S("Runs on your GPU or CPU — best quality, requires ~20GB disk space"), w);
 
         _choiceRemoteBtn = Btn(Loc.S("Remote Server"), w, () =>
         {
-            _config.Alltalk.InstanceType = AlltalkInstanceType.Remote;
-            _config.Save();
+            SetActiveInstanceType(AlltalkInstanceType.Remote);
             _wizardStep = 1;
         });
-        _choiceRemoteDesc = Lbl(Loc.S("Connect to a server running Alltalk (yours or someone else's)"), w);
+        _choiceRemoteDesc = Lbl(Loc.S("Connect to a server running your chosen TTS engine (yours or someone else's)"), w);
 
         _choiceNoneBtn = Btn(Loc.S("Audio Files Only"), w, () =>
         {
-            _config.Alltalk.InstanceType = AlltalkInstanceType.None;
-            _config.Save();
+            SetActiveInstanceType(AlltalkInstanceType.None);
             _wizardStep = 1;
         });
         _choiceNoneDesc = Lbl(Loc.S("No generation — use pre-made audio from friends or Google Drive"), w);
@@ -183,6 +216,9 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         list.AddNode(_welcomeTitle);
         list.AddNode(_welcomeDesc);
         list.AddNode(_welcomeSep);
+        list.AddNode(_engineLabel);
+        list.AddNode(_engineRow);
+        list.AddNode(_engineSep);
         list.AddNode(_choiceLocalBtn);
         list.AddNode(_choiceLocalDesc);
         list.AddNode(_choiceRemoteBtn);
@@ -227,6 +263,16 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         _remoteAllNodes = _remoteNodes.AllNodes;
         _remoteNodes.TestConnectionButton.OnClick = () => TestConnection();
         foreach (var n in _remoteAllNodes) list.AddNode(n);
+
+        // EchokrauTTS local + remote instance (shown when BackendSelection == EchokrauTTS)
+        _ekLocalNodes = NativeEchokrauTtsBuilder.BuildLocalInstance(w, _config, _echokrauTtsInstance);
+        _ekLocalAllNodes = _ekLocalNodes.AllNodes;
+        foreach (var n in _ekLocalAllNodes) list.AddNode(n);
+
+        _ekRemoteNodes = NativeEchokrauTtsBuilder.BuildRemoteInstance(w, _config);
+        _ekRemoteAllNodes = _ekRemoteNodes.AllNodes;
+        _ekRemoteNodes.TestConnectionButton.OnClick = () => TestConnection();
+        foreach (var n in _ekRemoteAllNodes) list.AddNode(n);
 
         // No instance
         _noInstanceWarning = Lbl(Loc.S("No audio will be generated. Use pre-made audio from friends or Google Drive."), w);
@@ -292,7 +338,10 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         ScreenClampHelper.ClampToScreen(addon, Size);
 
         var step = _wizardStep;
-        var instanceType = _config.Alltalk.InstanceType;
+        // Engine-aware: the mode/summary/gates follow the ACTIVE engine's InstanceType, not
+        // AllTalk's (BLK-1 / GAP-3). `isEk` selects which engine's Step-1 sections show.
+        var isEk = _config.BackendSelection == TTSBackends.EchokrauTTS;
+        var instanceType = _config.ActiveInstanceType;
         var isLocal = instanceType == AlltalkInstanceType.Local;
         var isRemote = instanceType == AlltalkInstanceType.Remote;
         var isNone = instanceType == AlltalkInstanceType.None;
@@ -306,6 +355,12 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         SetVisible(_welcomeTitle, s0);
         SetVisible(_welcomeDesc, s0);
         SetVisible(_welcomeSep, s0);
+        SetVisible(_engineLabel, s0);
+        SetVisible(_engineRow, s0);
+        SetVisible(_engineSep, s0);
+        // Highlight the selected engine (Alpha 1.0 active / 0.4 inactive), and lock during batch.
+        Dim(_engineAlltalkBtn, !batchActive && !isEk);
+        Dim(_engineEkBtn,      !batchActive && isEk);
         SetVisible(_choiceLocalBtn, s0);
         SetVisible(_choiceLocalDesc, s0);
         SetVisible(_choiceRemoteBtn, s0);
@@ -326,26 +381,46 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
                 : Loc.S("Audio Files Only");
         }
 
-        // Local nodes
+        // Which engine's section shows depends on both the engine (isEk) and the mode.
+        var showAtLocal  = s1 && !isEk && isLocal;
+        var showAtRemote = s1 && !isEk && isRemote;
+        var showEkLocal  = s1 &&  isEk && isLocal;
+        var showEkRemote = s1 &&  isEk && isRemote;
+
+        // AllTalk local nodes
         if (_localEssentialNodes != null)
-            foreach (var n in _localEssentialNodes) SetVisible(n, s1 && isLocal);
-        SetVisible(_localAdvancedToggle, s1 && isLocal);
-        if (!s1 || !isLocal)
+            foreach (var n in _localEssentialNodes) SetVisible(n, showAtLocal);
+        SetVisible(_localAdvancedToggle, showAtLocal);
+        if (!showAtLocal)
         {
             if (_localAdvancedNodes != null)
                 foreach (var n in _localAdvancedNodes) SetVisible(n, false);
         }
         if (_localPostAdvancedNodes != null)
-            foreach (var n in _localPostAdvancedNodes) SetVisible(n, s1 && isLocal);
-        if (s1 && isLocal) _localNodes?.Update(_config, _alltalkInstance, batchActive);
+            foreach (var n in _localPostAdvancedNodes) SetVisible(n, showAtLocal);
+        if (showAtLocal) _localNodes?.Update(_config, _alltalkInstance, batchActive);
 
-        // Remote nodes
+        // AllTalk remote nodes
         if (_remoteAllNodes != null)
-            foreach (var n in _remoteAllNodes) SetVisible(n, s1 && isRemote);
-        if (s1 && isRemote && _remoteNodes != null)
+            foreach (var n in _remoteAllNodes) SetVisible(n, showAtRemote);
+        if (showAtRemote && _remoteNodes != null)
         {
             Dim(_remoteNodes.BaseUrlInput,         !batchActive);
             Dim(_remoteNodes.TestConnectionButton, !batchActive);
+        }
+
+        // EchokrauTTS local nodes (no advanced-options accordion — the EK builder is a flat list)
+        if (_ekLocalAllNodes != null)
+            foreach (var n in _ekLocalAllNodes) SetVisible(n, showEkLocal);
+        if (showEkLocal) _ekLocalNodes?.Update(_config, _echokrauTtsInstance, batchActive);
+
+        // EchokrauTTS remote nodes
+        if (_ekRemoteAllNodes != null)
+            foreach (var n in _ekRemoteAllNodes) SetVisible(n, showEkRemote);
+        if (showEkRemote && _ekRemoteNodes != null)
+        {
+            Dim(_ekRemoteNodes.BaseUrlInput,         !batchActive);
+            Dim(_ekRemoteNodes.TestConnectionButton, !batchActive);
         }
 
         // No instance nodes
@@ -370,8 +445,11 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         // Batch lock also blocks Next so the user can't advance the wizard while the
         // backend they're configuring is being touched by a running op.
         SetVisible(_nextButton, s1);
-        var remoteUrlMatches = string.Equals(_remoteTestUrlSnapshot, _config.Alltalk.BaseUrl, StringComparison.Ordinal);
-        var canNext = !batchActive && ((isLocal && _config.Alltalk.LocalInstall)
+        // Gate against the ACTIVE engine's install/URL, not AllTalk's (GAP-3).
+        var activeBaseUrl = isEk ? _config.EchokrauTts.BaseUrl : _config.Alltalk.BaseUrl;
+        var activeLocalInstall = isEk ? _config.EchokrauTts.LocalInstall : _config.Alltalk.LocalInstall;
+        var remoteUrlMatches = string.Equals(_remoteTestUrlSnapshot, activeBaseUrl, StringComparison.Ordinal);
+        var canNext = !batchActive && ((isLocal && activeLocalInstall)
             || (isRemote && _remoteTestSucceeded && remoteUrlMatches)
             || isNone);
         Dim(_nextButton, canNext);
@@ -385,80 +463,79 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         SetVisible(_finishButton, s2);
 
         if (s2 && _finishDetails != null)
-            _finishDetails.String = BuildFinishSummary(instanceType);
+            _finishDetails.String = BuildFinishSummary(instanceType, isEk);
 
         // Re-flow the ScrollingListNode whenever the visible block changes. Hidden nodes
         // otherwise hold their slots (game-side layout cache), so e.g. clicking "Local"
         // on Step 0 → Step 1 leaves the Local install controls floating below the now-
-        // invisible Step-0 buttons. Signature on (step, instanceType) is enough — the
-        // advanced-options accordion has its own toggle that can fire RecalculateLayout
-        // independently if we ever need it.
-        var sig = (step, instanceType);
+        // invisible Step-0 buttons. Signature on (step, instanceType, engine) is enough.
+        var sig = (step, instanceType, isEk);
         if (_lastVisibilitySignature != sig)
         {
             _lastVisibilitySignature = sig;
             _list?.RecalculateLayout();
         }
 
-        // Install progress bar — visible while a Local install is running OR briefly
-        // showing the terminal status afterwards. The bar lives outside the scrolling list
-        // (pinned to the top), so toggling its visibility doesn't perturb the list layout.
+        // Install progress bar — visible while the ACTIVE engine's Local install is running OR
+        // briefly showing the terminal status afterwards. The bar lives outside the scrolling
+        // list (pinned to the top), so toggling its visibility doesn't perturb the list layout.
         if (_installProgressBar != null)
         {
-            var installing = _alltalkInstance.Installing;
-            var hasTerminalStatus = !string.IsNullOrEmpty(_alltalkInstance.CurrentInstallStatus);
+            var installing = isEk ? _echokrauTtsInstance.Installing : _alltalkInstance.Installing;
+            var installStatus = isEk ? _echokrauTtsInstance.CurrentInstallStatus : _alltalkInstance.CurrentInstallStatus;
+            var installProgress = isEk ? _echokrauTtsInstance.CurrentInstallProgress : _alltalkInstance.CurrentInstallProgress;
+            var hasTerminalStatus = !string.IsNullOrEmpty(installStatus);
             var showBar = s1 && isLocal && (installing || hasTerminalStatus);
             _installProgressBar.IsVisible = showBar;
             if (showBar)
             {
-                _installProgressBar.ActionText = _alltalkInstance.CurrentInstallStatus;
-                _installProgressBar.SetProgress(
-                    Math.Clamp(_alltalkInstance.CurrentInstallProgress, 0f, 1f),
-                    string.Empty);
+                _installProgressBar.ActionText = installStatus;
+                _installProgressBar.SetProgress(Math.Clamp(installProgress, 0f, 1f), string.Empty);
             }
         }
     }
 
     private void TestConnection()
     {
-        if (_remoteNodes == null || _remoteTestRunning) return;
+        if (_remoteTestRunning) return;
+
+        // Route to the ACTIVE engine's remote result label + base URL. CheckReady creates and
+        // pings the active backend (BackendService.CheckReady); both AllTalk and EchokrauTTS
+        // return the "Ready" success token, so the exact-match check below works uniformly.
+        var isEk = _config.BackendSelection == TTSBackends.EchokrauTTS;
+        var resultLabel = isEk ? _ekRemoteNodes?.ConnectionResultLabel : _remoteNodes?.ConnectionResultLabel;
+        if (resultLabel == null) return;
 
         _remoteTestRunning = true;
         // Tentatively invalidate prior result — even before the request starts, the
         // user has signalled they want a fresh verdict.
         _remoteTestSucceeded = false;
-        var urlAtStart = _config.Alltalk.BaseUrl;
-        _remoteNodes.ConnectionResultLabel.String = Loc.S("Testing...");
-
-        var task = _config.BackendSelection == TTSBackends.Alltalk
-            ? _backend.CheckReady(new EKEventId(0, TextSource.None))
-            : System.Threading.Tasks.Task.FromResult(Loc.S("No backend selected"));
+        var urlAtStart = isEk ? _config.EchokrauTts.BaseUrl : _config.Alltalk.BaseUrl;
+        resultLabel.String = Loc.S("Testing...");
 
         // ContinueWith fires on a thread-pool thread; bounce to the framework thread
         // before touching ATK nodes (label string + KamiToolKit node state aren't
         // thread-safe — they must be mutated on the main game thread).
-        task.ContinueWith(t => _framework.RunOnFrameworkThread(() =>
+        _backend.CheckReady(new EKEventId(0, TextSource.None)).ContinueWith(t => _framework.RunOnFrameworkThread(() =>
         {
             _remoteTestRunning = false;
-            if (_remoteNodes == null) return;
 
             if (t.IsFaulted)
             {
                 _remoteTestSucceeded = false;
                 _remoteTestUrlSnapshot = string.Empty;
-                _remoteNodes.ConnectionResultLabel.String =
+                resultLabel.String =
                     string.Format(Loc.S("Error: {0}"), t.Exception?.InnerException?.Message ?? string.Empty);
                 return;
             }
 
-            // CheckReady returns AllTalk's /api/ready body on success ("Ready") and a
-            // human-readable error message on failure (see AlltalkBackend.CheckReady).
-            // "Ready" is the only success token; everything else is treated as failure.
+            // CheckReady returns the backend's ready body on success ("Ready") and a
+            // human-readable error message on failure. "Ready" is the only success token.
             var result = t.Result ?? string.Empty;
             var success = string.Equals(result.Trim(), "Ready", StringComparison.OrdinalIgnoreCase);
             _remoteTestSucceeded = success;
             _remoteTestUrlSnapshot = success ? urlAtStart : string.Empty;
-            _remoteNodes.ConnectionResultLabel.String = success
+            resultLabel.String = success
                 ? Loc.S("Connection successful")
                 : string.Format(Loc.S("Error: {0}"), result);
         }));
@@ -466,9 +543,9 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
 
     /// <summary>
     /// Builds the localized multi-line summary shown on Step 2. Lines are separated
-    /// by '\n'; the TextNode has TextFlags.MultiLine set in OnSetup.
+    /// by '\n'; the TextNode has TextFlags.MultiLine set in OnSetup. Engine-aware (GAP-3).
     /// </summary>
-    private string BuildFinishSummary(AlltalkInstanceType instanceType)
+    private string BuildFinishSummary(AlltalkInstanceType instanceType, bool isEk)
     {
         var modeLabel = instanceType switch
         {
@@ -477,23 +554,26 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
             _ => Loc.S("Audio Files Only"),
         };
 
-        var lines = new System.Collections.Generic.List<string>
-        {
-            $"{Loc.S("Mode")}: {modeLabel}",
-        };
+        var lines = new System.Collections.Generic.List<string>();
+        // Engine is only meaningful for Local/Remote; None is audio-files-only (engine-independent).
+        if (instanceType != AlltalkInstanceType.None)
+            lines.Add($"{Loc.S("Engine")}: {(isEk ? "EchokrauTTS" : "AllTalk")}");
+        lines.Add($"{Loc.S("Mode")}: {modeLabel}");
 
         switch (instanceType)
         {
             case AlltalkInstanceType.Local:
-                lines.Add($"{Loc.S("Install path")}: {_config.Alltalk.LocalInstallPath}");
+                lines.Add($"{Loc.S("Install path")}: {_config.TtsInstallRoot}");
+                var localInstalled = isEk ? _config.EchokrauTts.LocalInstall : _config.Alltalk.LocalInstall;
                 lines.Add($"{Loc.S("Install status")}: " +
-                    (_config.Alltalk.LocalInstall ? Loc.S("Installed") : Loc.S("Not installed yet")));
+                    (localInstalled ? Loc.S("Installed") : Loc.S("Not installed yet")));
                 break;
 
             case AlltalkInstanceType.Remote:
-                lines.Add($"{Loc.S("Server URL")}: {_config.Alltalk.BaseUrl}");
+                var baseUrl = isEk ? _config.EchokrauTts.BaseUrl : _config.Alltalk.BaseUrl;
+                lines.Add($"{Loc.S("Server URL")}: {baseUrl}");
                 var remoteOk = _remoteTestSucceeded
-                    && string.Equals(_remoteTestUrlSnapshot, _config.Alltalk.BaseUrl, StringComparison.Ordinal);
+                    && string.Equals(_remoteTestUrlSnapshot, baseUrl, StringComparison.Ordinal);
                 lines.Add($"{Loc.S("Connection")}: " +
                     (remoteOk ? Loc.S("Connection successful") : Loc.S("Not yet tested")));
                 break;
@@ -511,6 +591,20 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
     }
 
 
+
+    /// <summary>
+    /// Writes the Local/Remote/None choice to the ACTIVE engine's InstanceType (mirrors
+    /// NativeConfigWindow.SetActiveInstanceType) so the wizard configures whichever engine the
+    /// Step-0 selector picked.
+    /// </summary>
+    private void SetActiveInstanceType(AlltalkInstanceType type)
+    {
+        if (_config.BackendSelection == TTSBackends.EchokrauTTS)
+            _config.EchokrauTts.InstanceType = type;
+        else
+            _config.Alltalk.InstanceType = type;
+        _config.Save();
+    }
 
     private static TextNode Lbl(string text, float width, int fontSize = 12) => new()
     {

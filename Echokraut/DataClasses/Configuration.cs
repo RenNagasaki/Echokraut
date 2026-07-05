@@ -14,8 +14,49 @@ public class Configuration : IPluginConfiguration
     public int Version { get; set; } = 0;
 
     public bool IsConfigWindowMovable { get; set; } = true;
-    public TTSBackends BackendSelection { get; set; } = TTSBackends.Alltalk;
+    /// <summary>
+    /// Active TTS engine. Defaults to <see cref="TTSBackends.EchokrauTTS"/> so brand-new installs
+    /// land on the recommended (zero-local-install, remote-ready) engine. Existing installs are
+    /// pinned back to <see cref="TTSBackends.Alltalk"/> exactly once by
+    /// <see cref="MigrateBackendSelectionForExistingInstalls"/> — since this field never existed in
+    /// their saved JSON, the deserialized value would otherwise silently be this new default and flip
+    /// a working AllTalk setup to EchokrauTTS.
+    /// </summary>
+    public TTSBackends BackendSelection { get; set; } = TTSBackends.EchokrauTTS;
     public AlltalkData Alltalk { get; set; } = new AlltalkData();
+    public EchokrauTtsData EchokrauTts { get; set; } = new EchokrauTtsData();
+
+    /// <summary>
+    /// Shared, engine-agnostic install root. Both engines live under it (AllTalk in
+    /// <c>alltalk_tts\</c>, EchokrauTTS in <c>echokrautts\</c>; see <c>TtsPaths</c>). Migrated once
+    /// from the legacy <see cref="AlltalkData.LocalInstallPath"/> in <see cref="Initialize"/>.
+    /// </summary>
+    public string TtsInstallRoot { get; set; } = DefaultTtsInstallRoot;
+
+    internal const string DefaultTtsInstallRoot = "C:\\alltalk_tts";
+
+    /// <summary>The EchokrautLocalInstaller release tag currently extracted on disk. Compared
+    /// against <c>RemoteUrlsData.InstallerVersion</c> to force a re-download when a newer installer
+    /// (with new arg modes) is expected, even if the exe already exists (BLK-5).</summary>
+    public string InstalledInstallerVersion { get; set; } = string.Empty;
+
+    /// <summary>
+    /// The instance type (Local / Remote / None) of the currently-selected engine. Single accessor
+    /// so runtime gates and UI read the active engine instead of hard-coding <c>Alltalk</c>. Follows
+    /// <see cref="BackendSelection"/> (EchokrauTTS by default on fresh installs; existing installs are
+    /// migrated to AllTalk once — see <see cref="MigrateBackendSelectionForExistingInstalls"/>).
+    /// </summary>
+    public AlltalkInstanceType ActiveInstanceType =>
+        BackendSelection == TTSBackends.EchokrauTTS ? EchokrauTts.InstanceType : Alltalk.InstanceType;
+
+    /// <summary>
+    /// Engine-aware "can we generate audio" gate (Local or Remote on the active engine). Mirrors
+    /// <see cref="AlltalkData.HasLiveGeneration"/> but follows <see cref="BackendSelection"/>.
+    /// Runtime / None-mode call sites should gate on this rather than <c>Alltalk.HasLiveGeneration</c>
+    /// (re-routing of existing raw sites happens in phase 2).
+    /// </summary>
+    public bool HasLiveGeneration => ActiveInstanceType != AlltalkInstanceType.None;
+
     public List<NpcMapData> MappedNpcs { get; set; } = new List<NpcMapData>();
     public List<NpcMapData> MappedPlayers { get; set; } = new List<NpcMapData>();
     public List<uint> MutedNpcDialogues { get; set; } = new List<uint>();
@@ -115,7 +156,49 @@ public class Configuration : IPluginConfiguration
         // One-shot migrations from older config schemas. Each call must be idempotent —
         // it runs every time the plugin starts.
         Alltalk?.MigrateLegacyInstanceTypeFields();
+        MigrateTtsInstallRoot();
+        MigrateBackendSelectionForExistingInstalls();
         MigrateLegacyLogConfig();
+    }
+
+    /// <summary>
+    /// One-shot guard for the <see cref="BackendSelection"/> default flip to
+    /// <see cref="TTSBackends.EchokrauTTS"/>. The field is new — an existing user's saved JSON has no
+    /// value for it, so after deserialization it would carry the new default and silently switch a
+    /// working AllTalk install to EchokrauTTS on the next start. Runs exactly once (gated on
+    /// <see cref="Version"/>): for any config that predates this field, an existing install
+    /// (<see cref="FirstTime"/> already completed) is pinned back to AllTalk. Fresh installs
+    /// (<see cref="FirstTime"/> still true) keep the EchokrauTTS default. After the version bump the
+    /// user is free to switch engines and have it persist.
+    /// </summary>
+    public void MigrateBackendSelectionForExistingInstalls()
+    {
+        if (Version >= 1)
+            return; // already migrated — respect the user's saved choice.
+
+        if (!FirstTime)
+            BackendSelection = TTSBackends.Alltalk;
+
+        Version = 1;
+    }
+
+    /// <summary>
+    /// One-shot migration of the legacy AllTalk-specific <see cref="AlltalkData.LocalInstallPath"/>
+    /// into the engine-agnostic <see cref="TtsInstallRoot"/>. Runs only while <see cref="TtsInstallRoot"/>
+    /// is still at its default and the legacy path holds a meaningful custom value. Idempotent — once
+    /// a user has a non-default root it is never overwritten, and an empty/blank legacy path is
+    /// ignored (the default root stands, which also fixes old configs that saved an empty path).
+    /// </summary>
+    public void MigrateTtsInstallRoot()
+    {
+        if (!string.IsNullOrWhiteSpace(TtsInstallRoot) && TtsInstallRoot != DefaultTtsInstallRoot)
+            return; // user already on a custom root — leave it.
+
+        var legacy = Alltalk?.LocalInstallPath;
+        if (!string.IsNullOrWhiteSpace(legacy) && legacy != DefaultTtsInstallRoot)
+            TtsInstallRoot = legacy;
+        else if (string.IsNullOrWhiteSpace(TtsInstallRoot))
+            TtsInstallRoot = DefaultTtsInstallRoot;
     }
 
     public void Save()

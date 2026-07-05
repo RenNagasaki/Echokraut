@@ -116,7 +116,6 @@ public sealed unsafe class NativeVoiceConfigWindow : NativeAddon
         {
             Size = new Vector2(w, 20),
             Range = 0..200,
-            DecimalPlaces = 2,
             Value = (int)(_voice.Volume * 100),
         };
         volSlider.OnValueChanged = v => { _voice.Volume = v / 100.0f; Save(); };

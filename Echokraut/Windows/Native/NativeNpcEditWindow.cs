@@ -33,10 +33,10 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
     // unavailable (None mode): Race/Gender/Voice only matter for backend voice routing,
     // so they're locked, while Volume + Enabled stay interactive — those still affect
     // playback of pre-existing audio files.
-    private TextDropDownNode? _raceDropDown;
-    private TextDropDownNode? _genderDropDown;
+    private StringDropDownNode? _raceDropDown;
+    private StringDropDownNode? _genderDropDown;
 
-    // Pending values — TextDropDownNode crashes when its label is updated mid-OnOptionSelected,
+    // Pending values — StringDropDownNode crashes when its label is updated mid-OnOptionSelected,
     // so we capture pending values and apply them on Save click.
     private NpcRaces _pendingRace;
     private Genders _pendingGender;
@@ -52,7 +52,7 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
     // BackendService.EnsureFittingVoice auto-reassigns the NPC's voice while this window
     // is open). Without this, the dropdown stays stuck at the open-time value and Save
     // would silently overwrite the auto-assigned voice with the stale captured key.
-    private TextDropDownNode? _voiceDropDown;
+    private StringDropDownNode? _voiceDropDown;
     private string _noVoiceLabel = string.Empty;
     private bool _userPickedVoice;
     private string _lastSyncedVoiceKey = string.Empty;
@@ -98,15 +98,15 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
         });
         y += 20;
 
-        _raceDropDown = new TextDropDownNode
+        _raceDropDown = new StringDropDownNode
         {
             Position = new Vector2(pos.X, pos.Y + y),
             Size = new Vector2(w, 26),
             Options = [],
         };
-        _raceDropDown.OptionListNode.Options = new List<string>(Constants.RACENAMESLIST);
+        _raceDropDown.Options = new List<string>(Constants.RACENAMESLIST);
         var currentRaceName = _npc.Race.ToString();
-        _raceDropDown.OptionListNode.SelectedOption = currentRaceName;
+        _raceDropDown.SelectedOption = currentRaceName;
         if (_raceDropDown.LabelNode.Node != null)
             _raceDropDown.LabelNode.String = currentRaceName;
         _raceDropDown.OnOptionSelected = option =>
@@ -129,15 +129,15 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
         });
         y += 20;
 
-        _genderDropDown = new TextDropDownNode
+        _genderDropDown = new StringDropDownNode
         {
             Position = new Vector2(pos.X, pos.Y + y),
             Size = new Vector2(w, 26),
             Options = [],
         };
-        _genderDropDown.OptionListNode.Options = new List<string>(Constants.GENDERNAMESLIST);
+        _genderDropDown.Options = new List<string>(Constants.GENDERNAMESLIST);
         var currentGenderName = _npc.Gender.ToString();
-        _genderDropDown.OptionListNode.SelectedOption = currentGenderName;
+        _genderDropDown.SelectedOption = currentGenderName;
         if (_genderDropDown.LabelNode.Node != null)
             _genderDropDown.LabelNode.String = currentGenderName;
         _genderDropDown.OnOptionSelected = option =>
@@ -188,17 +188,17 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
         var voiceOptions = new List<string> { _noVoiceLabel };
         voiceOptions.AddRange(_selectableVoices.Select(v => v.VoiceName));
 
-        _voiceDropDown = new TextDropDownNode
+        _voiceDropDown = new StringDropDownNode
         {
             Position = new Vector2(pos.X, pos.Y + y),
             Size = new Vector2(w, 26),
             Options = [],
         };
-        _voiceDropDown.OptionListNode.Options = voiceOptions;
+        _voiceDropDown.Options = voiceOptions;
         var currentVoiceLabel = string.IsNullOrEmpty(_npc.voice)
             ? _noVoiceLabel
             : _selectableVoices.Find(v => v.BackendVoice == _npc.voice)?.VoiceName ?? _noVoiceLabel;
-        _voiceDropDown.OptionListNode.SelectedOption = currentVoiceLabel;
+        _voiceDropDown.SelectedOption = currentVoiceLabel;
         if (_voiceDropDown.LabelNode.Node != null)
             _voiceDropDown.LabelNode.String = currentVoiceLabel;
         _lastSyncedVoiceKey = _npc.voice ?? "";
@@ -233,7 +233,6 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
             Position = new Vector2(pos.X, pos.Y + y),
             Size = new Vector2(w, 20),
             Range = 0..200,
-            DecimalPlaces = 2,
             Value = (int)(_npc.Volume * 100),
         };
         volSlider.OnValueChanged = v => _pendingVolume = v / 100.0f;
@@ -280,7 +279,7 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
         // Race / Gender / Voice are pure backend-routing config — they have nothing to do
         // with playback of pre-existing audio. Lock them in None mode (Volume + Enabled stay
         // interactive). Cheap to set Alpha each frame; no transition tracking needed.
-        var liveGen = _config.Alltalk.HasLiveGeneration;
+        var liveGen = _config.HasLiveGeneration;
         Dim(_raceDropDown, liveGen);
         Dim(_genderDropDown, liveGen);
         Dim(_voiceDropDown, liveGen);
@@ -307,14 +306,14 @@ public sealed unsafe class NativeNpcEditWindow : NativeAddon
                 _selectableVoices.Add(match);
                 var newOptions = new List<string> { _noVoiceLabel };
                 newOptions.AddRange(_selectableVoices.Select(v => v.VoiceName));
-                _voiceDropDown.OptionListNode.Options = newOptions;
+                _voiceDropDown.Options = newOptions;
             }
         }
 
         var newLabel = string.IsNullOrEmpty(live)
             ? _noVoiceLabel
             : _selectableVoices.Find(v => v.BackendVoice == live)?.VoiceName ?? live;
-        _voiceDropDown.OptionListNode.SelectedOption = newLabel;
+        _voiceDropDown.SelectedOption = newLabel;
         if (_voiceDropDown.LabelNode.Node != null)
             _voiceDropDown.LabelNode.String = newLabel;
     }

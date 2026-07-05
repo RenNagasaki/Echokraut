@@ -18,6 +18,7 @@ using FFXIVClientStructs.FFXIV.Component.GUI;
 using KamiToolKit;
 using KamiToolKit.Enums;
 using KamiToolKit.Nodes;
+using Lumina.Text.ReadOnly;
 
 using static Echokraut.Windows.Native.NativeNodeFactory;
 namespace Echokraut.Windows.Native;
@@ -53,14 +54,13 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
 
     // Layout
     private float _contentWidth;
-    private const float ScrollbarWidth = 16f;
 
     // Filter
     private TextInputNode? _filterInput;
     private string _filterText = "";
 
     // Quest type filter
-    private TextDropDownNode? _questTypeDropDown;
+    private StringDropDownNode? _questTypeDropDown;
     private int _selectedQuestType = -1; // -1 = All
     private int _pendingQuestTypeSelection = -1;
     private string[]? _questTypeLabels;
@@ -70,10 +70,13 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     // Tabs
     private TabBarNode? _tabBar;
     private int _activeTab;
-    private ScrollingTreeNode?[] _treePanels = new ScrollingTreeNode?[2];
+    // Virtualized tree (KTK TreeListNode) — headers = NPCs, rows = quest-type groups. The node
+    // pools a fixed set of row views and only updates content/visibility/position, so there is no
+    // per-item dispose/rebuild cycle (this replaced the old ScrollingTreeNode/TreeListCategoryNode
+    // build-and-destroy model that fed the ATK draw-node-list crash class).
+    private TreeListNode<VcRow, VoiceClipRowNode>?[] _treePanels = new TreeListNode<VcRow, VoiceClipRowNode>?[2];
     private bool[] _panelDirty = { true, true };
     private bool[] _panelBuilt = { false, false };
-    private readonly List<ScrollingTreeNode> _oldTrees = new();
 
     // Pagination
     private const int PageSize = 100;
@@ -88,36 +91,27 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     private int _lastPlayerCount;
     private bool _needsRebuild = true;
 
-    // Progressive load+build — each frame loads a batch from DB and creates nodes immediately
+    // Progressive load+build — each frame loads a batch from DB and accumulates VcRow entries into
+    // the tree's Options dictionary (headers=NPCs). Re-assigning Options per batch is cheap: the
+    // virtualized tree only re-pools/re-populates visible rows and preserves collapse + scroll state.
     private const int BatchSize = 5;
     private int _progressiveIndex = -1; // -1 = idle
     private int _progressiveTab = -1;
     private List<NpcMapData> _progressiveDataList = new();
-    private int _progressiveVisibleCount; // NPCs that passed the quest type filter
     private int _progressivePageStart;
     private int _progressivePageEnd;
+    private Dictionary<ReadOnlySeString, List<VcRow>> _progressiveOptions = new();
     private bool _firstFrame = true; // skip first OnUpdate to let OnSetup settle
 
     // Caches
-    private readonly Dictionary<string, int> _vcCountCache = new();
-    private readonly Dictionary<string, int> _savedCountCache = new();
     private readonly Dictionary<string, int> _charIdCache = new();
-    private readonly Dictionary<long, string> _instanceZoneCache = new();
-    private readonly Dictionary<string, List<(long npcBaseId, List<VoiceClipEntity> voiceClips)>> _npcInstanceCache = new();
-
-    // Expanded state — survives rebuilds
-    private readonly HashSet<string> _expandedNpcs = new();
 
     // Detail window reference
     private NativeVoiceClipDetailWindow? _detailWindow;
-    private ListButtonNode? _selectedInstanceButton;
 
     // NPC edit popup reference (Race/Gender override)
     private NativeNpcEditWindow? _npcEditWindow;
 
-    // Tracked nodes for text-only updates (no rebuild needed)
-    private readonly Dictionary<string, TreeListCategoryNode> _npcCategoryNodes = new();
-    private readonly List<(string npcKey, int questType, IconListItemNode node)> _subGroupNodes = new();
     private bool _countsNeedRefresh;
 
     private readonly Configuration _config;
@@ -189,16 +183,15 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
             Loc.S("Unlock / Class Quest"), Loc.S("Beast Tribe"),
             Loc.S("Repeatable"), Loc.S("Seasonal Event"), Loc.S("Non-Quest Dialog")
         };
-        _questTypeDropDown = new TextDropDownNode
+        _questTypeDropDown = new StringDropDownNode
         {
             Size = new Vector2(180, topRowH),
             Position = pos,
-            Options = [],
+            MaxListOptions = 8,
+            Options = new List<string>(_questTypeLabels),
         };
-        _questTypeDropDown.OptionListNode.Options = new List<string>(_questTypeLabels);
-        _questTypeDropDown.OptionListNode.SelectedOption = _questTypeLabels[0];
-        if (_questTypeDropDown.LabelNode.Node != null)
-            _questTypeDropDown.LabelNode.String = _questTypeLabels[0];
+        _questTypeDropDown.SelectedOption = _questTypeLabels[0];
+        _questTypeDropDown.LabelNode.String = _questTypeLabels[0];
         _questTypeDropDown.OnOptionSelected = selected => _pendingQuestTypeSelection = Array.IndexOf(_questTypeLabels, selected);
         AddNode(_questTypeDropDown);
 
@@ -356,13 +349,25 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
 
         for (var i = 0; i < 2; i++)
         {
-            _treePanels[i] = new ScrollingTreeNode
+            var tree = new TreeListNode<VcRow, VoiceClipRowNode>
             {
                 Position = _treePos,
                 Size = _treeSize,
-                CategoryVerticalSpacing = 2,
+                ItemSpacing = 2f,
+                NoResultsString = Loc.S("No voice clips found."),
             };
-            AddNode(_treePanels[i]!);
+            // Clicking a quest-type row opens the detail window with that group's clips. Per-NPC
+            // actions (Generate All / Delete All / Edit Character) now live in the detail window.
+            tree.OnItemSelected = row =>
+            {
+                if (row == null) return;
+                var mapData = _npcData.MappedNpcs.Find(n => n.ToString() == row.NpcKey)
+                           ?? _npcData.MappedPlayers.Find(n => n.ToString() == row.NpcKey);
+                _detailWindow?.ShowVoiceClips(row.DetailTitle, row.VoiceClips, row.NpcKey,
+                    mapData != null ? () => OpenNpcEdit(mapData) : null);
+            };
+            _treePanels[i] = tree;
+            AddNode(tree);
 
             var tabIdx = i;
             _paginationBars[i] = new PaginationBar(
@@ -382,7 +387,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         // Skip first frame so OnSetup node creation doesn't compound with data loading
         if (_firstFrame) { _firstFrame = false; return; }
 
-        var liveGen = _config.Alltalk.HasLiveGeneration;
+        var liveGen = _config.HasLiveGeneration;
         UpdateGenAllButtonState(liveGen);
 
         // Game Data Tools icon button: route through ATK's component-disabled state via
@@ -434,11 +439,13 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
 
         _paginationBars[_activeTab]?.Update();
 
-        // Refresh generated counts without rebuilding (e.g. after single clip generation)
+        // Refresh generated counts after a single clip was (re)generated. Re-run the current
+        // page build: it re-queries the counts and re-assigns the tree's Options, which the
+        // virtualized tree applies while preserving collapse + scroll state.
         if (_countsNeedRefresh)
         {
             _countsNeedRefresh = false;
-            RefreshCounts();
+            _panelDirty[_activeTab] = true;
         }
 
         // Panel dirty without full rebuild (e.g. page change)
@@ -490,11 +497,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _lastNpcCount = _npcData.MappedNpcs.Count;
         _lastPlayerCount = _npcData.MappedPlayers.Count;
 
-        _vcCountCache.Clear();
-        _savedCountCache.Clear();
         _charIdCache.Clear();
-        _instanceZoneCache.Clear();
-        _npcInstanceCache.Clear();
 
         // Pre-filter NPC lists by quest type if a filter is active
         if (_selectedQuestType >= 0)
@@ -526,7 +529,6 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _progressivePageStart = currentPage * PageSize;
         _progressivePageEnd = Math.Min(_progressivePageStart + PageSize, dataList.Count);
         _progressiveIndex = _progressivePageStart;
-        _progressiveVisibleCount = 0;
     }
 
     /// <summary>
@@ -534,7 +536,6 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
     /// </summary>
     private void StartProgressivePage(int tabIndex)
     {
-        _npcInstanceCache.Clear();
         PrepareTreeForBuild(tabIndex);
 
         var dataList = tabIndex == 0 ? _npcList : _playerList;
@@ -555,7 +556,6 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         if (tree == null) { _progressiveIndex = -1; return; }
 
         var isPlayer = _progressiveTab == 1;
-        var w = _contentWidth - ScrollbarWidth;
         var batchEnd = Math.Min(_progressiveIndex + BatchSize, _progressivePageEnd);
 
         for (var idx = _progressiveIndex; idx < batchEnd; idx++)
@@ -563,67 +563,28 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
             var mapData = _progressiveDataList[idx];
             var npcKey = mapData.ToString();
 
-            // Load DB data for this NPC if not cached
-            if (!_vcCountCache.ContainsKey(npcKey))
+            // Resolve + cache the character id once per NPC.
+            if (!_charIdCache.ContainsKey(npcKey))
             {
                 var character = _db.FindCharacter(mapData.Name, mapData.Gender, mapData.Race, (int)mapData.Language);
                 if (character != null)
-                {
                     _charIdCache[npcKey] = character.Id;
-                    var allClips = _db.GetVoiceClipsForCharacter(character.Id, 100000);
-                    if (_selectedQuestType >= 0)
-                        allClips = allClips.FindAll(vc => vc.QuestType == _selectedQuestType);
-                    _vcCountCache[npcKey] = allClips.Count;
-                    var playerId = (long)_gameObjects.LocalPlayerContentId;
-                    _savedCountCache[npcKey] = _db.GetGeneratedCountForCharacter(character.Id, playerId);
-                    foreach (var inst in _db.GetInstancesForCharacter(character.Id))
-                        if (!string.IsNullOrEmpty(inst.ZoneName))
-                            _instanceZoneCache[inst.NpcBaseId] = inst.ZoneName;
-                }
-                else
-                    _vcCountCache[npcKey] = 0;
             }
 
-            // Show every mapped NPC regardless of clip count — migrated configs and
-            // unspoken-to NPCs still need to surface so users can edit voice / race /
-            // gender. NPCs with zero clips just have an empty children list when expanded.
-            // (When a quest-type filter is active the upstream filter in BuildPage already
-            //  removes mismatching NPCs, so this scope is correct.)
-            _vcCountCache.TryGetValue(npcKey, out var vcCount);
-            var wasExpanded = _expandedNpcs.Contains(npcKey);
-            var npcCategory = new TreeListCategoryNode
-            {
-                Size = new Vector2(w, 28),
-                String = $"{mapData.Name}  |  {mapData.Gender}  |  {mapData.Race}",
-                IsCollapsed = !wasExpanded,
-            };
-
-            var capturedKey = npcKey;
-            var capturedMapData = mapData;
-            var capturedIsPlayer = isPlayer;
-            var capturedW = w;
-            var capturedTree = tree;
-            npcCategory.OnToggle = expanded =>
-            {
-                if (expanded)
-                {
-                    _expandedNpcs.Add(capturedKey);
-                    PopulateNpcCategory(npcCategory, capturedKey, capturedMapData, capturedIsPlayer, capturedW, capturedTree);
-                }
-                else
-                    _expandedNpcs.Remove(capturedKey);
-            };
-
-            if (wasExpanded)
-                PopulateNpcCategory(npcCategory, npcKey, mapData, isPlayer, w, tree);
-
-            tree.AddCategoryNode(npcCategory);
-            _npcCategoryNodes[npcKey] = npcCategory;
-            _progressiveVisibleCount++;
+            // Show every mapped NPC as a header regardless of clip count — migrated configs and
+            // unspoken-to NPCs still need to surface (an empty row list under the header).
+            ReadOnlySeString header = $"{mapData.Name}  |  {mapData.Gender}  |  {mapData.Race}";
+            _progressiveOptions[header] = BuildRowsForNpc(npcKey, mapData, isPlayer);
         }
 
         _progressiveIndex = batchEnd;
-        tree.RecalculateLayout();
+        // Re-assign so the virtualized tree picks up the newly added headers/rows. The setter
+        // rebuilds only the pooled visible nodes and does NOT touch CollapsedEntries/scrollPosition,
+        // so collapse + scroll state are preserved across incremental batches and count refreshes.
+        tree.Options = _progressiveOptions;
+        // The setter may have rebuilt the header node pool — recolor the category labels to match
+        // the plugin's normal labels (they default to the native journal-header brown).
+        RecolorTreeHeaders(tree);
 
         // Done
         if (_progressiveIndex >= _progressivePageEnd)
@@ -631,6 +592,52 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
             _progressiveIndex = -1;
             _progressiveTab = -1;
         }
+    }
+
+    /// <summary>
+    /// Builds the quest-type group rows for one NPC (MSQ first, then by type). Each row carries the
+    /// group's clips so the detail window can open without re-querying. Returns an empty list for
+    /// NPCs with no resolved character or no clips (the header still shows).
+    /// </summary>
+    private List<VcRow> BuildRowsForNpc(string npcKey, NpcMapData mapData, bool isPlayer)
+    {
+        var rows = new List<VcRow>();
+        if (!_charIdCache.TryGetValue(npcKey, out var charId))
+            return rows;
+
+        var allVoiceClips = _db.GetVoiceClipsForCharacter(charId, 100000);
+        if (_selectedQuestType >= 0)
+            allVoiceClips = allVoiceClips.FindAll(vc => vc.QuestType == _selectedQuestType);
+
+        var byType = new Dictionary<int, List<VoiceClipEntity>>();
+        foreach (var vc in allVoiceClips)
+        {
+            if (!byType.TryGetValue(vc.QuestType, out var list))
+            {
+                list = new List<VoiceClipEntity>();
+                byType[vc.QuestType] = list;
+            }
+            list.Add(vc);
+        }
+
+        foreach (var (qt, vcs) in byType.OrderBy(kvp => kvp.Key == (int)QuestType.MSQ ? 0 : kvp.Key))
+        {
+            var label = isPlayer ? Loc.S("Chat") : GetQuestTypeLabel(qt);
+            var ordered = vcs.OrderByDescending(vc => vc.Timestamp).ToList();
+            var savedCount = ordered.Count(vc => _voiceClipManager.HasLocalAudio(vc));
+            QuestTypeIcons.TryGetValue(qt, out var iconId);
+            rows.Add(new VcRow
+            {
+                NpcKey = npcKey,
+                DetailTitle = $"{mapData.Name} — {label}",
+                Label = label,
+                Subtitle = $"{ordered.Count} {Loc.S("Voice Clips")} | {savedCount} {Loc.S("Generated")}",
+                IconId = iconId,
+                VoiceClips = ordered,
+            });
+        }
+
+        return rows;
     }
 
     // Bulk "Generate All Unsaved" — fully disabled in None mode (no backend to call). Dim
@@ -658,7 +665,7 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         // an async check.
         if (_backendStatusLabel != null)
         {
-            if (!_config.Alltalk.HasLiveGeneration)
+            if (!_config.HasLiveGeneration)
             {
                 _backendStatusLabel.String = Loc.S("Audio Files Only");
                 _backendStatusLabel.TextColor = new System.Numerics.Vector4(0.75f, 0.75f, 0.75f, 1f); // neutral grey
@@ -724,63 +731,15 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _statusBar.SetProgress(fraction, $"{ts}/{tc}");
     }
 
-    private void RefreshCounts()
-    {
-        var playerId = (long)_gameObjects.LocalPlayerContentId;
-
-        // Update NPC category labels
-        foreach (var (npcKey, node) in _npcCategoryNodes)
-        {
-            if (!_charIdCache.TryGetValue(npcKey, out var charId)) continue;
-            var total = _vcCountCache.TryGetValue(npcKey, out var tc) ? tc : 0;
-            var saved = _db.GetGeneratedCountForCharacter(charId, playerId);
-            _savedCountCache[npcKey] = saved;
-
-            var mapData = _npcData.MappedNpcs.Find(n => n.ToString() == npcKey)
-                       ?? _npcData.MappedPlayers.Find(n => n.ToString() == npcKey);
-            if (mapData != null)
-                node.String = $"{mapData.Name}  |  {mapData.Gender}  |  {mapData.Race}";
-        }
-
-        // Update sub-group subtitles
-        foreach (var (npcKey, questType, btn) in _subGroupNodes)
-        {
-            if (!_charIdCache.TryGetValue(npcKey, out var charId)) continue;
-            var clips = _db.GetVoiceClipsForCharacter(charId, 100000);
-            if (_selectedQuestType >= 0)
-                clips = clips.FindAll(vc => vc.QuestType == _selectedQuestType);
-            var typeClips = clips.FindAll(vc => vc.QuestType == questType);
-            var savedCount = typeClips.Count(vc => _voiceClipManager.HasLocalAudio(vc));
-            btn.Subtitle = $"{typeClips.Count} {Loc.S("Voice Clips")} | {savedCount} {Loc.S("Generated")}";
-        }
-
-        // Update stats headers
-        _npcInstanceCache.Clear();
-    }
-
     private void PrepareTreeForBuild(int tabIndex)
     {
-        _npcCategoryNodes.Clear();
-        _subGroupNodes.Clear();
-        _selectedInstanceButton = null;
-
         var tree = _treePanels[tabIndex];
         if (tree == null) return;
 
-        if (_panelBuilt[tabIndex])
-        {
-            tree.IsVisible = false;
-            _oldTrees.Add(tree);
-
-            tree = new ScrollingTreeNode
-            {
-                Position = _treePos,
-                Size = _treeSize,
-                CategoryVerticalSpacing = 2,
-            };
-            _treePanels[tabIndex] = tree;
-            AddNode(tree);
-        }
+        // The virtualized tree is reusable — start a fresh Options dictionary instead of
+        // disposing/recreating the node (which was the old ScrollingTreeNode crash source).
+        _progressiveOptions = new Dictionary<ReadOnlySeString, List<VcRow>>();
+        tree.Options = _progressiveOptions;
 
         _panelBuilt[tabIndex] = true;
 
@@ -811,129 +770,32 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         _ => Loc.S("Non-Quest Dialog"),
     };
 
-    private void PopulateNpcCategory(TreeListCategoryNode category, string npcKey, NpcMapData mapData, bool isPlayer, float w, ScrollingTreeNode tree)
-    {
-        var npcName = mapData.Name;
-        // Only populate once (lazy load on expand)
-        if (category.Children.Any()) return;
-
-        // Stats header (journal separator style)
-        _vcCountCache.TryGetValue(npcKey, out var totalClips);
-        _savedCountCache.TryGetValue(npcKey, out var totalSaved);
-        var statsHeader = new TreeListHeaderNode
-        {
-            Size = new Vector2(w - 24, 24),
-            String = $"{totalClips} {Loc.S("Voice Clips")}  |  {totalSaved} {Loc.S("Generated")}",
-        };
-        category.AddNode(statsHeader);
-
-        // Action buttons row (Generate All / Delete All)
-        var capturedNpcKey = npcKey;
-        var actionsRow = new HorizontalListNode { Size = new Vector2(w - 24, 26), ItemSpacing = 4 };
-        var capturedQuestTypeFilter = _selectedQuestType;
-        actionsRow.AddNode(Button(Loc.S("Generate All Unsaved"), 160, () =>
-        {
-            if (_voiceClipManager.IsGenerating) return;
-            if (_charIdCache.TryGetValue(capturedNpcKey, out var genCharId))
-            {
-                var voiceClips = _db.GetVoiceClipsForCharacter(genCharId, 100000);
-                if (capturedQuestTypeFilter >= 0)
-                    voiceClips = voiceClips.FindAll(vc => vc.QuestType == capturedQuestTypeFilter);
-                _voiceClipManager.GenerateAllUnsaved(voiceClips).ContinueWith(_ =>
-                {
-                    _npcInstanceCache.Remove(capturedNpcKey);
-                    _panelDirty[_activeTab] = true;
-                });
-            }
-        }));
-        actionsRow.AddNode(Button(Loc.S("Delete All Saved"), 140, () =>
-        {
-            if (_voiceClipManager.IsGenerating) return;
-            _audioPlayback.ClearQueue(TextSource.VoiceTest);
-
-            if (_charIdCache.TryGetValue(capturedNpcKey, out var delCharId))
-            {
-                var voiceClips = _db.GetVoiceClipsForCharacter(delCharId, 100000);
-                if (capturedQuestTypeFilter >= 0)
-                    voiceClips = voiceClips.FindAll(vc => vc.QuestType == capturedQuestTypeFilter);
-                _voiceClipManager.DeleteAllSaved(voiceClips);
-                _npcInstanceCache.Remove(capturedNpcKey);
-                _panelDirty[_activeTab] = true;
-            }
-        }));
-        var capturedMapData = mapData;
-        actionsRow.AddNode(Button(Loc.S("Edit Character"), 130, () => OpenNpcEdit(capturedMapData)));
-        category.AddNode(actionsRow);
-
-        // Group voice clips by quest type
-        if (!_npcInstanceCache.TryGetValue(npcKey, out var questTypeGroups))
-        {
-            questTypeGroups = new List<(long npcBaseId, List<VoiceClipEntity> voiceClips)>();
-            if (_charIdCache.TryGetValue(npcKey, out var charId))
-            {
-                var allVoiceClips = _db.GetVoiceClipsForCharacter(charId, 100000);
-                if (_selectedQuestType >= 0)
-                    allVoiceClips = allVoiceClips.FindAll(vc => vc.QuestType == _selectedQuestType);
-
-                var byType = new Dictionary<int, List<VoiceClipEntity>>();
-                foreach (var vc in allVoiceClips)
-                {
-                    if (!byType.TryGetValue(vc.QuestType, out var list))
-                    {
-                        list = new List<VoiceClipEntity>();
-                        byType[vc.QuestType] = list;
-                    }
-                    list.Add(vc);
-                }
-                // Sort: MSQ first, then by count descending
-                foreach (var (qt, vcs) in byType.OrderBy(kvp => kvp.Key == (int)QuestType.MSQ ? 0 : kvp.Key))
-                    questTypeGroups.Add((qt, vcs.OrderByDescending(vc => vc.Timestamp).ToList()));
-            }
-            _npcInstanceCache[npcKey] = questTypeGroups;
-        }
-
-        foreach (var (questTypeLong, voiceClips) in questTypeGroups)
-        {
-            var questTypeInt = (int)questTypeLong;
-            var label = isPlayer ? Loc.S("Chat") : GetQuestTypeLabel(questTypeInt);
-            var savedCount = voiceClips.Count(vc => _voiceClipManager.HasLocalAudio(vc));
-            var subtitle = $"{voiceClips.Count} {Loc.S("Voice Clips")} | {savedCount} {Loc.S("Generated")}";
-
-            var itemW = w - 48;
-            const float itemH = 41f; // 36px content + 5px spacing
-
-            QuestTypeIcons.TryGetValue(questTypeInt, out var iconId);
-            var btn = new IconListItemNode
-            {
-                Size = new Vector2(itemW, itemH),
-                Title = label,
-                Subtitle = subtitle,
-                IconId = iconId,
-            };
-
-            var capturedVoiceClips = voiceClips;
-            var capturedTitle = $"{npcName} — {label}";
-            var capturedKey = npcKey;
-            var capturedBtn = btn;
-            btn.OnClick = () =>
-            {
-                try { if (_selectedInstanceButton != null) _selectedInstanceButton.Selected = false; }
-                catch { /* may be disposed */ }
-                capturedBtn.Selected = true;
-                _selectedInstanceButton = capturedBtn;
-                _detailWindow?.ShowVoiceClips(capturedTitle, capturedVoiceClips, capturedKey);
-            };
-
-            category.AddNode(btn);
-            _subGroupNodes.Add((npcKey, questTypeInt, btn));
-        }
-
-        category.RecalculateLayout();
-        tree.RecalculateLayout();
-    }
-
     // ── Helpers ──────────────────────────────────────────────
 
+    // KTK's TreeListNode renders category headers via an internal ToggleableHeaderNode whose label
+    // defaults to ColorHelper.GetColor(1) (the native journal-header brown). We want them to match
+    // the plugin's normal labels (LabelColor = GetColor(50)). The header nodes live in a private list
+    // with no public accessor and the node type is internal, so reach them via reflection and set the
+    // public LabelTextNode.TextColor. Fails soft (no-op) if the KTK internals ever change — headers
+    // just keep their default color, no crash. Reapplied after every Options assignment since the
+    // setter may rebuild the header pool.
+    private static readonly System.Reflection.PropertyInfo? HeaderNodesProp =
+        typeof(TreeListNode<VcRow, VoiceClipRowNode>).GetProperty(
+            "HeaderNodes",
+            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
+    private static System.Reflection.PropertyInfo? _headerLabelProp;
+
+    private static void RecolorTreeHeaders(TreeListNode<VcRow, VoiceClipRowNode> tree)
+    {
+        if (HeaderNodesProp?.GetValue(tree) is not System.Collections.IEnumerable headers) return;
+        foreach (var header in headers)
+        {
+            if (header == null) continue;
+            _headerLabelProp ??= header.GetType().GetProperty("LabelTextNode");
+            if (_headerLabelProp?.GetValue(header) is TextNode label)
+                label.TextColor = LabelColor;
+        }
+    }
 
     private void OpenNpcEdit(NpcMapData mapData)
     {
@@ -953,10 +815,6 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         // The edited character's identity (Name+Gender+Race composite) may have changed,
         // so all caches keyed by that composite need to drop. Easiest: invalidate the active panel.
         _charIdCache.Clear();
-        _vcCountCache.Clear();
-        _savedCountCache.Clear();
-        _npcInstanceCache.Clear();
-        _expandedNpcs.Clear();
         for (var i = 0; i < _panelDirty.Length; i++) _panelDirty[i] = true;
         _statusForceRecompute = true;
     }
@@ -971,11 +829,6 @@ public sealed unsafe class NativeVoiceClipManagerWindow : NativeAddon
         try { if (_npcEditWindow?.IsOpen == true) _npcEditWindow.Close(); } catch { }
         try { _npcEditWindow?.Dispose(); } catch { }
         _npcEditWindow = null;
-        foreach (var tree in _oldTrees)
-        {
-            try { tree.Dispose(); } catch { }
-        }
-        _oldTrees.Clear();
         base.Dispose();
     }
 }

@@ -68,7 +68,7 @@ public static class NativeAlltalkBuilder
         /// the running op is using.</summary>
         public void Update(Configuration config, IAlltalkInstanceService alltalkInstance, bool batchActive = false)
         {
-            var (pathValid, validationMsg) = ValidateInstallPath(config.Alltalk.LocalInstallPath);
+            var (pathValid, validationMsg) = ValidateInstallPath(config.TtsInstallRoot);
 
             // Validation label — visible only when path is invalid
             ValidationLabel.IsVisible = !pathValid;
@@ -118,22 +118,20 @@ public static class NativeAlltalkBuilder
     {
         var nodes = new LocalInstanceNodes();
 
-        // Backfill the canonical default into existing configs that have an empty
-        // LocalInstallPath. The property's C#-side default ("C:\\alltalk_tts") only
-        // applies on fresh deserialize — old configs with `"LocalInstallPath": ""` keep
-        // the empty string, which renders an empty input field and looks broken to the
-        // user. Persist the default once so the UI shows a sensible starting value the
-        // user can review/edit/replace.
-        if (string.IsNullOrWhiteSpace(config.Alltalk.LocalInstallPath))
+        // Backfill the canonical default into existing configs that have an empty install
+        // root. The property's C#-side default only applies on fresh deserialize — old configs
+        // with an empty value keep the empty string, which renders an empty input field and
+        // looks broken. Persist the default once so the UI shows a sensible starting value.
+        if (string.IsNullOrWhiteSpace(config.TtsInstallRoot))
         {
-            config.Alltalk.LocalInstallPath = "C:\\alltalk_tts";
+            config.TtsInstallRoot = Configuration.DefaultTtsInstallRoot;
             config.Save();
         }
 
-        // Install path
-        nodes.InstallPathInput = MakeInput(Loc.S("Local install path (no spaces or dashes)"), width, 128,
-            config.Alltalk.LocalInstallPath,
-            v => { config.Alltalk.LocalInstallPath = v; config.Save(); });
+        // Install path (shared TTS install root)
+        nodes.InstallPathInput = Input(Loc.S("Local install path (no spaces or dashes)"), width, 128,
+            config.TtsInstallRoot,
+            v => { config.TtsInstallRoot = v; config.Save(); });
 
         // Validation label — shown when path is empty
         nodes.ValidationLabel = new TextNode
@@ -143,35 +141,35 @@ public static class NativeAlltalkBuilder
             FontType = FontType.Axis,
             FontSize = 12,
             TextColor = new Vector4(1f, 0.3f, 0.3f, 1f),
-            IsVisible = string.IsNullOrWhiteSpace(config.Alltalk.LocalInstallPath),
+            IsVisible = string.IsNullOrWhiteSpace(config.TtsInstallRoot),
         };
 
         // CPU mode
-        nodes.CpuModeCheck = MakeCheck(Loc.S("CPU mode (no GPU required, slower)"), width, config.Alltalk.CpuMode,
+        nodes.CpuModeCheck = Check(Loc.S("CPU mode (no GPU required, slower)"), width, config.Alltalk.CpuMode,
             v => { config.Alltalk.CpuMode = v; config.Save(); });
 
         // Is Windows 11
-        nodes.IsWindows11Check = MakeCheck(Loc.S("Is Windows 11"), width, config.Alltalk.IsWindows11,
+        nodes.IsWindows11Check = Check(Loc.S("Is Windows 11"), width, config.Alltalk.IsWindows11,
             v => { config.Alltalk.IsWindows11 = v; config.Save(); });
 
         // Custom model URL
-        nodes.CustomModelUrlInput = MakeInput(Loc.S("Custom model URL (zip with one root folder)"), width, 256,
+        nodes.CustomModelUrlInput = Input(Loc.S("Custom model URL (zip with one root folder)"), width, 256,
             config.Alltalk.CustomModelUrl,
             v => { config.Alltalk.CustomModelUrl = v; config.Save(); });
 
         // Custom voices URL
-        nodes.CustomVoicesUrlInput = MakeInput(Loc.S("Custom voices URL (zip with \"voices\" folder)"), width, 256,
+        nodes.CustomVoicesUrlInput = Input(Loc.S("Custom voices URL (zip with \"voices\" folder)"), width, 256,
             config.Alltalk.CustomVoicesUrl,
             v => { config.Alltalk.CustomVoicesUrl = v; config.Save(); });
 
         // Install only custom data
-        nodes.InstallCustomDataButton = MakeButton(Loc.S("Install only custom data"), 170, () =>
+        nodes.InstallCustomDataButton = Button(Loc.S("Install only custom data"), 170, () =>
             alltalkInstance.InstallCustomData(new EKEventId(0, TextSource.Backend), false));
         nodes.InstallCustomDataRow = new HorizontalListNode { Size = new Vector2(width, 26), ItemSpacing = 4 };
         nodes.InstallCustomDataRow.AddNode(nodes.InstallCustomDataButton);
 
         // Auto-start
-        nodes.AutoStartCheck = MakeCheck(Loc.S("Auto-start local instance on plugin load"), width,
+        nodes.AutoStartCheck = Check(Loc.S("Auto-start local instance on plugin load"), width,
             config.Alltalk.AutoStartLocalInstance,
             v =>
             {
@@ -182,7 +180,7 @@ public static class NativeAlltalkBuilder
             });
 
         // Install/Reinstall — size to fit longest dynamic label
-        nodes.InstallButton = MakeButton(config.Alltalk.LocalInstall ? Loc.S("Reinstall") : Loc.S("Install"), 100, () =>
+        nodes.InstallButton = Button(config.Alltalk.LocalInstall ? Loc.S("Reinstall") : Loc.S("Install"), 100, () =>
         {
             if (alltalkInstance.InstanceRunning || alltalkInstance.InstanceStarting)
                 alltalkInstance.StopInstance(new EKEventId(0, TextSource.Backend));
@@ -196,12 +194,12 @@ public static class NativeAlltalkBuilder
         nodes.InstallRow.AddNode(nodes.InstallButton);
 
         // Start/Stop row — size Start to fit longest dynamic label
-        nodes.StartButton = MakeButton(Loc.S("Start"), 80, () => alltalkInstance.StartInstance());
+        nodes.StartButton = Button(Loc.S("Start"), 80, () => alltalkInstance.StartInstance());
         var startMaxW = new[] { Loc.S("Start"), Loc.S("Starting..."), Loc.S("Running") }
             .Max(s => nodes.StartButton.LabelNode.GetTextDrawSize(s).X) + 36;
         if (startMaxW > nodes.StartButton.Width)
             nodes.StartButton.Size = new Vector2(startMaxW, 24);
-        nodes.StopButton = MakeButton(Loc.S("Stop"), 80, () => alltalkInstance.StopInstance(new EKEventId(0, TextSource.Backend)));
+        nodes.StopButton = Button(Loc.S("Stop"), 80, () => alltalkInstance.StopInstance(new EKEventId(0, TextSource.Backend)));
         nodes.StartStopRow = new HorizontalListNode { Size = new Vector2(width, 26), ItemSpacing = 4 };
         nodes.StartStopRow.AddNode(nodes.StartButton);
         nodes.StartStopRow.AddNode(nodes.StopButton);
@@ -214,10 +212,10 @@ public static class NativeAlltalkBuilder
     {
         var nodes = new RemoteInstanceNodes();
 
-        nodes.BaseUrlInput = MakeInput(Loc.S("Alltalk base URL"), width, 80, config.Alltalk.BaseUrl,
+        nodes.BaseUrlInput = Input(Loc.S("Alltalk base URL"), width, 80, config.Alltalk.BaseUrl,
             v => { config.Alltalk.BaseUrl = v; config.Save(); });
 
-        nodes.TestConnectionButton = MakeButton(Loc.S("Test"), 60, () => { });
+        nodes.TestConnectionButton = Button(Loc.S("Test"), 60, () => { });
         nodes.ConnectionResultLabel = new TextNode
         {
             Size = new Vector2(width, 20),
@@ -267,36 +265,4 @@ public static class NativeAlltalkBuilder
         return (true, string.Empty);
     }
 
-    // ── Private helpers (mirror NativeConfigWindow's factory methods) ─────────
-
-
-    private static CheckboxNode MakeCheck(string label, float width, bool initial, Action<bool> onChange) => new()
-    {
-        Size = new Vector2(width, 24),
-        String = label,
-        IsChecked = initial,
-        OnClick = onChange,
-    };
-
-    private static TextButtonNode MakeButton(string label, float minWidth, Action onClick)
-    {
-        var node = new TextButtonNode { Size = new Vector2(minWidth, 24), String = label };
-        var textW = node.LabelNode.GetTextDrawSize(label).X + 36;
-        if (textW > minWidth) node.Size = new Vector2(textW, 24);
-        node.OnClick = onClick;
-        return node;
-    }
-
-    private static TextInputNode MakeInput(string placeholder, float width, int maxChars, string initial, Action<string> onChanged)
-    {
-        var node = new TextInputNode
-        {
-            Size = new Vector2(width, 28),
-            MaxCharacters = maxChars,
-            PlaceholderString = placeholder,
-            String = initial,
-        };
-        node.OnInputReceived = s => onChanged(s.ToString());
-        return node;
-    }
 }

@@ -35,6 +35,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private readonly IBackendService _backend;
     private readonly IGoogleDriveSyncService _googleDrive;
     private readonly IAlltalkInstanceService _alltalkInstance;
+    private readonly IEchokrauTtsInstanceService _echokrauTtsInstance;
+    private readonly ITtsVoiceSyncService _voiceSync;
     private readonly IAudioFileService _audioFiles;
     private readonly IJsonDataService _jsonData;
     private readonly ICommandService _commands;
@@ -155,8 +157,13 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private TextButtonNode? _gdDownloadNowButton;
 
     // Backend — deferred dropdown selection (same crash-safe pattern as DialogTalkController)
-    private TextDropDownNode? _backendDropDown;
+    private StringDropDownNode? _backendDropDown;
     private string? _pendingBackendSelection;
+
+    // Set from the (background) connection-test continuation, processed on the main thread in
+    // OnUpdate: after a successful reconnect we must remap voices + refresh selectables so mapped
+    // NPCs pick up a non-stale selectable list (see TestConnection).
+    private volatile bool _pendingRemapAfterConnect;
 
     // Alltalk controls
     // Mode switcher — 3 mutually-exclusive buttons (Local / Remote / None) replacing the
@@ -168,6 +175,16 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     private HorizontalListNode? _modeSwitcherRow;
     private NativeAlltalkBuilder.LocalInstanceNodes? _atLocalNodes;
     private NativeAlltalkBuilder.RemoteInstanceNodes? _atRemoteNodes;
+    // EchokrauTTS engine sections (shown when BackendSelection == EchokrauTTS).
+    private NativeEchokrauTtsBuilder.LocalInstanceNodes? _ekLocalNodes;
+    private NativeEchokrauTtsBuilder.RemoteInstanceNodes? _ekRemoteNodes;
+    private NodeBase[]? _ekLocalSectionContent;
+    private TextButtonNode? _ekLocalSectionToggle;
+    private bool _ekLocalExpanded;
+    private NodeBase[]? _ekRemoteSectionContent;
+    private TextButtonNode? _ekRemoteSectionToggle;
+    private bool _ekRemoteExpanded;
+    private bool _prevShowEkLocal, _prevShowEkRemote;
     // Streaming checkbox + Reload-Voices button used to live in the Backend tab's "Service
     // options" section. Streaming moved to the General tab as a top-level generation toggle
     // (dims in None mode); Reload-Voices moved into General → Reset Data alongside the
@@ -226,6 +243,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         IBackendService backend,
         IGoogleDriveSyncService googleDrive,
         IAlltalkInstanceService alltalkInstance,
+        IEchokrauTtsInstanceService echokrauTtsInstance,
+        ITtsVoiceSyncService voiceSync,
         IAudioFileService audioFiles,
         IJsonDataService jsonData,
         ICommandService commands,
@@ -244,6 +263,8 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _backend = backend;
         _googleDrive = googleDrive;
         _alltalkInstance = alltalkInstance;
+        _echokrauTtsInstance = echokrauTtsInstance;
+        _voiceSync = voiceSync;
         _audioFiles = audioFiles;
         _jsonData = jsonData;
         _commands = commands;
@@ -316,7 +337,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _settingsPanels[3] = BuildSaveLoadPanel(_innerContentPos, _innerContentSize);
         _settingsPanels[4] = BuildBackendPanel(_innerContentPos, _innerContentSize);
 
-        _settingsTabsLiveGenSnapshot = _config.Alltalk.HasLiveGeneration;
+        _settingsTabsLiveGenSnapshot = _config.HasLiveGeneration;
         BuildSettingsTabs(_settingsTabsLiveGenSnapshot.Value);
 
         // Link buttons — positioned top-right, only visible on Settings tab
@@ -345,7 +366,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         // ── Top-level tabs ───────────────────────────────────────────────────
         // Initial population reflects the current InstanceType; OnUpdate re-runs this
         // whenever HasLiveGeneration flips so tabs follow mode changes live.
-        _topTabsLiveGenSnapshot = _config.Alltalk.HasLiveGeneration;
+        _topTabsLiveGenSnapshot = _config.HasLiveGeneration;
         BuildTopTabs(_topTabsLiveGenSnapshot.Value);
 
         // ── Add all nodes to addon ───────────────────────────────────────────
@@ -568,6 +589,14 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             ProcessBackendSelection(sel);
         }
 
+        // Deferred voice remap after a successful connection test (see TestConnection). Runs on the
+        // main thread so RefreshBackend's DB/NPC-list work and VoicesMapped rebuild are frame-safe.
+        if (_pendingRemapAfterConnect)
+        {
+            _pendingRemapAfterConnect = false;
+            _backend.RefreshBackend();
+        }
+
         var enabled = _config.Enabled;
         Dim(_globalVolumeSlider, enabled);
         Dim(_generateBySentenceCheck, enabled);
@@ -585,7 +614,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         // audio the user has and silently skip the rest, so the toggles still control which
         // categories play). Player-choice routing, retainer dialogue, voice chat, and alias
         // auto-generation have no audio-file fallback path — they need a live backend.
-        var liveGen = _config.Alltalk.HasLiveGeneration;
+        var liveGen = _config.HasLiveGeneration;
         Dim(_voicePlayerCutsceneCheck, liveGen);
         Dim(_voicePlayerChoicesCheck,  liveGen);
         Dim(_voiceRetainersCheck,      liveGen);
@@ -622,13 +651,15 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         Dim(_gdShareLinkInput,        _config.GoogleDriveDownload);
         Dim(_gdDownloadNowButton,     _config.GoogleDriveDownload);
 
-        // Alltalk controls — visibility and state
+        // Engine + instance-type — visibility and state. Mode (Local/Remote/None) follows the
+        // ACTIVE engine; which engine's Local/Remote section is shown follows BackendSelection.
         var isAlltalk = _config.BackendSelection == TTSBackends.Alltalk;
-        var instanceType = _config.Alltalk.InstanceType;
+        var isEk      = _config.BackendSelection == TTSBackends.EchokrauTTS;
+        var instanceType = _config.ActiveInstanceType;
         var isLocal   = instanceType == AlltalkInstanceType.Local;
         var isRemote  = instanceType == AlltalkInstanceType.Remote;
         var isNone    = instanceType == AlltalkInstanceType.None;
-        var installing = _alltalkInstance.Installing;
+        var installing = isEk ? _echokrauTtsInstance.Installing : _alltalkInstance.Installing;
         // Batch lock — harvest / voice-sample extract / (future) import / export. While any
         // such operation is in flight, every backend-affecting widget (mode switcher, install
         // controls, backend dropdown, reload buttons, etc.) is dimmed so the run isn't
@@ -735,20 +766,28 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             Dim(_atRemoteNodes.TestConnectionButton,!batchActive);
         }
 
-        // None section: toggle button + content (info text + audio path + GD link)
+        // None section: toggle button + content (info text + audio path + GD link). None mode is
+        // engine-independent, so this shows whenever the active instance type is None.
         SetVisible(_noneSectionToggle, showNone);
         if (_noneSectionContent != null)
             foreach (var n in _noneSectionContent) SetVisible(n, showNone && _noneExpanded);
         // GD link follows GoogleDriveDownload toggle even within the None section
         if (showNone) Dim(_noneGdLinkInput, _config.GoogleDriveDownload && !batchActive);
 
+        // EchokrauTTS Local/Remote sections (extracted to keep this method's complexity down).
+        var showEkLocal = isEk && isLocal;
+        var showEkRemote = isEk && isRemote;
+        UpdateEchokrauTtsSections(showEkLocal, showEkRemote, batchActive);
+
         // Recalculate backend panel layout when visibility changes
         if (showLocal != _prevShowLocal || showRemote != _prevShowRemote
-            || showNone != _prevShowNone)
+            || showNone != _prevShowNone || showEkLocal != _prevShowEkLocal || showEkRemote != _prevShowEkRemote)
         {
             _prevShowLocal = showLocal;
             _prevShowRemote = showRemote;
             _prevShowNone = showNone;
+            _prevShowEkLocal = showEkLocal;
+            _prevShowEkRemote = showEkRemote;
             _settingsPanels[4]?.RecalculateLayout();
         }
 
@@ -776,7 +815,6 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         {
             Size = new Vector2(180, 20),
             Range = 0..200,
-            DecimalPlaces = 2,
             Value = (int)(_config.GlobalVolume * 100),
         };
         _globalVolumeSlider.OnValueChanged = v =>
@@ -1176,11 +1214,9 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var backends       = Enum.GetValues<TTSBackends>().Select(b => b.ToString()).ToList();
         var currentBackend = _config.BackendSelection.ToString();
 
-        _backendDropDown = new TextDropDownNode { Size = new Vector2(w, 24), Options = [] };
-        _backendDropDown.OptionListNode.Options        = backends;
-        _backendDropDown.OptionListNode.SelectedOption = currentBackend;
-        if (_backendDropDown.LabelNode.Node != null)
-            _backendDropDown.LabelNode.String = currentBackend;
+        _backendDropDown = new StringDropDownNode { Size = new Vector2(w, 24), Options = backends };
+        _backendDropDown.SelectedOption = currentBackend;
+        _backendDropDown.LabelNode.String = currentBackend;
 
         // Capture in OnOptionSelected (fires before UpdateLabel crash); process next frame.
         _backendDropDown.OnOptionSelected = option => _pendingBackendSelection = option;
@@ -1201,21 +1237,9 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         var labels = new[] { Loc.S("Local TTS"), Loc.S("Remote Server"), Loc.S("Audio Files Only") };
         var sample = new TextButtonNode { Size = new Vector2(1, 28), String = labels[0] };
         var modeBtnW = labels.Max(s => sample.LabelNode.GetTextDrawSize(s).X) + 36;
-        _modeLocalBtn = ModeButton(Loc.S("Local TTS"), modeBtnW, () =>
-        {
-            _config.Alltalk.InstanceType = AlltalkInstanceType.Local;
-            _config.Save();
-        });
-        _modeRemoteBtn = ModeButton(Loc.S("Remote Server"), modeBtnW, () =>
-        {
-            _config.Alltalk.InstanceType = AlltalkInstanceType.Remote;
-            _config.Save();
-        });
-        _modeNoneBtn = ModeButton(Loc.S("Audio Files Only"), modeBtnW, () =>
-        {
-            _config.Alltalk.InstanceType = AlltalkInstanceType.None;
-            _config.Save();
-        });
+        _modeLocalBtn = ModeButton(Loc.S("Local TTS"), modeBtnW, () => SetActiveInstanceType(AlltalkInstanceType.Local));
+        _modeRemoteBtn = ModeButton(Loc.S("Remote Server"), modeBtnW, () => SetActiveInstanceType(AlltalkInstanceType.Remote));
+        _modeNoneBtn = ModeButton(Loc.S("Audio Files Only"), modeBtnW, () => SetActiveInstanceType(AlltalkInstanceType.None));
         _modeSwitcherRow = new HorizontalListNode { Size = new Vector2(w, 30), ItemSpacing = 4 };
         _modeSwitcherRow.AddNode(_modeLocalBtn);
         _modeSwitcherRow.AddNode(_modeRemoteBtn);
@@ -1274,7 +1298,48 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         _noneSectionToggle = CreateTrackedCollapsibleSection(list, Loc.S("Audio Files Only"), w,
             _noneSectionContent, () => _noneExpanded, v => _noneExpanded = v);
 
+        // EchokrauTTS engine sections (parallel to AllTalk; shown when EchokrauTTS is selected).
+        _ekLocalNodes = NativeEchokrauTtsBuilder.BuildLocalInstance(w, _config, _echokrauTtsInstance);
+        _ekRemoteNodes = NativeEchokrauTtsBuilder.BuildRemoteInstance(w, _config);
+        _ekRemoteNodes.TestConnectionButton.OnClick = () => TestConnection();
+
+        _ekLocalSectionContent = _ekLocalNodes.AllNodes;
+        _ekLocalSectionToggle = CreateTrackedCollapsibleSection(list, Loc.S("EchokrauTTS local instance"), w,
+            _ekLocalSectionContent, () => _ekLocalExpanded, v => _ekLocalExpanded = v);
+
+        _ekRemoteSectionContent = _ekRemoteNodes.AllNodes;
+        _ekRemoteSectionToggle = CreateTrackedCollapsibleSection(list, Loc.S("EchokrauTTS remote connection"), w,
+            _ekRemoteSectionContent, () => _ekRemoteExpanded, v => _ekRemoteExpanded = v);
+
         return list;
+    }
+
+    /// <summary>Per-frame visibility + state for the EchokrauTTS Local/Remote sections.</summary>
+    private void UpdateEchokrauTtsSections(bool showEkLocal, bool showEkRemote, bool batchActive)
+    {
+        SetVisible(_ekLocalSectionToggle, showEkLocal);
+        if (_ekLocalSectionContent != null)
+            foreach (var n in _ekLocalSectionContent) SetVisible(n, showEkLocal && _ekLocalExpanded);
+        if (showEkLocal) _ekLocalNodes?.Update(_config, _echokrauTtsInstance, batchActive);
+
+        SetVisible(_ekRemoteSectionToggle, showEkRemote);
+        if (_ekRemoteSectionContent != null)
+            foreach (var n in _ekRemoteSectionContent) SetVisible(n, showEkRemote && _ekRemoteExpanded);
+        if (showEkRemote && _ekRemoteNodes != null)
+        {
+            Dim(_ekRemoteNodes.BaseUrlInput,         !batchActive);
+            Dim(_ekRemoteNodes.TestConnectionButton, !batchActive);
+        }
+    }
+
+    /// <summary>Write the Local/Remote/None mode onto the currently-selected engine + save.</summary>
+    private void SetActiveInstanceType(AlltalkInstanceType type)
+    {
+        if (_config.BackendSelection == TTSBackends.EchokrauTTS)
+            _config.EchokrauTts.InstanceType = type;
+        else
+            _config.Alltalk.InstanceType = type;
+        _config.Save();
     }
 
     /// <summary>
@@ -1298,19 +1363,26 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
 
     private void TestConnection()
     {
-        if (_atRemoteNodes == null) return;
-        _atRemoteNodes.ConnectionResultLabel.String = "Testing...";
+        // Route the result to whichever remote section is active — the Alltalk and EchokrauTTS
+        // remote sections each have their own result label but share this handler.
+        var isEk = _config.BackendSelection == TTSBackends.EchokrauTTS;
+        var resultLabel = isEk ? _ekRemoteNodes?.ConnectionResultLabel : _atRemoteNodes?.ConnectionResultLabel;
+        if (resultLabel == null) return;
+        resultLabel.String = "Testing...";
 
-        var task = _config.BackendSelection == TTSBackends.Alltalk
-            ? _backend.CheckReady(new EKEventId(0, TextSource.None))
-            : System.Threading.Tasks.Task.FromResult("No backend selected");
-
-        task.ContinueWith(t =>
+        _backend.CheckReady(new EKEventId(0, TextSource.None)).ContinueWith(t =>
         {
-            if (_atRemoteNodes == null) return;
-            _atRemoteNodes.ConnectionResultLabel.String = t.IsFaulted
+            resultLabel.String = t.IsFaulted
                 ? $"Error: {t.Exception?.InnerException?.Message}"
                 : $"Result: {t.Result}";
+
+            // If the backend was unreachable at startup, MapVoices never ran and every mapped NPC
+            // still holds a stale/empty selectable list — so persisted voice keys can't resolve and
+            // generation warns "No voice assigned". A successful (re)connect must remap voices +
+            // refresh selectables; defer to the main thread (RefreshBackend touches the DB, the NPC
+            // lists, and fires VoicesMapped/UI events).
+            if (!t.IsFaulted)
+                _pendingRemapAfterConnect = true;
         });
     }
 
@@ -1322,17 +1394,16 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
     {
         if (Enum.TryParse<TTSBackends>(option, out var backend))
         {
-            _config.BackendSelection = backend;
-            _config.Save();
-            _backend.SetBackendType(backend);
+            // SwitchEngine flushes the queue, copies voices old→new, persists the selection, and
+            // reconnects the backend. No-op when already on that engine.
+            _voiceSync.SwitchEngine(backend);
         }
 
         if (_backendDropDown == null || _backendDropDown.IsCollapsed) return;
         try
         {
-            _backendDropDown.OptionListNode.SelectedOption = option;
-            if (_backendDropDown.LabelNode.Node != null)
-                _backendDropDown.LabelNode.String = option;
+            _backendDropDown.SelectedOption = option;
+            _backendDropDown.LabelNode.String = option;
             _backendDropDown.Collapse(false);
         }
         catch { /* ReattachNode may crash; dropdown state will recover on next open */ }
@@ -1350,21 +1421,12 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
         ItemSpacing = 4,
     };
 
-    private static CheckboxNode Check(string label, float width, bool initial, Action<bool> onChange) => new()
-    {
-        Size      = new Vector2(width, 24),
-        String    = label,
-        IsChecked = initial,
-        OnClick   = onChange,
-    };
-
     private static SliderNode Slider(float width, float initialValue, Action<float> onChange)
     {
         var node = new SliderNode
         {
             Size          = new Vector2(width, 20),
             Range         = 0..100,
-            DecimalPlaces = 2,
             Value         = (int)(initialValue * 100),
         };
         node.OnValueChanged = v => onChange(v / 100.0f);

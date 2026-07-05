@@ -223,6 +223,9 @@ public static class Loc
         ["Reload model"] = new() { { DE, "Modell neu laden" }, { FR, "Recharger le modèle" }, { JP, "モデルを再読み込み" } },
         ["Reload voices"] = new() { { DE, "Stimmen neu laden" }, { FR, "Recharger les voix" }, { JP, "ボイスを再読み込み" } },
         ["Alltalk base URL"] = new() { { DE, "Alltalk Basis-URL" }, { FR, "URL de base Alltalk" }, { JP, "Alltalk ベースURL" } },
+        ["EchokrauTTS base URL"] = new() { { DE, "EchokrauTTS Basis-URL" }, { FR, "URL de base EchokrauTTS" }, { JP, "EchokrauTTS ベースURL" } },
+        ["EchokrauTTS local instance"] = new() { { DE, "EchokrauTTS lokale Instanz" }, { FR, "Instance locale EchokrauTTS" }, { JP, "EchokrauTTS ローカルインスタンス" } },
+        ["EchokrauTTS remote connection"] = new() { { DE, "EchokrauTTS Remote-Verbindung" }, { FR, "Connexion distante EchokrauTTS" }, { JP, "EchokrauTTS リモート接続" } },
         ["Model name to reload"] = new() { { DE, "Modellname zum Neuladen" }, { FR, "Nom du modèle à recharger" }, { JP, "再読み込みするモデル名" } },
         ["Model to reload"] = new() { { DE, "Modellname zum Neuladen" }, { FR, "Nom du modèle à recharger" }, { JP, "再読み込みするモデル名" } },
         ["Local instance path:"] = new() { { DE, "Pfad der lokalen Instanz:" }, { FR, "Chemin de l'instance locale :" }, { JP, "ローカルインスタンスパス:" } },
@@ -353,6 +356,14 @@ public static class Loc
             { JP, "ローカルTTS\nGPUまたはCPUで実行 — 最高品質、約20GBのディスク容量が必要" },
         },
         ["Remote Server"] = new() { { DE, "Remote-Server" }, { FR, "Serveur distant" }, { JP, "リモートサーバー" } },
+        ["Choose your TTS engine:"] = new() { { DE, "Wähle deine TTS-Engine:" }, { FR, "Choisissez votre moteur TTS :" }, { JP, "TTSエンジンを選択：" } },
+        ["Engine"] = new() { { DE, "Engine" }, { FR, "Moteur" }, { JP, "エンジン" } },
+        ["Connect to a server running your chosen TTS engine (yours or someone else's)"] = new()
+        {
+            { DE, "Verbindung zu einem Server mit der gewählten TTS-Engine herstellen (eigener oder fremder)" },
+            { FR, "Connexion à un serveur exécutant le moteur TTS choisi (le vôtre ou celui d'un autre)" },
+            { JP, "選択したTTSエンジンを実行しているサーバーに接続（自分または他人のサーバー）" },
+        },
         ["Connect to a server running Alltalk (yours or someone else's)"] = new()
         {
             { DE, "Verbindung zu einem Server mit Alltalk herstellen (eigener oder fremder)" },

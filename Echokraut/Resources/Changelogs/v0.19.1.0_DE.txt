@@ -1,0 +1,63 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.1.0
+================================================================================
+
+
+==============================================================================
+NEUE HAUPTFUNKTIONEN
+==============================================================================
+
+[Backend] EchokrauTTS — eine neue lokale TTS-Engine neben AllTalk
+  Echokraut kann jetzt EchokrauTTS (eine eigenstaendige F5-TTS-Engine zum
+  Stimmen-Klonen) als Alternative zu AllTalk nutzen. EchokrauTTS ist bei
+  Neuinstallationen die Standard-Engine; bestehende Setups behalten ihre
+  bisherige AllTalk-Konfiguration. Du waehlst die Engine im Erst-Start-
+  Assistenten und unter Einstellungen -> Backend, installierst und startest sie
+  lokal oder verbindest dich mit einer Remote-Instanz. AllTalk und EchokrauTTS
+  liegen nebeneinander im selben Installationsordner, und beim Wechsel werden
+  deine Voices kopiert, sodass beide einsatzbereit bleiben.
+
+  - Lokales EchokrauTTS: die Engine auf dem eigenen Rechner installieren und
+    starten, unter Windows vollautomatisch (gleicher Ein-Klick-Ablauf wie beim
+    lokalen AllTalk).
+  - Remote-EchokrauTTS: Echokraut per URL mit einem laufenden EchokrauTTS-Server
+    verbinden (Einstellungen -> Backend), genau wie bei einem Remote-AllTalk.
+  - Engine-Wahl ueberall: AllTalk oder EchokrauTTS im Erst-Start-Assistenten
+    waehlen (Schritt 1 zeigt jetzt das Setup der gewaehlten Engine) und
+    jederzeit unter Einstellungen -> Backend umschalten.
+
+
+==============================================================================
+VERBESSERUNGEN
+==============================================================================
+
+[Spieldaten-Tools] Voice-Starterset schreibt jetzt einen Transkripttext je Sample
+  Zu jedem extrahierten Voice-Sample wird jetzt eine gleichnamige .txt-Datei mit
+  dem gesprochenen Text angelegt (z. B. Female_Hyur_Tataru.wav +
+  Female_Hyur_Tataru.txt). Damit ist das Starterset direkt fuer Voice-Training-
+  Tools nutzbar, die pro Clip ein Transkript erwarten.
+
+[Voice-Clip-Manager] Fluessigeres, absturzfreies Durchsuchen der NPCs
+  Die NPC-Liste nutzt jetzt einen virtualisierten Baum, der grosse Kataloge ohne
+  den gelegentlichen nativen Absturz scrollt. Die NPC-Aktionen (Alle ungespeicherten
+  generieren, Alle gespeicherten loeschen, Charakter bearbeiten) liegen jetzt oben
+  im Voice-Clip-Detailfenster, das sich beim Auswaehlen einer Kategorie oeffnet.
+
+
+==============================================================================
+FEHLERBEHEBUNGEN
+==============================================================================
+
+[Dialog] Stimmenwechsel in der Dialog-Leiste stuerzt nicht mehr ab
+  Das Wechseln der Stimme ueber das Dropdown im Dialogfenster (besonders zweimal
+  hintereinander) konnte das Spiel hart abstuerzen lassen. Das native UI-Toolkit
+  wurde aktualisiert und das Stimmen-Dropdown ueberarbeitet -- damit ist das weg.
+
+[Backend] NPCs blieben stumm, wenn das Backend beim Start offline war
+  War das TTS-Backend beim Laden des Plugins nicht erreichbar und du hast es
+  spaeter verbunden (z. B. ueber den Backend-Tab), schlug das Ansprechen eines
+  NPCs mit "No voice assigned" fehl, obwohl eine Stimme gesetzt war. Die
+  Sprachausgabe nutzt jetzt die zugewiesene Stimme direkt, und ein erfolgreicher
+  Verbindungstest frischt die Stimmenliste auf, sodass wieder alles passt -- ohne
+  Neustart.
