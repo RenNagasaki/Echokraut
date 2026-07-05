@@ -32,6 +32,7 @@ public sealed class EchokrauTtsInstanceService : IEchokrauTtsInstanceService, ID
     private readonly Configuration _config;
     private readonly IRemoteUrlService _remoteUrls;
     private readonly IClientState _clientState;
+    private readonly IVoiceSampleExtractorService _voiceExtract;
 
     public event Action? OnInstanceReady;
 
@@ -49,12 +50,13 @@ public sealed class EchokrauTtsInstanceService : IEchokrauTtsInstanceService, ID
     private volatile bool _instanceProcessIsRunning;
 
     public EchokrauTtsInstanceService(ILogService log, Configuration config, IRemoteUrlService remoteUrls,
-        IClientState clientState)
+        IClientState clientState, IVoiceSampleExtractorService voiceExtract)
     {
         _log = log ?? throw new ArgumentNullException(nameof(log));
         _config = config ?? throw new ArgumentNullException(nameof(config));
         _remoteUrls = remoteUrls ?? throw new ArgumentNullException(nameof(remoteUrls));
         _clientState = clientState ?? throw new ArgumentNullException(nameof(clientState));
+        _voiceExtract = voiceExtract ?? throw new ArgumentNullException(nameof(voiceExtract));
         IsWindows = Dalamud.Utility.Util.GetHostPlatform() == OSPlatform.Windows;
     }
 
@@ -133,6 +135,50 @@ public sealed class EchokrauTtsInstanceService : IEchokrauTtsInstanceService, ID
         }
     };
 
+    /// <summary>
+    /// Seed the EchokrauTTS voice starter set on a fresh local install — the same on-the-fly extract
+    /// from the user's own FFXIV audio that <see cref="AlltalkInstanceService"/> does, but targeting
+    /// EchokrauTTS's samples folder (<c>echokrautts/samples/</c>) instead of AllTalk's voices folder.
+    /// Non-fatal: the install still completes if it fails; the user can rebuild from the Game Data
+    /// Tools window. Extractor progress (0..1) maps onto the install bar's 0.50..0.95 band.
+    /// </summary>
+    private void ExtractStarterSet(EKEventId eventId)
+    {
+        var ekRoot = TtsPaths.EchokrauTtsRoot(_config.TtsInstallRoot);
+        var samplesDir = TtsPaths.EchokrauTtsSamples(_config.TtsInstallRoot);
+        _log.Info(nameof(ExtractStarterSet), $"Building voice starter set into {samplesDir}...", eventId);
+        CurrentInstallStatus = "Building voice samples...";
+        CurrentInstallProgress = 0.50f;
+
+        Action<string, int, int> onExtractProgress = (label, current, total) =>
+        {
+            var ratio = total > 0 ? Math.Clamp((float)current / total, 0f, 1f) : 0f;
+            CurrentInstallProgress = 0.50f + ratio * 0.45f;
+            if (!string.IsNullOrEmpty(label))
+                CurrentInstallStatus = $"Voice samples — {label} ({current}/{total})";
+        };
+        try
+        {
+            _voiceExtract.ProgressChanged += onExtractProgress;
+            using var extractCts = new CancellationTokenSource();
+            _voiceExtract.RunAsync(_clientState.ClientLanguage, samplesPerNpc: 1, extractCts.Token,
+                outputRootOverride: ekRoot, outputSubfolder: TtsPaths.EchokrauTtsSamplesFolder)
+                .GetAwaiter().GetResult();
+            _log.Info(nameof(ExtractStarterSet), "Voice starter set ready.", eventId);
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal: install still completes. User can re-run extract from Game Data Tools.
+            _log.Warning(nameof(ExtractStarterSet),
+                $"Voice starter-set extraction failed during install: {ex.Message}. " +
+                $"Run it manually from Game Data Tools later.", eventId);
+        }
+        finally
+        {
+            _voiceExtract.ProgressChanged -= onExtractProgress;
+        }
+    }
+
     private void MarkInstalled()
     {
         _config.EchokrauTts.LocalInstall = true;
@@ -180,7 +226,13 @@ public sealed class EchokrauTtsInstanceService : IEchokrauTtsInstanceService, ID
                 return;
             }
 
-            if (download) MarkInstalled();
+            if (download)
+            {
+                // Fresh install: seed the voice starter set into echokrautts/samples (mirror of
+                // AllTalk's install-time extract) before marking complete.
+                ExtractStarterSet(eventId);
+                MarkInstalled();
+            }
 
             InstanceRunning = true;
             _log.Info(nameof(RunInstance), "EchokrauTTS instance ready", eventId);

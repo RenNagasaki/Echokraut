@@ -62,6 +62,12 @@ FEHLERBEHEBUNGEN
   Verbindungstest frischt die Stimmenliste auf, sodass wieder alles passt -- ohne
   Neustart.
 
+[Backend] Lokale EchokrauTTS-Installation legt jetzt das Voice-Starterset an
+  Eine frische lokale EchokrauTTS-Installation extrahiert jetzt ein Voice-
+  Starterset aus deinem eigenen FFXIV-Audio in ihren samples-Ordner -- gleiche
+  Ein-Klick-Funktion wie beim lokalen AllTalk. Vorher blieb der Ordner leer und
+  du musstest die Extraktion manuell ueber die Spieldaten-Tools starten.
+
 [Start] Plugin laedt nicht mehr fehl, wenn der Assistent beim Start aufgeht
   Bei einer Neuinstallation (oder immer wenn der Erst-Start-Assistent bzw. das
   Changelog-Popup nach einem Update beim Start aufging) wurde das Fenster nicht

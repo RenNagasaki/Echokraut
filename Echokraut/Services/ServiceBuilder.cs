@@ -141,7 +141,8 @@ public static class ServiceBuilder
             c.GetService<ILogService>(),
             configuration,
             c.GetService<IRemoteUrlService>(),
-            clientState));
+            clientState,
+            c.GetService<IVoiceSampleExtractorService>()));
 
         container.RegisterFactory<IBackendService>(c => new BackendService(
             c.GetService<IVoiceMessageQueue>(),

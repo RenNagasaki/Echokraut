@@ -59,6 +59,12 @@ BUG FIXES
   voice directly, and a successful connection test refreshes the voice list so
   everything lines up again without a restart.
 
+[Backend] Local EchokrauTTS install now seeds the voice starter set
+  A fresh local EchokrauTTS install now extracts a voice starter set from your own
+  FFXIV audio into its samples folder — the same one-click behavior as local
+  AllTalk. Previously the folder was left empty and you had to run the extract
+  manually from Game Data Tools.
+
 [Startup] Plugin no longer fails to load when the setup wizard opens at launch
   On a fresh install (or whenever the First-Time wizard or the post-update
   changelog popup opened during startup) the window was created off the main
