@@ -58,3 +58,9 @@ BUG FIXES
   assigned" even though a voice was set. Voice generation now uses the assigned
   voice directly, and a successful connection test refreshes the voice list so
   everything lines up again without a restart.
+
+[Startup] Plugin no longer fails to load when the setup wizard opens at launch
+  On a fresh install (or whenever the First-Time wizard or the post-update
+  changelog popup opened during startup) the window was created off the main
+  thread, which could make the plugin fail to load with a "Not on main thread"
+  error. Startup windows now open on the correct thread.

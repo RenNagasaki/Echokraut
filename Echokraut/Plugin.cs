@@ -139,7 +139,10 @@ public partial class Plugin : IDalamudPlugin
         _pluginInterface.UiBuilder.OpenMainUi += _commands.ToggleVoiceClipManagerUi;
         _clientState.Login += OnLogin;
 
-        HandleStartup();
+        // The plugin ctor runs off the main thread; HandleStartup opens native windows
+        // (First-Time wizard / changelog), which KamiToolKit requires to happen on the
+        // framework thread ("Not on main thread!" otherwise → plugin fails to load).
+        _framework.RunOnFrameworkThread(HandleStartup);
 
         _log.Info(nameof(Plugin), "Echokraut initialized", new EKEventId(0, TextSource.None));
     }

@@ -61,3 +61,9 @@ FEHLERBEHEBUNGEN
   Sprachausgabe nutzt jetzt die zugewiesene Stimme direkt, und ein erfolgreicher
   Verbindungstest frischt die Stimmenliste auf, sodass wieder alles passt -- ohne
   Neustart.
+
+[Start] Plugin laedt nicht mehr fehl, wenn der Assistent beim Start aufgeht
+  Bei einer Neuinstallation (oder immer wenn der Erst-Start-Assistent bzw. das
+  Changelog-Popup nach einem Update beim Start aufging) wurde das Fenster nicht
+  im Haupt-Thread erzeugt, wodurch das Plugin mit „Not on main thread" gar nicht
+  laden konnte. Start-Fenster oeffnen jetzt im richtigen Thread.
