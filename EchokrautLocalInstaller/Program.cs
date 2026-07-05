@@ -105,6 +105,11 @@ public class Program
 
     public static void Main(string[] args)
     {
+        // The Python wrapper bootstrap emits UTF-8 NDJSON (German text + symbols like … → ä).
+        // Force the console to UTF-8 so our own log output renders correctly instead of CP850
+        // mojibake (child-process stdout is decoded as UTF-8 via StandardOutputEncoding below).
+        try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch { /* no console attached */ }
+
         try
         {
             using var client = new NamedPipeClientStream(".", "EchokrautLocalInstaller", PipeDirection.Out);
@@ -552,6 +557,9 @@ public class Program
             {
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
+                // Python emits UTF-8; decode it as such so … → ä survive instead of CP850 mojibake.
+                StandardOutputEncoding = System.Text.Encoding.UTF8,
+                StandardErrorEncoding = System.Text.Encoding.UTF8,
                 UseShellExecute = false,
                 CreateNoWindow = true,
                 WorkingDirectory = wrapperFolder,
@@ -582,7 +590,9 @@ public class Program
 
             InstanceProcess.StartInfo = processInfo;
             InstanceProcess.OutputDataReceived += (_, e) => HandleEchokrauTtsNdjson(e.Data);
-            InstanceProcess.ErrorDataReceived += (_, e) => { if (!string.IsNullOrEmpty(e.Data)) Log(CleanAnsi(e.Data), ConsoleColor.Red); };
+            // tqdm/pip write progress + info to stderr — that's not an error, so log it neutrally
+            // (not red). Real failures surface via the NDJSON 'error' event on stdout, logged red there.
+            InstanceProcess.ErrorDataReceived += (_, e) => { if (!string.IsNullOrEmpty(e.Data)) Log(CleanAnsi(e.Data)); };
             InstanceProcess.Start();
             InstanceProcessIsRunning = true;
             InstanceProcess.BeginOutputReadLine();
