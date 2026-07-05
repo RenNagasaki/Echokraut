@@ -14,6 +14,17 @@ public class RemoteUrlsData
     [JsonPropertyName("installerUrl")]
     public string InstallerUrl { get; set; } = string.Empty;
 
+    /// <summary>Expected EchokrautLocalInstaller release tag. When it differs from
+    /// <c>Configuration.InstalledInstallerVersion</c>, the cached installer is re-downloaded even if
+    /// the exe already exists — so users get a newer installer that understands new arg modes
+    /// (BLK-5). Empty disables the version check (download only when the exe is missing).</summary>
+    [JsonPropertyName("installerVersion")]
+    public string InstallerVersion { get; set; } = string.Empty;
+
+    /// <summary>Download URL for the EchokrauTTS wrapper zip (extracted to {root}\echokrautts).</summary>
+    [JsonPropertyName("echokrauTtsUrl")]
+    public string EchokrauTtsUrl { get; set; } = string.Empty;
+
     [JsonPropertyName("voicesUrl")]
     public string VoicesUrl { get; set; } = string.Empty;
 

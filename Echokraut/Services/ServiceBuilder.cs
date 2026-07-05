@@ -137,15 +137,27 @@ public static class ServiceBuilder
             clientState,
             c.GetService<IVoiceSampleExtractorService>()));
 
+        container.RegisterFactory<IEchokrauTtsInstanceService>(c => new EchokrauTtsInstanceService(
+            c.GetService<ILogService>(),
+            configuration,
+            c.GetService<IRemoteUrlService>(),
+            clientState));
+
         container.RegisterFactory<IBackendService>(c => new BackendService(
             c.GetService<IVoiceMessageQueue>(),
             c.GetService<ILogService>(),
             configuration,
             c.GetService<IAlltalkInstanceService>(),
+            c.GetService<IEchokrauTtsInstanceService>(),
             c.GetService<INpcDataService>(),
             c.GetService<IAudioFileService>(),
             c.GetService<IDatabaseService>(),
             c.GetService<IAudioPlaybackService>()));
+
+        container.RegisterFactory<ITtsVoiceSyncService>(c => new TtsVoiceSyncService(
+            configuration,
+            c.GetService<ILogService>(),
+            c.GetService<IBackendService>()));
 
         container.RegisterFactory<IVoiceClipManagerService>(c => new VoiceClipManagerService(
             c.GetService<IDatabaseService>(),

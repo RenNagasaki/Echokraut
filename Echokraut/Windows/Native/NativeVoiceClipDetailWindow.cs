@@ -52,6 +52,9 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
     private string _npcKey = "";
     private int _characterId;
     private bool _needsRebuild;
+    // Per-NPC "Edit Character" action supplied by the manager window (it owns the edit popup).
+    // Null when opened without an editable character; the button is a no-op in that case.
+    private Action? _onEditCharacter;
 
     // None-mode hard-disable snapshot — flips IsEnabled on every Generate button when
     // HasLiveGeneration changes (CLAUDE.md: NodeFlags toggles every frame can crash).
@@ -175,17 +178,36 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         });
         btnRow.AddNode(_genToggleButton);
 
-        // Progress bar inline on button row
-        var barOffset = 268f;
-        var barWidth = size.X - barOffset - 34;
-        _progressBar = new StatusProgressBar
+        // Delete all locally saved audio for the currently shown group.
+        btnRow.AddNode(Button(Loc.S("Delete All Saved"), 140, () =>
         {
-            Position = new Vector2(barOffset, 2),
-            Size = new Vector2(barWidth, 28),
-        };
-        _progressBar.AttachNode(btnRow);
+            if (_voiceClipManager.IsGenerating) return;
+            // Defer to next frame — deletion triggers a panel rebuild (ATK use-after-free otherwise).
+            _pendingAction = () =>
+            {
+                _audioPlayback.ClearQueue(TextSource.VoiceTest);
+                _voiceClipManager.DeleteAllSaved(_voiceClips);
+                _audioExistsCache.Clear();
+                _savedCountDirty = true;
+                _needsRebuild = true;
+            };
+        }));
+
+        // Edit the underlying character (Race/Gender/Voice). The manager window owns the edit
+        // popup and supplies the callback via ShowVoiceClips; a no-op when none was provided.
+        btnRow.AddNode(Button(Loc.S("Edit Character"), 130, () => _onEditCharacter?.Invoke()));
 
         AddNode(btnRow);
+
+        // Progress bar on its own row below the action buttons (kept off the button row so
+        // localized button widths can never overlap it).
+        var progRowY = btnY + 30;
+        _progressBar = new StatusProgressBar
+        {
+            Position = new Vector2(pos.X, progRowY),
+            Size = new Vector2(size.X - 34, 28),
+        };
+        AddNode(_progressBar);
 
         // Circle buttons: play (28px) + regenerate (28px) in a group with 2px spacing
         _colPlay = 58f; // 28 + 2 + 28
@@ -205,8 +227,8 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
         _colText = hw - _colPlay - _colSource - ColTimestamp - 3 * 4;
         if (_colText < 80) _colText = 80;
 
-        // Column headers
-        var headerY = btnY + 30;
+        // Column headers (below the action-button row + the progress-bar row)
+        var headerY = progRowY + 30;
         var headers = new HorizontalListNode
         {
             Position = new Vector2(pos.X, headerY),
@@ -304,7 +326,7 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
             // "Generate All Unsaved" button + every per-clip Generate/Regenerate icon,
             // plus the Play icon for unsaved clips (Play of an unsaved clip auto-generates).
             // Saved Play stays bright — the file already exists, no backend call needed.
-            var liveGen = _config.Alltalk.HasLiveGeneration;
+            var liveGen = _config.HasLiveGeneration;
             var lockedOut = isGen || !liveGen;
             var liveGenChanged = _liveGenSnapshot != liveGen;
 
@@ -395,8 +417,9 @@ public sealed unsafe class NativeVoiceClipDetailWindow : NativeAddon
             .ToList();
     }
 
-    public void ShowVoiceClips(string title, List<VoiceClipEntity> voiceClips, string npcKey)
+    public void ShowVoiceClips(string title, List<VoiceClipEntity> voiceClips, string npcKey, Action? onEditCharacter = null)
     {
+        _onEditCharacter = onEditCharacter;
         _voiceClips = voiceClips
             .OrderBy(vc => vc.TextSource)
             .ThenBy(vc => vc.Timestamp)

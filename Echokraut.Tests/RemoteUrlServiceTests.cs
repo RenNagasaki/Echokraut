@@ -111,6 +111,41 @@ public class RemoteUrlServiceTests
     }
 
     [Fact]
+    public void FetchUrls_Success_PreservesInstallerVersionAndEchokrauTtsUrl()
+    {
+        // Regression: MergeWithFallback previously dropped these two new fields, so a successful
+        // remote fetch always left them empty — blocking local install + the BLK-5 version handshake.
+        var json = MakeValidJson(d =>
+        {
+            d.InstallerVersion = "ELI-1.1.0.0";
+            d.EchokrauTtsUrl = "https://example.com/echokrautts.zip";
+        });
+        using var http = MakeHttpClient(HttpStatusCode.OK, json);
+
+        var service = new RemoteUrlService(_logMock.Object, http);
+
+        Assert.Equal("ELI-1.1.0.0", service.Urls.InstallerVersion);
+        Assert.Equal("https://example.com/echokrautts.zip", service.Urls.EchokrauTtsUrl);
+    }
+
+    [Fact]
+    public void FetchUrls_EmptyInstallerVersionAndEchokrauTtsUrl_FallBackForThoseFields()
+    {
+        var json = MakeValidJson(d =>
+        {
+            d.InstallerVersion = "";
+            d.EchokrauTtsUrl = "";
+        });
+        using var http = MakeHttpClient(HttpStatusCode.OK, json);
+
+        var service = new RemoteUrlService(_logMock.Object, http);
+        var fallback = MakeFallback();
+
+        Assert.Equal(fallback.InstallerVersion, service.Urls.InstallerVersion);
+        Assert.Equal(fallback.EchokrauTtsUrl, service.Urls.EchokrauTtsUrl);
+    }
+
+    [Fact]
     public void FetchUrls_UnexpectedVersion_ReturnsFallbackValues()
     {
         var json = MakeValidJson(d => d.Version = 999);

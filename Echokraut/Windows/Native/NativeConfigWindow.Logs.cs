@@ -94,7 +94,7 @@ public sealed unsafe partial class NativeConfigWindow
                 });
         }
 
-        _logsTabsLiveGenSnapshot = _config.Alltalk.HasLiveGeneration;
+        _logsTabsLiveGenSnapshot = _config.HasLiveGeneration;
         BuildLogsTabs(_logsTabsLiveGenSnapshot.Value);
 
         _log.LogUpdated += OnLogUpdated;

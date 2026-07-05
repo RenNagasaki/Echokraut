@@ -8,6 +8,7 @@ namespace Echokraut.Enums
 {
     public enum TTSBackends
     {
-        Alltalk
+        Alltalk,
+        EchokrauTTS
     }
 }

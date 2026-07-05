@@ -356,7 +356,7 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
                 ct.ThrowIfCancellationRequested();
                 var path = VoiceExtractFileNames.GetNamedTargetPath(
                     outputRoot, gender, race, bodyType, locName, i + 1, picked.Count, outputSubfolder);
-                WriteWavToFile(resampledBytes[i], path, eventId);
+                WriteSampleAndTranscript(resampledBytes[i], path, picked[i].Candidate, gender, eventId);
                 totalClipsWritten++;
             }
 
@@ -371,7 +371,7 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
                     ct.ThrowIfCancellationRequested();
                     var path = VoiceExtractFileNames.GetCatalogTargetPath(
                         outputRoot, gender, race, bodyType, catalogId, i + 1, picked.Count, outputSubfolder);
-                    WriteWavToFile(resampledBytes[i], path, eventId);
+                    WriteSampleAndTranscript(resampledBytes[i], path, picked[i].Candidate, gender, eventId);
                     totalClipsWritten++;
                 }
             }
@@ -426,7 +426,7 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
                 var path = VoiceExtractFileNames.GetNamedTargetPath(
                     target.OutputRoot, target.Gender, target.Race, target.BodyType, target.LocName,
                     i + 1, picked.Count, target.OutputSubfolder, epoch);
-                WriteWavToFile(bytes, path, eventId);
+                WriteSampleAndTranscript(bytes, path, picked[i].Candidate, target.Gender, eventId);
                 written++;
             }
         }
@@ -611,6 +611,45 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
             _log.Warning(nameof(WriteWavToFile), $"Failed to write {path}: {ex.Message}", eventId);
         }
     }
+
+    /// <summary>
+    /// Write a resampled sample to <paramref name="wavPath"/> plus a sidecar <c>.txt</c> next to
+    /// it holding the spoken line (gender-appropriate variant). Single write point for all three
+    /// output paths (named, catalog, split) so the WAV and its transcript never diverge.
+    /// </summary>
+    private void WriteSampleAndTranscript(
+        byte[] wavBytes, string wavPath, VoiceClipCandidate candidate, string gender, EKEventId eventId)
+    {
+        WriteWavToFile(wavBytes, wavPath, eventId);
+        WriteTranscript(wavPath, SampleTranscript(candidate.MaleText, candidate.FemaleText, gender), eventId);
+    }
+
+    private void WriteTranscript(string wavPath, string text, EKEventId eventId)
+    {
+        if (string.IsNullOrWhiteSpace(text)) return;
+        var path = VoiceExtractFileNames.GetTranscriptPath(wavPath);
+        try
+        {
+            var dir = Path.GetDirectoryName(path);
+            if (!string.IsNullOrEmpty(dir) && !Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+            File.WriteAllText(path, text);
+        }
+        catch (Exception ex)
+        {
+            _log.Warning(nameof(WriteTranscript), $"Failed to write transcript {path}: {ex.Message}", eventId);
+        }
+    }
+
+    /// <summary>
+    /// Pick the transcript that matches the sample's gendered audio: the female variant for
+    /// female NPCs when present (gender-branch dialog produces two cleaned variants), otherwise
+    /// the male/default text. Trimmed; never null.
+    /// </summary>
+    internal static string SampleTranscript(string maleText, string? femaleText, string gender) =>
+        string.Equals(gender, "Female", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(femaleText)
+            ? femaleText!.Trim()
+            : (maleText ?? string.Empty).Trim();
 
     // ── Voice-extract aliases: embedded ← remote ← user-local (last wins) ────
     /// <summary>

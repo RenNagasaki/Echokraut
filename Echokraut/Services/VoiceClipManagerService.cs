@@ -228,7 +228,7 @@ public class VoiceClipManagerService : IVoiceClipManagerService
 
         // None-mode short-circuit — also guards against the (slightly costly) EnsureFittingVoice
         // call below. BackendService.GenerateVoice has its own gate as defense in depth.
-        if (!_config.Alltalk.HasLiveGeneration)
+        if (!_config.HasLiveGeneration)
         {
             _log.Debug(nameof(GenerateForVoiceClip), $"Skipping generation for clip {voiceClip.Id}: live generation disabled (InstanceType=None)", eventId);
             return false;

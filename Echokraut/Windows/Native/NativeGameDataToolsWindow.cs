@@ -40,7 +40,7 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
     private CancellationTokenSource? _harvestCts;
     private TextInputNode? _debugQuestIdInput;
     private TextButtonNode? _debugExportButton;
-    private TextDropDownNode? _questTypeDropDown;
+    private StringDropDownNode? _questTypeDropDown;
     private string[]? _questTypeLabels;
     // Maps dropdown index → questTypeFilter passed to RunAsync.
     //   index 0 (All)      → null  (everything)
@@ -172,15 +172,14 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
             Loc.S("Unlock / Class Quest"), Loc.S("Beast Tribe"),
             Loc.S("Repeatable"), Loc.S("Seasonal Event"), Loc.S("Non-Quest Dialog")
         };
-        _questTypeDropDown = new TextDropDownNode
+        _questTypeDropDown = new StringDropDownNode
         {
             Size = new Vector2(180, 28),
-            Options = [],
+            MaxListOptions = 8,
+            Options = new System.Collections.Generic.List<string>(_questTypeLabels),
         };
-        _questTypeDropDown.OptionListNode.Options = new System.Collections.Generic.List<string>(_questTypeLabels);
-        _questTypeDropDown.OptionListNode.SelectedOption = _questTypeLabels[0];
-        if (_questTypeDropDown.LabelNode.Node != null)
-            _questTypeDropDown.LabelNode.String = _questTypeLabels[0];
+        _questTypeDropDown.SelectedOption = _questTypeLabels[0];
+        _questTypeDropDown.LabelNode.String = _questTypeLabels[0];
         _questTypeDropDown.OnOptionSelected = selected => _pendingQuestTypeSelection = Array.IndexOf(_questTypeLabels, selected);
 
         var harvestRow = new HorizontalListNode { Size = new Vector2(w, 28), ItemSpacing = 6 };
@@ -205,7 +204,6 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
             Size = new Vector2(w - 260, 22),
             Range = 1..5,
             Value = defaultSamples,
-            DecimalPlaces = 0,
         };
         // Combined label that shows what the slider does + what's currently selected.
         // Updated in OnValueChanged so the count stays in sync with the slider thumb.
@@ -511,9 +509,9 @@ public sealed unsafe class NativeGameDataToolsWindow : NativeAddon
         string? overrideRoot = null;
         string subfolder = "FF14-Voices";
         if (_config.Alltalk.InstanceType == AlltalkInstanceType.Local
-            && !string.IsNullOrWhiteSpace(_config.Alltalk.LocalInstallPath))
+            && !string.IsNullOrWhiteSpace(_config.TtsInstallRoot))
         {
-            overrideRoot = System.IO.Path.Combine(_config.Alltalk.LocalInstallPath, "alltalk_tts");
+            overrideRoot = Echokraut.Helper.Functional.TtsPaths.AllTalkRoot(_config.TtsInstallRoot);
             subfolder = "voices";
         }
 

@@ -2,7 +2,7 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
 
   <PropertyGroup>
-    <Version>0.19.0.1</Version>
+    <Version>0.19.1.0</Version>
     <Description>A TTS Dalamud Plugin that breaks the silence! For self hosted TTS Services.</Description>
     <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
@@ -91,6 +91,8 @@
     <EmbeddedResource Include="Resources\Changelogs\v0.19.0.0_DE.txt" />
     <EmbeddedResource Include="Resources\Changelogs\v0.19.0.1_EN.txt" />
     <EmbeddedResource Include="Resources\Changelogs\v0.19.0.1_DE.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.1.0_EN.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.1.0_DE.txt" />
   </ItemGroup>
 
   <ItemGroup>

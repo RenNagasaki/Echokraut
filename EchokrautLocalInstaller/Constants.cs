@@ -1,6 +1,8 @@
 public static class Constants
 {
     public const string ALLTALKFOLDERNAME = "alltalk_tts";
+    public const string ECHOKRAUTTSFOLDERNAME = "echokrautts";
+    public const string ECHOKRAUTTSREADYFILE = "Ready.EchokrauTTS.txt";
 
     public const string MSBUILDTOOLSMSVC = "Microsoft.VisualStudio.Component.VC.Tools.x86.x64";
     public const string MSBUILDTOOLSWIN10SDK = "Microsoft.VisualStudio.Component.Windows10SDK.19041";

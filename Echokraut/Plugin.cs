@@ -38,6 +38,7 @@ public partial class Plugin : IDalamudPlugin
     private readonly IBackendService _backend;
     private readonly IGoogleDriveSyncService _googleDrive;
     private readonly IAlltalkInstanceService _alltalkInstance;
+    private readonly IEchokrauTtsInstanceService _echokrauTtsInstance;
     private readonly ICommandService _commands;
 
     // Camera pointer (unsafe, stays in Plugin)
@@ -110,6 +111,7 @@ public partial class Plugin : IDalamudPlugin
         _backend        = _services.GetService<IBackendService>();
         _googleDrive    = _services.GetService<IGoogleDriveSyncService>();
         _alltalkInstance = _services.GetService<IAlltalkInstanceService>();
+        _echokrauTtsInstance = _services.GetService<IEchokrauTtsInstanceService>();
         _commands       = _services.GetService<ICommandService>();
 
         var npcData = _services.GetService<INpcDataService>();
@@ -174,12 +176,11 @@ public partial class Plugin : IDalamudPlugin
         }
 
         if (!_configuration.FirstTime && _clientState.IsLoggedIn
-            && _configuration.Alltalk.LocalInstall
-            && _configuration.Alltalk.InstanceType == Echokraut.Enums.AlltalkInstanceType.Local
-            && _configuration.Alltalk.AutoStartLocalInstance)
+            && ActiveEngineLocalInstall()
+            && _configuration.ActiveInstanceType == Echokraut.Enums.AlltalkInstanceType.Local
+            && ActiveEngineAutoStart())
         {
-            _alltalkInstance.StartInstance();
-            _backend.RefreshBackend();
+            StartActiveEngineInstance();
         }
 
         if (_configuration.GoogleDriveDownloadPeriodically)
@@ -236,6 +237,32 @@ public partial class Plugin : IDalamudPlugin
         }
     }
 
+    // ── Active-engine auto-start helpers (route by BackendSelection) ──────────
+    // Single source of truth for "which engine is active" so the four accessors below don't each
+    // repeat the BackendSelection comparison.
+    private bool IsActiveEngineEchokrauTts =>
+        _configuration.BackendSelection == Echokraut.Enums.TTSBackends.EchokrauTTS;
+
+    private bool ActiveEngineLocalInstall() =>
+        IsActiveEngineEchokrauTts ? _configuration.EchokrauTts.LocalInstall : _configuration.Alltalk.LocalInstall;
+
+    private bool ActiveEngineAutoStart() =>
+        IsActiveEngineEchokrauTts ? _configuration.EchokrauTts.AutoStartLocalInstance : _configuration.Alltalk.AutoStartLocalInstance;
+
+    private bool ActiveEngineRunningOrStarting() =>
+        IsActiveEngineEchokrauTts
+            ? (_echokrauTtsInstance.InstanceRunning || _echokrauTtsInstance.InstanceStarting)
+            : (_alltalkInstance.InstanceRunning || _alltalkInstance.InstanceStarting);
+
+    private void StartActiveEngineInstance()
+    {
+        if (IsActiveEngineEchokrauTts)
+            _echokrauTtsInstance.StartInstance();
+        else
+            _alltalkInstance.StartInstance();
+        _backend.RefreshBackend();
+    }
+
     private void StartPlayerEnrichment()
     {
         try
@@ -271,13 +298,11 @@ public partial class Plugin : IDalamudPlugin
             }
 
             if (!_configuration.FirstTime
-                && _configuration.Alltalk.LocalInstall
-                && _configuration.Alltalk.InstanceType == Echokraut.Enums.AlltalkInstanceType.Local
-                && !_alltalkInstance.InstanceRunning
-                && !_alltalkInstance.InstanceStarting)
+                && ActiveEngineLocalInstall()
+                && _configuration.ActiveInstanceType == Echokraut.Enums.AlltalkInstanceType.Local
+                && !ActiveEngineRunningOrStarting())
             {
-                _alltalkInstance.StartInstance();
-                _backend.RefreshBackend();
+                StartActiveEngineInstance();
             }
 
             // Lodestone enrichment runs once per session — HomeWorld is now available.
