@@ -1305,7 +1305,7 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             _noneSectionContent, () => _noneExpanded, v => _noneExpanded = v);
 
         // EchokrauTTS engine sections (parallel to AllTalk; shown when EchokrauTTS is selected).
-        _ekLocalNodes = NativeEchokrauTtsBuilder.BuildLocalInstance(w, _config, _echokrauTtsInstance);
+        _ekLocalNodes = NativeEchokrauTtsBuilder.BuildLocalInstance(w, _config, _echokrauTtsInstance, _alltalkInstance.IsCudaInstalled);
         _ekRemoteNodes = NativeEchokrauTtsBuilder.BuildRemoteInstance(w, _config);
         _ekRemoteNodes.TestConnectionButton.OnClick = () => TestConnection();
 

@@ -47,6 +47,17 @@ namespace Echokraut.DataClasses
         /// <summary>The lower-cased wrapper arg value for <see cref="TtsBackend"/> (<c>xtts</c>/<c>f5</c>).</summary>
         public string TtsBackendArg => TtsBackend.ToString().ToLowerInvariant();
 
+        /// <summary>
+        /// Load the XTTS model in half precision (fp16) on the LOCAL wrapper for a ~1.3–1.8x inference
+        /// speedup. Passed as <c>--xtts-fp16</c>. Only takes effect with the XTTS engine on a CUDA/ROCm
+        /// GPU (the wrapper ignores it for F5 / on CPU). Default off. Changing it restarts the local
+        /// instance (the model is loaded with the chosen precision at startup).
+        /// </summary>
+        public bool XttsFp16 { get; set; } = false;
+
+        /// <summary>The wrapper arg value for <see cref="XttsFp16"/> (<c>true</c>/<c>false</c>).</summary>
+        public string XttsFp16Arg => XttsFp16 ? "true" : "false";
+
         // NOTE: no CpuMode in v1 — the wrapper auto-detects GPU/CPU (gpu_detect.py) and exposes no
         // CPU override. A force-CPU option is a tracked TODO (needs a wrapper-side flag + checkbox).
 

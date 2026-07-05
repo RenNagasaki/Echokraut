@@ -265,7 +265,7 @@ public sealed unsafe class NativeFirstTimeWindow : NativeAddon
         foreach (var n in _remoteAllNodes) list.AddNode(n);
 
         // EchokrauTTS local + remote instance (shown when BackendSelection == EchokrauTTS)
-        _ekLocalNodes = NativeEchokrauTtsBuilder.BuildLocalInstance(w, _config, _echokrauTtsInstance);
+        _ekLocalNodes = NativeEchokrauTtsBuilder.BuildLocalInstance(w, _config, _echokrauTtsInstance, _alltalkInstance.IsCudaInstalled);
         _ekLocalAllNodes = _ekLocalNodes.AllNodes;
         foreach (var n in _ekLocalAllNodes) list.AddNode(n);
 

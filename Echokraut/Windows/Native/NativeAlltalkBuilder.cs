@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Numerics;
+using System.Threading.Tasks;
 using Echokraut.DataClasses;
 using Echotools.Logging.DataClasses;
 using Echokraut.Enums;
@@ -163,8 +164,10 @@ public static class NativeAlltalkBuilder
             v => { config.Alltalk.CustomVoicesUrl = v; config.Save(); });
 
         // Install only custom data
+        // Install/Stop run blocking I/O (shutdown POST + process kill / long install work); run off
+        // the UI thread so the game doesn't freeze. State surfaces via the per-frame Update().
         nodes.InstallCustomDataButton = Button(Loc.S("Install only custom data"), 170, () =>
-            alltalkInstance.InstallCustomData(new EKEventId(0, TextSource.Backend), false));
+            Task.Run(() => alltalkInstance.InstallCustomData(new EKEventId(0, TextSource.Backend), false)));
         nodes.InstallCustomDataRow = new HorizontalListNode { Size = new Vector2(width, 26), ItemSpacing = 4 };
         nodes.InstallCustomDataRow.AddNode(nodes.InstallCustomDataButton);
 
@@ -181,11 +184,12 @@ public static class NativeAlltalkBuilder
 
         // Install/Reinstall — size to fit longest dynamic label
         nodes.InstallButton = Button(config.Alltalk.LocalInstall ? Loc.S("Reinstall") : Loc.S("Install"), 100, () =>
-        {
-            if (alltalkInstance.InstanceRunning || alltalkInstance.InstanceStarting)
-                alltalkInstance.StopInstance(new EKEventId(0, TextSource.Backend));
-            alltalkInstance.Install();
-        });
+            Task.Run(() =>
+            {
+                if (alltalkInstance.InstanceRunning || alltalkInstance.InstanceStarting)
+                    alltalkInstance.StopInstance(new EKEventId(0, TextSource.Backend));
+                alltalkInstance.Install();
+            }));
         var installMaxW = new[] { Loc.S("Install"), Loc.S("Reinstall"), Loc.S("Installing...") }
             .Max(s => nodes.InstallButton.LabelNode.GetTextDrawSize(s).X) + 36;
         if (installMaxW > nodes.InstallButton.Width)
@@ -194,12 +198,12 @@ public static class NativeAlltalkBuilder
         nodes.InstallRow.AddNode(nodes.InstallButton);
 
         // Start/Stop row — size Start to fit longest dynamic label
-        nodes.StartButton = Button(Loc.S("Start"), 80, () => alltalkInstance.StartInstance());
+        nodes.StartButton = Button(Loc.S("Start"), 80, () => Task.Run(() => alltalkInstance.StartInstance()));
         var startMaxW = new[] { Loc.S("Start"), Loc.S("Starting..."), Loc.S("Running") }
             .Max(s => nodes.StartButton.LabelNode.GetTextDrawSize(s).X) + 36;
         if (startMaxW > nodes.StartButton.Width)
             nodes.StartButton.Size = new Vector2(startMaxW, 24);
-        nodes.StopButton = Button(Loc.S("Stop"), 80, () => alltalkInstance.StopInstance(new EKEventId(0, TextSource.Backend)));
+        nodes.StopButton = Button(Loc.S("Stop"), 80, () => Task.Run(() => alltalkInstance.StopInstance(new EKEventId(0, TextSource.Backend))));
         nodes.StartStopRow = new HorizontalListNode { Size = new Vector2(width, 26), ItemSpacing = 4 };
         nodes.StartStopRow.AddNode(nodes.StartButton);
         nodes.StartStopRow.AddNode(nodes.StopButton);

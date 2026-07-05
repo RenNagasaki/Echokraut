@@ -61,6 +61,8 @@ public class ConfigurationActiveEngineTests
         Assert.False(d.HasLiveGeneration);
         Assert.Equal(EchokrauTtsEngine.XTTS, d.TtsBackend); // default: better quality
         Assert.Equal("xtts", d.TtsBackendArg);
+        Assert.False(d.XttsFp16); // default off
+        Assert.Equal("false", d.XttsFp16Arg);
     }
 
     [Theory]
@@ -70,6 +72,15 @@ public class ConfigurationActiveEngineTests
     {
         var d = new EchokrauTtsData { TtsBackend = engine };
         Assert.Equal(expectedArg, d.TtsBackendArg);
+    }
+
+    [Theory]
+    [InlineData(true, "true")]
+    [InlineData(false, "false")]
+    public void XttsFp16Arg_IsLowerCaseBoolString(bool enabled, string expectedArg)
+    {
+        var d = new EchokrauTtsData { XttsFp16 = enabled };
+        Assert.Equal(expectedArg, d.XttsFp16Arg);
     }
 
     // ── BackendSelection default-flip migration ──────────────────────────────

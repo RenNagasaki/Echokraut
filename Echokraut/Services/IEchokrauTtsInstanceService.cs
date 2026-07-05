@@ -36,4 +36,11 @@ public interface IEchokrauTtsInstanceService
     /// engine is unchanged.
     /// </summary>
     void SwitchTtsBackend(EchokrauTtsEngine engine);
+
+    /// <summary>
+    /// Toggle XTTS fp16 (half-precision) on the local wrapper. Persists the choice; restarts a
+    /// running/starting local instance so the model reloads with the new precision. No-op when
+    /// unchanged. Only has an effect with the XTTS engine on a CUDA/ROCm GPU.
+    /// </summary>
+    void SetXttsFp16(bool enabled);
 }

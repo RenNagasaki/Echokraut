@@ -38,6 +38,12 @@ VERBESSERUNGEN
   Einstellungen -> Backend. Beide Engines sind installiert, ein Wechsel startet
   nur die lokale Instanz neu (keine Neuinstallation).
 
+[Backend] Optionaler FP16-Speedup fuer lokales EchokrauTTS (XTTS auf NVIDIA-GPUs)
+  Wird eine GPU erkannt, zeigen Einstellungen -> Backend (und der Erst-Start-
+  Assistent) eine FP16-Checkbox fuer lokales EchokrauTTS. Aktiviert laedt sie das
+  XTTS-Modell in halber Praezision fuer rund 1,3-1,8x schnellere Generierung.
+  Umschalten startet die lokale Instanz neu.
+
 [Spieldaten-Tools] Voice-Starterset schreibt jetzt einen Transkripttext je Sample
   Zu jedem extrahierten Voice-Sample wird jetzt eine gleichnamige .txt-Datei mit
   dem gesprochenen Text angelegt (z. B. Female_Hyur_Tataru.wav +
@@ -89,3 +95,8 @@ FEHLERBEHEBUNGEN
   Die Erreichbarkeitsanzeige aktualisiert sich jetzt sofort, sobald ein lokales
   Backend bereit ist, und faellt auf einen echten Health-Check zurueck -- so
   zeigt sie kein veraltetes „offline" mehr, waehrend die Generierung laeuft.
+
+[Backend] Start-/Stop-/Installieren-Buttons frieren das Spiel nicht mehr ein
+  Starten, Stoppen oder (Neu-)Installieren eines lokalen Backends unter
+  Einstellungen -> Backend lief mit seiner Shutdown-/Kill-Arbeit im UI-Thread und
+  fror das Spiel kurz ein. Diese Arbeit laeuft jetzt im Hintergrund.

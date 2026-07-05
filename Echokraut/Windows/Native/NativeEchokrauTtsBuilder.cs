@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Numerics;
+using System.Threading.Tasks;
 using Echokraut.DataClasses;
 using Echokraut.Enums;
 using Echotools.Logging.DataClasses;
@@ -29,13 +30,20 @@ public static class NativeEchokrauTtsBuilder
         public CheckboxNode AutoStartCheck = null!;
         public TextNode EngineCaption = null!;
         public StringDropDownNode EngineDropDown = null!;
+        // Only created + shown when a CUDA/ROCm GPU is available (fp16 is a no-op otherwise).
+        public CheckboxNode? Fp16Check;
+        public bool CudaAvailable;
         public TextButtonNode InstallButton = null!;
         public HorizontalListNode InstallRow = null!;
         public TextButtonNode StartButton = null!;
         public TextButtonNode StopButton = null!;
         public HorizontalListNode StartStopRow = null!;
 
-        public NodeBase[] AllNodes => [InstallPathInput, ValidationLabel, AutoStartCheck, EngineCaption, EngineDropDown, InstallRow, StartStopRow];
+        // Fp16 checkbox is included only when CUDA is available — omitting it from AllNodes (rather
+        // than hiding it) keeps it from reserving an empty layout slot in the collapsible section.
+        public NodeBase[] AllNodes => CudaAvailable && Fp16Check != null
+            ? [InstallPathInput, ValidationLabel, AutoStartCheck, EngineCaption, EngineDropDown, Fp16Check, InstallRow, StartStopRow]
+            : [InstallPathInput, ValidationLabel, AutoStartCheck, EngineCaption, EngineDropDown, InstallRow, StartStopRow];
 
         public void Update(Configuration config, IEchokrauTtsInstanceService instance, bool batchActive = false)
         {
@@ -76,9 +84,9 @@ public static class NativeEchokrauTtsBuilder
         public NodeBase[] AllNodes => [BaseUrlInput, TestConnectionButton, ConnectionResultLabel];
     }
 
-    public static LocalInstanceNodes BuildLocalInstance(float width, Configuration config, IEchokrauTtsInstanceService instance)
+    public static LocalInstanceNodes BuildLocalInstance(float width, Configuration config, IEchokrauTtsInstanceService instance, bool cudaAvailable)
     {
-        var nodes = new LocalInstanceNodes();
+        var nodes = new LocalInstanceNodes { CudaAvailable = cudaAvailable };
 
         if (string.IsNullOrWhiteSpace(config.TtsInstallRoot))
         {
@@ -135,12 +143,25 @@ public static class NativeEchokrauTtsBuilder
             instance.SwitchTtsBackend(engine); // persists + restarts if running
         };
 
-        nodes.InstallButton = Button(config.EchokrauTts.LocalInstall ? Loc.S("Reinstall") : Loc.S("Install"), 100, () =>
+        // FP16 half-precision — only meaningful for XTTS on a CUDA/ROCm GPU, so only offered when a
+        // GPU is detected. Toggling restarts the local instance (precision is fixed at model load).
+        if (cudaAvailable)
         {
-            if (instance.InstanceRunning || instance.InstanceStarting)
-                instance.StopInstance(new EKEventId(0, TextSource.Backend));
-            instance.Install();
-        });
+            nodes.Fp16Check = Check(Loc.S("Faster XTTS generation with FP16 (needs NVIDIA GPU, ~1.3-1.8x)"), width,
+                config.EchokrauTts.XttsFp16,
+                v => instance.SetXttsFp16(v)); // persists + restarts if running
+        }
+
+        // Stop/Install do blocking I/O (graceful-shutdown HTTP POST with a timeout + process kill),
+        // so run them off the UI thread — otherwise the game freezes for up to a few seconds. The
+        // UI reflects progress via the per-frame Update() reading the instance flags.
+        nodes.InstallButton = Button(config.EchokrauTts.LocalInstall ? Loc.S("Reinstall") : Loc.S("Install"), 100, () =>
+            Task.Run(() =>
+            {
+                if (instance.InstanceRunning || instance.InstanceStarting)
+                    instance.StopInstance(new EKEventId(0, TextSource.Backend));
+                instance.Install();
+            }));
         var installMaxW = new[] { Loc.S("Install"), Loc.S("Reinstall"), Loc.S("Installing...") }
             .Max(s => nodes.InstallButton.LabelNode.GetTextDrawSize(s).X) + 36;
         if (installMaxW > nodes.InstallButton.Width)
@@ -148,12 +169,12 @@ public static class NativeEchokrauTtsBuilder
         nodes.InstallRow = new HorizontalListNode { Size = new Vector2(width, 26), ItemSpacing = 4 };
         nodes.InstallRow.AddNode(nodes.InstallButton);
 
-        nodes.StartButton = Button(Loc.S("Start"), 80, () => instance.StartInstance());
+        nodes.StartButton = Button(Loc.S("Start"), 80, () => Task.Run(() => instance.StartInstance()));
         var startMaxW = new[] { Loc.S("Start"), Loc.S("Starting..."), Loc.S("Running") }
             .Max(s => nodes.StartButton.LabelNode.GetTextDrawSize(s).X) + 36;
         if (startMaxW > nodes.StartButton.Width)
             nodes.StartButton.Size = new Vector2(startMaxW, 24);
-        nodes.StopButton = Button(Loc.S("Stop"), 80, () => instance.StopInstance(new EKEventId(0, TextSource.Backend)));
+        nodes.StopButton = Button(Loc.S("Stop"), 80, () => Task.Run(() => instance.StopInstance(new EKEventId(0, TextSource.Backend))));
         nodes.StartStopRow = new HorizontalListNode { Size = new Vector2(width, 26), ItemSpacing = 4 };
         nodes.StartStopRow.AddNode(nodes.StartButton);
         nodes.StartStopRow.AddNode(nodes.StopButton);

@@ -71,16 +71,33 @@ public sealed class EchokrauTtsInstanceService : IEchokrauTtsInstanceService, ID
     {
         if (_config.EchokrauTts.TtsBackend == engine) return;
 
-        var eventId = new EKEventId(0, TextSource.Backend);
         _config.EchokrauTts.TtsBackend = engine;
         _config.Save();
-        _log.Info(nameof(SwitchTtsBackend), $"EchokrauTTS engine set to {engine}", eventId);
+        RestartLocalIfRunning($"engine set to {engine}");
+    }
 
-        // A running/starting local instance must restart to pick up the new --tts-backend.
-        // Both engines are already installed, so this is a plain restart (no re-download).
+    /// <inheritdoc/>
+    public void SetXttsFp16(bool enabled)
+    {
+        if (_config.EchokrauTts.XttsFp16 == enabled) return;
+
+        _config.EchokrauTts.XttsFp16 = enabled;
+        _config.Save();
+        RestartLocalIfRunning($"XTTS fp16 set to {enabled}");
+    }
+
+    /// <summary>
+    /// Persist-then-apply helper for local-instance settings that only take effect at wrapper startup
+    /// (engine, fp16). Logs the change; if a local instance is running/starting, restarts it so the
+    /// new args are picked up. Everything needed is already installed, so this is a plain restart.
+    /// </summary>
+    private void RestartLocalIfRunning(string reason)
+    {
+        var eventId = new EKEventId(0, TextSource.Backend);
+        _log.Info(nameof(RestartLocalIfRunning), $"EchokrauTTS local: {reason}", eventId);
         if (InstanceRunning || InstanceStarting)
         {
-            _log.Info(nameof(SwitchTtsBackend), "Restarting local instance for engine switch", eventId);
+            _log.Info(nameof(RestartLocalIfRunning), "Restarting local instance to apply change", eventId);
             StopInstance(eventId);
             StartInstance();
         }
@@ -138,7 +155,7 @@ public sealed class EchokrauTtsInstanceService : IEchokrauTtsInstanceService, ID
         }
     }
 
-    // echokrautts <installRoot> <echokrauTtsUrl-or-empty> <isWindows> <port> <language> <parentPid> <ttsBackend>
+    // echokrautts <installRoot> <echokrauTtsUrl-or-empty> <isWindows> <port> <language> <parentPid> <ttsBackend> <xttsFp16>
     private ProcessStartInfo BuildProcessInfo(bool download, string installerExe) => new(installerExe)
     {
         UseShellExecute = true,
@@ -153,6 +170,7 @@ public sealed class EchokrauTtsInstanceService : IEchokrauTtsInstanceService, ID
             LanguageCode(_clientState.ClientLanguage),
             Environment.ProcessId.ToString(),
             _config.EchokrauTts.TtsBackendArg,
+            _config.EchokrauTts.XttsFp16Arg,
         }
     };
 
