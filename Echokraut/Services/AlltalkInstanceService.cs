@@ -121,8 +121,8 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
                 // extract from the user's own FFXIV install. Output target is AllTalk's
                 // canonical voices folder (alltalk_tts/voices/), which the extractor wipes
                 // before writing so leftover files from a previous extract don't haunt the
-                // voice list. samplesPerNpc=1 keeps the install fast (decode + resample of
-                // ~hundreds of NPCs once); user can rebuild with more samples later via the
+                // voice list. StarterSetSamplesPerNpc samples per voice (decode + resample of
+                // ~hundreds of NPCs once); user can rebuild with a different count later via the
                 // Game Data Tools window.
                 var alltalkFolder = TtsPaths.AllTalkRoot(_config.TtsInstallRoot);
                 var voicesDir = Path.Join(alltalkFolder, "voices");
@@ -146,7 +146,8 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
                 {
                     _voiceExtract.ProgressChanged += onExtractProgress;
                     using var extractCts = new CancellationTokenSource();
-                    _voiceExtract.RunAsync(_clientState.ClientLanguage, samplesPerNpc: 1, extractCts.Token,
+                    _voiceExtract.RunAsync(_clientState.ClientLanguage,
+                        samplesPerNpc: VoiceSampleExtractorService.StarterSetSamplesPerNpc, extractCts.Token,
                         outputRootOverride: alltalkFolder, outputSubfolder: "voices")
                         .GetAwaiter().GetResult();
                     _log.Info(nameof(Install), "Voice starter set ready.", eventId);

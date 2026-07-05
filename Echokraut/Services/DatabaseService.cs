@@ -1774,15 +1774,19 @@ public class DatabaseService : IDatabaseService
         {
             if (_disposed) return;
             _disposed = true;
-            try
-            {
-                var connection = _context.Database.GetDbConnection();
-                _context.Dispose();
-                connection.Close();
-                connection.Dispose();
-                Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-            }
-            catch { /* In-memory databases may already be disposed */ }
+
+            // Dispose the context (it owns + closes its connection). Wrapped separately so a
+            // failure here never skips ClearAllPools below.
+            try { _context.Dispose(); }
+            catch { /* in-memory / already disposed */ }
+
+            // THIS is what actually releases the on-disk SQLite file handle: Microsoft.Data.Sqlite
+            // pools connections, so disposing the context only returns the physical connection to
+            // the pool — the .db (+ WAL -wal/-shm) stays locked until the pool is cleared. Must run
+            // even if the context dispose threw, otherwise the file stays locked until the game
+            // process exits (can't delete/reset the DB on a plugin reload).
+            try { Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools(); }
+            catch { /* nothing more we can do */ }
         }
     }
 }

@@ -200,7 +200,8 @@ public sealed class EchokrauTtsInstanceService : IEchokrauTtsInstanceService, ID
         {
             _voiceExtract.ProgressChanged += onExtractProgress;
             using var extractCts = new CancellationTokenSource();
-            _voiceExtract.RunAsync(_clientState.ClientLanguage, samplesPerNpc: 1, extractCts.Token,
+            _voiceExtract.RunAsync(_clientState.ClientLanguage,
+                samplesPerNpc: VoiceSampleExtractorService.StarterSetSamplesPerNpc, extractCts.Token,
                 outputRootOverride: ekRoot, outputSubfolder: TtsPaths.EchokrauTtsSamplesFolder)
                 .GetAwaiter().GetResult();
             _log.Info(nameof(ExtractStarterSet), "Voice starter set ready.", eventId);

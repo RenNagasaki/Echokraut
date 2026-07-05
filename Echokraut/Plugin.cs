@@ -356,17 +356,20 @@ public partial class Plugin : IDalamudPlugin
         // into half-disposed UI nodes.
         try { _services.GetService<IDialogHarvestService>()?.Dispose(); } catch { }
 
-        _soundHelper.Dispose();
-        _addonTalkHelper.Dispose();
-        _addonBattleTalkHelper.Dispose();
-        _addonCutSceneSelectStringHelper.Dispose();
-        _addonSelectStringHelper.Dispose();
-        _addonBubbleHelper.Dispose();
-        _chatTalkHelper.Dispose();
+        // Guard each teardown step so a throwing helper/window disposal can't skip the ones after
+        // it — most importantly _services.Dispose(), which disposes the DatabaseService and thus
+        // releases the SQLite file lock (else the .db stays locked until the game process exits).
+        try { _soundHelper.Dispose(); } catch { }
+        try { _addonTalkHelper.Dispose(); } catch { }
+        try { _addonBattleTalkHelper.Dispose(); } catch { }
+        try { _addonCutSceneSelectStringHelper.Dispose(); } catch { }
+        try { _addonSelectStringHelper.Dispose(); } catch { }
+        try { _addonBubbleHelper.Dispose(); } catch { }
+        try { _chatTalkHelper.Dispose(); } catch { }
 
-        _configuration.Save();
-        _windowManager.Dispose();
-        _commands.Dispose();
+        try { _configuration.Save(); } catch { }
+        try { _windowManager.Dispose(); } catch { }
+        try { _commands.Dispose(); } catch { }
         _services.Dispose();
 
         if (_kamiToolKitInitialized)

@@ -143,6 +143,22 @@ public class ServiceContainerTests
         Assert.True(disposable.Disposed);
     }
 
+    [Fact]
+    public void Dispose_ThrowingService_StillDisposesOthers()
+    {
+        // A throwing Dispose must not skip the remaining services — the DatabaseService (which
+        // releases the SQLite file lock) must be disposed even if an earlier service throws.
+        var container = new ServiceContainer();
+        var good = new DisposableService();
+        container.RegisterSingleton<ITestService>(new ThrowingDisposableService());
+        container.RegisterSingleton<ITestService3>(good);
+
+        var ex = Record.Exception(() => container.Dispose());
+
+        Assert.Null(ex);          // exception is swallowed, not propagated
+        Assert.True(good.Disposed); // the other service was still disposed
+    }
+
     // ── Clear ────────────────────────────────────────────────────────────────
 
     [Fact]
@@ -159,12 +175,17 @@ public class ServiceContainerTests
 
     interface ITestService { }
     interface ITestService2 { ITestService Inner { get; } }
+    interface ITestService3 { }
 
     class ConcreteService : ITestService { }
-    class DisposableService : ITestService, IDisposable
+    class DisposableService : ITestService, ITestService3, IDisposable
     {
         public bool Disposed { get; private set; }
         public void Dispose() => Disposed = true;
+    }
+    class ThrowingDisposableService : ITestService, IDisposable
+    {
+        public void Dispose() => throw new InvalidOperationException("boom");
     }
     class ConcreteService2 : ITestService2
     {

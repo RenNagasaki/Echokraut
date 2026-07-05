@@ -44,6 +44,12 @@ VERBESSERUNGEN
   XTTS-Modell in halber Praezision fuer rund 1,3-1,8x schnellere Generierung.
   Umschalten startet die lokale Instanz neu.
 
+[Spieldaten-Tools] Voice-Starterset holt jetzt 5 Samples pro Stimme
+  Das Starterset bei der Installation extrahiert jetzt bis zu 5 verschiedene
+  Samples pro Stimme (vorher 1) fuer bessere Sprachqualitaet ab Werk. Die
+  Installation dauert etwas laenger; du kannst weiterhin mit einer anderen Anzahl
+  ueber die Spieldaten-Tools neu aufbauen.
+
 [Spieldaten-Tools] Voice-Starterset schreibt jetzt einen Transkripttext je Sample
   Zu jedem extrahierten Voice-Sample wird jetzt eine gleichnamige .txt-Datei mit
   dem gesprochenen Text angelegt (z. B. Female_Hyur_Tataru.wav +
@@ -100,3 +106,8 @@ FEHLERBEHEBUNGEN
   Starten, Stoppen oder (Neu-)Installieren eines lokalen Backends unter
   Einstellungen -> Backend lief mit seiner Shutdown-/Kill-Arbeit im UI-Thread und
   fror das Spiel kurz ein. Diese Arbeit laeuft jetzt im Hintergrund.
+
+[Datenbank] DB-Datei bleibt nach Entladen des Plugins nicht mehr gesperrt
+  Neuladen oder Deaktivieren des Plugins gibt jetzt zuverlaessig das SQLite-
+  Datenbank-Handle frei (Connection-Pool + Datei-Sperre), sodass die .db ohne
+  Spiel-Neustart geloescht oder zurueckgesetzt werden kann.

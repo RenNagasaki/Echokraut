@@ -31,6 +31,11 @@ public class VoiceSampleExtractorService : IVoiceSampleExtractorService
     private const int CatalogClipThreshold = 20;
     private const int TargetSampleRate = 22050;
 
+    /// <summary>Samples-per-voice the install-time starter set extracts (both engines). Clamped to
+    /// 1..5 by <see cref="RunAsync"/>; the Game Data Tools slider lets the user rebuild with a
+    /// different count later.</summary>
+    public const int StarterSetSamplesPerNpc = 5;
+
     private readonly IDataManager _dataManager;
     private readonly IClientState _clientState;
     private readonly ILogService _log;

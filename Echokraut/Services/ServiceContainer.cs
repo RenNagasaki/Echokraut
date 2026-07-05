@@ -73,10 +73,15 @@ public class ServiceContainer : IDisposable
 
     public void Dispose()
     {
+        // Guard each disposal so one throwing service can't skip the rest — notably the
+        // DatabaseService, whose Dispose releases the SQLite file lock.
         foreach (var service in _services.Values)
         {
             if (service is IDisposable disposable)
-                disposable.Dispose();
+            {
+                try { disposable.Dispose(); }
+                catch { /* keep disposing the remaining services */ }
+            }
         }
         _services.Clear();
         _factories.Clear();

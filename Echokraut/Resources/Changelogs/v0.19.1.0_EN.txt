@@ -41,6 +41,11 @@ IMPROVEMENTS
   precision for roughly 1.3-1.8x faster generation. Toggling restarts the local
   instance.
 
+[Game Data Tools] Voice starter set now grabs 5 samples per voice
+  The install-time starter set now extracts up to 5 diverse samples per voice
+  (was 1) for better voice quality out of the box. The install takes a little
+  longer; you can still rebuild with a different count from Game Data Tools.
+
 [Game Data Tools] Voice starter set now writes a transcript next to each sample
   Every extracted voice sample now gets a matching .txt file with the same name
   containing the spoken line (e.g. Female_Hyur_Tataru.wav + Female_Hyur_Tataru.txt).
@@ -95,3 +100,8 @@ BUG FIXES
   Starting, stopping, or (re)installing a local backend from Settings -> Backend
   ran its shutdown/kill work on the UI thread, freezing the game for a moment.
   That work now runs in the background.
+
+[Database] Database file no longer stays locked after unloading the plugin
+  Reloading or disabling the plugin now reliably releases the SQLite database
+  handle (connection pool + file lock), so the .db can be deleted or reset
+  without restarting the game.
