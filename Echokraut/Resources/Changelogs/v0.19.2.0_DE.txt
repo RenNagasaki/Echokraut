@@ -36,3 +36,12 @@ FEHLERBEHEBUNGEN
   Wenn du mit gesetzter Custom-Voices-URL installierst, extrahiert die Installation
   nicht mehr das FFXIV-Voice-Starter-Set ueber deine Stimmen (was sie vorher
   ersetzt hat). Gilt fuer AllTalk und EchokrauTTS.
+
+[Wiedergabe] Knistern bei Streaming-Wiedergabe auf langsameren GPUs behoben
+  Bei aktivem Streaming generiert EchokrauTTS (XTTS) das Audio waehrend der
+  Wiedergabe -- auf einer langsameren GPU konnte die Wiedergabe der Generierung
+  davonlaufen und knistern (die gespeicherte Datei war immer in Ordnung). Die
+  Wiedergabe puffert jetzt mehr vor, bevor sie startet -- und kurze Zeilen warten,
+  bis der ganze Clip da ist -- sodass gestreamtes Audio sauber laeuft. Schnelle
+  Systeme sind kaum betroffen. (Falls es weiterhin auftritt, puffert „Streaming-
+  Generierung" ausschalten den kompletten Clip zuerst.)

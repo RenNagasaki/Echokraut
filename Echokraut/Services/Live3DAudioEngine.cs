@@ -302,6 +302,10 @@ public sealed class Live3DAudioEngine : IDisposable
         int _h;
         Task? _reader, _writer;
         volatile int _ended;
+        // Set once the read loop has drained the whole source (all bytes buffered/queued). Lets the
+        // prebuffer start immediately for a fully-arrived clip instead of waiting for a cushion that
+        // a short stream will never reach.
+        volatile bool _readerDone;
         volatile int _ctsDisposed;
         SyncProcedure? _endSync;
         volatile float _volume;
@@ -467,7 +471,10 @@ public sealed class Live3DAudioEngine : IDisposable
                 Bass.ChannelSet3DAttributes(_h, ManagedBass.Mode3D.Normal, 1f, 1000f, -1, -1, 0);
             }
 
-            var channelBufferMs = MathF.Max(_bufferMs, 450);
+            // Roomy playback buffer so the prebuffer below can bank ~1s of audio ahead of the device —
+            // absorbs jitter from a slower-than-real-time streaming source (EchokrauTTS XTTS) without
+            // starving. Must exceed the prebuffer target (1000ms) so that cushion actually fits.
+            var channelBufferMs = MathF.Max(_bufferMs, 1500);
             Bass.ChannelSetAttribute(_h, ChannelAttribute.Buffer, channelBufferMs / 1000f);
 
             Bass.ChannelSetAttribute(_h, ChannelAttribute.Volume, 1f);
@@ -502,12 +509,20 @@ public sealed class Live3DAudioEngine : IDisposable
             int silenceBytes = Math.Max(frameOut, _sr * frameOut * silenceMs / 1000);
             PushSilence(silenceBytes);
 
-            int targetMs   = 320;
+            // Bigger prebuffer cushion so a source that delivers slower than real-time (e.g. EchokrauTTS
+            // XTTS token-streaming on a modest GPU) doesn't immediately starve the BASS push stream and
+            // produce underrun clicks. Start as soon as EITHER the cushion is reached OR the whole clip
+            // has already arrived (_readerDone) — the latter keeps short lines low-latency AND fully
+            // buffered (clean). Fast sources (AllTalk, local files) fill the cushion almost instantly,
+            // so their first-audio latency barely changes. The timeout is a safety cap for a stalled
+            // source; a slowly-progressing one keeps accumulating cushion until it's hit.
+            int targetMs   = 1000;
             int targetByte = Math.Max(frameOut, _sr * frameOut * targetMs / 1000);
 
             var sw = Stopwatch.StartNew();
-            while (sw.ElapsedMilliseconds < 2000)
+            while (sw.ElapsedMilliseconds < 6000)
             {
+                if (_readerDone) break;
                 int avail = Bass.ChannelGetData(_h, IntPtr.Zero, (int)DataFlags.Available);
                 if (avail >= targetByte) break;
                 Thread.Sleep(5);
@@ -805,6 +820,7 @@ public sealed class Live3DAudioEngine : IDisposable
             catch (OperationCanceledException) { }
             finally
             {
+                _readerDone = true;
                 _q.CompleteAdding();
             }
         }

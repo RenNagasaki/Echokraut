@@ -35,3 +35,11 @@ BUG FIXES
   When you install with a custom voices URL set, the install no longer extracts
   the FFXIV voice starter set on top of your voices (which previously replaced
   them). This applies to both AllTalk and EchokrauTTS.
+
+[Playback] Fixed crackling during streaming playback on slower GPUs
+  With streaming on, EchokrauTTS (XTTS) generates audio as it plays, and on a
+  slower GPU the playback could outrun generation and crackle (the saved file was
+  always fine). Playback now buffers more before it starts — and short lines wait
+  until the whole clip has arrived — so streamed audio plays cleanly. Fast setups
+  are barely affected. (If you still hear it, turning Streaming generation off
+  buffers the full clip first.)
