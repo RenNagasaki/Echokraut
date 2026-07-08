@@ -17,6 +17,9 @@ VERBESSERUNGEN
   fuer die aktive Engine (F5 oder XTTS) verwendet; die Samples werden zu deinen
   Voice-Samples hinzugefuegt (dein extrahiertes Starter-Set bleibt erhalten). Die
   lokale Instanz startet selbst neu, damit das neue Modell sofort greift.
+  HINWEIS: Dafuer wird die aktualisierte EchokrauTTS-Engine benoetigt -- wenn du
+  bereits eine lokale EchokrauTTS-Installation hast, installiere sie einmal neu
+  (Einstellungen -> Backend -> Neuinstallieren), bevor du Custom-Daten installierst.
 
 
 ==============================================================================

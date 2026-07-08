@@ -16,6 +16,9 @@ IMPROVEMENTS
   and used automatically for the active engine (F5 or XTTS); the samples are
   merged into your voice samples (your extracted starter set is kept). The local
   instance restarts on its own so the new model takes effect right away.
+  NOTE: this requires the updated EchokrauTTS engine — if you already have a local
+  EchokrauTTS install, reinstall it once (Settings -> Backend -> Reinstall) before
+  installing custom data.
 
 
 ==============================================================================
