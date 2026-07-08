@@ -64,6 +64,25 @@ namespace Echokraut.Backend
         /// <summary>Joins the configured base URL and an endpoint path, collapsing any double slash.</summary>
         internal static string BuildUrl(string baseUrl, string path) => (baseUrl ?? "").TrimEnd('/') + path;
 
+        /// <summary>
+        /// Turns the raw /tts response body into the seekable stream the playback path consumes.
+        /// <paramref name="streaming"/> true → wrap the live network stream (audio plays as it
+        /// arrives). false → copy the whole body into an in-memory buffer first, so the caller only
+        /// gets the stream once the full clip has been generated (no progressive playback). The
+        /// returned stream is always positioned at 0 and seekable.
+        /// </summary>
+        internal static async Task<Stream> MaterializeAudioStream(Stream responseStream, bool streaming)
+        {
+            if (streaming)
+                return new ReadSeekableStream(responseStream, 2146435);
+
+            var buffered = new MemoryStream();
+            await using (responseStream.ConfigureAwait(false))
+                await responseStream.CopyToAsync(buffered).ConfigureAwait(false);
+            buffered.Seek(0, SeekOrigin.Begin);
+            return buffered;
+        }
+
         /// <summary>Maps an EchokrauTTS health response to the literal "Ready" success token the
         /// connection-test UI matches on (case-insensitive), or a descriptive failure string.</summary>
         internal static string HealthToReady(EchokrauTtsHealthResponse? health, string rawBody)
@@ -129,12 +148,14 @@ namespace Echokraut.Backend
                     _lastJobId = jobIds.FirstOrDefault();
 
                 var responseStream = await res.Content.ReadAsStreamAsync().ConfigureAwait(false);
-                // Raw PCM s16le 24 kHz mono — handed straight to the playback path (seekable so the
-                // SaveToLocal path in OnSourceEnded can re-read it; WriteStreamToFile seeks to 0 and
-                // wraps via RawPcmToWav).
-                var seekable = new ReadSeekableStream(responseStream, 2146435);
+                // Raw PCM s16le 24 kHz mono. When streaming is ON, hand the network stream straight to
+                // the playback path so audio plays as it arrives. When OFF, fully buffer it here first
+                // so generation completes before playback begins (parity with AllTalk's non-streaming
+                // branch). Either way the returned stream is seekable, so the SaveToLocal path in
+                // OnSourceEnded can re-read it (WriteStreamToFile seeks to 0 + wraps via RawPcmToWav).
+                var result = await MaterializeAudioStream(responseStream, _config.StreamingGeneration).ConfigureAwait(false);
                 _log.Info(nameof(GenerateAudioStreamFromVoice), "Done", eventId);
-                return seekable;
+                return result;
             }
             catch (Exception ex)
             {

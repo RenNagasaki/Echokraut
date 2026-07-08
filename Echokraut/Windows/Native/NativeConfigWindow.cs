@@ -838,12 +838,13 @@ public sealed unsafe partial class NativeConfigWindow : NativeAddon
             v => { _config.GenerateBySentence = v; _config.Save(); });
 
         // Streaming generation moved here from the Backend tab's old Service-options
-        // section. It's an AllTalk-only knob, so it dims (and is no-op) in None mode but
-        // stays interactive on Local/Remote regardless of which Backend sub-tab is open.
+        // section. Shared across engines (both AllTalk and EchokrauTTS honor it via
+        // Configuration.StreamingGeneration): when off, playback waits for the full clip.
+        // No-op in None mode (no live generation) but stays interactive on Local/Remote.
         _atStreamingCheck = Check(
             Loc.S("Streaming generation (play audio before full text is generated)"), w,
-            _config.Alltalk.StreamingGeneration,
-            v => { _config.Alltalk.StreamingGeneration = v; _config.Save(); });
+            _config.StreamingGeneration,
+            v => { _config.StreamingGeneration = v; _config.Save(); });
 
         var removeStuttersCheck = Check(Loc.S("Remove stutters"), w, _config.RemoveStutters,
             v => { _config.RemoveStutters = v; _config.Save(); });

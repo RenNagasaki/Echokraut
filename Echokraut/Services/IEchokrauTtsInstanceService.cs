@@ -30,6 +30,16 @@ public interface IEchokrauTtsInstanceService
     void StopInstance(EKEventId eventId);
 
     /// <summary>
+    /// Install ONLY the user-supplied custom data (a model zip into
+    /// <c>echokrautts/models/echokraut_custom</c> and/or a voice-samples zip into
+    /// <c>echokrautts/samples</c>), without a full reinstall. Mirrors
+    /// <see cref="IAlltalkInstanceService.InstallCustomData"/>. Runs off the UI thread. When a local
+    /// instance is running (or <paramref name="installProcess"/> is false and auto-start is on) the
+    /// wrapper is restarted afterwards so it reloads with the custom model.
+    /// </summary>
+    void InstallCustomData(EKEventId eventId, bool installProcess = false);
+
+    /// <summary>
     /// Change the local sub-engine (F5/XTTS). Persists the choice; if a local instance is currently
     /// running or starting, restarts it so the wrapper reloads with the new <c>--tts-backend</c>
     /// (both engines are already installed, so this is a restart, not a reinstall). No-op when the

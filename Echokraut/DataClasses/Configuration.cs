@@ -57,6 +57,20 @@ public class Configuration : IPluginConfiguration
     /// </summary>
     public bool HasLiveGeneration => ActiveInstanceType != AlltalkInstanceType.None;
 
+    /// <summary>
+    /// Shared "play audio as it streams in" preference, honored by BOTH backends. When off, the
+    /// backend waits for the full clip before playback begins (AllTalk writes it to disk first;
+    /// EchokrauTTS buffers the response). Backed by <see cref="AlltalkData.StreamingGeneration"/> so
+    /// existing configs keep their value with no migration — the UI checkbox and both backends read
+    /// this accessor instead of the engine-specific field.
+    /// </summary>
+    [System.Text.Json.Serialization.JsonIgnore]
+    public bool StreamingGeneration
+    {
+        get => Alltalk.StreamingGeneration;
+        set => Alltalk.StreamingGeneration = value;
+    }
+
     public List<NpcMapData> MappedNpcs { get; set; } = new List<NpcMapData>();
     public List<NpcMapData> MappedPlayers { get; set; } = new List<NpcMapData>();
     public List<uint> MutedNpcDialogues { get; set; } = new List<uint>();

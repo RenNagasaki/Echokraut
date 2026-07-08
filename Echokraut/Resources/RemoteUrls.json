@@ -1,9 +1,9 @@
 {
   "version": 1,
   "alltalkUrl": "https://github.com/RenNagasaki/alltalk_tts/releases/download/alltalk_tts-alltalkbeta/alltalk_tts-alltalkbeta.zip",
-  "installerUrl": "https://github.com/RenNagasaki/Echokraut/releases/download/ELI-1.1.0.0/EchokrautLocalInstaller.zip",
-  "installerVersion": "ELI-1.1.0.0",
-  "echokrauTtsUrl": "https://github.com/RenNagasaki/Echokrautts/releases/download/0.0.0.1/EchokrauTTS.zip",
+  "installerUrl": "https://github.com/RenNagasaki/Echokraut/releases/download/ELI-1.2.0.0/EchokrautLocalInstaller.zip",
+  "installerVersion": "ELI-1.2.0.0",
+  "echokrauTtsUrl": "https://github.com/RenNagasaki/Echokrautts/releases/download/0.0.0.2/EchokrauTTS.zip",
   "voicesUrl": "https://drive.google.com/uc?export=download&id=1bYdZdr3L69kmzUN3vSiqZmLRD7-A3M47",
   "voices2Url": "https://drive.google.com/uc?export=download&id=1CPnx1rpkuKvVj5fGr9OiUJHZ_e8DfTzP",
   "msBuildToolsUrl": "https://aka.ms/vs/17/release/vs_BuildTools.exe",

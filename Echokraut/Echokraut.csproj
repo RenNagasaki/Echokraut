@@ -2,7 +2,7 @@
 <Project Sdk="Dalamud.NET.Sdk/15.0.0">
 
   <PropertyGroup>
-    <Version>0.19.1.0</Version>
+    <Version>0.19.2.0</Version>
     <Description>A TTS Dalamud Plugin that breaks the silence! For self hosted TTS Services.</Description>
     <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
     <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
@@ -80,6 +80,17 @@
     <EmbeddedResource Include="Resources\VoiceExtractAliases.json" />
     <EmbeddedResource Include="Resources\VoiceActorSplits.json" />
     <!--
+      Offline fallbacks for the JSON data JsonDataService normally fetches from the
+      master branch on GitHub. Embedding them keeps startup resilient when GitHub
+      raw rate-limits the request burst (429) or is otherwise unreachable.
+    -->
+    <EmbeddedResource Include="Resources\NpcGenders.json" />
+    <EmbeddedResource Include="Resources\Emoticons.json" />
+    <EmbeddedResource Include="Resources\VoiceNamesEN.json" />
+    <EmbeddedResource Include="Resources\VoiceNamesDE.json" />
+    <EmbeddedResource Include="Resources\VoiceNamesFR.json" />
+    <EmbeddedResource Include="Resources\VoiceNamesJA.json" />
+    <!--
       In-game changelog content. ChangelogService enumerates these via
       Assembly.GetManifestResourceNames(), parses the version out of the filename,
       and shows entries newer than Configuration.LastSeenChangelogVersion.
@@ -93,6 +104,10 @@
     <EmbeddedResource Include="Resources\Changelogs\v0.19.0.1_DE.txt" />
     <EmbeddedResource Include="Resources\Changelogs\v0.19.1.0_EN.txt" />
     <EmbeddedResource Include="Resources\Changelogs\v0.19.1.0_DE.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.1.1_EN.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.1.1_DE.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.2.0_EN.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.2.0_DE.txt" />
   </ItemGroup>
 
   <ItemGroup>
@@ -100,15 +115,6 @@
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </None>
     <None Update="Resources\Echokraut.png">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-    </None>
-    <None Update="Resources\VoiceNamesFR.json">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-    </None>
-    <None Update="Resources\VoiceNamesDE.json">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-    </None>
-    <None Update="Resources\VoiceNamesEN.json">
       <CopyToOutputDirectory>Never</CopyToOutputDirectory>
     </None>
   </ItemGroup>

@@ -197,6 +197,24 @@ public class Program
                     if (Convert.ToBoolean(args[5]))
                         StartInstance(customDataFolder);
                     break;
+                case "installcustomdataek":
+                    // Args: installcustomdataek <installRoot> <customModelUrl> <customVoicesUrl> <isWindows>
+                    //        <shouldRestart> <port> <language> <parentPid> [ttsBackend] [xttsFp16]
+                    // EchokrauTTS analog of installcustomdata: drop a custom model into
+                    // echokrautts/models/echokraut_custom and custom voice samples into
+                    // echokrautts/samples, then (optionally) relaunch the wrapper so it picks
+                    // the custom model up. Any running instance is already killed by the named
+                    // pipe shutdown above. The restart carries the same serve args as the
+                    // echokrautts mode so engine/fp16/language stay consistent.
+                    var ekRestart = Convert.ToBoolean(args[5]);
+                    var ekBackend = args.Length > 9 && !string.IsNullOrWhiteSpace(args[9]) ? args[9] : "xtts";
+                    var ekFp16 = args.Length > 10 && !string.IsNullOrWhiteSpace(args[10]) ? args[10] : "false";
+                    Log($"Mode: installcustomdataek | installRoot={args[1]} | customModelUrl={args[2]} | customVoicesUrl={args[3]} | isWindows={args[4]} | shouldRestart={ekRestart} | port={args[6]} | language={args[7]} | parentPid={args[8]} | ttsBackend={ekBackend} | xttsFp16={ekFp16}");
+                    IsWindows = Convert.ToBoolean(args[4]);
+                    InstallCustomDataEchokrauTts(args[1], args[2], args[3]).Wait();
+                    if (ekRestart)
+                        StartEchokrauTts(args[1], "", args[6], args[7], args[8], ekBackend, ekFp16).Wait();
+                    break;
             }
         }
     }
@@ -787,6 +805,106 @@ public class Program
         {
             Log($"Error while installing custom data: {ex}");
         }
+    }
+
+    /// <summary>
+    /// EchokrauTTS analog of <see cref="InstallCustomData"/>: install a user-supplied model +
+    /// voice samples into the running wrapper's on-disk layout. The custom model is placed in
+    /// <c>echokrautts/models/echokraut_custom</c> (replacing any previous custom model), where the
+    /// wrapper auto-detects it at load time (F5 checkpoint or full XTTS model dir). Custom voice
+    /// samples are merged into <c>echokrautts/samples</c> — additive, so the extracted starter set
+    /// is preserved and same-named files are overwritten. Both zips may be Google Drive links. Each
+    /// half is best-effort: a failure of one is logged and skipped, not fatal.
+    /// </summary>
+    static async Task InstallCustomDataEchokrauTts(string installRoot, string customModelUrl, string customVoicesUrl)
+    {
+        try
+        {
+            var wrapperFolder = Path.Join(installRoot, Constants.ECHOKRAUTTSFOLDERNAME);
+            var customModelFolder = Path.Join(wrapperFolder, Constants.ECHOKRAUTTSMODELSFOLDER, Constants.ECHOKRAUTTSCUSTOMMODELFOLDER);
+            var samplesFolder = Path.Join(wrapperFolder, Constants.ECHOKRAUTTSSAMPLESFOLDER);
+
+            if (!string.IsNullOrWhiteSpace(customModelUrl))
+            {
+                Log("Installing custom EchokrauTTS model");
+                // Replace any previous custom model so switching doesn't blend two models.
+                if (Directory.Exists(customModelFolder))
+                    Directory.Delete(customModelFolder, true);
+                await DownloadAndExtractZip(customModelUrl, customModelFolder, "custom model");
+                // A zip that wraps its files in one root folder would hide them from the
+                // wrapper's top-level model detection — flatten that common case.
+                FlattenSingleSubfolder(customModelFolder);
+            }
+            else
+                Log("No custom model URL, skipping");
+
+            if (!string.IsNullOrWhiteSpace(customVoicesUrl))
+            {
+                Log("Installing custom EchokrauTTS voice samples");
+                await DownloadAndExtractZip(customVoicesUrl, samplesFolder, "custom voices");
+            }
+            else
+                Log("No custom voices URL, skipping");
+        }
+        catch (Exception ex)
+        {
+            Log($"Error while installing EchokrauTTS custom data: {ex}");
+        }
+    }
+
+    /// <summary>Download a (possibly Google Drive) zip and extract it into <paramref name="destFolder"/>
+    /// (created if needed, overwriting same-named files). Best-effort — logs and swallows failures so
+    /// one bad URL doesn't abort the rest of the custom-data install. The temp zip is a sibling of the
+    /// destination folder and is always cleaned up.</summary>
+    static async Task DownloadAndExtractZip(string url, string destFolder, string label)
+    {
+        var zipPath = destFolder.TrimEnd('\\', '/') + ".customdata.zip";
+        try
+        {
+            Directory.CreateDirectory(destFolder);
+            using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
+            var downloadUrl = GoogleDriveHelper.CheckForGoogleAndConvertToDirectDownloadLink(url, out bool isGoogle);
+            Log($"Downloading {label} from {downloadUrl}");
+            var response = await client.GetAsync(downloadUrl);
+            if (isGoogle)
+                response = GoogleDriveHelper.DownloadGoogleDrive(downloadUrl, response, client);
+            response.EnsureSuccessStatusCode();
+            await using (var fs = new FileStream(zipPath, FileMode.Create, FileAccess.Write))
+                await response.Content.CopyToAsync(fs);
+
+            Log($"Extracting {label}");
+            System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, destFolder, true);
+        }
+        catch (Exception ex)
+        {
+            Log($"Error while installing {label}, skipping: {ex}");
+        }
+        finally
+        {
+            try { if (File.Exists(zipPath)) File.Delete(zipPath); } catch { }
+        }
+    }
+
+    /// <summary>If <paramref name="folder"/> has no files of its own but exactly one sub-directory,
+    /// move that sub-directory's contents up one level. Handles a zip that wraps everything in a
+    /// single root folder, so the wrapper's top-level model detection still finds the checkpoint /
+    /// config.json.</summary>
+    static void FlattenSingleSubfolder(string folder)
+    {
+        try
+        {
+            if (Directory.EnumerateFiles(folder).Any()) return;
+            var subs = Directory.GetDirectories(folder);
+            if (subs.Length != 1) return;
+            var inner = subs[0];
+            foreach (var f in Directory.GetFiles(inner))
+                File.Move(f, Path.Join(folder, Path.GetFileName(f)));
+            foreach (var d in Directory.GetDirectories(inner))
+                Directory.Move(d, Path.Join(folder, Path.GetFileName(d)));
+            Directory.Delete(inner, true);
+            Log($"Flattened single wrapper folder in {folder}");
+        }
+        catch (Exception ex) { Log($"Flatten skipped: {ex.Message}"); }
     }
 
     static string CleanAnsi(string input)

@@ -33,6 +33,21 @@ namespace Echokraut.DataClasses
         /// <summary>Auto-start the local instance on plugin load (when this engine is active).</summary>
         public bool AutoStartLocalInstance { get; set; } = true;
 
+        /// <summary>
+        /// URL (direct or Google Drive) to a zip holding a user-supplied custom model. Installed by
+        /// "Install only custom data" into <c>echokrautts/models/echokraut_custom</c>, where the
+        /// wrapper auto-detects it for the ACTIVE engine (an F5 checkpoint for the f5 backend, a full
+        /// XTTS-v2 model directory for the xtts backend). Mirrors <see cref="AlltalkData.CustomModelUrl"/>.
+        /// </summary>
+        public string CustomModelUrl { get; set; } = "";
+
+        /// <summary>
+        /// URL (direct or Google Drive) to a zip of custom voice samples, merged additively into
+        /// <c>echokrautts/samples</c> (the extracted starter set is preserved). Mirrors
+        /// <see cref="AlltalkData.CustomVoicesUrl"/>.
+        /// </summary>
+        public string CustomVoicesUrl { get; set; } = "";
+
         /// <summary>Local / Remote / None — reuses the AllTalk instance-type enum.</summary>
         public AlltalkInstanceType InstanceType { get; set; } = AlltalkInstanceType.None;
 

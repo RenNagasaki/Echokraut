@@ -1,4 +1,6 @@
+using System.IO;
 using System.Text.Json;
+using System.Threading.Tasks;
 using Echokraut.Backend;
 using Echokraut.DataClasses;
 using Xunit;
@@ -54,6 +56,35 @@ public class EchokrauTtsBackendTests
         Assert.Equal(2, parsed!.samples.Count);
         // Extension preserved so BackendVoice keys match AllTalk's convention.
         Assert.Contains("Female_Hyur_Iceheart.wav", parsed.samples);
+    }
+
+    [Fact]
+    public async Task MaterializeAudioStream_NonStreaming_BuffersFullBodyAtPositionZero()
+    {
+        // Streaming OFF must fully read the response before returning, so playback only starts
+        // once the whole clip is generated (the reported bug: EchokrauTTS never waited).
+        var payload = new byte[] { 1, 2, 3, 4, 5 };
+        var source = new MemoryStream(payload);
+
+        var result = await EchokrauTtsBackend.MaterializeAudioStream(source, streaming: false);
+
+        Assert.True(result.CanSeek);
+        Assert.Equal(0, result.Position);
+        var buf = new byte[payload.Length];
+        var read = await result.ReadAsync(buf);
+        Assert.Equal(payload.Length, read);
+        Assert.Equal(payload, buf);
+        // The source network stream is consumed + disposed once buffered.
+        Assert.False(source.CanRead);
+    }
+
+    [Fact]
+    public async Task MaterializeAudioStream_Streaming_ReturnsReadableStream()
+    {
+        var source = new MemoryStream(new byte[] { 9, 8, 7 });
+        var result = await EchokrauTtsBackend.MaterializeAudioStream(source, streaming: true);
+        Assert.NotNull(result);
+        Assert.True(result.CanRead);
     }
 
     [Fact]

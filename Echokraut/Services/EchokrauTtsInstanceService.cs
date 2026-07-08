@@ -67,6 +67,40 @@ public sealed class EchokrauTtsInstanceService : IEchokrauTtsInstanceService, ID
     public void StartInstance() => Launch(download: false);
 
     /// <inheritdoc/>
+    public void InstallCustomData(EKEventId eventId, bool installProcess = false)
+    {
+        var (pathValid, _) = Windows.Native.NativeAlltalkBuilder.ValidateInstallPath(_config.TtsInstallRoot);
+        if (!pathValid)
+        {
+            _log.Warning(nameof(InstallCustomData), "Install path is invalid, aborting.", eventId);
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_config.EchokrauTts.CustomModelUrl)
+            && string.IsNullOrWhiteSpace(_config.EchokrauTts.CustomVoicesUrl))
+        {
+            _log.Warning(nameof(InstallCustomData), "No custom model or voices URL set — nothing to install.", eventId);
+            return;
+        }
+
+        try
+        {
+            // Restart the wrapper afterwards if it's running now, or if it would auto-start —
+            // otherwise a freshly installed custom model wouldn't be picked up until next launch.
+            var wasRunning = InstanceRunning || InstanceStarting;
+            var shouldRestart = wasRunning || (!installProcess && _config.EchokrauTts.AutoStartLocalInstance);
+
+            if (_instanceProcessIsRunning || _instanceProcess != null || _instanceThread != null)
+                StopInstance(eventId);
+            _instanceThread = Task.Run(() => RunCustomDataInstall(shouldRestart, eventId));
+        }
+        catch (Exception ex)
+        {
+            _log.Error(nameof(InstallCustomData), $"Error while installing EchokrauTTS custom data: {ex}", eventId);
+            StopInstance(eventId);
+        }
+    }
+
+    /// <inheritdoc/>
     public void SwitchTtsBackend(Echokraut.Enums.EchokrauTtsEngine engine)
     {
         if (_config.EchokrauTts.TtsBackend == engine) return;
@@ -216,6 +250,102 @@ public sealed class EchokrauTtsInstanceService : IEchokrauTtsInstanceService, ID
         finally
         {
             _voiceExtract.ProgressChanged -= onExtractProgress;
+        }
+    }
+
+    // installcustomdataek <installRoot> <customModelUrl> <customVoicesUrl> <isWindows> <shouldRestart> <port> <language> <parentPid> <ttsBackend> <xttsFp16>
+    private ProcessStartInfo BuildCustomDataProcessInfo(bool shouldRestart, string installerExe) => new(installerExe)
+    {
+        UseShellExecute = true,
+        CreateNoWindow = false,
+        ArgumentList =
+        {
+            "installcustomdataek",
+            _config.TtsInstallRoot,
+            _config.EchokrauTts.CustomModelUrl ?? string.Empty,
+            _config.EchokrauTts.CustomVoicesUrl ?? string.Empty,
+            IsWindows.ToString(),
+            shouldRestart.ToString(),
+            Port().ToString(),
+            LanguageCode(_clientState.ClientLanguage),
+            Environment.ProcessId.ToString(),
+            _config.EchokrauTts.TtsBackendArg,
+            _config.EchokrauTts.XttsFp16Arg,
+        }
+    };
+
+    /// <summary>
+    /// Runs the installer's <c>installcustomdataek</c> mode: it drops the custom model/samples into
+    /// the wrapper layout and, when <paramref name="shouldRestart"/>, relaunches the wrapper (serve)
+    /// as one long-running process — mirroring <see cref="RunInstance"/>'s ready-file polling. When
+    /// no restart is wanted the installer just applies the data and exits.
+    /// </summary>
+    private void RunCustomDataInstall(bool shouldRestart, EKEventId eventId)
+    {
+        try
+        {
+            Installing = true;
+            CurrentInstallStatus = "Installing custom data (downloads may take a while)...";
+            CurrentInstallProgress = 0.10f;
+            _log.Info(nameof(RunCustomDataInstall), $"Installing EchokrauTTS custom data (shouldRestart={shouldRestart})", eventId);
+
+            var installerExe = EnsureInstaller(eventId);
+            var readyFile = Path.Join(Path.GetDirectoryName(installerExe), ReadyFileName);
+            if (File.Exists(readyFile)) { try { File.Delete(readyFile); } catch { /* will be recreated */ } }
+
+            if (shouldRestart) InstanceStarting = true;
+            _instanceProcess = new Process { StartInfo = BuildCustomDataProcessInfo(shouldRestart, installerExe) };
+            _instanceProcess.Start();
+            _instanceProcessIsRunning = true;
+
+            if (!shouldRestart)
+            {
+                // Installer applies the custom data and exits — no serving process to track.
+                _instanceProcess.WaitForExit();
+                _instanceProcessIsRunning = false;
+                _instanceProcess.Dispose();
+                _instanceProcess = null;
+                _instanceThread = null;
+                Installing = false;
+                CurrentInstallStatus = "Done";
+                CurrentInstallProgress = 1.0f;
+                _log.Info(nameof(RunCustomDataInstall), "Custom data installed", eventId);
+                return;
+            }
+
+            // Installer applies the custom data then relaunches the wrapper (serve): poll ready.
+            while (!File.Exists(readyFile) && !_instanceProcess.HasExited)
+                Thread.Sleep(2000);
+
+            InstanceStarting = false;
+            Installing = false;
+            if (!File.Exists(readyFile))
+            {
+                _log.Warning(nameof(RunCustomDataInstall), "Installer exited before EchokrauTTS became ready", eventId);
+                CurrentInstallStatus = "Failed: install did not complete";
+                InstanceRunning = false;
+                _instanceProcessIsRunning = false;
+                return;
+            }
+
+            CurrentInstallStatus = "Done";
+            CurrentInstallProgress = 1.0f;
+            InstanceRunning = true;
+            _log.Info(nameof(RunCustomDataInstall), "Custom data installed, instance restarted", eventId);
+            OnInstanceReady?.Invoke();
+
+            _instanceProcess.WaitForExit();
+            _instanceProcessIsRunning = false;
+            InstanceRunning = false;
+            _log.Info(nameof(RunCustomDataInstall), "EchokrauTTS instance stopped", eventId);
+        }
+        catch (Exception ex)
+        {
+            StopInstance(eventId);
+            Installing = false;
+            CurrentInstallStatus = $"Failed: {ex.Message}";
+            CurrentInstallProgress = 0f;
+            _log.Error(nameof(RunCustomDataInstall), $"Error while installing EchokrauTTS custom data: {ex}", eventId);
         }
     }
 

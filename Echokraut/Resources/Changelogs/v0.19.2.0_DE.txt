@@ -1,0 +1,30 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.2.0
+================================================================================
+
+
+==============================================================================
+VERBESSERUNGEN
+==============================================================================
+
+[Backend] Eigenes EchokrauTTS-Modell und eigene Voice-Samples installieren
+  Lokales EchokrauTTS hat jetzt dieselbe "Nur benutzerdefinierte Daten
+  installieren"-Option wie AllTalk: Fuege eine URL (Direktlink oder Google Drive)
+  zu einem ZIP mit deinem eigenen trainierten Modell und/oder einem ZIP mit
+  Voice-Samples ein und klicke den Button unter Einstellungen -> Backend. Das
+  Modell wird in den models-Ordner von EchokrauTTS installiert und automatisch
+  fuer die aktive Engine (F5 oder XTTS) verwendet; die Samples werden zu deinen
+  Voice-Samples hinzugefuegt (dein extrahiertes Starter-Set bleibt erhalten). Die
+  lokale Instanz startet selbst neu, damit das neue Modell sofort greift.
+
+
+==============================================================================
+FEHLERBEHEBUNGEN
+==============================================================================
+
+[Backend] EchokrauTTS beachtet jetzt die Einstellung „Streaming-Generierung"
+  EchokrauTTS hat Audio immer gestreamt und die Wiedergabe gestartet, bevor die
+  Zeile fertig generiert war -- auch wenn „Streaming-Generierung" ausgeschaltet
+  war. Es beachtet die Einstellung jetzt wie AllTalk: Ist Streaming aus, wird auf
+  den vollstaendigen Clip gewartet, bevor abgespielt wird.

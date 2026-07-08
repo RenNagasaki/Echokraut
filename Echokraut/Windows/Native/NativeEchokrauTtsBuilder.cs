@@ -33,6 +33,10 @@ public static class NativeEchokrauTtsBuilder
         // Only created + shown when a CUDA/ROCm GPU is available (fp16 is a no-op otherwise).
         public CheckboxNode? Fp16Check;
         public bool CudaAvailable;
+        public TextInputNode CustomModelUrlInput = null!;
+        public TextInputNode CustomVoicesUrlInput = null!;
+        public TextButtonNode InstallCustomDataButton = null!;
+        public HorizontalListNode InstallCustomDataRow = null!;
         public TextButtonNode InstallButton = null!;
         public HorizontalListNode InstallRow = null!;
         public TextButtonNode StartButton = null!;
@@ -42,8 +46,8 @@ public static class NativeEchokrauTtsBuilder
         // Fp16 checkbox is included only when CUDA is available — omitting it from AllNodes (rather
         // than hiding it) keeps it from reserving an empty layout slot in the collapsible section.
         public NodeBase[] AllNodes => CudaAvailable && Fp16Check != null
-            ? [InstallPathInput, ValidationLabel, AutoStartCheck, EngineCaption, EngineDropDown, Fp16Check, InstallRow, StartStopRow]
-            : [InstallPathInput, ValidationLabel, AutoStartCheck, EngineCaption, EngineDropDown, InstallRow, StartStopRow];
+            ? [InstallPathInput, ValidationLabel, AutoStartCheck, EngineCaption, EngineDropDown, Fp16Check, CustomModelUrlInput, CustomVoicesUrlInput, InstallCustomDataRow, InstallRow, StartStopRow]
+            : [InstallPathInput, ValidationLabel, AutoStartCheck, EngineCaption, EngineDropDown, CustomModelUrlInput, CustomVoicesUrlInput, InstallCustomDataRow, InstallRow, StartStopRow];
 
         public void Update(Configuration config, IEchokrauTtsInstanceService instance, bool batchActive = false)
         {
@@ -53,6 +57,9 @@ public static class NativeEchokrauTtsBuilder
 
             InstallButton.String = InstallLabel(instance, config);
             Dim(InstallButton, pathValid && !instance.Installing && !batchActive);
+
+            // Install-custom-data only makes sense once a local install exists, and never mid-install.
+            Dim(InstallCustomDataButton, pathValid && config.EchokrauTts.LocalInstall && !instance.Installing && !batchActive);
 
             StartButton.String = StartLabel(instance);
             Dim(StartButton, pathValid
@@ -151,6 +158,24 @@ public static class NativeEchokrauTtsBuilder
                 config.EchokrauTts.XttsFp16,
                 v => instance.SetXttsFp16(v)); // persists + restarts if running
         }
+
+        // Custom data (already-prepared model + voice samples). The model zip lands in
+        // echokrautts/models/echokraut_custom (auto-detected by the active engine), the voices zip is
+        // merged into echokrautts/samples. Reuses the AllTalk model/button Loc keys; the voices hint
+        // differs because EchokrauTTS uses a samples/ layout, not AllTalk's voices/ folder.
+        nodes.CustomModelUrlInput = Input(Loc.S("Custom model URL (zip with one root folder)"), width, 256,
+            config.EchokrauTts.CustomModelUrl,
+            v => { config.EchokrauTts.CustomModelUrl = v; config.Save(); });
+        nodes.CustomVoicesUrlInput = Input(Loc.S("Custom voices URL (zip of sample files)"), width, 256,
+            config.EchokrauTts.CustomVoicesUrl,
+            v => { config.EchokrauTts.CustomVoicesUrl = v; config.Save(); });
+
+        // Install-only-custom-data does blocking download/extract I/O and restarts the wrapper, so run
+        // it off the UI thread (same freeze-avoidance as Install/Stop). Progress surfaces via Update().
+        nodes.InstallCustomDataButton = Button(Loc.S("Install only custom data"), 170, () =>
+            Task.Run(() => instance.InstallCustomData(new EKEventId(0, TextSource.Backend), false)));
+        nodes.InstallCustomDataRow = new HorizontalListNode { Size = new Vector2(width, 26), ItemSpacing = 4 };
+        nodes.InstallCustomDataRow.AddNode(nodes.InstallCustomDataButton);
 
         // Stop/Install do blocking I/O (graceful-shutdown HTTP POST with a timeout + process kill),
         // so run them off the UI thread — otherwise the game freezes for up to a few seconds. The

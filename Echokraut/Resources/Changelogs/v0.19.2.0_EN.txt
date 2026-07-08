@@ -1,0 +1,29 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.2.0
+================================================================================
+
+
+==============================================================================
+IMPROVEMENTS
+==============================================================================
+
+[Backend] Install your own EchokrauTTS model and voice samples
+  Local EchokrauTTS now has the same "Install only custom data" option AllTalk
+  offers: paste a URL (direct link or Google Drive) to a zip with your own
+  trained model and/or a zip of voice samples, then click the button in
+  Settings -> Backend. The model is installed into EchokrauTTS's models folder
+  and used automatically for the active engine (F5 or XTTS); the samples are
+  merged into your voice samples (your extracted starter set is kept). The local
+  instance restarts on its own so the new model takes effect right away.
+
+
+==============================================================================
+BUG FIXES
+==============================================================================
+
+[Backend] EchokrauTTS now respects the "Streaming generation" setting
+  EchokrauTTS always streamed audio and started playback before the line was
+  fully generated, even with "Streaming generation" turned off. It now honors
+  the setting like AllTalk: with streaming off, it waits for the whole clip
+  before playing.

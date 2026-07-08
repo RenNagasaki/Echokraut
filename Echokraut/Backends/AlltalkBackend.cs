@@ -70,7 +70,7 @@ namespace Echokraut.Backend
                 var responseStream = await res.Content.ReadAsStreamAsync().ConfigureAwait(false);
                 var readSeekableStream = new ReadSeekableStream(responseStream, 2146435);
 
-                if (!_configuration.Alltalk.StreamingGeneration)
+                if (!_configuration.StreamingGeneration)
                 {
                     await _audioFiles.WriteStreamToFile(eventId, message, readSeekableStream, _configuration.LocalSaveLocation, _configuration.GoogleDriveUpload);
                     readSeekableStream.Seek(0, SeekOrigin.Begin);

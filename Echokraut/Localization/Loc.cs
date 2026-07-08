@@ -210,6 +210,7 @@ public static class Loc
         ["Local install path (no spaces or dashes)"] = new() { { DE, "Lokaler Installationspfad (keine Leerzeichen oder Bindestriche)" }, { FR, "Chemin d'installation local (sans espaces ni tirets)" }, { JP, "ローカルインストールパス（スペースやダッシュなし）" } },
         ["Custom model URL (zip with one root folder)"] = new() { { DE, "Benutzerdefinierte Modell-URL (ZIP mit einem Stammordner)" }, { FR, "URL du modèle personnalisé (zip avec un dossier racine)" }, { JP, "カスタムモデルURL（ルートフォルダ1つのzip）" } },
         ["Custom voices URL (zip with \"voices\" folder)"] = new() { { DE, "Benutzerdefinierte Stimmen-URL (ZIP mit \"voices\"-Ordner)" }, { FR, "URL des voix personnalisées (zip avec dossier \"voices\")" }, { JP, "カスタムボイスURL（「voices」フォルダ付きzip）" } },
+        ["Custom voices URL (zip of sample files)"] = new() { { DE, "Benutzerdefinierte Stimmen-URL (ZIP mit Sample-Dateien)" }, { FR, "URL des voix personnalisées (zip de fichiers d'échantillons)" }, { JP, "カスタムボイスURL（サンプルファイルのzip）" } },
         ["Install only custom data"] = new() { { DE, "Nur benutzerdefinierte Daten installieren" }, { FR, "Installer uniquement les données personnalisées" }, { JP, "カスタムデータのみインストール" } },
         ["Install"] = new() { { DE, "Installieren" }, { FR, "Installer" }, { JP, "インストール" } },
         ["Reinstall"] = new() { { DE, "Neuinstallieren" }, { FR, "Réinstaller" }, { JP, "再インストール" } },

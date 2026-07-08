@@ -1,0 +1,17 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.1.1
+================================================================================
+
+
+==============================================================================
+FEHLERBEHEBUNGEN
+==============================================================================
+
+[Start] Kein „Too Many Requests"-Fehler mehr beim Laden der Voice-Daten
+  Beim Start laedt Echokraut mehrere Datendateien von GitHub; dieser Schwung an
+  Anfragen konnte gedrosselt werden (HTTP 429), wodurch das Laden der Stimmen-
+  Namensliste mit einer Fehlermeldung fehlschlug. Start-Abrufe versuchen es jetzt
+  bei voruebergehenden Fehlern mit Wartezeit erneut und fallen auf eine
+  mitgelieferte Kopie der Daten zurueck -- so laedt das Plugin sauber, auch wenn
+  GitHub kurz nicht erreichbar ist oder drosselt.
