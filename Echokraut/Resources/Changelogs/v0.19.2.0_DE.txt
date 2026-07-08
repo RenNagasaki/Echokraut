@@ -28,3 +28,8 @@ FEHLERBEHEBUNGEN
   Zeile fertig generiert war -- auch wenn „Streaming-Generierung" ausgeschaltet
   war. Es beachtet die Einstellung jetzt wie AllTalk: Ist Streaming aus, wird auf
   den vollstaendigen Clip gewartet, bevor abgespielt wird.
+
+[Backend] Eigene Stimmen werden nicht mehr vom Voice-Starter-Set ueberschrieben
+  Wenn du mit gesetzter Custom-Voices-URL installierst, extrahiert die Installation
+  nicht mehr das FFXIV-Voice-Starter-Set ueber deine Stimmen (was sie vorher
+  ersetzt hat). Gilt fuer AllTalk und EchokrauTTS.

@@ -27,3 +27,8 @@ BUG FIXES
   fully generated, even with "Streaming generation" turned off. It now honors
   the setting like AllTalk: with streaming off, it waits for the whole clip
   before playing.
+
+[Backend] Custom voices are no longer overwritten by the voice starter set
+  When you install with a custom voices URL set, the install no longer extracts
+  the FFXIV voice starter set on top of your voices (which previously replaced
+  them). This applies to both AllTalk and EchokrauTTS.

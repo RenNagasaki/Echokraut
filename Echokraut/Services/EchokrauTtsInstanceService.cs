@@ -399,8 +399,14 @@ public sealed class EchokrauTtsInstanceService : IEchokrauTtsInstanceService, ID
             if (download)
             {
                 // Fresh install: seed the voice starter set into echokrautts/samples (mirror of
-                // AllTalk's install-time extract) before marking complete.
-                ExtractStarterSet(eventId);
+                // AllTalk's install-time extract) before marking complete — UNLESS the user supplied
+                // their own custom voices, in which case they don't want the FFXIV starter set (they
+                // install their voices via "Install only custom data").
+                if (string.IsNullOrWhiteSpace(_config.EchokrauTts.CustomVoicesUrl))
+                    ExtractStarterSet(eventId);
+                else
+                    _log.Info(nameof(RunInstance),
+                        "Custom voices provided — skipping FFXIV voice starter-set extraction.", eventId);
                 MarkInstalled();
             }
 

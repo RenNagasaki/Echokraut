@@ -124,46 +124,58 @@ public class AlltalkInstanceService : IAlltalkInstanceService, IDisposable
                 // voice list. StarterSetSamplesPerNpc samples per voice (decode + resample of
                 // ~hundreds of NPCs once); user can rebuild with a different count later via the
                 // Game Data Tools window.
-                var alltalkFolder = TtsPaths.AllTalkRoot(_config.TtsInstallRoot);
-                var voicesDir = Path.Join(alltalkFolder, "voices");
-                _log.Info(nameof(Install),
-                    $"Building voice starter set into {voicesDir} (this replaces the old voices.zip download)...",
-                    eventId);
-                CurrentInstallStatus = "Building voice samples...";
-                CurrentInstallProgress = 0.50f;
-                // Subscribe to extractor progress for the duration of this run so the
-                // First-Time window's progress bar shows real "X/Y NPCs" granularity instead
-                // of the indeterminate sticky-50% during the opaque installer phase. Mapping:
-                // 0..1 from the extractor → 0.50..0.95 in our overall install bar.
-                Action<string, int, int> onExtractProgress = (label, current, total) =>
+                // When the user supplied their own custom voices, the installer already extracted
+                // them into alltalk_tts/voices/ during the install step. Building the FFXIV starter
+                // set here would WIPE that folder (the extractor clears voices/ before writing) and
+                // replace the custom voices — so skip it. With no custom voices, build as usual.
+                if (string.IsNullOrWhiteSpace(_config.Alltalk.CustomVoicesUrl))
                 {
-                    var ratio = total > 0 ? Math.Clamp((float)current / total, 0f, 1f) : 0f;
-                    CurrentInstallProgress = 0.50f + ratio * 0.45f;
-                    if (!string.IsNullOrEmpty(label))
-                        CurrentInstallStatus = $"Voice samples — {label} ({current}/{total})";
-                };
-                try
-                {
-                    _voiceExtract.ProgressChanged += onExtractProgress;
-                    using var extractCts = new CancellationTokenSource();
-                    _voiceExtract.RunAsync(_clientState.ClientLanguage,
-                        samplesPerNpc: VoiceSampleExtractorService.StarterSetSamplesPerNpc, extractCts.Token,
-                        outputRootOverride: alltalkFolder, outputSubfolder: "voices")
-                        .GetAwaiter().GetResult();
-                    _log.Info(nameof(Install), "Voice starter set ready.", eventId);
-                }
-                catch (Exception ex)
-                {
-                    // Non-fatal: install still completes. User can re-run extract from the
-                    // Game Data Tools window if voice samples are missing.
-                    _log.Warning(nameof(Install),
-                        $"Voice starter-set extraction failed during install: {ex.Message}. " +
-                        $"Run it manually from Game Data Tools later.",
+                    var alltalkFolder = TtsPaths.AllTalkRoot(_config.TtsInstallRoot);
+                    var voicesDir = Path.Join(alltalkFolder, "voices");
+                    _log.Info(nameof(Install),
+                        $"Building voice starter set into {voicesDir} (this replaces the old voices.zip download)...",
                         eventId);
+                    CurrentInstallStatus = "Building voice samples...";
+                    CurrentInstallProgress = 0.50f;
+                    // Subscribe to extractor progress for the duration of this run so the
+                    // First-Time window's progress bar shows real "X/Y NPCs" granularity instead
+                    // of the indeterminate sticky-50% during the opaque installer phase. Mapping:
+                    // 0..1 from the extractor → 0.50..0.95 in our overall install bar.
+                    Action<string, int, int> onExtractProgress = (label, current, total) =>
+                    {
+                        var ratio = total > 0 ? Math.Clamp((float)current / total, 0f, 1f) : 0f;
+                        CurrentInstallProgress = 0.50f + ratio * 0.45f;
+                        if (!string.IsNullOrEmpty(label))
+                            CurrentInstallStatus = $"Voice samples — {label} ({current}/{total})";
+                    };
+                    try
+                    {
+                        _voiceExtract.ProgressChanged += onExtractProgress;
+                        using var extractCts = new CancellationTokenSource();
+                        _voiceExtract.RunAsync(_clientState.ClientLanguage,
+                            samplesPerNpc: VoiceSampleExtractorService.StarterSetSamplesPerNpc, extractCts.Token,
+                            outputRootOverride: alltalkFolder, outputSubfolder: "voices")
+                            .GetAwaiter().GetResult();
+                        _log.Info(nameof(Install), "Voice starter set ready.", eventId);
+                    }
+                    catch (Exception ex)
+                    {
+                        // Non-fatal: install still completes. User can re-run extract from the
+                        // Game Data Tools window if voice samples are missing.
+                        _log.Warning(nameof(Install),
+                            $"Voice starter-set extraction failed during install: {ex.Message}. " +
+                            $"Run it manually from Game Data Tools later.",
+                            eventId);
+                    }
+                    finally
+                    {
+                        _voiceExtract.ProgressChanged -= onExtractProgress;
+                    }
                 }
-                finally
+                else
                 {
-                    _voiceExtract.ProgressChanged -= onExtractProgress;
+                    _log.Info(nameof(Install),
+                        "Custom voices provided — skipping FFXIV voice starter-set extraction.", eventId);
                 }
 
                 CurrentInstallStatus = "Finalizing...";
