@@ -788,8 +788,16 @@ public class Program
                         if (Directory.Exists(voicesFolder))
                             Directory.Delete(voicesFolder, true);
 
+                        // Unified custom-voices layout: the zip is expected FLAT — voice folders
+                        // and sample files at the zip root — so we extract straight into voices/.
+                        // A zip still prepared the old AllTalk way (everything wrapped in a top-level
+                        // "voices/" folder) would otherwise produce voices/voices/… ; StripVoiceWrapperFolder
+                        // strips that stray wrapper. A per-voice folder is left intact (its name won't
+                        // match a wrapper name). Same contract as EchokrauTTS custom voices.
                         Log($"Extracting custom voices");
-                        System.IO.Compression.ZipFile.ExtractToDirectory(voicesFile, alltalkFolder, true);
+                        Directory.CreateDirectory(voicesFolder);
+                        System.IO.Compression.ZipFile.ExtractToDirectory(voicesFile, voicesFolder, true);
+                        StripVoiceWrapperFolder(voicesFolder);
                         File.Delete(voicesFile);
                     }
                     catch (Exception ex)
@@ -841,7 +849,12 @@ public class Program
             if (!string.IsNullOrWhiteSpace(customVoicesUrl))
             {
                 Log("Installing custom EchokrauTTS voice samples");
-                await DownloadAndExtractZip(customVoicesUrl, samplesFolder, "custom voices");
+                // Same flat-zip contract as AllTalk custom voices: extract into a staging folder,
+                // strip a stray "voices"/"samples" wrapper (AllTalk-prepared zips wrap everything
+                // in voices/), then merge additively into echokrautts/samples so the extracted
+                // starter set is preserved. Staging is required because samples/ may already hold
+                // the starter set — stripping the wrapper in-place would be blocked by those files.
+                await DownloadAndMergeVoicesZip(customVoicesUrl, samplesFolder, "custom voices");
             }
             else
                 Log("No custom voices URL, skipping");
@@ -905,6 +918,81 @@ public class Program
             Log($"Flattened single wrapper folder in {folder}");
         }
         catch (Exception ex) { Log($"Flatten skipped: {ex.Message}"); }
+    }
+
+    /// <summary>Download a (possibly Google Drive) custom-voices zip and merge it additively into
+    /// <paramref name="targetFolder"/> (created if needed, same-named files overwritten). The zip is
+    /// staged in a sibling folder first so a stray wrapper folder (<see cref="VoiceWrapperFolderNames"/>)
+    /// can be stripped before the merge — in-place stripping would be blocked when the target already
+    /// holds files (e.g. the extracted starter set). Best-effort: failures are logged and swallowed,
+    /// and the staging folder is always cleaned up.</summary>
+    static async Task DownloadAndMergeVoicesZip(string url, string targetFolder, string label)
+    {
+        var stagingFolder = targetFolder.TrimEnd('\\', '/') + ".incoming";
+        try
+        {
+            if (Directory.Exists(stagingFolder))
+                Directory.Delete(stagingFolder, true);
+            await DownloadAndExtractZip(url, stagingFolder, label);
+            StripVoiceWrapperFolder(stagingFolder);
+            MergeDirectory(stagingFolder, targetFolder);
+        }
+        catch (Exception ex)
+        {
+            Log($"Error while installing {label}, skipping: {ex}");
+        }
+        finally
+        {
+            try { if (Directory.Exists(stagingFolder)) Directory.Delete(stagingFolder, true); } catch { }
+        }
+    }
+
+    /// <summary>Recursively move every file from <paramref name="source"/> into <paramref name="dest"/>,
+    /// preserving relative sub-paths and overwriting same-named files (additive merge). Empty source
+    /// (e.g. a failed download) is a no-op.</summary>
+    static void MergeDirectory(string source, string dest)
+    {
+        if (!Directory.Exists(source)) return;
+        Directory.CreateDirectory(dest);
+        foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var rel = Path.GetRelativePath(source, file);
+            var target = Path.Join(dest, rel);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Move(file, target, true);
+        }
+    }
+
+    /// <summary>Wrapper folder names a custom-voices zip may nest everything under. AllTalk-prepared
+    /// zips wrap all samples in a top-level <c>voices/</c> folder; <c>samples/</c> is the EchokrauTTS
+    /// equivalent. Stripping only these reserved names (see <see cref="StripVoiceWrapperFolder"/>)
+    /// keeps a legitimate per-voice folder — a voice with several samples — intact.</summary>
+    static readonly string[] VoiceWrapperFolderNames = { "voices", "samples" };
+
+    /// <summary>If <paramref name="folder"/> has no files of its own but exactly one sub-directory whose
+    /// name is a known wrapper name (<see cref="VoiceWrapperFolderNames"/>), move that sub-directory's
+    /// contents up one level and delete it. Unifies AllTalk- and EchokrauTTS-style custom-voice zips on
+    /// a flat layout: a stray wrapping <c>voices/</c> from an AllTalk-prepared zip is stripped, while a
+    /// single voice-with-samples folder is left alone because its name won't match a wrapper name.</summary>
+    static void StripVoiceWrapperFolder(string folder)
+    {
+        try
+        {
+            if (!Directory.Exists(folder)) return;
+            if (Directory.EnumerateFiles(folder).Any()) return;
+            var subs = Directory.GetDirectories(folder);
+            if (subs.Length != 1) return;
+            var inner = subs[0];
+            var innerName = Path.GetFileName(inner);
+            if (!VoiceWrapperFolderNames.Contains(innerName, StringComparer.OrdinalIgnoreCase)) return;
+            foreach (var f in Directory.GetFiles(inner))
+                File.Move(f, Path.Join(folder, Path.GetFileName(f)));
+            foreach (var d in Directory.GetDirectories(inner))
+                Directory.Move(d, Path.Join(folder, Path.GetFileName(d)));
+            Directory.Delete(inner, true);
+            Log($"Stripped wrapper folder '{innerName}' in {folder}");
+        }
+        catch (Exception ex) { Log($"Wrapper strip skipped: {ex.Message}"); }
     }
 
     static string CleanAnsi(string input)

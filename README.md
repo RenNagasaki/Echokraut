@@ -4,6 +4,10 @@
 
 Bring your dialogue to life in Final Fantasy XIV: Fully voiced NPC storylines and battle calls, auto-advance, and immersive 3D chat.
 
+> ### 📖 New here? Read the **[Full User Guide → GUIDE.md](GUIDE.md)**
+> Step-by-step first-time setup, everyday use, and how to switch between TTS engines
+> (AllTalk ↔ EchokrauTTS, and XTTS ↔ F5 inside EchokrauTTS).
+
 ## Disclaimer
 
 - Echokraut supports **two TTS engines** — **EchokrauTTS** (the default) and **AllTalk_TTS** — each usable in **Local** (runs on your own machine), **Remote** (connect to a server), or **Audio Files Only** (no generation) mode. Local generation is GPU-based: it currently requires an Nvidia GPU on Windows (AMD GPUs are supported on Linux), with a dedicated GPU of at least 6 GB VRAM (e.g. RTX 3060 or AMD equivalent on Linux) recommended for local inference. Remote mode offloads generation to another machine, so no local GPU is needed.
@@ -49,7 +53,10 @@ Bring your dialogue to life in Final Fantasy XIV: Fully voiced NPC storylines an
 
 | Command | Description |
 |---------|-------------|
-| `/ek` | Opens the configuration window |
+| `/ek` | Opens the Voice Clip Manager |
+| `/ekconfig` | Opens the configuration window |
+| `/ekfirst` | Opens the first-time setup wizard |
+| `/ekdata` | Opens the Game Data Tools window |
 | `/ekt` | Toggles the plugin on/off |
 | `/ekttalk` | Toggles dialogue voicing |
 | `/ektbtalk` | Toggles battle dialogue voicing |
@@ -57,9 +64,6 @@ Bring your dialogue to life in Final Fantasy XIV: Fully voiced NPC storylines an
 | `/ektchat` | Toggles chat voicing |
 | `/ektchoice` | Toggles player choice voicing |
 | `/ektcutschoice` | Toggles cutscene choice voicing |
-| `/ekdel [n]` | Deletes last *n* local saved audio files (default 10) |
-| `/ekdelmin [n]` | Deletes audio files generated in the last *n* minutes (default 10) |
-| `/ekfirst` | Opens the first-time setup wizard |
 
 ## Setup
 
@@ -89,7 +93,7 @@ First pick a TTS engine — **EchokrauTTS** (selected by default) or **AllTalk_T
 
 **Step 2 — Configure your chosen engine** (install progress, server URL, or file paths) and test the connection.
 
-**Step 3 — Done!** Open settings anytime with `/ek`.
+**Step 3 — Done!** Open settings anytime with `/ekconfig`.
 
 ### 3. Voice file naming (optional)
 
@@ -114,7 +118,7 @@ For NPCs with multiple names (e.g. Nanamo Ul Namo / Lilira) or shared voice acto
 
 ## Settings Overview
 
-The configuration window (`/ek`) has four main tabs:
+The configuration window (`/ekconfig`) has four main tabs:
 
 - **Settings** — Five sub-tabs:
   - *General* — Master toggle, in-game controls, reset data
