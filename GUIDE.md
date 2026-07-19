@@ -5,7 +5,7 @@ unvoiced NPC dialogue, battle talk, chat, and speech bubbles with text-to-speech
 
 If you just want to get talking, jump to **[1. First-time setup](#1-first-time-setup)**.
 If you already have it running and want to change how audio is generated, jump to
-**[4. Switching TTS engines](#4-switching-tts-engines)**.
+**[4. Switching TTS engines](#4-switching-tts-engines-alltalk--echokrautts)**.
 
 ---
 
@@ -17,8 +17,9 @@ If you already have it running and want to change how audio is generated, jump t
 4. [Switching TTS engines (AllTalk ↔ EchokrauTTS)](#4-switching-tts-engines-alltalk--echokrautts)
 5. [Switching sub-engines inside EchokrauTTS (XTTS ↔ F5)](#5-switching-sub-engines-inside-echokrautts-xtts--f5)
 6. [Managing voices](#6-managing-voices)
-7. [Commands reference](#7-commands-reference)
-8. [Troubleshooting](#8-troubleshooting)
+7. [Settings reference](#7-settings-reference)
+8. [Commands reference](#8-commands-reference)
+9. [Troubleshooting](#9-troubleshooting)
 
 ---
 
@@ -125,6 +126,11 @@ a chat command:
   blends with normally voiced cutscenes.
 - **3D audio** — dialogue, bubbles, and chat can be positioned in 3D relative to the
   speaker or camera.
+- **Streaming generation** (*Settings → General*) — when **on**, audio starts playing while
+  the clip is still being generated, for the lowest delay. When **off**, Echokraut waits
+  until the whole clip is ready and then plays it — slightly more delay, but gapless. Turn
+  it **off** if you hear crackling or stutter on a slower GPU that can't generate faster
+  than real time. This setting applies to **both** engines (AllTalk and EchokrauTTS).
 
 ### In-dialogue controls
 
@@ -163,8 +169,9 @@ Notes:
   configuration.
 - The first time you switch to an engine in **Local** mode you'll need to install it
   once. After that, switching is instant.
-- If you switch to **Audio Files Only** mode, tabs that require live generation (such as
-  Voice Selection, Phonetics, and Chat) are hidden, because there's nothing to generate.
+- If you switch to **Audio Files Only** mode, tabs that require live generation (the
+  **Voices** and **Phonetics** tabs and the **Chat** sub-tab) are hidden, because there's
+  nothing to generate.
 
 ---
 
@@ -217,13 +224,13 @@ race/gender-appropriate NPC voice, and finally to a narrator voice for unnamed s
 
 ### Reassigning a voice
 
-Open `/ekconfig` → **Voice Selection**. Search across gender, race, name, and voice, then
+Open `/ekconfig` → the **Voices** tab. Search across gender, race, name, and voice, then
 reassign the voice of any NPC you've encountered. You can also do this on the fly from the
 voice selector attached to the dialogue window.
 
 ### Phonetic corrections
 
-Open `/ekconfig` → **Phonetic Corrections** to add pronunciation rules for names and terms
+Open `/ekconfig` → the **Phonetics** tab to add pronunciation rules for names and terms
 the engine mispronounces.
 
 ### Custom voice files (optional)
@@ -246,7 +253,89 @@ audio clips per NPC.
 
 ---
 
-## 7. Commands reference
+## 7. Settings reference
+
+Open the configuration window with `/ekconfig`. It has four top-level tabs: **Settings**,
+**Voices**, **Phonetics**, and **Logs**. In *Audio Files Only* mode the **Voices** and
+**Phonetics** tabs (and the **Chat** sub-tab) are hidden — there's no live generation to
+configure.
+
+### Settings tab
+
+Five sub-tabs:
+
+**General**
+- **Enabled** — master on/off switch for the whole plugin.
+- **Generate per sentence** — splits long lines into sentences for shorter latency
+  (recommended for CPU inference).
+- **Streaming generation** — play audio while it's still generating; off = wait for the
+  full clip (see [Everyday use](#3-everyday-use)). Applies to both engines.
+- **Remove stutters** / **Remove punctuation** — clean up the text before TTS (removing
+  punctuation may reduce speech hallucinations).
+- **Hide UI in cutscenes**.
+- **Show Play/Pause, Stop and Mute buttons in dialogue** — toggles the in-dialogue controls.
+- **In-Game Controls** and **Reset Data** sections (Clear mapped NPCs / players / bubbles,
+  Wipe database & local audio, Reload remote mappings, Reload voices), plus an **Available
+  commands** list.
+
+**Dialogue**
+- **Voice dialogue** and **Voice dialogue in 3D space**.
+- **Voice player choices in cutscenes** and **outside cutscenes**.
+- **Cancel voice on text advance** and **Auto-advance dialogue after speech completes**.
+- **Voice retainer dialogue**.
+- **Battle Dialogue** section: Voice battle dialogue, Queue battle dialogue.
+- **NPC Bubbles** section: Voice NPC bubbles, Voice bubbles in cities, Use camera as 3D
+  sound source.
+
+**Chat** *(hidden in Audio Files Only mode)*
+- **Voice chat** and a **Detect Language API key** (from detectlanguage.com).
+- **3D Space** section: Voice chat in 3D space.
+- **Chat channels** section: your own chat, Say, Yell, Shout, Free Company, Tell, Party,
+  Alliance, Novice Network, linkshells, and cross-world linkshells — each toggled
+  independently.
+
+**Storage**
+- **Search for audio locally before generating**, **Save generated audio locally**,
+  **Create directory if missing**, and the **Local audio directory path**.
+- **Auto-generate shareable alias variants for player-name dialog**.
+- **Send dialogue lines to Ren Nagasaki's share** — contribute lines to a shared voice-line
+  database.
+- **Google Drive** section: Upload (requires local save), Download from share, Download
+  periodically, the share link, and a **Download now** button.
+
+**Backend**
+- The **engine** selector (EchokrauTTS / AllTalk_TTS) and the **mode** buttons (Local TTS /
+  Remote Server / Audio Files Only).
+- Per-engine, per-mode sections: **Local instance** (install/start/stop, the XTTS/F5
+  **TTS engine** dropdown, FP16), **Advanced options**, **Remote connection** (base URL +
+  Test), and **Audio Files Only** (audio path + Google Drive). See
+  [Switching TTS engines](#4-switching-tts-engines-alltalk--echokrautts) and
+  [Switching sub-engines](#5-switching-sub-engines-inside-echokrautts-xtts--f5).
+
+### Voices tab
+
+Search and reassign NPC voices. A unified **Search** box matches gender, race, name, and
+voice, and an **Advanced Filters** toggle adds per-column filters. Each row lets you
+**Play** (test the voice), change the assigned **Voice**, set a per-NPC **Volume**,
+**Delete audio**, **Delete mapping**, or **Configure** (allowed races/genders). Long lists
+are paginated.
+
+### Phonetics tab
+
+Manage **phonetic corrections** — pronunciation fixes for names and terms the engine gets
+wrong. Each rule maps an **Original** text to a **Corrected** text: add one with the *New
+original* / *New corrected* fields and **Add**, filter the existing list, and **Delete**
+any row. Corrections are applied to the text before it's handed to the TTS engine.
+
+### Logs tab
+
+A per-source log viewer (Talk, Battle Talk, Bubbles, Chat, Cutscene, Choice, Backend) for
+seeing exactly what Echokraut did with a given line — useful when reporting an issue. The
+live-generation-only sources are hidden in Audio Files Only mode.
+
+---
+
+## 8. Commands reference
 
 | Command | What it does |
 |---------|--------------|
@@ -264,7 +353,7 @@ audio clips per NPC.
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 **Local install won't start.** Make sure the install path has no spaces or dashes, and
 that you have enough free disk space. On Windows the install is automated; wait for it to
@@ -279,10 +368,11 @@ toggled on, and the in-game **Voice** volume slider isn't at zero.
 
 **Crackling or stuttering with local EchokrauTTS + XTTS on a weak GPU.** This is a known
 symptom of the GPU generating slower than real time. Recent versions prebuffer audio to
-smooth it out; if it persists on long lines, disabling streaming (full buffering) avoids
-it at the cost of a short delay before playback.
+smooth it out; if it persists on long lines, turn off **Settings → General → Streaming
+generation** (full buffering) — it avoids the crackle at the cost of a short delay before
+playback. This works for EchokrauTTS too, not just AllTalk.
 
-**Voice sounds wrong for an NPC.** Reassign it in **Voice Selection**, or add a
+**Voice sounds wrong for an NPC.** Reassign it in the **Voices** tab, or add a
 [phonetic correction](#phonetic-corrections) if it's a pronunciation issue.
 
 ---
