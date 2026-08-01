@@ -1,0 +1,163 @@
+﻿================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.3.0
+================================================================================
+
+
+==============================================================================
+MAJOR NEW FEATURES
+==============================================================================
+
+[NEW] Voice Pack download replaces the in-game voice extraction
+  Echokraut no longer reads, decodes or copies any audio out of your FFXIV
+  installation. Instead, Game Data Tools now has a "Voice Pack" section that
+  downloads a curated set of freely-licensed reference voices (male, female and
+  child) and installs them straight into your TTS engine's voice folder. Every
+  voice comes from a source whose license permits redistribution, and the pack
+  ships its license and attribution files alongside the samples.
+
+  - Fresh local AllTalk and EchokrauTTS installs seed their voices from the pack
+    automatically, with live download progress in the setup wizard.
+  - Manual download from Game Data Tools targets the active engine's voice
+    folder when it runs locally, otherwise your local save location.
+  - Samples come as 16-bit mono WAV plus a matching .txt transcript, so both
+    XTTS and F5 can use them for cloning without any conversion, and they are
+    named so that gender, race and adult/child filtering works out of the box.
+  - Custom voices set via a custom voices URL are still never overwritten.
+
+[NEW] Update the EchokrauTTS backend without reinstalling it
+  Settings -> Backend now shows which EchokrauTTS version you have installed,
+  next to a "Check for updates" button.
+
+  - Press it and Echokraut asks GitHub for the newest backend release. If there
+    is one, the button turns into "Update"; if you are already current, it says
+    so and stays greyed out. Nothing is checked in the background, so this never
+    costs you anything unless you ask for it.
+  - The update replaces the backend program only. Your voices and the downloaded
+    models are kept exactly as they are, so there is no multi-gigabyte download
+    and no re-import of custom voices.
+  - The backend restarts by itself once the update is done, and the button goes
+    back to "Check for updates" — a finished update is never offered again.
+  - An EchokrauTTS installed before this release is recognised as the version
+    that is currently published, so you are not offered an update that would
+    only reinstall what you already have.
+
+
+==============================================================================
+IMPROVEMENTS
+==============================================================================
+
+[UI] Greyed-out controls are now really unusable
+  A control that Echokraut greys out no longer reacts at all — previously the
+  dimming was purely visual and the button still did its job when clicked. As
+  part of this, the Backend tab's mode switcher and the setup wizard's engine
+  switcher now grey out the option you have *selected*, since that is the one
+  with nothing left to do; the alternatives stay bright and clickable.
+
+[Legal] All game-audio extraction removed
+  The voice starter-set extractor, the SCD/ADPCM audio decoders and the voice
+  actor split configuration are gone for good, together with their settings,
+  files and menu entries. Voice samples previously written to FF14-Voices/ stay
+  on your disk untouched — delete them yourself if you no longer want them.
+
+
+==============================================================================
+BUG FIXES
+==============================================================================
+
+[FIX] Streamed speech now really starts while it is still being generated
+  With streaming enabled, playback still waited for the complete line before
+  making a sound — the audio was arriving continuously the whole time, but the
+  part of Echokraut that decides "enough is buffered, start playing" was asking
+  the audio engine a question it cannot answer before playback runs, so it kept
+  waiting until the line was finished. Speech now begins about as soon as the
+  TTS engine has produced its first second of audio, which on a longer sentence
+  is several seconds earlier than before.
+
+[FIX] Streamed speech no longer stutters into gibberish on slower GPUs
+  When EchokrauTTS generates audio slower than it plays back, Echokraut now
+  pauses briefly to refill its buffer and grows that buffer until the line
+  plays through in one piece, instead of chopping the sentence apart. Fast
+  setups are unaffected — short lines still start as soon as they are ready.
+
+[FIX] Skipped dialogue lines no longer speak up later
+  Clicking quickly through a conversation left lines that were still being
+  generated in the pipeline; they then played whenever they happened to be
+  ready — with the next line already on screen, or the dialog box long closed.
+  Skipping a line now cancels its audio for good and tells the TTS engine to
+  stop working on it, so the line you are actually on gets the GPU. Closing
+  the dialog box is also detected when the game tears the window down outright.
+  A line that was already buffering its audio when you skipped is now stopped
+  as well — previously it slipped past the cancel and played out in full.
+
+[FIX] Voice dropdown in the dialogue toolbar works for NPCs without a voice
+  An NPC that had no usable voice assigned (or was muted) never registered as
+  the current speaker, so the toolbar's voice dropdown stayed empty and there
+  was no way to give that NPC a voice from the dialog. The speaker is now
+  published as soon as it is known.
+
+[FIX] Picking a voice with a duplicate display name applies the right voice
+  Two samples can produce the same short display name. The dropdown now keeps
+  such entries apart and resolves your pick against the exact list it showed,
+  so the selection is no longer silently applied to a different voice.
+
+[FIX] Long play sessions no longer accumulate memory
+  Every spoken line stayed in the speech queue and the playback bookkeeping for
+  as long as the game ran. Finished lines are now released, so a long session
+  no longer grows Echokraut's memory use — and cancelling a dialogue stays fast
+  instead of getting slower the longer you have played.
+
+[FIX] Speakers without a name get a fitting voice
+  An NPC whose name Echokraut could not resolve — an unnamed bubble speaker, or
+  a "???" line before it is matched to a character — was always given the first
+  voice in the list, regardless of race, gender or age. Such speakers now go
+  through the normal race/gender matching like everyone else.
+
+[FIX] Dialogue no longer slows down after a big dialog harvest
+  Resolving a speaker read the entire character table from the database for
+  every line. With a harvested database that meant tens of thousands of rows per
+  spoken line; it is now a single lookup.
+
+[FIX] The game no longer freezes while Echokraut reloads its voice list
+  Reloading voices, switching TTS engine, a successful connection test and
+  starting a local engine all fetched the voice list over the network while the
+  game waited for it — up to a five-second freeze when the server was slow or
+  gone. That work now happens in the background.
+
+[FIX] Skipping a line no longer aborts the wrong generation
+  On EchokrauTTS, cancelling always cancelled the most recent job the plugin had
+  seen. If the next line had already started generating, that one got aborted
+  instead — the line you skipped to went silent. The cancel is now tied to the
+  exact request it belongs to, and it also survives a backend reconnect.
+
+[FIX] The dialog harvest now says when game data has moved
+  Some game tables are read by fixed column position, which Square shifts
+  between patches. When that happened the harvest silently produced fewer
+  links and looked like it had simply found nothing. It now reports in the log
+  that the columns no longer match.
+
+[FIX] Settings windows are cheaper to keep open
+  Every frame, the config window rewrote the enabled/disabled shading of some
+  forty controls whether or not anything had changed. It now only writes when
+  a control actually changes state.
+
+[FIX] Mapped NPC and player lists no longer glitch under load
+  The lists Echokraut keeps in memory were read by the UI while the dialogue
+  pipeline was writing to them, which could throw and interrupt whatever was
+  running — most visibly while a dialog harvest or a busy conversation was in
+  progress. Reads now work on a stable snapshot.
+
+[FIX] "Clear mapped players" now clears all of them
+  The button removed a single player and then aborted with an internal error,
+  so the list looked stuck. Clearing mapped NPCs and bubbles was never affected.
+
+[FIX] No more "Echokraut is creating errors" popup when the TTS server is down
+  A backend that isn't running yet is a normal state at login, but Echokraut
+  logged it as an error, which makes Dalamud raise its error popup. Connection
+  and voice-list failures are now logged as warnings. Failures that actually
+  cost you speech are still errors.
+
+[FIX] Repeated backend connection checks no longer leak network sockets
+  The periodic "is the TTS server reachable" probe opened a new connection every
+  time and never reused it, which over a long session could exhaust the system's
+  socket pool. The probe now reuses one long-lived connection.
