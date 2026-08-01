@@ -1,0 +1,98 @@
+using Echokraut.Enums;
+
+namespace Echokraut.DataClasses
+{
+    /// <summary>
+    /// Per-engine config for the EchokrauTTS backend (a self-contained F5-TTS wrapper), parallel to
+    /// <see cref="AlltalkData"/>. Does NOT store its own install path — the install root is shared
+    /// across engines and lives in <see cref="Configuration.TtsInstallRoot"/>; both engines derive
+    /// their subfolders from it via <c>TtsPaths</c>.
+    ///
+    /// <para>The wrapper server is single-language per run (pinned to the client language at start);
+    /// the backend client omits the per-request <c>language</c> field so the server never rejects a
+    /// differing-language line.</para>
+    /// </summary>
+    public class EchokrauTtsData
+    {
+        // Property, not a public field, to avoid the SonarQube S1104 the project is clearing.
+        public string BaseUrl { get; set; } = "http://127.0.0.1:8765";
+
+        // Endpoint paths are fixed (get-only with initializer; the config serializer skips them).
+        public string TtsPath { get; } = "/tts";
+        public string SamplesPath { get; } = "/samples";
+        public string HealthPath { get; } = "/health";
+        public string ShutdownPath { get; } = "/shutdown";
+        public string CancelPath { get; } = "/cancel/"; // + {jobId}
+
+        /// <summary>Optional Bearer token if the wrapper was started with an api_key.</summary>
+        public string? ApiKey { get; set; }
+
+        /// <summary>True once the local bootstrap install completed successfully.</summary>
+        public bool LocalInstall { get; set; } = false;
+
+        /// <summary>
+        /// Git release tag of the EchokrauTTS wrapper currently extracted under
+        /// <c>{TtsInstallRoot}\echokrautts</c>. Written by <c>IEchokrauTtsInstanceService</c> after a
+        /// successful install/update from <c>RemoteUrlsData.EchokrauTtsVersion</c>; compared against
+        /// that same remote value to offer the Update button (<c>WrapperUpdatePolicy</c>).
+        /// <para>Installs made before the handshake existed carry no value; they are backfilled once
+        /// with <c>WrapperUpdatePolicy.AssumedLegacyVersion</c> by
+        /// <c>Configuration.MigrateWrapperVersionForExistingInstalls</c>, because the only wrapper
+        /// they can be running is the single published release. Still empty (Remote/None users, no
+        /// wrapper on disk) reads as "unknown" and offers no update — the policy requires a local
+        /// install first.</para>
+        /// </summary>
+        public string InstalledWrapperVersion { get; set; } = "";
+
+        /// <summary>Auto-start the local instance on plugin load (when this engine is active).</summary>
+        public bool AutoStartLocalInstance { get; set; } = true;
+
+        /// <summary>
+        /// URL (direct or Google Drive) to a zip holding a user-supplied custom model. Installed by
+        /// "Install only custom data" into <c>echokrautts/models/echokraut_custom</c>, where the
+        /// wrapper auto-detects it for the ACTIVE engine (an F5 checkpoint for the f5 backend, a full
+        /// XTTS-v2 model directory for the xtts backend). Mirrors <see cref="AlltalkData.CustomModelUrl"/>.
+        /// </summary>
+        public string CustomModelUrl { get; set; } = "";
+
+        /// <summary>
+        /// URL (direct or Google Drive) to a zip of custom voice samples, merged additively into
+        /// <c>echokrautts/samples</c> (existing voices are preserved). Mirrors
+        /// <see cref="AlltalkData.CustomVoicesUrl"/>.
+        /// </summary>
+        public string CustomVoicesUrl { get; set; } = "";
+
+        /// <summary>Local / Remote / None — reuses the AllTalk instance-type enum.</summary>
+        public AlltalkInstanceType InstanceType { get; set; } = AlltalkInstanceType.None;
+
+        /// <summary>
+        /// Sub-engine the LOCAL wrapper loads at startup (passed as <c>--tts-backend</c>). Default
+        /// <see cref="EchokrauTtsEngine.XTTS"/> (better quality). Only meaningful for Local — a Remote
+        /// server's engine is fixed by whoever started it. Both engines are installed by the
+        /// bootstrap, so changing this restarts the local instance rather than reinstalling.
+        /// </summary>
+        public EchokrauTtsEngine TtsBackend { get; set; } = EchokrauTtsEngine.XTTS;
+
+        /// <summary>The lower-cased wrapper arg value for <see cref="TtsBackend"/> (<c>xtts</c>/<c>f5</c>).</summary>
+        public string TtsBackendArg => TtsBackend.ToString().ToLowerInvariant();
+
+        /// <summary>
+        /// Load the XTTS model in half precision (fp16) on the LOCAL wrapper for a ~1.3–1.8x inference
+        /// speedup. Passed as <c>--xtts-fp16</c>. Only takes effect with the XTTS engine on a CUDA/ROCm
+        /// GPU (the wrapper ignores it for F5 / on CPU). Default off. Changing it restarts the local
+        /// instance (the model is loaded with the chosen precision at startup).
+        /// </summary>
+        public bool XttsFp16 { get; set; } = false;
+
+        /// <summary>The wrapper arg value for <see cref="XttsFp16"/> (<c>true</c>/<c>false</c>).</summary>
+        public string XttsFp16Arg => XttsFp16 ? "true" : "false";
+
+        // NOTE: no CpuMode in v1 — the wrapper auto-detects GPU/CPU (gpu_detect.py) and exposes no
+        // CPU override. A force-CPU option is a tracked TODO (needs a wrapper-side flag + checkbox).
+
+        /// <summary>True when this engine can produce new audio (Local or Remote). Mirrors
+        /// <see cref="AlltalkData.HasLiveGeneration"/>; the engine-aware aggregate lives on
+        /// <c>Configuration.HasLiveGeneration</c>.</summary>
+        public bool HasLiveGeneration => InstanceType != AlltalkInstanceType.None;
+    }
+}

@@ -1,0 +1,186 @@
+[
+    {
+        "voiceName": "Zero",
+        "speakers": [ "Schwarzgekleidete Nichtsgesandte" ]
+    },
+    {
+        "voiceName": "Tesleen",
+        "speakers": [ "Tesleen die Bekehrte" ]
+    },
+    {
+        "voiceName": "Nanamo Ul Namo",
+        "speakers": [ "Lilira" ]
+    },
+    {
+        "voiceName": "Varis",
+        "speakers": [ "Varis Zos Galvus" ]
+    },
+    {
+        "voiceName": "Zenos",
+        "speakers": [ "Zenos Viator Galvus", "Zenos Yae Galvus" ]
+    },
+    {
+        "voiceName": "Livia Sas Junius",
+        "speakers": [ "Livia die Glühende" ]
+    },
+    {
+        "voiceName": "Magnus",
+        "speakers": [ "Tiefe Stimme" ]
+    },
+    {
+        "voiceName": "Regula",
+        "speakers": [ "Regula Van Hydrus" ]
+    },
+    {
+        "voiceName": "Gaius",
+        "speakers": [ "Gaius Van Baelsar", "Gaius van Baelsar", "Verwegener Haudegen", "Schattenjäger" ]
+    },
+    {
+        "voiceName": "Nero",
+        "speakers": [ "Nero Tol Scaeva" ]
+    },
+    {
+        "voiceName": "Sadu",
+        "speakers": [ "Sadu Himmelsflamme" ]
+    },
+    {
+        "voiceName": "Magnai",
+        "speakers": [ "Magnai der Ältere" ]
+    },
+    {
+        "voiceName": "Yaana",
+        "speakers": [ "Schwarze Katze" ]
+    },
+    {
+        "voiceName": "Yda",
+        "speakers": [ "Lyse" ]
+    },
+    {
+        "voiceName": "Eisherz",
+        "speakers": [ "Shiva", "Ysayle" ]
+    },
+    {
+        "voiceName": "Gerolt",
+        "speakers": [ "Grenoldt", "Genolt" ]
+    },
+    {
+        "voiceName": "Doros",
+        "speakers": [ "Mann mit blonden gebundenen Haaren" ]
+    },
+    {
+        "voiceName": "Emet-Selch",
+        "speakers": [ "Solus Zos Galvus", "Hades", "Schwarz Gekleidete Gestalt" ]
+    },
+    {
+        "voiceName": "Elidibus",
+        "speakers": [ "Krieger des Lichts" ]
+    },
+    {
+        "voiceName": "Ardbert",
+        "speakers": [ "Krieger der Dunkelheit" ]
+    },
+    {
+        "voiceName": "Mehrahd",
+        "speakers": [ "Bekannte Jungenstimme" ]
+    },
+    {
+        "voiceName": "Lahabrea",
+        "speakers": [ "Mann mit roter Maske" ]
+    },
+    {
+        "voiceName": "Da Za",
+        "speakers": [ "Da Za Vom 269. Orden" ]
+    },
+    {
+        "voiceName": "Kupopo",
+        "speakers": [ "Aufdringlicher Mogry" ]
+    },
+    {
+        "voiceName": "Galuf",
+        "speakers": [ "Galuf Baldesion" ]
+    },
+    {
+        "voiceName": "Apyaahi",
+        "speakers": [ "Gut gelaunte Frau" ]
+    },
+    {
+        "voiceName": "?",
+        "speakers": [ "Irritierte Frau" ]
+    },
+    {
+        "voiceName": "??",
+        "speakers": [ "Begeisterte Frau" ]
+    },
+    {
+        "voiceName": "???",
+        "speakers": [ "Kriecherischer Mann" ]
+    },
+    {
+        "voiceName": "????",
+        "speakers": [ "Wortkarger Mann" ]
+    },
+    {
+        "voiceName": "?????",
+        "speakers": [ "Teuer gekleideter Mann" ]
+    },
+    {
+        "voiceName": "Themis",
+        "speakers": [ "Sanftäugiger Jüngling" ]
+    },
+    {
+        "voiceName": "Hydaelyn",
+        "speakers": [ "Venat", "Amaurotanerin Venat" ]
+    },
+    {
+        "voiceName": "Wuk Lamat",
+        "speakers": [ "Energetische Frau" ]
+    },
+    {
+        "voiceName": "Hunmu Rruk",
+        "speakers": [ "Gelassener Xbr'aal" ]
+    },
+    {
+        "voiceName": "Ty'at Evu",
+        "speakers": [ "Besonnener Xbr'aal" ]
+    },
+    {
+        "voiceName": "Fran",
+        "speakers": [ "Grazile Frau" ]
+    },
+    {
+        "voiceName": "Ilberd",
+        "speakers": [ "Golbez", "Durante" ]
+    },
+    {
+        "voiceName": "Zekowa",
+        "speakers": [ "Zekowas Stimme", "Bekannte Stimme" ]
+    },
+    {
+        "voiceName": "Theobald",
+        "speakers": [ "Maskierter Mann" ]
+    },
+    {
+        "voiceName": "O'tchakha",
+        "speakers": [ "O'tchakha des Endlosen Tages" ]
+    },
+    {
+        "voiceName": "D'zentsa",
+        "speakers": [ "D'zentsa der Endlosen Nacht" ]
+    },
+    {
+        "voiceName": "Estinien",
+        "speakers": [ "Estinien Drachenblut" ]
+    },
+    {
+        "voiceName": "Rediroq",
+        "speakers": [ "Gealterte Moblin-Dame" ]
+    },
+    {
+        "voiceName": "Tobli",
+        "speakers": [ "Redseliger Pelupelu" ]
+    },
+    {
+        "voiceName": "Coph-coodg",
+        "speakers": [ "Rundliche Lebensform" ]
+    }
+]

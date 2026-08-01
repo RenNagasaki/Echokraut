@@ -1,0 +1,16 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.1.1
+================================================================================
+
+
+==============================================================================
+BUG FIXES
+==============================================================================
+
+[Startup] No more "Too Many Requests" error when loading voice data at launch
+  When several of Echokraut's data files are fetched from GitHub at startup, the
+  request burst could be rate-limited (HTTP 429), which made loading the voice
+  name list fail with an error popup. Startup fetches now retry with backoff on
+  temporary failures and fall back to a built-in copy of the data, so the plugin
+  loads cleanly even when GitHub is briefly unavailable or rate-limiting.

@@ -1,0 +1,128 @@
+{
+  "plugin": "Echokraut",
+  "version": "0.19.3.0",
+  "intro": "Items marked NEW were added or changed in this version — please test those first. CRITICAL means: if it fails, the version must not ship.",
+  "components": [
+    {
+      "name": "Plugin",
+      "sections": [
+        {
+          "title": "Installation & startup",
+          "items": [
+            { "id": "inst-install", "text": "Plugin installs from the repository without an error", "critical": true },
+            { "id": "inst-update", "text": "Updating from the previous version keeps settings and database", "critical": true },
+            { "id": "inst-noerr", "text": "No \"Echokraut is creating errors\" popup from Dalamud after startup", "critical": true },
+            { "id": "inst-cmd", "text": "Both /echokraut and /ek open the window", "hint": "Both commands must be registered." },
+            { "id": "inst-changelog", "text": "Changelog popup appears after the update and lists this version's entries" },
+            { "id": "inst-version", "text": "Window title shows the correct version number" }
+          ]
+        },
+        {
+          "title": "Backend connection",
+          "items": [
+            { "id": "be-alltalk", "text": "AllTalk backend: connection is detected and voices are loaded" },
+            { "id": "be-ekt", "text": "EchokrauTTS backend: connection is detected and voices are loaded" },
+            { "id": "be-switch", "text": "Switching backends at runtime works without restarting the game" },
+            { "id": "be-offline", "text": "Backend down or unreachable: a clear message instead of a crash or a freeze", "critical": true },
+            { "id": "be-stream", "text": "Streaming generation: playback starts before the clip has finished generating", "hint": "Not only at the very end — audio should audibly start well before generation completes." }
+          ]
+        },
+        {
+          "title": "Local installer (EchokrautLocalInstaller)",
+          "items": [
+            { "id": "eli-install", "text": "A fresh install of AllTalk / EchokrauTTS completes successfully" },
+            { "id": "eli-check", "text": "\"Check for updates\" correctly reports either an available update or up-to-date", "new": true },
+            { "id": "eli-update", "text": "\"Update\" installs the zip from the same release as the reported tag", "new": true },
+            { "id": "eli-failed", "text": "A failed check returns the button to \"Check for updates\" (it does not claim you are up to date)", "new": true },
+            { "id": "eli-after-update", "text": "After the update finished, the button reads \"Check for updates\" again", "hint": "It must not still say \"Update\" — clicking it a second time must not reinstall the same release.", "new": true },
+            { "id": "eli-uptodate-inert", "text": "A greyed-out \"Update\" (after a check that found nothing) does nothing when clicked", "new": true },
+            { "id": "eli-keep", "text": "Updating the wrapper leaves voices and models untouched", "critical": true }
+          ]
+        },
+        {
+          "title": "Playback in game",
+          "items": [
+            { "id": "play-dialog", "text": "NPC dialogue windows are read out", "critical": true },
+            { "id": "play-bubble", "text": "Speech bubbles are read out" },
+            { "id": "play-battle", "text": "Battle talk and cutscene lines are read out" },
+            { "id": "play-chat", "text": "Chat messages are read out according to the configured settings" },
+            { "id": "play-stop", "text": "Dismissing a dialogue stops playback immediately" },
+            { "id": "play-queue", "text": "Clicking rapidly through dialogue never overlaps or leaves playback stuck", "critical": true },
+            { "id": "play-voiced", "text": "Lines already voiced by the game are not spoken a second time" },
+            { "id": "play-volume", "text": "The volume slider takes effect immediately" }
+          ]
+        },
+        {
+          "title": "3D audio",
+          "items": [
+            { "id": "3d-dir", "text": "The voice comes from the NPC's direction — turning the camera audibly moves it", "critical": true, "new": true },
+            { "id": "3d-dist", "text": "Distance matters: farther away is quieter" },
+            { "id": "3d-off", "text": "With 3D audio disabled, playback is clean and centred" }
+          ]
+        },
+        {
+          "title": "Voices & assignment",
+          "items": [
+            { "id": "voice-auto", "text": "New NPCs automatically get a fitting voice (gender / race)" },
+            { "id": "voice-manual", "text": "A manually assigned voice survives a restart", "critical": true },
+            { "id": "voice-test", "text": "Previewing a voice in the voice selection works" },
+            { "id": "voice-pack", "text": "The voice pack downloads and its 260 voices show up in the selection", "hint": "Game Data Tools -> Voice Pack, or a fresh engine install. Expect 100 male and 100 female adult voices plus 30 male and 30 female child voices.", "new": true, "critical": true },
+            { "id": "voice-pack-install", "text": "A fresh local AllTalk / EchokrauTTS install seeds its voices from the pack automatically", "hint": "Install an engine from scratch. The setup wizard should show download progress and the engine's voice folder should end up holding the pack's voices.", "new": true, "critical": true },
+            { "id": "voice-pack-manual", "text": "Manual download from Game Data Tools keeps voices that are already there", "hint": "It targets the active engine's voice folder when the engine runs locally, otherwise your local save location, and must not delete existing files.", "new": true },
+            { "id": "voice-pack-child", "text": "Child NPCs get one of the child voices, not an adult one", "hint": "Talk to an obviously young NPC. The pack ships 30 male and 30 female child voices (their filenames contain '-Child'); auto-assignment should pick from those.", "new": true, "critical": true },
+            { "id": "voice-pack-gender", "text": "Male NPCs get male pack voices and female NPCs female ones", "hint": "Gender and race are read out of the voice filename. If everyone ends up with the same voice, or gender is ignored, the filenames were not parsed.", "new": true, "critical": true },
+            { "id": "voice-pack-custom", "text": "A configured custom voices URL still wins: the pack download is skipped", "hint": "With a custom voices URL set, installing an engine must not pull the pack over your own voices.", "new": true },
+            { "id": "voice-pack-license", "text": "LICENSE.txt and ATTRIBUTION.csv end up in the voice folder", "hint": "Both ship inside the pack and must be present after the download - they carry the CC BY 4.0 attribution for every voice.", "new": true },
+            { "id": "voice-phonetic", "text": "Phonetic corrections are applied to pronunciation" },
+            { "id": "voice-mute", "text": "A muted dialogue stays silent" }
+          ]
+        },
+        {
+          "title": "User interface (native UI)",
+          "items": [
+            { "id": "ui-open", "text": "Every tab opens without freezing or crashing the game", "critical": true },
+            { "id": "ui-page", "text": "Long lists page cleanly (page numbers, arrows, no crash while paging)" },
+            { "id": "ui-clip", "text": "Voice Clip Manager: play, regenerate and delete all work" },
+            { "id": "ui-log", "text": "Log tab keeps showing new entries and the filters take effect" },
+            { "id": "ui-clamp", "text": "The window cannot be dragged fully off screen" },
+            { "id": "ui-lang", "text": "Language switching (EN/DE/FR/JA): no empty or truncated labels" },
+            { "id": "ui-disabled-inert", "text": "Greyed-out controls do nothing when clicked (buttons, checkboxes, sliders, dropdowns)", "hint": "In \"Audio files only\" mode the dimmed generate buttons and the dimmed chat/voice options must not react at all.", "new": true },
+            { "id": "ui-mode-switch", "text": "Settings -> Backend: the SELECTED mode is the greyed-out one, the other two are clickable and switch modes", "hint": "Same in the setup wizard for AllTalk / EchokrauTTS. You must never end up unable to switch back.", "new": true, "critical": true }
+          ]
+        },
+        {
+          "title": "Database & persistence",
+          "items": [
+            { "id": "db-migrate", "text": "An existing echokraut.db migrates without data loss", "critical": true },
+            { "id": "db-fresh", "text": "A fresh install creates the database without errors" },
+            { "id": "db-restart", "text": "Settings, voices and phonetics survive a game restart" }
+          ]
+        },
+        {
+          "title": "Endurance & stability",
+          "items": [
+            { "id": "perf-fps", "text": "No noticeable FPS drops while playback is running" },
+            { "id": "perf-long", "text": "30+ minutes of play with no crash, no freeze and no steadily growing memory use", "critical": true },
+            { "id": "perf-zone", "text": "Zone changes and cutscenes abort playback cleanly" },
+            { "id": "perf-unload", "text": "Disabling or reloading the plugin leaves no errors in the Dalamud log" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "EchokrauTTS (server component)",
+      "sections": [
+        {
+          "title": "Operation",
+          "items": [
+            { "id": "srv-start", "text": "The wrapper starts and reports itself as ready", "critical": true },
+            { "id": "srv-gpu", "text": "The GPU is used (generation is faster than real time)" },
+            { "id": "srv-stream", "text": "/tts delivers audio progressively (chunked), not only at the end", "critical": true },
+            { "id": "srv-voices", "text": "The voice list is served to the plugin correctly" },
+            { "id": "srv-restart", "text": "Restarting the wrapper is noticed by the plugin and playback works again afterwards" }
+          ]
+        }
+      ]
+    }
+  ]
+}

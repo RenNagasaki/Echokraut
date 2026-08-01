@@ -1,0 +1,272 @@
+﻿using System;
+using System.Linq;
+using System.Numerics;
+using System.Threading.Tasks;
+using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
+using Echokraut.Enums;
+using Echotools.Logging.Enums;
+using Echokraut.Localization;
+using Echokraut.Services;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit;
+using KamiToolKit.Nodes;
+
+using static Echokraut.Windows.Native.NativeNodeFactory;
+namespace Echokraut.Windows.Native;
+
+/// <summary>
+/// Shared builder for Alltalk instance UI sections used by both NativeConfigWindow and NativeFirstTimeWindow.
+/// Ensures the install process, local instance controls, and remote instance controls are always identical.
+/// </summary>
+public static class NativeAlltalkBuilder
+{
+    /// <summary>All nodes created for a local instance section.</summary>
+    public class LocalInstanceNodes
+    {
+        public TextInputNode InstallPathInput = null!;
+        public TextNode ValidationLabel = null!;
+        public CheckboxNode CpuModeCheck = null!;
+        public CheckboxNode IsWindows11Check = null!;
+        public TextInputNode CustomModelUrlInput = null!;
+        public TextInputNode CustomVoicesUrlInput = null!;
+        public TextButtonNode InstallCustomDataButton = null!;
+        public HorizontalListNode InstallCustomDataRow = null!;
+        public CheckboxNode AutoStartCheck = null!;
+        public TextButtonNode InstallButton = null!;
+        public HorizontalListNode InstallRow = null!;
+        public TextButtonNode StartButton = null!;
+        public TextButtonNode StopButton = null!;
+        public HorizontalListNode StartStopRow = null!;
+
+        /// <summary>All nodes in display order, for adding to a list or collapsible section.</summary>
+        public NodeBase[] AllNodes => [
+            InstallPathInput, ValidationLabel, CpuModeCheck, IsWindows11Check,
+            CustomModelUrlInput, CustomVoicesUrlInput, InstallCustomDataRow,
+            InstallRow, AutoStartCheck, StartStopRow,
+        ];
+
+        /// <summary>Essential nodes visible by default (install path + validation + CPU mode, then install button + start/stop after advanced).</summary>
+        public NodeBase[] EssentialNodes => [InstallPathInput, ValidationLabel, CpuModeCheck];
+
+        /// <summary>Nodes that come after the advanced section. <see cref="AutoStartCheck"/>
+        /// sits directly above <see cref="StartStopRow"/> so the start-related controls
+        /// cluster together — auto-starting on plugin load is conceptually the same
+        /// decision as clicking Start manually, and burying it under the collapsible
+        /// "Advanced" section made it hard to discover.</summary>
+        public NodeBase[] PostAdvancedNodes => [InstallRow, AutoStartCheck, StartStopRow];
+
+        /// <summary>Advanced nodes hidden by default under a collapsible section.</summary>
+        public NodeBase[] AdvancedNodes => [
+            IsWindows11Check, CustomModelUrlInput, CustomVoicesUrlInput,
+            InstallCustomDataRow,
+        ];
+
+        /// <summary>Updates button labels, dimming, and validation each frame.
+        /// <paramref name="batchActive"/> locks every backend-affecting button while a
+        /// long-running operation (harvest / voice pack download / future import-export)
+        /// is in flight — switching install mode mid-batch would race on the file paths
+        /// the running op is using.</summary>
+        public void Update(Configuration config, IAlltalkInstanceService alltalkInstance, bool batchActive = false)
+        {
+            var (pathValid, validationMsg) = ValidateInstallPath(config.TtsInstallRoot);
+
+            // Validation label — visible only when path is invalid
+            ValidationLabel.IsVisible = !pathValid;
+            if (!pathValid)
+                ValidationLabel.String = validationMsg;
+
+            // Install button
+            InstallButton.String = alltalkInstance.Installing
+                ? Loc.S("Installing...")
+                : config.Alltalk.LocalInstall ? Loc.S("Reinstall") : Loc.S("Install");
+            Dim(InstallButton, pathValid && !alltalkInstance.Installing && !batchActive);
+
+            // Install custom data — only when installed, not installing, and path valid
+            Dim(InstallCustomDataButton, pathValid && config.Alltalk.LocalInstall && !alltalkInstance.Installing && !batchActive);
+
+            // Start/Stop. Start is also blocked while an install is in progress — clicking
+            // it mid-install would race against the installer touching alltalkFolder and the
+            // post-install voice-extract step writing into voices/.
+            StartButton.String = alltalkInstance.InstanceStarting ? Loc.S("Starting...")
+                : alltalkInstance.InstanceRunning ? Loc.S("Running") : Loc.S("Start");
+            Dim(StartButton, pathValid
+                && !alltalkInstance.InstanceRunning
+                && !alltalkInstance.InstanceStarting
+                && !alltalkInstance.Installing
+                && !batchActive);
+            // Stop button stays available during a batch — that's the canonical "stop the
+            // running op" affordance. (The stop button on this row stops the AllTalk
+            // instance, not the batch op, but it's still operationally fine to allow:
+            // batches don't depend on AllTalk being up — harvest works on game data only,
+            // the voice pack download writes into the same voice folder.)
+            Dim(StopButton, (alltalkInstance.InstanceRunning || alltalkInstance.InstanceStarting) && !alltalkInstance.InstanceStopping);
+        }
+    }
+
+    /// <summary>All nodes created for a remote instance section.</summary>
+    public class RemoteInstanceNodes
+    {
+        public TextInputNode BaseUrlInput = null!;
+        public TextButtonNode TestConnectionButton = null!;
+        public TextNode ConnectionResultLabel = null!;
+
+        public NodeBase[] AllNodes => [BaseUrlInput, TestConnectionButton, ConnectionResultLabel];
+    }
+
+    /// <summary>Creates the local instance UI nodes. Order matches the ImGui version.</summary>
+    public static LocalInstanceNodes BuildLocalInstance(float width, Configuration config, IAlltalkInstanceService alltalkInstance)
+    {
+        var nodes = new LocalInstanceNodes();
+
+        // Backfill the canonical default into existing configs that have an empty install
+        // root. The property's C#-side default only applies on fresh deserialize — old configs
+        // with an empty value keep the empty string, which renders an empty input field and
+        // looks broken. Persist the default once so the UI shows a sensible starting value.
+        if (string.IsNullOrWhiteSpace(config.TtsInstallRoot))
+        {
+            config.TtsInstallRoot = Configuration.DefaultTtsInstallRoot;
+            config.Save();
+        }
+
+        // Install path (shared TTS install root)
+        nodes.InstallPathInput = Input(Loc.S("Local install path (no spaces or dashes)"), width, 128,
+            config.TtsInstallRoot,
+            v => { config.TtsInstallRoot = v; config.Save(); });
+
+        // Validation label — shown when path is empty
+        nodes.ValidationLabel = new TextNode
+        {
+            Size = new Vector2(width, 18),
+            String = Loc.S("The Alltalk path must not be empty.\r\nPlease enter a valid path."),
+            FontType = FontType.Axis,
+            FontSize = 12,
+            TextColor = new Vector4(1f, 0.3f, 0.3f, 1f),
+            IsVisible = string.IsNullOrWhiteSpace(config.TtsInstallRoot),
+        };
+
+        // CPU mode
+        nodes.CpuModeCheck = Check(Loc.S("CPU mode (no GPU required, slower)"), width, config.Alltalk.CpuMode,
+            v => { config.Alltalk.CpuMode = v; config.Save(); });
+
+        // Is Windows 11
+        nodes.IsWindows11Check = Check(Loc.S("Is Windows 11"), width, config.Alltalk.IsWindows11,
+            v => { config.Alltalk.IsWindows11 = v; config.Save(); });
+
+        // Custom model URL
+        nodes.CustomModelUrlInput = Input(Loc.S("Custom model URL (zip with one root folder)"), width, 256,
+            config.Alltalk.CustomModelUrl,
+            v => { config.Alltalk.CustomModelUrl = v; config.Save(); });
+
+        // Custom voices URL
+        nodes.CustomVoicesUrlInput = Input(Loc.S("Custom voices URL (zip with \"voices\" folder)"), width, 256,
+            config.Alltalk.CustomVoicesUrl,
+            v => { config.Alltalk.CustomVoicesUrl = v; config.Save(); });
+
+        // Install only custom data
+        // Install/Stop run blocking I/O (shutdown POST + process kill / long install work); run off
+        // the UI thread so the game doesn't freeze. State surfaces via the per-frame Update().
+        nodes.InstallCustomDataButton = Button(Loc.S("Install only custom data"), 170, () =>
+            Task.Run(() => alltalkInstance.InstallCustomData(new EKEventId(0, TextSource.Backend), false)));
+        nodes.InstallCustomDataRow = new HorizontalListNode { Size = new Vector2(width, 26), ItemSpacing = 4 };
+        nodes.InstallCustomDataRow.AddNode(nodes.InstallCustomDataButton);
+
+        // Auto-start
+        nodes.AutoStartCheck = Check(Loc.S("Auto-start local instance on plugin load"), width,
+            config.Alltalk.AutoStartLocalInstance,
+            v =>
+            {
+                config.Alltalk.AutoStartLocalInstance = v;
+                config.Save();
+                if (v && config.Alltalk.LocalInstall && !alltalkInstance.InstanceRunning && !alltalkInstance.InstanceStarting)
+                    alltalkInstance.StartInstance();
+            });
+
+        // Install/Reinstall — size to fit longest dynamic label
+        nodes.InstallButton = Button(config.Alltalk.LocalInstall ? Loc.S("Reinstall") : Loc.S("Install"), 100, () =>
+            Task.Run(() =>
+            {
+                if (alltalkInstance.InstanceRunning || alltalkInstance.InstanceStarting)
+                    alltalkInstance.StopInstance(new EKEventId(0, TextSource.Backend));
+                alltalkInstance.Install();
+            }));
+        var installMaxW = new[] { Loc.S("Install"), Loc.S("Reinstall"), Loc.S("Installing...") }
+            .Max(s => nodes.InstallButton.LabelNode.GetTextDrawSize(s).X) + 36;
+        if (installMaxW > nodes.InstallButton.Width)
+            nodes.InstallButton.Size = new Vector2(installMaxW, 24);
+        nodes.InstallRow = new HorizontalListNode { Size = new Vector2(width, 26), ItemSpacing = 4 };
+        nodes.InstallRow.AddNode(nodes.InstallButton);
+
+        // Start/Stop row — size Start to fit longest dynamic label
+        nodes.StartButton = Button(Loc.S("Start"), 80, () => Task.Run(() => alltalkInstance.StartInstance()));
+        var startMaxW = new[] { Loc.S("Start"), Loc.S("Starting..."), Loc.S("Running") }
+            .Max(s => nodes.StartButton.LabelNode.GetTextDrawSize(s).X) + 36;
+        if (startMaxW > nodes.StartButton.Width)
+            nodes.StartButton.Size = new Vector2(startMaxW, 24);
+        nodes.StopButton = Button(Loc.S("Stop"), 80, () => Task.Run(() => alltalkInstance.StopInstance(new EKEventId(0, TextSource.Backend))));
+        nodes.StartStopRow = new HorizontalListNode { Size = new Vector2(width, 26), ItemSpacing = 4 };
+        nodes.StartStopRow.AddNode(nodes.StartButton);
+        nodes.StartStopRow.AddNode(nodes.StopButton);
+
+        return nodes;
+    }
+
+    /// <summary>Creates the remote instance UI nodes.</summary>
+    public static RemoteInstanceNodes BuildRemoteInstance(float width, Configuration config, IBackendService backend)
+    {
+        var nodes = new RemoteInstanceNodes();
+
+        nodes.BaseUrlInput = Input(Loc.S("Alltalk base URL"), width, 80, config.Alltalk.BaseUrl,
+            v => { config.Alltalk.BaseUrl = v; config.Save(); });
+
+        nodes.TestConnectionButton = Button(Loc.S("Test"), 60, () => { });
+        nodes.ConnectionResultLabel = new TextNode
+        {
+            Size = new Vector2(width, 20),
+            String = " ",
+            FontType = FontType.Axis,
+            FontSize = 12,
+            TextColor = LabelColor,
+        };
+
+        return nodes;
+    }
+
+    /// <summary>
+    /// Validates the AllTalk install path. Returns (isValid, errorMessage).
+    /// Checks: not empty, rooted (absolute), no invalid path characters, no spaces or dashes in path.
+    /// </summary>
+    public static (bool isValid, string message) ValidateInstallPath(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return (false, Loc.S("The Alltalk path must not be empty.\r\nPlease enter a valid path."));
+
+        // Must be an absolute/rooted path (e.g. C:\... or /home/...)
+        if (!System.IO.Path.IsPathRooted(path))
+            return (false, Loc.S("Please enter an absolute path (e.g. C:\\alltalk_tts)."));
+
+        // Check for invalid path characters
+        var invalidChars = System.IO.Path.GetInvalidPathChars();
+        if (path.IndexOfAny(invalidChars) >= 0)
+            return (false, Loc.S("The path contains invalid characters."));
+
+        // No spaces or dashes (AllTalk / conda don't handle them well)
+        if (path.Contains(' ') || path.Contains('-'))
+            return (false, Loc.S("The path must not contain spaces or dashes."));
+
+        // Reject drive-root-only paths like "C:\" or "C:". The installer drops a ZIP
+        // alongside other content directly into the install path, then extracts a
+        // sub-folder, then runs a sub-process whose working dir is that folder. Writing
+        // to a drive root requires admin on Windows; without it File.WriteAllBytes throws
+        // UnauthorizedAccessException, which on the Task-Run thread isn't observed by the
+        // outer catch and the UI sticks at "Preparing installer..." forever. Force a
+        // subfolder so we get fail-fast validation here instead of a silent hang.
+        var trimmed = path.TrimEnd('\\', '/').Trim();
+        var parent = System.IO.Path.GetDirectoryName(trimmed);
+        if (string.IsNullOrEmpty(parent))
+            return (false, Loc.S("The path must point to a subfolder, not the root of a drive (e.g. C:\\alltalk_tts)."));
+
+        return (true, string.Empty);
+    }
+
+}

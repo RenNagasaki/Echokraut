@@ -1,0 +1,345 @@
+using System;
+using System.Linq;
+using Echokraut.Helper.Functional;
+using System.Numerics;
+using System.Threading.Tasks;
+using Echokraut.DataClasses;
+using Echokraut.Enums;
+using Echotools.Logging.DataClasses;
+using Echotools.Logging.Enums;
+using Echokraut.Localization;
+using Echokraut.Services;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using KamiToolKit.Nodes;
+
+using static Echokraut.Windows.Native.NativeNodeFactory;
+namespace Echokraut.Windows.Native;
+
+/// <summary>
+/// Shared builder for the EchokrauTTS instance UI sections (Backend tab + First-Time wizard),
+/// parallel to <see cref="NativeAlltalkBuilder"/> but simpler: the wrapper self-bootstraps, so
+/// there's no CPU-mode / Windows-11 / custom-model / install-custom-data plumbing. The install
+/// path is the SHARED <c>Configuration.TtsInstallRoot</c> (same field AllTalk edits).
+/// </summary>
+public static class NativeEchokrauTtsBuilder
+{
+    /// <summary>All nodes created for the EchokrauTTS local instance section.</summary>
+    public class LocalInstanceNodes
+    {
+        public TextInputNode InstallPathInput = null!;
+        public TextNode ValidationLabel = null!;
+        public CheckboxNode AutoStartCheck = null!;
+        public TextNode EngineCaption = null!;
+        public StringDropDownNode EngineDropDown = null!;
+        // Only created + shown when a CUDA/ROCm GPU is available (fp16 is a no-op otherwise).
+        public CheckboxNode? Fp16Check;
+        public bool CudaAvailable;
+        public TextInputNode CustomModelUrlInput = null!;
+        public TextInputNode CustomVoicesUrlInput = null!;
+        public TextButtonNode InstallCustomDataButton = null!;
+        public HorizontalListNode InstallCustomDataRow = null!;
+        public TextButtonNode InstallButton = null!;
+        public TextButtonNode UpdateButton = null!;
+        public TextNode VersionLabel = null!;
+        public HorizontalListNode InstallRow = null!;
+        // The button's visibility follows the local install, and HorizontalListNode only skips hidden
+        // nodes when its layout is recalculated — so track the last state and re-flow on flip instead
+        // of leaving a gap (or recalculating every frame).
+        private bool? _prevUpdateButtonShown;
+        public TextButtonNode StartButton = null!;
+        public TextButtonNode StopButton = null!;
+        public HorizontalListNode StartStopRow = null!;
+
+        // Fp16 checkbox is included only when CUDA is available — omitting it from AllNodes (rather
+        // than hiding it) keeps it from reserving an empty layout slot in the collapsible section.
+        public NodeBase[] AllNodes => CudaAvailable && Fp16Check != null
+            ? [InstallPathInput, ValidationLabel, AutoStartCheck, EngineCaption, EngineDropDown, Fp16Check, CustomModelUrlInput, CustomVoicesUrlInput, InstallCustomDataRow, InstallRow, StartStopRow]
+            : [InstallPathInput, ValidationLabel, AutoStartCheck, EngineCaption, EngineDropDown, CustomModelUrlInput, CustomVoicesUrlInput, InstallCustomDataRow, InstallRow, StartStopRow];
+
+        public void Update(Configuration config, IEchokrauTtsInstanceService instance, bool batchActive = false)
+        {
+            var (pathValid, validationMsg) = NativeAlltalkBuilder.ValidateInstallPath(config.TtsInstallRoot);
+            ValidationLabel.IsVisible = !pathValid;
+            if (!pathValid) ValidationLabel.String = validationMsg;
+
+            InstallButton.String = InstallLabel(instance, config);
+            Dim(InstallButton, pathValid && !instance.Installing && !batchActive);
+
+            UpdateVersionRow(config, instance, pathValid && !instance.Installing && !batchActive);
+
+            // Install-custom-data only makes sense once a local install exists, and never mid-install.
+            Dim(InstallCustomDataButton, pathValid && config.EchokrauTts.LocalInstall && !instance.Installing && !batchActive);
+
+            StartButton.String = StartLabel(instance);
+            Dim(StartButton, pathValid
+                && !instance.InstanceRunning && !instance.InstanceStarting
+                && !instance.Installing && !batchActive);
+            Dim(StopButton, (instance.InstanceRunning || instance.InstanceStarting) && !instance.InstanceStopping);
+        }
+
+        /// <summary>
+        /// The wrapper row: one button that first offers "Check for updates" and afterwards becomes
+        /// "Update" — clickable when a newer release was found, greyed out when there is none, so
+        /// "you are current" stays readable instead of the button disappearing. Next to it, what is
+        /// installed and what is available. Kept out of <see cref="Update"/> so that per-frame method
+        /// stays within its complexity budget.
+        /// </summary>
+        private void UpdateVersionRow(Configuration config, IEchokrauTtsInstanceService instance, bool enabled)
+        {
+            var state = instance.UpdateState;
+            UpdateButton.String = UpdateButtonLabel(state);
+            // Only the actionable states may be clicked: "check" (costs a GitHub request) and
+            // "update" (a real install). Checking and UpToDate are dead ends by design — and because
+            // Dim() only lowers the alpha, the click handler enforces the very same rule.
+            Dim(UpdateButton, enabled && WrapperUpdatePolicy.IsButtonActionable(state));
+
+            // Nothing to update without a local install — the whole row is meaningless then.
+            var showRow = config.EchokrauTts.LocalInstall;
+            VersionLabel.IsVisible = showRow;
+            VersionLabel.String = VersionLabelText(config, instance, state);
+
+            if (_prevUpdateButtonShown != showRow)
+            {
+                UpdateButton.IsVisible = showRow;
+                InstallRow.RecalculateLayout();
+                _prevUpdateButtonShown = showRow;
+            }
+        }
+
+        private static string UpdateButtonLabel(WrapperUpdateState state) => state switch
+        {
+            WrapperUpdateState.Checking => Loc.S("Checking..."),
+            // A failed check goes back to offering the check, so it can simply be retried — showing
+            // "Update" (disabled) there would read as "you are up to date", which we do not know.
+            WrapperUpdateState.NotChecked or WrapperUpdateState.CheckFailed => Loc.S("Check for updates"),
+            _ => Loc.S("Update"),
+        };
+
+        private static string VersionLabelText(Configuration config, IEchokrauTtsInstanceService instance,
+                                               WrapperUpdateState state)
+        {
+            var installed = WrapperUpdatePolicy.Display(config.EchokrauTts.InstalledWrapperVersion);
+            var wrapper = Loc.S("Wrapper");
+
+            // Before a check, the "latest" half would only repeat the version we shipped with — that
+            // is not an answer to "is there something newer", so it is left out until we know.
+            return state switch
+            {
+                WrapperUpdateState.CheckFailed =>
+                    $"{wrapper}: {installed} ({Loc.S("update check failed")}: {instance.UpdateCheckError})",
+                WrapperUpdateState.UpToDate => $"{wrapper}: {installed} ({Loc.S("up to date")})",
+                WrapperUpdateState.UpdateAvailable => WrapperUpdatePolicy.BuildVersionLabel(
+                    config.EchokrauTts.InstalledWrapperVersion, instance.LatestWrapperVersion,
+                    wrapper, Loc.S("latest")),
+                _ => $"{wrapper}: {installed}",
+            };
+        }
+
+        private static string InstallLabel(IEchokrauTtsInstanceService instance, Configuration config)
+        {
+            if (instance.Installing) return Loc.S("Installing...");
+            return config.EchokrauTts.LocalInstall ? Loc.S("Reinstall") : Loc.S("Install");
+        }
+
+        private static string StartLabel(IEchokrauTtsInstanceService instance)
+        {
+            if (instance.InstanceStarting) return Loc.S("Starting...");
+            return instance.InstanceRunning ? Loc.S("Running") : Loc.S("Start");
+        }
+    }
+
+    /// <summary>All nodes created for the EchokrauTTS remote instance section.</summary>
+    public class RemoteInstanceNodes
+    {
+        public TextInputNode BaseUrlInput = null!;
+        public TextButtonNode TestConnectionButton = null!;
+        public TextNode ConnectionResultLabel = null!;
+
+        public NodeBase[] AllNodes => [BaseUrlInput, TestConnectionButton, ConnectionResultLabel];
+    }
+
+    public static LocalInstanceNodes BuildLocalInstance(float width, Configuration config,
+        IEchokrauTtsInstanceService instance, bool cudaAvailable)
+    {
+        var nodes = new LocalInstanceNodes { CudaAvailable = cudaAvailable };
+
+        if (string.IsNullOrWhiteSpace(config.TtsInstallRoot))
+        {
+            config.TtsInstallRoot = Configuration.DefaultTtsInstallRoot;
+            config.Save();
+        }
+
+        nodes.InstallPathInput = Input(Loc.S("Local install path (no spaces or dashes)"), width, 128,
+            config.TtsInstallRoot,
+            v => { config.TtsInstallRoot = v; config.Save(); });
+
+        nodes.ValidationLabel = new TextNode
+        {
+            Size = new Vector2(width, 18),
+            String = Loc.S("The Alltalk path must not be empty.\r\nPlease enter a valid path."),
+            FontType = FontType.Axis,
+            FontSize = 12,
+            TextColor = new Vector4(1f, 0.3f, 0.3f, 1f),
+            IsVisible = string.IsNullOrWhiteSpace(config.TtsInstallRoot),
+        };
+
+        nodes.AutoStartCheck = Check(Loc.S("Auto-start local instance on plugin load"), width,
+            config.EchokrauTts.AutoStartLocalInstance,
+            v =>
+            {
+                config.EchokrauTts.AutoStartLocalInstance = v;
+                config.Save();
+                if (v && config.EchokrauTts.LocalInstall && !instance.InstanceRunning && !instance.InstanceStarting)
+                    instance.StartInstance();
+            });
+
+        // Sub-engine (F5 / XTTS) chosen at wrapper startup. Both are installed, so a change just
+        // restarts the local instance (handled in SwitchTtsBackend). Only meaningful for Local.
+        nodes.EngineCaption = new TextNode
+        {
+            Size = new Vector2(width, 18),
+            String = Loc.S("TTS engine (restarts local instance on change)"),
+            FontType = FontType.Axis,
+            FontSize = 12,
+            TextColor = LabelColor,
+        };
+        var engines = Enum.GetNames<EchokrauTtsEngine>().ToList();
+        var currentEngine = config.EchokrauTts.TtsBackend.ToString();
+        nodes.EngineDropDown = new StringDropDownNode { Size = new Vector2(width, 24), Options = engines };
+        nodes.EngineDropDown.SelectedOption = currentEngine;
+        nodes.EngineDropDown.LabelNode.String = currentEngine;
+        nodes.EngineDropDown.OnOptionSelected = option =>
+        {
+            if (!Enum.TryParse<EchokrauTtsEngine>(option, out var engine)
+                || engine == config.EchokrauTts.TtsBackend)
+                return;
+            nodes.EngineDropDown.SelectedOption = option;
+            nodes.EngineDropDown.LabelNode.String = option;
+            instance.SwitchTtsBackend(engine); // persists + restarts if running
+        };
+
+        // FP16 half-precision — only meaningful for XTTS on a CUDA/ROCm GPU, so only offered when a
+        // GPU is detected. Toggling restarts the local instance (precision is fixed at model load).
+        if (cudaAvailable)
+        {
+            nodes.Fp16Check = Check(Loc.S("Faster XTTS generation with FP16 (needs NVIDIA GPU, ~1.3-1.8x)"), width,
+                config.EchokrauTts.XttsFp16,
+                v => instance.SetXttsFp16(v)); // persists + restarts if running
+        }
+
+        // Custom data (already-prepared model + voice samples). The model zip lands in
+        // echokrautts/models/echokraut_custom (auto-detected by the active engine), the voices zip is
+        // merged into echokrautts/samples. Reuses the AllTalk model/button Loc keys; the voices hint
+        // differs because EchokrauTTS uses a samples/ layout, not AllTalk's voices/ folder.
+        nodes.CustomModelUrlInput = Input(Loc.S("Custom model URL (zip with one root folder)"), width, 256,
+            config.EchokrauTts.CustomModelUrl,
+            v => { config.EchokrauTts.CustomModelUrl = v; config.Save(); });
+        nodes.CustomVoicesUrlInput = Input(Loc.S("Custom voices URL (zip of sample files)"), width, 256,
+            config.EchokrauTts.CustomVoicesUrl,
+            v => { config.EchokrauTts.CustomVoicesUrl = v; config.Save(); });
+
+        // Install-only-custom-data does blocking download/extract I/O and restarts the wrapper, so run
+        // it off the UI thread (same freeze-avoidance as Install/Stop). Progress surfaces via Update().
+        nodes.InstallCustomDataButton = Button(Loc.S("Install only custom data"), 170, () =>
+            Task.Run(() => instance.InstallCustomData(new EKEventId(0, TextSource.Backend), false)));
+        nodes.InstallCustomDataRow = new HorizontalListNode { Size = new Vector2(width, 26), ItemSpacing = 4 };
+        nodes.InstallCustomDataRow.AddNode(nodes.InstallCustomDataButton);
+
+        // Stop/Install do blocking I/O (graceful-shutdown HTTP POST with a timeout + process kill),
+        // so run them off the UI thread — otherwise the game freezes for up to a few seconds. The
+        // UI reflects progress via the per-frame Update() reading the instance flags.
+        nodes.InstallButton = Button(config.EchokrauTts.LocalInstall ? Loc.S("Reinstall") : Loc.S("Install"), 100, () =>
+            Task.Run(() =>
+            {
+                if (instance.InstanceRunning || instance.InstanceStarting)
+                    instance.StopInstance(new EKEventId(0, TextSource.Backend));
+                instance.Install();
+            }));
+        var installMaxW = new[] { Loc.S("Install"), Loc.S("Reinstall"), Loc.S("Installing...") }
+            .Max(s => nodes.InstallButton.LabelNode.GetTextDrawSize(s).X) + 36;
+        if (installMaxW > nodes.InstallButton.Width)
+            nodes.InstallButton.Size = new Vector2(installMaxW, 24);
+
+        BuildUpdateControls(nodes, instance, width);
+
+        nodes.InstallRow = new HorizontalListNode { Size = new Vector2(width, 26), ItemSpacing = 4 };
+        nodes.InstallRow.AddNode(nodes.InstallButton);
+        nodes.InstallRow.AddNode(nodes.UpdateButton);
+        nodes.InstallRow.AddNode(nodes.VersionLabel);
+
+        nodes.StartButton = Button(Loc.S("Start"), 80, () => Task.Run(() => instance.StartInstance()));
+        var startMaxW = new[] { Loc.S("Start"), Loc.S("Starting..."), Loc.S("Running") }
+            .Max(s => nodes.StartButton.LabelNode.GetTextDrawSize(s).X) + 36;
+        if (startMaxW > nodes.StartButton.Width)
+            nodes.StartButton.Size = new Vector2(startMaxW, 24);
+        nodes.StopButton = Button(Loc.S("Stop"), 80, () => Task.Run(() => instance.StopInstance(new EKEventId(0, TextSource.Backend))));
+        nodes.StartStopRow = new HorizontalListNode { Size = new Vector2(width, 26), ItemSpacing = 4 };
+        nodes.StartStopRow.AddNode(nodes.StartButton);
+        nodes.StartStopRow.AddNode(nodes.StopButton);
+
+        return nodes;
+    }
+
+    /// <summary>
+    /// Wrapper-update button + version label, both living in the install row. The button starts
+    /// hidden — <see cref="LocalInstanceNodes.Update"/> decides per frame whether an update is
+    /// actually available and re-flows the row when that flips.
+    /// </summary>
+    private static void BuildUpdateControls(LocalInstanceNodes nodes, IEchokrauTtsInstanceService instance, float width)
+    {
+        // One button, two jobs — see UpdateVersionRow. Both run off the UI thread: the check does a
+        // network round-trip, the update does the same blocking stop/download/install work Install
+        // does. The installer keeps samples/ + models/, so voices and models are never re-downloaded.
+        nodes.UpdateButton = Button(Loc.S("Check for updates"), 90, () =>
+        {
+            // The greyed-out look does NOT block the click — Dim() only lowers the node's alpha and
+            // ATK still delivers the event. So the dead states are rejected here, not by appearance.
+            var state = instance.UpdateState;
+            if (instance.Installing || !WrapperUpdatePolicy.IsButtonActionable(state)) return;
+            Task.Run(async () =>
+            {
+                if (state != WrapperUpdateState.UpdateAvailable)
+                {
+                    await instance.CheckForWrapperUpdateAsync();
+                    return;
+                }
+                if (instance.InstanceRunning || instance.InstanceStarting)
+                    instance.StopInstance(new EKEventId(0, TextSource.Backend));
+                instance.UpdateWrapper();
+            });
+        });
+        nodes.UpdateButton.IsVisible = false;
+        // Sized to the longest label it can ever show, so it doesn't jump between states.
+        var updateMaxW = new[] { Loc.S("Update"), Loc.S("Check for updates"), Loc.S("Checking...") }
+            .Max(s => nodes.UpdateButton.LabelNode.GetTextDrawSize(s).X) + 36;
+        if (updateMaxW > nodes.UpdateButton.Width)
+            nodes.UpdateButton.Size = new Vector2(updateMaxW, 24);
+
+        // Whatever the two buttons don't claim, down to a floor that keeps the label readable.
+        var labelWidth = Math.Max(80f, width - nodes.InstallButton.Width - nodes.UpdateButton.Width - 12);
+        nodes.VersionLabel = Label(string.Empty, labelWidth);
+        nodes.VersionLabel.Size = new Vector2(labelWidth, 24);
+        nodes.VersionLabel.AddTextFlags(TextFlags.Ellipsis);
+    }
+
+    public static RemoteInstanceNodes BuildRemoteInstance(float width, Configuration config)
+    {
+        var nodes = new RemoteInstanceNodes();
+
+        nodes.BaseUrlInput = Input(Loc.S("EchokrauTTS base URL"), width, 80, config.EchokrauTts.BaseUrl,
+            v => { config.EchokrauTts.BaseUrl = v; config.Save(); });
+
+        nodes.TestConnectionButton = Button(Loc.S("Test"), 60, () => { });
+        nodes.ConnectionResultLabel = new TextNode
+        {
+            Size = new Vector2(width, 20),
+            String = " ",
+            FontType = FontType.Axis,
+            FontSize = 12,
+            TextColor = LabelColor,
+        };
+
+        return nodes;
+    }
+
+}
