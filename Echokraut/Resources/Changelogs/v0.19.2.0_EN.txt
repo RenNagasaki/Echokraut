@@ -1,0 +1,45 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.2.0
+================================================================================
+
+
+==============================================================================
+IMPROVEMENTS
+==============================================================================
+
+[Backend] Install your own EchokrauTTS model and voice samples
+  Local EchokrauTTS now has the same "Install only custom data" option AllTalk
+  offers: paste a URL (direct link or Google Drive) to a zip with your own
+  trained model and/or a zip of voice samples, then click the button in
+  Settings -> Backend. The model is installed into EchokrauTTS's models folder
+  and used automatically for the active engine (F5 or XTTS); the samples are
+  merged into your voice samples (your existing voices are kept). The local
+  instance restarts on its own so the new model takes effect right away.
+  NOTE: this requires the updated EchokrauTTS engine — if you already have a local
+  EchokrauTTS install, reinstall it once (Settings -> Backend -> Reinstall) before
+  installing custom data.
+
+
+==============================================================================
+BUG FIXES
+==============================================================================
+
+[Backend] EchokrauTTS now respects the "Streaming generation" setting
+  EchokrauTTS always streamed audio and started playback before the line was
+  fully generated, even with "Streaming generation" turned off. It now honors
+  the setting like AllTalk: with streaming off, it waits for the whole clip
+  before playing.
+
+[Backend] Custom voices are no longer overwritten by the default voice set
+  When you install with a custom voices URL set, the install no longer writes the
+  default voice set on top of your voices (which previously replaced them). This
+  applies to both AllTalk and EchokrauTTS.
+
+[Playback] Fixed crackling during streaming playback on slower GPUs
+  With streaming on, EchokrauTTS (XTTS) generates audio as it plays, and on a
+  slower GPU the playback could outrun generation and crackle (the saved file was
+  always fine). Playback now buffers more before it starts — and short lines wait
+  until the whole clip has arrived — so streamed audio plays cleanly. Fast setups
+  are barely affected. (If you still hear it, turning Streaming generation off
+  buffers the full clip first.)

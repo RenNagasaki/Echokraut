@@ -1,0 +1,34 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <OutputType>Exe</OutputType>
+        <TargetFramework>net10.0</TargetFramework>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <Authors>RenNagasaki</Authors>
+        <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
+        <ApplicationIcon>Echokraut.ico</ApplicationIcon>
+        <Version>1.3.0.0</Version>
+        <!-- Full VERSIONINFO resource. A binary with sparse or empty file metadata scores worse with
+             the AV heuristics that flagged this installer as Trojan:Script/Wacatac.B!ml; a downloader
+             that also identifies itself properly is far less suspicious. Keep these filled in. -->
+        <Company>RenNagasaki</Company>
+        <Product>Echokraut</Product>
+        <AssemblyTitle>Echokraut Local Installer</AssemblyTitle>
+        <Description>Installs and runs the local TTS backend (EchokrauTTS / AllTalk) for the Echokraut Dalamud plugin.</Description>
+        <Copyright>Copyright © RenNagasaki</Copyright>
+        <NeutralLanguage>en</NeutralLanguage>
+        <FileVersion>1.3.0.0</FileVersion>
+        <AssemblyVersion>1.3.0.0</AssemblyVersion>
+        <!-- Never publish this as a compressed single file: the self-extracting layout reads as a
+             packer to AV heuristics. Loose assemblies next to the exe are the safer shape. -->
+        <PublishSingleFile>false</PublishSingleFile>
+        <EnableCompressionInSingleFile>false</EnableCompressionInSingleFile>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <PackageReference Include="Google.Apis.Drive.v3" Version="1.73.0.4045" />
+      <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    </ItemGroup>
+
+</Project>

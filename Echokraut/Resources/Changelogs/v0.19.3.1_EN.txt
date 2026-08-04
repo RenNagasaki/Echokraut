@@ -1,0 +1,59 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.3.1
+================================================================================
+
+
+==============================================================================
+IMPROVEMENTS
+==============================================================================
+
+[Voices] The voice pack ships new child voices
+  The child voices of the first pack were real recordings of children, but in a
+  different language, and cloned speech built from them did not sound good
+  enough in practice. All 60 of them have been replaced. The new child voices
+  are built from English speakers of the same source as the adult voices, with
+  their pitch and their vocal tract raised into a child register, so they carry
+  a child's timbre and an English accent. The 200 adult voices are unchanged.
+
+  - The voice files keep their names, so an NPC that already uses a child voice
+    keeps its assignment — it will simply sound different from now on.
+  - To get the new voices, download the voice pack again from Game Data Tools,
+    or reinstall your TTS engine. Note that for a locally installed engine this
+    replaces the whole voice folder, so move any voices of your own out of it
+    first.
+  - These are child-sounding adult speakers, not recordings of children. The
+    exact change made to every clip is recorded in the pack's ATTRIBUTION.csv,
+    as the license of the source recordings requires.
+
+==============================================================================
+BUG FIXES
+==============================================================================
+
+[Playback] Streaming voices no longer flood the log
+  While a streamed line was playing, the buffer watchdog could react to its own
+  restart and pause, refill and resume thousands of times per second, writing a
+  "stream underrun" line each time. Dalamud's log filled up with the same
+  message and the game stuttered. The watchdog now measures the buffer the same
+  way playback does and rebuffers at most a couple of times per second.
+
+[3D audio] Voices follow the camera correctly again
+  The listener orientation was read from the wrong part of the camera matrix. It
+  happened to be right while the camera was level, so it looked fine, but drifted
+  as soon as the camera was tilted - measured 146 degrees where the real angle was
+  101, with "up" pointing down. Direction and elevation now match the camera at
+  every angle.
+
+[3D audio] The audible range setting now applies from the start
+  The configured range only ever reached the audio engine when the slider in the
+  settings was moved, and was forgotten again on the next start. Every session
+  silently ran with the engine default instead of your setting.
+
+[3D audio] Moving speakers no longer detune voices
+  Touching the audible range slider also switched on the doppler effect, which
+  shifted the pitch of a voice whenever the speaker or you moved. It stays off now,
+  as it was always meant to.
+
+[Playback] Fixed a crash when a voice was positioned during startup
+  Positioning a voice while it was still buffering could dereference uninitialised
+  state and take the whole game down with it.

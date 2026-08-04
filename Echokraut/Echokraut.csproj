@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+
+  <PropertyGroup>
+    <Version>0.19.3.1</Version>
+    <Description>A TTS Dalamud Plugin that breaks the silence! For self hosted TTS Services.</Description>
+    <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+    <IsPackable>false</IsPackable>
+    <RepositoryUrl>https://github.com/RenNagasaki/Echokraut</RepositoryUrl>
+    <Authors>RenNagasaki</Authors>
+    <AssemblyVersion></AssemblyVersion>
+    <FileVersion></FileVersion>
+    <!--
+      KamiToolKit (latest) marks the tree-view nodes (TreeListNode,
+      TreeListCategoryNode, ...) as [Experimental], which is an ERROR by default.
+      The Voice Clip Manager's journal-style tree has no non-experimental
+      alternative, so opt in to the experimental surface project-wide.
+    -->
+    <NoWarn>$(NoWarn);KamiToolKit_Experimental</NoWarn>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Anamnesis\Data\Equipment.json" />
+    <None Remove="Anamnesis\Data\Images.json" />
+    <None Remove="Anamnesis\Data\ItemCategories.json" />
+    <None Remove="Anamnesis\Data\NpcNames.json" />
+    <None Remove="Anamnesis\Data\Tips.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="Echokraut.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Apis.Auth" Version="1.73.0" />
+    <PackageReference Include="Google.Apis.Drive.v3" Version="1.73.0.3996" />
+    <PackageReference Include="Humanizer.Core" Version="2.14.1" />
+    <PackageReference Include="Humanizer.Core.de" Version="2.14.1" />
+    <PackageReference Include="Humanizer.Core.fr" Version="2.14.1" />
+    <PackageReference Include="Humanizer.Core.ja" Version="2.14.1" />
+    <PackageReference Include="ManagedBass" Version="4.0.1" />
+    <PackageReference Include="R3" Version="1.1.13" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.3" />
+    <PackageReference Include="HtmlAgilityPack" Version="1.11.65" />
+    <PackageReference Include="Reloaded.Memory" Version="7.1.0" />
+    <!--
+      Do NOT add `<PackageReference Remove="DalamudPackager" />` here. The
+      Dalamud.NET.Sdk auto-includes DalamudPackager (Sdk.props line ~75) and
+      the packager is what:
+        - reads Echokraut.json,
+        - injects AssemblyVersion (from <Version>) + DalamudApiLevel + RepoUrl,
+        - writes the enriched manifest into bin/.../Echokraut.json,
+        - assembles the distributed Echokraut.zip.
+      Removing it leaves the source manifest unmodified and Dalamud's installer
+      rejects the install with "Distributed plugin version does not match repo
+      version, distributed: " (empty).
+    -->
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Properties\Resources.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Update="Properties\Resources.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\RemoteUrls.json" />
+    <EmbeddedResource Include="Resources\NpcRaces.json" />
+    <EmbeddedResource Include="Resources\QuestNpcAliases.json" />
+    <!--
+      Offline fallbacks for the JSON data JsonDataService normally fetches from the
+      master branch on GitHub. Embedding them keeps startup resilient when GitHub
+      raw rate-limits the request burst (429) or is otherwise unreachable.
+    -->
+    <EmbeddedResource Include="Resources\NpcGenders.json" />
+    <EmbeddedResource Include="Resources\Emoticons.json" />
+    <EmbeddedResource Include="Resources\VoiceNamesEN.json" />
+    <EmbeddedResource Include="Resources\VoiceNamesDE.json" />
+    <EmbeddedResource Include="Resources\VoiceNamesFR.json" />
+    <EmbeddedResource Include="Resources\VoiceNamesJA.json" />
+    <!--
+      In-game changelog content. ChangelogService enumerates these via
+      Assembly.GetManifestResourceNames(), parses the version out of the filename,
+      and shows entries newer than Configuration.LastSeenChangelogVersion.
+      Filename convention: v{MAJOR}.{MINOR}.{BUILD}.{REVISION}_{LANG}.txt — the
+      "v" prefix anchors the version regex against the surrounding dots. Add
+      one EN + one DE entry per release; FR/JA fall back to EN at runtime.
+    -->
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.0.0_EN.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.0.0_DE.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.0.1_EN.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.0.1_DE.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.1.0_EN.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.1.0_DE.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.1.1_EN.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.1.1_DE.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.2.0_EN.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.2.0_DE.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.3.0_EN.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.3.0_DE.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.3.1_EN.txt" />
+    <EmbeddedResource Include="Resources\Changelogs\v0.19.3.1_DE.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="bass.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+    <None Update="Resources\Echokraut.png">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <!--
+    Do NOT add an explicit <Content Include="Echokraut.json"> with
+    CopyToOutputDirectory here. The Dalamud.NET.Sdk handles the plugin manifest
+    itself: it reads Echokraut.json, injects AssemblyVersion (from <Version>) +
+    DalamudApiLevel + RepoUrl, and writes the enriched manifest into the build
+    output and into the distributed Echokraut.zip. An explicit Content Include
+    short-circuits that pipeline — the source JSON gets copied through as-is and
+    Dalamud's installer rejects the install with "Distributed plugin version does
+    not match repo version, distributed: " (empty).
+  -->
+
+  <ItemGroup>
+    <ProjectReference Include="..\KamiToolKit\KamiToolKit.csproj" />
+    <ProjectReference Include="..\Echotools\Logging\Logging.csproj" />
+    <ProjectReference Include="..\Echotools\UI\UI.csproj" />
+  </ItemGroup>
+</Project>

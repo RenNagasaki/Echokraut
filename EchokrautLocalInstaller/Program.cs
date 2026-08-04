@@ -1,0 +1,1185 @@
+﻿using System.Diagnostics;
+using System.IO.Pipes;
+using System.Reflection;
+using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
+using Newtonsoft.Json;
+
+public class Program
+{
+    delegate bool ConsoleCtrlDelegate(int ctrlType);
+    static readonly ConsoleCtrlDelegate _handler = Handler;
+
+    [DllImport("Kernel32.dll", SetLastError = true)]
+    static extern bool SetConsoleCtrlHandler(ConsoleCtrlDelegate handler, bool add);
+
+    static bool Handler(int ctrlType)
+    {
+        Dispose();
+        return false;
+    }
+
+    static Process? InstallProcess = null;
+    static Process? InstanceProcess = null;
+    static bool IsWindows;
+    static bool InstanceProcessIsRunning = false;
+    static bool InstallProcessStarted = false;
+
+    static readonly string LogFilePath = Path.Join(
+        Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location),
+        "EchokrautLocalInstaller.log");
+    static readonly object LogLock = new();
+
+    static void Log(string message)
+    {
+        var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}";
+        Console.WriteLine(message);
+        try
+        {
+            lock (LogLock)
+            {
+                File.AppendAllText(LogFilePath, line + Environment.NewLine);
+            }
+        }
+        catch { /* don't let logging failures break the installer */ }
+    }
+
+    static void Log(string message, ConsoleColor color)
+    {
+        var line = $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff}] {message}";
+        Console.ForegroundColor = color;
+        Console.WriteLine(message);
+        Console.ResetColor();
+        try
+        {
+            lock (LogLock)
+            {
+                File.AppendAllText(LogFilePath, line + Environment.NewLine);
+            }
+        }
+        catch { }
+    }
+
+    static async Task DownloadFileAsync(HttpClient client, string url, string destPath, string label)
+    {
+        using var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead);
+        response.EnsureSuccessStatusCode();
+        var totalBytes = response.Content.Headers.ContentLength;
+        await using var stream = await response.Content.ReadAsStreamAsync();
+        await using var fs = new FileStream(destPath, FileMode.Create, FileAccess.Write, FileShare.None, 81920);
+
+        var buffer = new byte[81920];
+        long downloaded = 0;
+        const int barWidth = 40;
+        var sw = Stopwatch.StartNew();
+        int bytesRead;
+
+        while ((bytesRead = await stream.ReadAsync(buffer)) > 0)
+        {
+            await fs.WriteAsync(buffer.AsMemory(0, bytesRead));
+            downloaded += bytesRead;
+
+            if (totalBytes.HasValue && totalBytes.Value > 0)
+            {
+                var pct = (double)downloaded / totalBytes.Value;
+                var filled = (int)(pct * barWidth);
+                var empty = barWidth - filled;
+                var bar = new string('=', filled) + (empty > 0 ? ">" + new string(' ', empty - 1) : "");
+                var mbDown = downloaded / 1048576.0;
+                var mbTotal = totalBytes.Value / 1048576.0;
+                Console.Write($"\r  {label}: [{bar}] {pct:P0}  {mbDown:F1}/{mbTotal:F1} MB");
+            }
+            else
+            {
+                var mbDown = downloaded / 1048576.0;
+                Console.Write($"\r  {label}: {mbDown:F1} MB downloaded...");
+            }
+        }
+
+        sw.Stop();
+        var finalMb = downloaded / 1048576.0;
+        var speed = sw.Elapsed.TotalSeconds > 0 ? finalMb / sw.Elapsed.TotalSeconds : 0;
+        Console.WriteLine();
+        Log($"{label}: {finalMb:F1} MB downloaded in {sw.Elapsed.TotalSeconds:F1}s ({speed:F1} MB/s)");
+    }
+
+    /// <summary>
+    /// Ensures <c>&lt;wrapperFolder&gt;/.uv/uv.exe</c> exists and returns its full path. This is the C#
+    /// equivalent of what <c>bootstrap/install_win.ps1</c> does before handing over to bootstrap.py —
+    /// doing it here lets us start uv directly instead of launching a hidden PowerShell with a bypassed
+    /// execution policy, which is what tripped Defender's ML classifier on the released installer.
+    /// Prefers a uv already on PATH (copied in, so the wrapper folder stays self-contained).
+    /// </summary>
+    static async Task<string> EnsureUvAsync(string wrapperFolder)
+    {
+        var uvDir = Path.Join(wrapperFolder, Constants.UVFOLDERNAME);
+        var uvExe = Path.Join(uvDir, "uv.exe");
+        if (File.Exists(uvExe))
+            return uvExe;
+
+        Directory.CreateDirectory(uvDir);
+
+        var onPath = FindOnPath("uv.exe");
+        if (onPath != null)
+        {
+            Log($"Reusing uv from PATH: {onPath}");
+            File.Copy(onPath, uvExe, true);
+            return uvExe;
+        }
+
+        var zipPath = Path.Join(uvDir, Constants.UVWINDOWSASSET);
+        Log($"Downloading uv from {Constants.UVWINDOWSURL}");
+        using (var client = new HttpClient { Timeout = TimeSpan.FromMinutes(30) })
+            await DownloadFileAsync(client, Constants.UVWINDOWSURL, zipPath, "uv");
+        System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, uvDir, true);
+        try { File.Delete(zipPath); } catch { }
+
+        if (!File.Exists(uvExe))
+            throw new FileNotFoundException($"uv.exe missing after extracting {Constants.UVWINDOWSASSET}", uvExe);
+
+        Log($"uv ready at {uvExe}");
+        return uvExe;
+    }
+
+    static string? FindOnPath(string exeName)
+    {
+        foreach (var dir in (Environment.GetEnvironmentVariable("PATH") ?? "")
+                            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
+        {
+            try
+            {
+                var candidate = Path.Join(dir.Trim('"'), exeName);
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+            catch { /* unusable PATH entry (invalid chars, unmapped drive) — just skip it */ }
+        }
+
+        return null;
+    }
+
+    public static void Main(string[] args)
+    {
+        // The Python wrapper bootstrap emits UTF-8 NDJSON (German text + symbols like … → ä).
+        // Force the console to UTF-8 so our own log output renders correctly instead of CP850
+        // mojibake (child-process stdout is decoded as UTF-8 via StandardOutputEncoding below).
+        try { Console.OutputEncoding = System.Text.Encoding.UTF8; } catch { /* no console attached */ }
+
+        try
+        {
+            using var client = new NamedPipeClientStream(".", "EchokrautLocalInstaller", PipeDirection.Out);
+            client.Connect(200);
+            using var writer = new StreamWriter(client) { AutoFlush = true };
+            writer.WriteLine("shutdown");
+        }
+        catch
+        { }
+        
+        _ = Task.Run(async () =>
+        { 
+            while (true)
+            {
+                using var server = new NamedPipeServerStream("EchokrautLocalInstaller");
+                await server.WaitForConnectionAsync();
+
+                using var reader = new StreamReader(server);
+                var msg = await reader.ReadLineAsync();
+
+                if (msg == "shutdown")
+                    Environment.Exit(0);
+            }
+        });
+
+        SetConsoleCtrlHandler(_handler, true);
+        AppDomain.CurrentDomain.ProcessExit += (_, _) =>
+        {
+            Log("ProcessExit – Stopping All");
+            Dispose();
+        };
+        
+        Log($"EchokrautLocalInstaller started. Args ({args.Length}): [{string.Join(", ", args.Select((a, i) => $"[{i}]={a}"))}]");
+
+        if (args.Length > 1)
+        {
+            switch (args[0])
+            {
+                case "start":
+                    Log($"Mode: start | installFolder={args[1]} | isWindows={args[2]}");
+                    IsWindows = Convert.ToBoolean(args[2]);
+                    var installFolder = Path.Join(args[1], Constants.ALLTALKFOLDERNAME);
+                    StartInstance(installFolder);
+                    break;
+                case "install":
+                    // Args: install <installFolder> <customModelUrl> <customVoicesUrl> <reinstall>
+                    //        <isWindows> <isWindows11> <alltalkUrl> <voicesUrl> <voices2Url>
+                    //        <msBuildToolsUrl> <xttsModelUrls(;-separated)> <cpuMode>
+                    Log($"Mode: install | installFolder={args[1]} | customModelUrl={args[2]} | customVoicesUrl={args[3]} | reinstall={args[4]} | isWindows={args[5]} | isWindows11={args[6]}");
+                    Log($"URLs: alltalkUrl={args[7]} | voicesUrl={args[8]} | voices2Url={args[9]} | msBuildToolsUrl={args[10]} | xttsModelUrls={args[11]}");
+                    Log($"Options: cpuMode={args[12]}");
+                    IsWindows = Convert.ToBoolean(args[5]);
+                    Install(args[1],
+                            args[2],
+                            args[3],
+                            Convert.ToBoolean(args[4]),
+                            Convert.ToBoolean(args[6]),
+                            args[7],
+                            args[8],
+                            args[9],
+                            args[10],
+                            args[11].Split(';'),
+                            Convert.ToBoolean(args[12]));
+                    break;
+                case "echokrautts":
+                case EchokrauTtsServeArgs.UpdateMode:
+                    // <mode> <installRoot> <echokrauTtsUrl-or-empty> <isWindows> <port> <language> <parentPid> [ttsBackend] [xttsFp16]
+                    // One mode for both install + start: the wrapper bootstrap installs (idempotent)
+                    // AND serves in a single long-running process. When a URL is given the wrapper is
+                    // (re)downloaded first; otherwise we just run the existing install. ttsBackend
+                    // (f5/xtts) + xttsFp16 (true/false) are optional for back-compat with older
+                    // plugins; default to xtts / false.
+                    // updateechokrautts takes the SAME arguments and serves the same way — the only
+                    // difference is that the zip is unpacked with PRESERVEDECHOKRAUTTSFOLDERS skipped,
+                    // so the user's voice samples and downloaded models survive a wrapper update.
+                    var serveArgs = EchokrauTtsServeArgs.FromWrapperMode(args);
+                    Log($"Mode: {args[0]} | {serveArgs.Describe()} | isWindows={args[3]}");
+                    IsWindows = Convert.ToBoolean(args[3]);
+                    StartEchokrauTts(serveArgs).Wait();
+                    break;
+                case "installcustomdata":
+                    // Args: installcustomdata <installFolder> <customModelUrl> <customVoicesUrl> <isWindows> <shouldRestart>
+                    // Note: any running installer (and its AllTalk instance) is already killed by the named pipe shutdown above.
+                    Log($"Mode: installcustomdata | installFolder={args[1]} | customModelUrl={args[2]} | customVoicesUrl={args[3]} | isWindows={args[4]} | shouldRestart={args[5]}");
+                    IsWindows = Convert.ToBoolean(args[4]);
+                    var customDataFolder = Path.Join(args[1], Constants.ALLTALKFOLDERNAME);
+                    InstallCustomData(customDataFolder, args[2], args[3]).Wait();
+                    if (Convert.ToBoolean(args[5]))
+                        StartInstance(customDataFolder);
+                    break;
+                case "installcustomdataek":
+                    // Args: installcustomdataek <installRoot> <customModelUrl> <customVoicesUrl> <isWindows>
+                    //        <shouldRestart> <port> <language> <parentPid> [ttsBackend] [xttsFp16]
+                    // EchokrauTTS analog of installcustomdata: drop a custom model into
+                    // echokrautts/models/echokraut_custom and custom voice samples into
+                    // echokrautts/samples, then (optionally) relaunch the wrapper so it picks
+                    // the custom model up. Any running instance is already killed by the named
+                    // pipe shutdown above. The restart carries the same serve args as the
+                    // echokrautts mode so engine/fp16/language stay consistent.
+                    var ekRestart = Convert.ToBoolean(args[5]);
+                    var ekServeArgs = EchokrauTtsServeArgs.FromCustomDataMode(args);
+                    Log($"Mode: installcustomdataek | customModelUrl={args[2]} | customVoicesUrl={args[3]} | isWindows={args[4]} | shouldRestart={ekRestart} | {ekServeArgs.Describe()}");
+                    IsWindows = Convert.ToBoolean(args[4]);
+                    InstallCustomDataEchokrauTts(args[1], args[2], args[3]).Wait();
+                    if (ekRestart)
+                        StartEchokrauTts(ekServeArgs).Wait();
+                    break;
+            }
+        }
+    }
+
+    static void Install(string installFolder, string customModelUrl, string customVoicesUrl,
+        bool reinstall, bool isWindows11,
+        string alltalkUrl, string voicesUrl, string voices2Url, string msBuildToolsUrl, string[] xttsModelUrls,
+        bool cpuMode)
+    {
+        try
+        {
+            Log($"Installing into {installFolder}");
+            Log($"Args: reinstall={reinstall}, isWindows={IsWindows}, isWindows11={isWindows11}");
+            var installFile = Path.Join(installFolder, "alltalk_tts.zip");
+            var installMSBTFile = Path.Join(installFolder, "vs_BuildTools.exe");
+            var alltalkFolderNameWrong = Path.GetFileNameWithoutExtension(alltalkUrl);
+            var alltalkFolderWrong = Path.Join(installFolder, alltalkFolderNameWrong);
+            var alltalkFolder = Path.Join(installFolder, Constants.ALLTALKFOLDERNAME);
+            var modelFolder = Path.Join(alltalkFolder, "models", "xtts", "xtts2.0.3");
+            var confignewFile = Path.Join(alltalkFolder, "confignew.json");
+            var ttsEnginesFile = Path.Join(alltalkFolder, "system", "tts_engines", "tts_engines.json");
+            var modelSettingsFile = Path.Join(alltalkFolder, "system", "tts_engines", "xtts", "model_settings.json");
+
+            try
+            {
+                InstallProcess = new Process();
+                if (reinstall && Directory.Exists(alltalkFolder))
+                {
+                    try {
+                        Directory.Delete(alltalkFolder, true);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"Error while installing alltalk locally: {ex}");
+                    }
+                }
+
+                if (!Directory.Exists(installFolder))
+                    Directory.CreateDirectory(installFolder);
+
+                #region Prerequisites
+                if (IsWindows || isWindows11)
+                {
+                    Log($"Downloading vs_BuildTools.exe");
+                    using (var client = new HttpClient() { Timeout = TimeSpan.FromMinutes(30) })
+                    {
+                        DownloadFileAsync(client, msBuildToolsUrl, installMSBTFile, "vs_BuildTools.exe").Wait();
+                    }
+
+                    var winSdk = isWindows11
+                                     ? Constants.MSBUILDTOOLSWIN11SDK
+                                     : Constants.MSBUILDTOOLSWIN10SDK;
+                    Log($"Installing vs_BuildTools.exe");
+                    var process = new Process();
+                    process.StartInfo.UseShellExecute = false;
+                    process.StartInfo.CreateNoWindow = true;
+                    process.StartInfo.FileName = installMSBTFile;
+                    process.StartInfo.Arguments = $"--quiet --add {Constants.MSBUILDTOOLSMSVC} --add {winSdk}";
+                    process.Start();
+                    process.WaitForExit();
+                    Log($"vs_BuildTools.exe ExitCode: {process.ExitCode}");
+                    File.Delete(installMSBTFile);
+                }
+                #endregion
+
+                Log($"Downloading alltalk_tts.zip from {alltalkUrl}");
+                using(var client = new HttpClient() { Timeout = TimeSpan.FromMinutes(30) })
+                {
+                    DownloadFileAsync(client, alltalkUrl, installFile, "alltalk_tts.zip").Wait();
+                }
+
+                Log($"Extracting alltalk_tts.zip");
+                System.IO.Compression.ZipFile.ExtractToDirectory(installFile, installFolder, true);
+                Log($"Moving {alltalkFolderWrong} -> {alltalkFolder}");
+                Directory.Move(alltalkFolderWrong, alltalkFolder);
+                File.Delete(installFile);
+
+                Log($"Downloading xtts2.0.3 model");
+                using(var client = new HttpClient() { Timeout = TimeSpan.FromMinutes(30) })
+                {
+                    if (!Directory.Exists(modelFolder))
+                        Directory.CreateDirectory(modelFolder);
+
+                    foreach (var xttsUrl in xttsModelUrls)
+                    {
+                        var uri = new Uri(xttsUrl);
+                        var fileName = Path.GetFileName(uri.LocalPath);
+                        Log($"Downloading {fileName}");
+                        DownloadFileAsync(client, xttsUrl, Path.Join(modelFolder, fileName), fileName).Wait();
+                    }
+                }
+
+                // Voice samples used to be downloaded via voices.zip + voices2.zip and
+                // unpacked into alltalkFolder here. The plugin now installs voices itself
+                // via IVoicePackService (curated, freely-licensed pack) right after this
+                // installer finishes. voicesUrl / voices2Url remain in the install args for
+                // back-compat but are no longer consumed by the installer.
+
+                var silentArgs = cpuMode ? "-silent cpu" : "-silent";
+                Log($"Configuring InstallProcess (atsetup args: {silentArgs})");
+                InstallProcess.StartInfo.UseShellExecute = false;
+                InstallProcess.StartInfo.CreateNoWindow = true;
+                InstallProcess.StartInfo.RedirectStandardOutput = true;
+                InstallProcess.StartInfo.RedirectStandardError = true;
+                if (IsWindows)
+                {
+                    var batPath = Path.Join(alltalkFolder, "atsetup.bat");
+                    InstallProcess.StartInfo.FileName = "cmd.exe";
+                    InstallProcess.StartInfo.Arguments =
+                        $"/C start \"atsetup\" /wait {batPath} {silentArgs}";
+                    Log($"InstallProcess FileName: cmd.exe");
+                    Log($"InstallProcess Arguments: /C start \"atsetup\" /wait {batPath} {silentArgs}");
+                    Log($"atsetup.bat exists: {File.Exists(batPath)}");
+                    if (File.Exists(batPath))
+                        Log($"atsetup.bat size: {new FileInfo(batPath).Length} bytes");
+                }
+                else
+                {
+                    var shPath = Path.Join(alltalkFolder, "atsetup.sh");
+                    InstallProcess.StartInfo.FileName = "/bin/bash";
+                    InstallProcess.StartInfo.Arguments =
+                        $"-c \"setsid bash -c '{shPath} {silentArgs}' & wait $!\"";
+                    Log($"InstallProcess FileName: /bin/bash");
+                    Log($"InstallProcess Arguments: -c \"setsid bash -c '{shPath} {silentArgs}' & wait $!\"");
+                    Log($"atsetup.sh exists: {File.Exists(shPath)}");
+                }
+
+                Log($"Starting InstallProcess (calling atsetup)...");
+                var sw = Stopwatch.StartNew();
+                InstallProcess.Start();
+                InstallProcessStarted = true;
+                Log($"InstallProcess started, PID: {InstallProcess.Id}");
+
+                var stdout = InstallProcess.StandardOutput.ReadToEnd();
+                var stderr = InstallProcess.StandardError.ReadToEnd();
+                InstallProcess.WaitForExit();
+                sw.Stop();
+
+                Log($"InstallProcess finished in {sw.Elapsed.TotalSeconds:F1}s");
+                Log($"InstallProcess ExitCode: {InstallProcess.ExitCode}");
+                if (!string.IsNullOrWhiteSpace(stdout))
+                    Log($"InstallProcess STDOUT:\n{stdout}");
+                if (!string.IsNullOrWhiteSpace(stderr))
+                    Log($"InstallProcess STDERR:\n{stderr}");
+
+                if (InstallProcess.ExitCode == 0)
+                {
+                    if (IsWindows)
+                    {
+                        Log($"Installing espeak-ng");
+                        CallCMD(IsWindows,
+                                "",
+                          $"msiexec /i \"{Path.Join(alltalkFolder, "system", "espeak-ng", "espeak-ng-X64.msi")}\" /quiet /norestart",
+                          "Espeak-NG");
+                    }
+
+                    Log("Modifying configs:");
+                    dynamic? config = JsonConvert.DeserializeObject(File.ReadAllText(confignewFile));
+                    if (config != null)
+                    {
+                        config["gradio_port_number"] = 7852;
+                        config["firstrun_model"] = false;
+                        config["api_def"]["api_port_number"] = 7851;
+                        config["tgwui"]["tgwui_lowvram_enabled"] = true;
+
+                        File.WriteAllText(confignewFile, JsonConvert.SerializeObject(config));
+                    }
+
+                    dynamic? configEngines = JsonConvert.DeserializeObject(File.ReadAllText(ttsEnginesFile));
+                    if (configEngines != null)
+                    {
+                        configEngines["engine_loaded"] = "xtts";
+                        configEngines["selected_model"] = "xtts - xtts2.0.3";
+                        File.WriteAllText(ttsEnginesFile, JsonConvert.SerializeObject(configEngines));
+                    }
+
+                    dynamic? configEngine = JsonConvert.DeserializeObject(File.ReadAllText(modelSettingsFile));
+                    if (configEngine != null)
+                    {
+                        configEngine["settings"]["lowvram_enabled"] = cpuMode;
+                        if (!cpuMode)
+                            configEngine["settings"]["deepspeed_enabled"] = true;
+                        File.WriteAllText(modelSettingsFile, JsonConvert.SerializeObject(configEngine));
+                    }
+                    Log($"Configured for {(cpuMode ? "CPU" : "GPU")} mode (lowvram={cpuMode}{(cpuMode ? "" : ", deepspeed=true")})");
+                    InstallCustomData(alltalkFolder, customModelUrl, customVoicesUrl).Wait();
+
+                    Log($"Done!");
+                    }
+                else
+                {
+                    Log($"InstallProcess failed with exit code {InstallProcess.ExitCode} — skipping post-install config");
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                StopInstall();
+                Log($"Stopped alltalk install process");
+            }
+            catch (Exception ex)
+            {
+                StopInstall();
+                Log($"Error while installing alltalk locally: {ex}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Error while installing alltalk locally: {ex}");
+            StopInstall();
+        }
+    }
+
+    static void StopInstall()
+    {
+        try
+        {
+                Log($"Stopping alltalk install process");
+                if (InstallProcessStarted && InstallProcess is { HasExited: false })
+                {
+                    InstallProcess.Kill(true);
+                }
+                InstallProcess?.Dispose();
+                InstallProcess = null;
+                InstallProcessStarted = false;
+        }
+        catch (Exception ex)
+        {
+            Log($"Error while stopping alltalk install: {ex}");
+        }
+    }
+
+    static void StartInstance(string installFolder)
+    {
+        try
+        {
+            if (!(!InstanceProcessIsRunning && InstanceProcess == null))
+                StopInstance();
+
+            try
+            {
+                InstanceProcess = new Process();
+                var alltalkFolder = installFolder;
+                Log($"Starting alltalk instance process");
+
+                var cmdExe = IsWindows
+                                 ? "cmd.exe"
+                                 : "/bin/bash";
+                var processInfo = new ProcessStartInfo(cmdExe)
+                {
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true
+                };
+
+                InstanceProcess = new Process();
+                InstanceProcess.OutputDataReceived += (sender, e) =>
+                {
+                    if (e.Data != null && !string.IsNullOrEmpty(e.Data))
+                    {
+                        var cleanedMessage = CleanAnsi(e.Data);
+                        if (Constants.ALLTALKDEBUGLOGCOLOR.Any(item => e.Data.Contains(item)))
+                            Log(cleanedMessage, ConsoleColor.Green);
+                        else if (Constants.ALLTALKERRORLOGCOLOR.Any(item => e.Data.Contains(item)))
+                            Log(cleanedMessage, ConsoleColor.Red);
+                        else
+                            Log(cleanedMessage, ConsoleColor.Yellow);
+
+                        if (e.Data.Contains("Server Ready"))
+                        {
+                            Log("Alltalk instance is ready");
+                            var readyFile = Path.Join(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), "Ready.txt");
+                            if (!File.Exists(readyFile))
+                                File.WriteAllText(readyFile, " ");
+                        }
+                    }
+                };
+                InstanceProcess.ErrorDataReceived += (sender, e) =>
+                {
+                    if (e.Data != null && !string.IsNullOrEmpty(e.Data))
+                        Log(CleanAnsi(e.Data));
+                };
+                InstanceProcess.StartInfo = processInfo;
+                InstanceProcess.Start();
+                InstanceProcess.BeginOutputReadLine();
+                InstanceProcess.BeginErrorReadLine();
+
+                using (var sw = InstanceProcess.StandardInput)
+                {
+                    if (sw.BaseStream.CanWrite)
+                    {
+                        var command = "";
+                        if (IsWindows)
+                        {
+                            command =
+                                $"\"{Path.Join(alltalkFolder, "alltalk_environment", "conda", "condabin", "conda.bat")}\" activate \"{Path.Join(alltalkFolder, "alltalk_environment", "env")}\"";
+                            sw.WriteLine(command);
+                        }
+                        else
+                        {
+                            command =
+                                $"source \"{Path.Join(alltalkFolder, "alltalk_environment", "conda", "etc", "profile.d", "conda.sh")}\"";
+                            sw.WriteLine(command);
+                            command =
+                                $"activate \"{Path.Join(alltalkFolder, "alltalk_environment", "env")}\"";
+                            sw.WriteLine(command);
+                        }
+
+                        command = $"python -u {Path.Join(alltalkFolder, "script.py")}";
+                        sw.WriteLine(command);
+                    }
+                }
+
+                InstanceProcess.WaitForExit();
+            }
+            catch (Exception ex)
+            {
+                StopInstance();
+                Log($"Error while running alltalk instance: {ex}");
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Error while running alltalk instance: {ex}");
+            StopInstance();
+        }
+    }
+
+    /// <summary>
+    /// Install (optionally download first) + run the EchokrauTTS wrapper. The wrapper's bootstrap is
+    /// a single long-running process that installs (idempotent, skips completed steps) and then
+    /// serves; it emits NDJSON progress/ready/error on stdout. We forward those lines to the log and,
+    /// on the <c>ready</c> event, write <c>Ready.EchokrauTTS.txt</c> next to this exe (the plugin
+    /// polls it). The process stays alive serving until killed.
+    /// </summary>
+    /// <summary>
+    /// Download the wrapper (when a URL is given), then run its bootstrap, which installs what is
+    /// missing and serves in the same long-running process. With
+    /// <see cref="EchokrauTtsServeArgs.PreserveUserData"/> the zip is unpacked keeping
+    /// <see cref="Constants.PRESERVEDECHOKRAUTTSFOLDERS"/> (samples/, models/), so a wrapper update
+    /// never touches the user's voices or the multi-GB downloaded models.
+    /// </summary>
+    static async Task StartEchokrauTts(EchokrauTtsServeArgs serve)
+    {
+        try
+        {
+            var wrapperFolder = Path.Join(serve.InstallRoot, Constants.ECHOKRAUTTSFOLDERNAME);
+
+            if (!string.IsNullOrEmpty(serve.EchokrauTtsUrl))
+            {
+                Log($"Downloading EchokrauTTS wrapper to {wrapperFolder}");
+                Directory.CreateDirectory(serve.InstallRoot);
+                var zipPath = Path.Join(serve.InstallRoot, "echokrautts.zip");
+                using (var client = new HttpClient { Timeout = TimeSpan.FromMinutes(30) })
+                    await DownloadFileAsync(client, serve.EchokrauTtsUrl, zipPath, "EchokrauTTS wrapper");
+                Directory.CreateDirectory(wrapperFolder);
+                if (serve.PreserveUserData)
+                    ExtractPreservingUserData(zipPath, wrapperFolder);
+                else
+                    System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, wrapperFolder, overwriteFiles: true);
+                try { File.Delete(zipPath); } catch { }
+                Log("EchokrauTTS wrapper extracted");
+            }
+
+            InstanceProcess = new Process();
+            var bootstrapDir = Path.Join(wrapperFolder, "bootstrap");
+            // Windows: start uv — and through it bootstrap.py — DIRECTLY instead of going through
+            // bootstrap/install_win.ps1. The old route was
+            //   powershell.exe -ExecutionPolicy Bypass -WindowStyle Hidden -File <script unzipped
+            //   from a download seconds ago>
+            // which is the textbook behaviour profile of a malware loader: Defender's ML classifier
+            // flagged the released installer as Trojan:Script/Wacatac.B!ml over it (a false positive,
+            // but one that deletes the auto-downloaded release on the user's machine). EnsureUvAsync
+            // does in C# exactly what the .ps1 did before running bootstrap.py; the .ps1 stays in the
+            // wrapper repo for standalone use, we just no longer invoke it.
+            var fileName = IsWindows ? await EnsureUvAsync(wrapperFolder) : "/bin/bash";
+            var processInfo = new ProcessStartInfo(fileName)
+            {
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                // Python emits UTF-8; decode it as such so … → ä survive instead of CP850 mojibake.
+                StandardOutputEncoding = System.Text.Encoding.UTF8,
+                StandardErrorEncoding = System.Text.Encoding.UTF8,
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                WorkingDirectory = wrapperFolder,
+            };
+            if (IsWindows)
+            {
+                // Mirrors the last line of install_win.ps1. --no-project is REQUIRED: the working
+                // directory (wrapperFolder) contains a pyproject.toml, and without it `uv run` treats
+                // that as a project and auto-creates AND syncs .venv from it (f5-tts → torch 2.12+cpu
+                // + torchcodec from PyPI) *before* bootstrap.py runs — clobbering the pinned torch
+                // (2.7.0+cu128, no torchcodec) that step_deps installs. bootstrap.py owns .venv.
+                processInfo.ArgumentList.Add("run");
+                processInfo.ArgumentList.Add("--no-project");
+                processInfo.ArgumentList.Add("--python");
+                processInfo.ArgumentList.Add(Constants.UVPYTHONVERSION);
+                processInfo.ArgumentList.Add("python");
+                processInfo.ArgumentList.Add(Path.Join(bootstrapDir, "bootstrap.py"));
+            }
+            else
+            {
+                processInfo.ArgumentList.Add(Path.Join(bootstrapDir, "install_linux.sh"));
+            }
+            // Forwarded to bootstrap.py (on Linux the .sh passes @args through to it).
+            processInfo.ArgumentList.Add("--host");
+            processInfo.ArgumentList.Add("127.0.0.1");
+            processInfo.ArgumentList.Add("--port");
+            processInfo.ArgumentList.Add(serve.Port);
+            processInfo.ArgumentList.Add("--language");
+            processInfo.ArgumentList.Add(serve.Language);
+            processInfo.ArgumentList.Add("--parent-pid");
+            processInfo.ArgumentList.Add(serve.ParentPid);
+            // Sub-engine (f5/xtts). Both are installed by the bootstrap; this picks which one serves.
+            processInfo.ArgumentList.Add("--tts-backend");
+            processInfo.ArgumentList.Add(serve.TtsBackend);
+            // XTTS half-precision (true/false). No-op for f5 / non-CUDA — the wrapper gates it.
+            processInfo.ArgumentList.Add("--xtts-fp16");
+            processInfo.ArgumentList.Add(serve.XttsFp16);
+
+            InstanceProcess.StartInfo = processInfo;
+            InstanceProcess.OutputDataReceived += (_, e) => HandleEchokrauTtsNdjson(e.Data);
+            // tqdm/pip write progress + info to stderr — that's not an error, so log it neutrally
+            // (not red). Real failures surface via the NDJSON 'error' event on stdout, logged red there.
+            InstanceProcess.ErrorDataReceived += (_, e) => { if (!string.IsNullOrEmpty(e.Data)) Log(CleanAnsi(e.Data)); };
+            InstanceProcess.Start();
+            InstanceProcessIsRunning = true;
+            InstanceProcess.BeginOutputReadLine();
+            InstanceProcess.BeginErrorReadLine();
+            Log("EchokrauTTS bootstrap started (install + serve)");
+
+            InstanceProcess.WaitForExit();
+            InstanceProcessIsRunning = false;
+            Log("EchokrauTTS bootstrap exited");
+        }
+        catch (Exception ex)
+        {
+            Log($"Error while running EchokrauTTS: {ex}", ConsoleColor.Red);
+            StopInstance();
+        }
+    }
+
+    /// <summary>
+    /// Extract the wrapper zip over an EXISTING install, skipping every entry that lives under one
+    /// of <see cref="Constants.PRESERVEDECHOKRAUTTSFOLDERS"/>. This is what makes "update" different
+    /// from "reinstall": wrapper code is overwritten, the user's voice samples and the downloaded
+    /// models (multiple GB) stay exactly as they are.
+    /// <para>Only files are written and nothing is ever deleted — a file the new release dropped
+    /// stays behind rather than being removed, which is the safe direction for a mode whose whole
+    /// promise is "your data survives".</para>
+    /// </summary>
+    static void ExtractPreservingUserData(string zipPath, string destFolder)
+    {
+        var fullDest = Path.GetFullPath(destFolder);
+        var destPrefix = fullDest.TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+        var written = 0;
+        var preserved = 0;
+
+        using var archive = System.IO.Compression.ZipFile.OpenRead(zipPath);
+        foreach (var entry in archive.Entries)
+        {
+            var relative = entry.FullName.Replace('\\', '/');
+            // Directory entries carry no content; the directories we need are created below.
+            if (relative.EndsWith('/') || string.IsNullOrEmpty(entry.Name)) continue;
+
+            if (IsPreservedEchokrauTtsPath(relative))
+            {
+                preserved++;
+                continue;
+            }
+
+            var targetPath = Path.GetFullPath(Path.Join(fullDest, relative));
+            // Zip-slip guard: an entry named ../../something must not write outside the wrapper.
+            if (!targetPath.StartsWith(destPrefix, StringComparison.OrdinalIgnoreCase))
+            {
+                Log($"Skipping zip entry outside the wrapper folder: {entry.FullName}", ConsoleColor.Yellow);
+                continue;
+            }
+
+            var dir = Path.GetDirectoryName(targetPath);
+            if (!string.IsNullOrEmpty(dir)) Directory.CreateDirectory(dir);
+            // Called in its static form: ExtractToFile is an extension on ZipFileExtensions and this
+            // file references the compression types fully-qualified (no using directive for them).
+            System.IO.Compression.ZipFileExtensions.ExtractToFile(entry, targetPath, overwrite: true);
+            written++;
+        }
+
+        Log($"Wrapper update: {written} file(s) written, {preserved} kept " +
+            $"({string.Join(", ", Constants.PRESERVEDECHOKRAUTTSFOLDERS)} untouched)");
+    }
+
+    /// <summary>
+    /// True when a zip entry belongs to preserved user data. Matched on the FIRST path segment only
+    /// — the layout is <c>echokrautts/samples</c> and <c>echokrautts/models</c> at the wrapper root,
+    /// and matching anywhere would also swallow a legitimate python package that happens to be named
+    /// <c>models</c> deeper in the tree.
+    /// </summary>
+    static bool IsPreservedEchokrauTtsPath(string relativePath)
+    {
+        var slash = relativePath.IndexOf('/');
+        if (slash <= 0) return false; // top-level file — wrapper code, always updated
+        var first = relativePath[..slash];
+        return Constants.PRESERVEDECHOKRAUTTSFOLDERS.Contains(first, StringComparer.OrdinalIgnoreCase);
+    }
+
+    /// <summary>Parse one NDJSON line from the wrapper bootstrap; log it and, on <c>ready</c>, write
+    /// the ready file the plugin polls. Tolerant of non-JSON lines (logged verbatim).</summary>
+    static void HandleEchokrauTtsNdjson(string? line)
+    {
+        if (string.IsNullOrWhiteSpace(line)) return;
+        var trimmed = line.Trim();
+        string? ev = null;
+        if (trimmed.StartsWith("{"))
+        {
+            try
+            {
+                var obj = JsonConvert.DeserializeObject<Dictionary<string, object>>(trimmed);
+                if (obj != null && obj.TryGetValue("event", out var evVal))
+                    ev = evVal?.ToString();
+            }
+            catch { /* not JSON — fall through to plain log */ }
+        }
+
+        switch (ev)
+        {
+            case "ready":
+                Log("EchokrauTTS is ready", ConsoleColor.Green);
+                var readyFile = Path.Join(Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location), Constants.ECHOKRAUTTSREADYFILE);
+                if (!File.Exists(readyFile)) File.WriteAllText(readyFile, " ");
+                break;
+            case "error":
+                Log($"EchokrauTTS error: {trimmed}", ConsoleColor.Red);
+                break;
+            default:
+                Log(trimmed, ConsoleColor.Yellow);
+                break;
+        }
+    }
+
+    static void StopInstance()
+    {
+        try
+        {
+            Log($"Stopping alltalk instance process");
+            if (InstanceProcess is { HasExited: false })
+            {
+                InstanceProcess.CancelOutputRead();
+                InstanceProcess.CancelErrorRead();
+                InstanceProcess.Kill(true);
+            }
+            InstanceProcess?.Dispose();
+            InstanceProcess = null;
+            var exeDir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            foreach (var rf in new[] { "Ready.txt", Constants.ECHOKRAUTTSREADYFILE })
+            {
+                var readyFile = Path.Join(exeDir, rf);
+                if (File.Exists(readyFile))
+                    File.Delete(readyFile);
+            }
+        }
+        catch (Exception ex)
+        {
+            Log($"Error while stopping alltalk instance: {ex}");
+        }
+    }
+
+    static async Task InstallCustomData(
+        string alltalkFolder, string customModelUrl, string customVoicesUrl,
+        bool installProcess = true)
+    {
+        try
+        {
+            if (!installProcess)
+                StopInstance();
+
+            var modelFolder = Path.Join(alltalkFolder, "models", "xtts");
+            var voicesFile = Path.Join(alltalkFolder, "voices.zip");
+            var voicesFolder = Path.Join(alltalkFolder, "voices");
+            if (!string.IsNullOrWhiteSpace(customModelUrl))
+            {
+                Log($"Downloading custom model");
+                Log($"{customVoicesUrl}");
+                using (var client = new HttpClient())
+                {
+                    try
+                    {
+                        var modelFolderName = "echokraut_trained";
+                        modelFolder = Path.Join(modelFolder, modelFolderName);
+                        if (Directory.Exists(modelFolder))
+                            Directory.Delete(modelFolder, true);
+
+                        Directory.CreateDirectory(modelFolder);
+                        var modelFile = modelFolder + ".zip";
+                        var downloadUrl =
+                            GoogleDriveHelper.CheckForGoogleAndConvertToDirectDownloadLink(
+                                customModelUrl, out bool isGoogle);
+                        Log($"{downloadUrl}");
+                        var response = await client.GetAsync(downloadUrl);
+
+                        if (isGoogle)
+                            response = GoogleDriveHelper.DownloadGoogleDrive(downloadUrl, response, client);
+
+                        using (var fs = new FileStream(modelFile, FileMode.Create, FileAccess.Write))
+                        {
+                            await response.Content.CopyToAsync(fs);
+                        }
+
+                        Log($"Extracting custom model");
+                        System.IO.Compression.ZipFile.ExtractToDirectory(modelFile, modelFolder, true);
+                        File.Delete(modelFile);
+
+                        var ttsEnginesFile = Path.Join(alltalkFolder, "system", "tts_engines", "tts_engines.json");
+                        dynamic? configEngines = JsonConvert.DeserializeObject(File.ReadAllText(ttsEnginesFile));
+                        if (configEngines != null)
+                        {
+                            configEngines["engine_loaded"] = "xtts";
+                            configEngines["selected_model"] = $"xtts - {modelFolderName}";
+                            File.WriteAllText(ttsEnginesFile, JsonConvert.SerializeObject(configEngines));
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"Error while downloading custom model, skipping: {ex}");
+                    }
+                }
+            }
+            else
+                Log($"No custom model found, skipping");
+
+            if (!string.IsNullOrWhiteSpace(customVoicesUrl))
+            {
+                Log($"Downloading custom voices");
+                Log($"{customVoicesUrl}");
+                using (var client = new HttpClient())
+                {
+                    try
+                    {
+                        var downloadUrl =
+                            GoogleDriveHelper.CheckForGoogleAndConvertToDirectDownloadLink(
+                                customVoicesUrl, out bool isGoogle);
+                        Log($"{downloadUrl}");
+                        var response = await client.GetAsync(downloadUrl);
+
+                        if (isGoogle)
+                            response = GoogleDriveHelper.DownloadGoogleDrive(downloadUrl, response, client);
+
+                        using (var fs = new FileStream(voicesFile, FileMode.Create, FileAccess.Write))
+                        {
+                            await response.Content.CopyToAsync(fs);
+                        }
+
+                        Log($"Deleting existing voices");
+                        if (Directory.Exists(voicesFolder))
+                            Directory.Delete(voicesFolder, true);
+
+                        // Unified custom-voices layout: the zip is expected FLAT — voice folders
+                        // and sample files at the zip root — so we extract straight into voices/.
+                        // A zip still prepared the old AllTalk way (everything wrapped in a top-level
+                        // "voices/" folder) would otherwise produce voices/voices/… ; StripVoiceWrapperFolder
+                        // strips that stray wrapper. A per-voice folder is left intact (its name won't
+                        // match a wrapper name). Same contract as EchokrauTTS custom voices.
+                        Log($"Extracting custom voices");
+                        Directory.CreateDirectory(voicesFolder);
+                        System.IO.Compression.ZipFile.ExtractToDirectory(voicesFile, voicesFolder, true);
+                        StripVoiceWrapperFolder(voicesFolder);
+                        File.Delete(voicesFile);
+                    }
+                    catch (Exception ex)
+                    {
+                        Log($"Error while downloading custom voices, skipping: {ex}");
+                    }
+                }
+            }
+            else
+                Log($"No custom voices found, skipping");
+        }
+        catch (Exception ex)
+        {
+            Log($"Error while installing custom data: {ex}");
+        }
+    }
+
+    /// <summary>
+    /// EchokrauTTS analog of <see cref="InstallCustomData"/>: install a user-supplied model +
+    /// voice samples into the running wrapper's on-disk layout. The custom model is placed in
+    /// <c>echokrautts/models/echokraut_custom</c> (replacing any previous custom model), where the
+    /// wrapper auto-detects it at load time (F5 checkpoint or full XTTS model dir). Custom voice
+    /// samples are merged into <c>echokrautts/samples</c> — additive, so the extracted starter set
+    /// is preserved and same-named files are overwritten. Both zips may be Google Drive links. Each
+    /// half is best-effort: a failure of one is logged and skipped, not fatal.
+    /// </summary>
+    static async Task InstallCustomDataEchokrauTts(string installRoot, string customModelUrl, string customVoicesUrl)
+    {
+        try
+        {
+            var wrapperFolder = Path.Join(installRoot, Constants.ECHOKRAUTTSFOLDERNAME);
+            var customModelFolder = Path.Join(wrapperFolder, Constants.ECHOKRAUTTSMODELSFOLDER, Constants.ECHOKRAUTTSCUSTOMMODELFOLDER);
+            var samplesFolder = Path.Join(wrapperFolder, Constants.ECHOKRAUTTSSAMPLESFOLDER);
+
+            if (!string.IsNullOrWhiteSpace(customModelUrl))
+            {
+                Log("Installing custom EchokrauTTS model");
+                // Replace any previous custom model so switching doesn't blend two models.
+                if (Directory.Exists(customModelFolder))
+                    Directory.Delete(customModelFolder, true);
+                await DownloadAndExtractZip(customModelUrl, customModelFolder, "custom model");
+                // A zip that wraps its files in one root folder would hide them from the
+                // wrapper's top-level model detection — flatten that common case.
+                FlattenSingleSubfolder(customModelFolder);
+            }
+            else
+                Log("No custom model URL, skipping");
+
+            if (!string.IsNullOrWhiteSpace(customVoicesUrl))
+            {
+                Log("Installing custom EchokrauTTS voice samples");
+                // Same flat-zip contract as AllTalk custom voices: extract into a staging folder,
+                // strip a stray "voices"/"samples" wrapper (AllTalk-prepared zips wrap everything
+                // in voices/), then merge additively into echokrautts/samples so the extracted
+                // starter set is preserved. Staging is required because samples/ may already hold
+                // the starter set — stripping the wrapper in-place would be blocked by those files.
+                await DownloadAndMergeVoicesZip(customVoicesUrl, samplesFolder, "custom voices");
+            }
+            else
+                Log("No custom voices URL, skipping");
+        }
+        catch (Exception ex)
+        {
+            Log($"Error while installing EchokrauTTS custom data: {ex}");
+        }
+    }
+
+    /// <summary>Download a (possibly Google Drive) zip and extract it into <paramref name="destFolder"/>
+    /// (created if needed, overwriting same-named files). Best-effort — logs and swallows failures so
+    /// one bad URL doesn't abort the rest of the custom-data install. The temp zip is a sibling of the
+    /// destination folder and is always cleaned up.</summary>
+    static async Task DownloadAndExtractZip(string url, string destFolder, string label)
+    {
+        var zipPath = destFolder.TrimEnd('\\', '/') + ".customdata.zip";
+        try
+        {
+            Directory.CreateDirectory(destFolder);
+            using var client = new HttpClient { Timeout = TimeSpan.FromMinutes(30) };
+            var downloadUrl = GoogleDriveHelper.CheckForGoogleAndConvertToDirectDownloadLink(url, out bool isGoogle);
+            Log($"Downloading {label} from {downloadUrl}");
+            var response = await client.GetAsync(downloadUrl);
+            if (isGoogle)
+                response = GoogleDriveHelper.DownloadGoogleDrive(downloadUrl, response, client);
+            response.EnsureSuccessStatusCode();
+            await using (var fs = new FileStream(zipPath, FileMode.Create, FileAccess.Write))
+                await response.Content.CopyToAsync(fs);
+
+            Log($"Extracting {label}");
+            System.IO.Compression.ZipFile.ExtractToDirectory(zipPath, destFolder, true);
+        }
+        catch (Exception ex)
+        {
+            Log($"Error while installing {label}, skipping: {ex}");
+        }
+        finally
+        {
+            try { if (File.Exists(zipPath)) File.Delete(zipPath); } catch { }
+        }
+    }
+
+    /// <summary>If <paramref name="folder"/> has no files of its own but exactly one sub-directory,
+    /// move that sub-directory's contents up one level. Handles a zip that wraps everything in a
+    /// single root folder, so the wrapper's top-level model detection still finds the checkpoint /
+    /// config.json.</summary>
+    static void FlattenSingleSubfolder(string folder)
+    {
+        try
+        {
+            if (Directory.EnumerateFiles(folder).Any()) return;
+            var subs = Directory.GetDirectories(folder);
+            if (subs.Length != 1) return;
+            var inner = subs[0];
+            foreach (var f in Directory.GetFiles(inner))
+                File.Move(f, Path.Join(folder, Path.GetFileName(f)));
+            foreach (var d in Directory.GetDirectories(inner))
+                Directory.Move(d, Path.Join(folder, Path.GetFileName(d)));
+            Directory.Delete(inner, true);
+            Log($"Flattened single wrapper folder in {folder}");
+        }
+        catch (Exception ex) { Log($"Flatten skipped: {ex.Message}"); }
+    }
+
+    /// <summary>Download a (possibly Google Drive) custom-voices zip and merge it additively into
+    /// <paramref name="targetFolder"/> (created if needed, same-named files overwritten). The zip is
+    /// staged in a sibling folder first so a stray wrapper folder (<see cref="VoiceWrapperFolderNames"/>)
+    /// can be stripped before the merge — in-place stripping would be blocked when the target already
+    /// holds files (e.g. the extracted starter set). Best-effort: failures are logged and swallowed,
+    /// and the staging folder is always cleaned up.</summary>
+    static async Task DownloadAndMergeVoicesZip(string url, string targetFolder, string label)
+    {
+        var stagingFolder = targetFolder.TrimEnd('\\', '/') + ".incoming";
+        try
+        {
+            if (Directory.Exists(stagingFolder))
+                Directory.Delete(stagingFolder, true);
+            await DownloadAndExtractZip(url, stagingFolder, label);
+            StripVoiceWrapperFolder(stagingFolder);
+            MergeDirectory(stagingFolder, targetFolder);
+        }
+        catch (Exception ex)
+        {
+            Log($"Error while installing {label}, skipping: {ex}");
+        }
+        finally
+        {
+            try { if (Directory.Exists(stagingFolder)) Directory.Delete(stagingFolder, true); } catch { }
+        }
+    }
+
+    /// <summary>Recursively move every file from <paramref name="source"/> into <paramref name="dest"/>,
+    /// preserving relative sub-paths and overwriting same-named files (additive merge). Empty source
+    /// (e.g. a failed download) is a no-op.</summary>
+    static void MergeDirectory(string source, string dest)
+    {
+        if (!Directory.Exists(source)) return;
+        Directory.CreateDirectory(dest);
+        foreach (var file in Directory.GetFiles(source, "*", SearchOption.AllDirectories))
+        {
+            var rel = Path.GetRelativePath(source, file);
+            var target = Path.Join(dest, rel);
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Move(file, target, true);
+        }
+    }
+
+    /// <summary>Wrapper folder names a custom-voices zip may nest everything under. AllTalk-prepared
+    /// zips wrap all samples in a top-level <c>voices/</c> folder; <c>samples/</c> is the EchokrauTTS
+    /// equivalent. Stripping only these reserved names (see <see cref="StripVoiceWrapperFolder"/>)
+    /// keeps a legitimate per-voice folder — a voice with several samples — intact.</summary>
+    static readonly string[] VoiceWrapperFolderNames = { "voices", "samples" };
+
+    /// <summary>If <paramref name="folder"/> has no files of its own but exactly one sub-directory whose
+    /// name is a known wrapper name (<see cref="VoiceWrapperFolderNames"/>), move that sub-directory's
+    /// contents up one level and delete it. Unifies AllTalk- and EchokrauTTS-style custom-voice zips on
+    /// a flat layout: a stray wrapping <c>voices/</c> from an AllTalk-prepared zip is stripped, while a
+    /// single voice-with-samples folder is left alone because its name won't match a wrapper name.</summary>
+    static void StripVoiceWrapperFolder(string folder)
+    {
+        try
+        {
+            if (!Directory.Exists(folder)) return;
+            if (Directory.EnumerateFiles(folder).Any()) return;
+            var subs = Directory.GetDirectories(folder);
+            if (subs.Length != 1) return;
+            var inner = subs[0];
+            var innerName = Path.GetFileName(inner);
+            if (!VoiceWrapperFolderNames.Contains(innerName, StringComparer.OrdinalIgnoreCase)) return;
+            foreach (var f in Directory.GetFiles(inner))
+                File.Move(f, Path.Join(folder, Path.GetFileName(f)));
+            foreach (var d in Directory.GetDirectories(inner))
+                Directory.Move(d, Path.Join(folder, Path.GetFileName(d)));
+            Directory.Delete(inner, true);
+            Log($"Stripped wrapper folder '{innerName}' in {folder}");
+        }
+        catch (Exception ex) { Log($"Wrapper strip skipped: {ex.Message}"); }
+    }
+
+    static string CleanAnsi(string input)
+    {
+        return Regex.Replace(input, @"\x1B\[[0-9;]*[mK]", "").Replace(" ", "  ");
+    }
+
+    static void CallCMD(bool isWindows, string exePath, string command, string methodExtra)
+    {
+        try
+        {
+            var process = new Process();
+
+            if (isWindows)
+            {
+                process.StartInfo.FileName = "cmd.exe";
+                process.StartInfo.Arguments = @$"/c {exePath} {command}";
+            }
+            else
+            {
+                process.StartInfo.FileName = "/bin/bash";
+                process.StartInfo.Arguments = @$"-c {exePath} {command}";
+            }
+
+            process.StartInfo.RedirectStandardOutput = true;
+            process.StartInfo.UseShellExecute = false;
+            process.StartInfo.CreateNoWindow = true;
+
+            Log(@$"Calling command: '{exePath} {command}'");
+            process.Start();
+
+            while (!process.HasExited)
+            {
+                string? output = process.StandardOutput.ReadLine();
+                Log(output ?? "");
+            }
+        }
+        catch (Exception e)
+        {
+            Log($"{e}");
+        }
+    }
+
+    static void Dispose()
+    {
+        StopInstall();
+        StopInstance();
+    }
+}

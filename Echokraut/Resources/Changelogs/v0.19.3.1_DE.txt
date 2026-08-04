@@ -1,0 +1,61 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.3.1
+================================================================================
+
+
+==============================================================================
+VERBESSERUNGEN
+==============================================================================
+
+[Stimmen] Das Stimmpaket bringt neue Kinderstimmen
+  Die Kinderstimmen des ersten Pakets waren echte Aufnahmen von Kindern, aber in
+  einer anderen Sprache, und die daraus geklonte Sprache klang in der Praxis
+  nicht gut genug. Alle 60 wurden ersetzt. Die neuen Kinderstimmen entstehen aus
+  englischen Sprechern derselben Quelle wie die Erwachsenenstimmen, deren
+  Tonhoehe und Stimmtrakt in eine Kinderlage angehoben wurden; sie haben damit
+  die Klangfarbe eines Kindes und einen englischen Akzent. Die 200
+  Erwachsenenstimmen bleiben unveraendert.
+
+  - Die Dateinamen bleiben gleich. Ein NPC, dem bereits eine Kinderstimme
+    zugewiesen ist, behaelt seine Zuordnung und klingt ab jetzt nur anders.
+  - Zum Aktualisieren das Stimmpaket in den Game Data Tools erneut
+    herunterladen oder die TTS-Engine neu installieren. Achtung: bei einer
+    lokal installierten Engine wird dabei der komplette Stimmenordner ersetzt -
+    eigene Stimmen vorher herausnehmen.
+  - Es sind kindlich klingende erwachsene Sprecher, keine Aufnahmen von Kindern.
+    Was genau an jedem Clip veraendert wurde, steht in der ATTRIBUTION.csv des
+    Pakets, so wie es die Lizenz der Originalaufnahmen verlangt.
+
+==============================================================================
+FEHLERBEHEBUNGEN
+==============================================================================
+
+[Wiedergabe] Streamende Stimmen fluten das Log nicht mehr
+  Waehrend eine gestreamte Zeile lief, konnte die Puffer-Ueberwachung auf ihren
+  eigenen Neustart reagieren und tausende Male pro Sekunde anhalten, nachfuellen
+  und fortsetzen - jedes Mal mit einer "stream underrun"-Zeile. Das Dalamud-Log
+  lief damit voll und das Spiel stockte. Die Ueberwachung misst den Puffer jetzt
+  genauso wie die Wiedergabe selbst und puffert hoechstens noch ein paar Mal pro
+  Sekunde nach.
+
+[3D-Audio] Stimmen folgen der Kamera wieder korrekt
+  Die Hoererausrichtung wurde aus dem falschen Teil der Kameramatrix gelesen. Bei
+  waagerechter Kamera stimmte sie zufaellig, sah also richtig aus, lief aber bei
+  geneigter Kamera weg - gemessen 146 Grad, wo der echte Winkel 101 betrug, mit
+  einem "Oben", das nach unten zeigte. Richtung und Hoehe stimmen jetzt in jeder
+  Kameralage.
+
+[3D-Audio] Die eingestellte Hoerweite gilt jetzt ab dem Start
+  Der eingestellte Wert erreichte die Audio-Engine nur, wenn der Regler in den
+  Einstellungen bewegt wurde, und war beim naechsten Start wieder vergessen. Jede
+  Sitzung lief also unbemerkt mit dem Standardwert der Engine statt mit deinem.
+
+[3D-Audio] Bewegte Sprecher verstimmen die Stimme nicht mehr
+  Das Anfassen des Hoerweite-Reglers schaltete nebenbei den Doppler-Effekt ein, der
+  die Tonhoehe veraenderte, sobald sich der Sprecher oder du bewegten. Er bleibt
+  jetzt aus, so wie vorgesehen.
+
+[Wiedergabe] Absturz behoben, wenn eine Stimme waehrend des Starts positioniert wurde
+  Wurde eine Stimme positioniert, waehrend sie noch puffert, konnte uninitialisierter
+  Zustand ausgelesen werden und das ganze Spiel mitreissen.

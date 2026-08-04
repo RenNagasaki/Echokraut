@@ -1,0 +1,191 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.3.0
+================================================================================
+
+
+==============================================================================
+GROSSE NEUERUNGEN
+==============================================================================
+
+[NEU] Stimmenpaket-Download ersetzt die Extraktion aus dem Spiel
+  Echokraut liest, dekodiert und kopiert keinerlei Audio mehr aus deiner
+  FFXIV-Installation. Stattdessen gibt es in den Spieldaten-Tools jetzt den
+  Bereich "Stimmenpaket": Er laedt ein kuratiertes Set frei lizenzierter
+  Referenzstimmen (maennlich, weiblich und Kinder) und installiert sie direkt in
+  den Stimmenordner deiner TTS-Engine. Jede Stimme stammt aus einer Quelle,
+  deren Lizenz die Weitergabe erlaubt; Lizenz- und Attributionsdateien liegen
+  dem Paket bei.
+
+  - Frische lokale AllTalk- und EchokrauTTS-Installationen beziehen ihre Stimmen
+    automatisch aus dem Paket, mit Fortschrittsanzeige im Einrichtungsassistenten.
+  - Ein manueller Download aus den Spieldaten-Tools landet im Stimmenordner der
+    aktiven Engine, sofern sie lokal laeuft -- sonst in deinem lokalen
+    Speicherort.
+  - Die Samples kommen als 16-Bit-Mono-WAV samt passender .txt-Transkription,
+    sodass XTTS und F5 sie ohne Umwandlung zum Klonen nutzen koennen -- und sie
+    sind so benannt, dass Geschlechts-, Rassen- und Erwachsen/Kind-Filter direkt
+    greifen.
+  - Eigene Stimmen ueber eine Custom-Voices-URL werden weiterhin nie
+    ueberschrieben.
+  - Das Paket ist jetzt veroeffentlicht und enthaelt 260 Stimmen: 100
+    maennliche und 100 weibliche Erwachsene sowie 30 maennliche und 30
+    weibliche Kinder, je ein Referenzclip von 8 bis 14 Sekunden in 24 kHz.
+    Die Erwachsenenstimmen stammen aus LibriTTS-R, die Kinderstimmen aus
+    Samromur Children -- beide unter CC BY 4.0.
+
+[NEU] EchokrauTTS-Backend aktualisieren, ohne es neu zu installieren
+  Unter Einstellungen -> Backend steht jetzt, welche EchokrauTTS-Version
+  installiert ist -- daneben ein Knopf "Nach Updates suchen".
+
+  - Ein Klick fragt bei GitHub nach der neuesten Backend-Version. Gibt es eine,
+    wird der Knopf zu "Aktualisieren"; bist du schon aktuell, steht das da und
+    der Knopf bleibt ausgegraut. Im Hintergrund wird nichts abgefragt -- es
+    passiert nur, wenn du es anstoesst.
+  - Aktualisiert wird ausschliesslich das Backend-Programm. Deine Stimmen und
+    die heruntergeladenen Modelle bleiben unangetastet -- kein Download von
+    mehreren Gigabyte, kein erneutes Einspielen eigener Stimmen.
+  - Nach der Aktualisierung startet das Backend von selbst wieder, und der
+    Knopf steht wieder auf "Nach Updates suchen" -- eine erledigte
+    Aktualisierung wird nie ein zweites Mal angeboten.
+  - Ein vor dieser Version installiertes EchokrauTTS wird als die aktuell
+    veroeffentlichte Version erkannt -- es wird also keine Aktualisierung
+    angeboten, die nur neu installieren wuerde, was ohnehin schon da ist.
+
+
+==============================================================================
+VERBESSERUNGEN
+==============================================================================
+
+[UI] Ausgegraute Bedienelemente sind jetzt wirklich unbenutzbar
+  Was Echokraut ausgraut, reagiert nun gar nicht mehr -- bisher war das
+  Ausgrauen rein optisch und der Knopf tat beim Klick trotzdem seine Arbeit.
+  Dazu gehoert: der Modus-Umschalter im Backend-Reiter und die Engine-Auswahl
+  im Einrichtungsassistenten grauen jetzt die *gewaehlte* Option aus, denn bei
+  der gibt es nichts mehr zu tun; die Alternativen bleiben hell und anklickbar.
+
+[Rechtliches] Saemtliche Extraktion von Spiel-Audio entfernt
+  Der Voice-Starter-Set-Extractor, die SCD-/ADPCM-Audiodekoder und die
+  Synchronsprecher-Split-Konfiguration sind endgueltig entfallen -- samt ihrer
+  Einstellungen, Dateien und Menueeintraege. Bereits nach FF14-Voices/
+  geschriebene Sprachproben bleiben unangetastet auf deiner Festplatte; loesche
+  sie selbst, wenn du sie nicht mehr moechtest.
+
+
+==============================================================================
+FEHLERBEHEBUNGEN
+==============================================================================
+
+[FIX] Gestreamte Sprache startet jetzt wirklich waehrend der Erzeugung
+  Mit eingeschaltetem Streaming wartete die Wiedergabe trotzdem auf die
+  komplette Zeile, bevor ueberhaupt ein Ton kam -- das Audio traf die ganze Zeit
+  laufend ein, aber die Stelle in Echokraut, die entscheidet "genug gepuffert,
+  jetzt abspielen", stellte der Audio-Engine eine Frage, die sie vor dem Start
+  der Wiedergabe nicht beantworten kann, und wartete deshalb bis zum Ende der
+  Zeile. Die Sprache beginnt jetzt, sobald die TTS-Engine ihre erste Sekunde
+  Audio erzeugt hat -- bei einem laengeren Satz mehrere Sekunden frueher.
+
+[FIX] Gestreamte Sprache stottert auf schwaecheren GPUs nicht mehr
+  Erzeugt EchokrauTTS das Audio langsamer als es abgespielt wird, pausiert
+  Echokraut jetzt kurz zum Nachpuffern und vergroessert diesen Puffer so lange,
+  bis die Zeile am Stueck durchlaeuft, statt den Satz zu zerhacken. Schnelle
+  Systeme merken davon nichts -- kurze Zeilen starten weiterhin sofort.
+
+[FIX] Uebersprungene Dialogzeilen melden sich nicht mehr nachtraeglich
+  Wer schnell durch ein Gespraech klickte, liess Zeilen zurueck, die noch
+  generiert wurden; die liefen dann los, sobald sie zufaellig fertig waren --
+  mitten in der naechsten Zeile oder lange nach dem Schliessen des Fensters.
+  Das Ueberspringen bricht die Zeile jetzt endgueltig ab und weist die
+  TTS-Engine an, die Arbeit daran einzustellen, damit die Zeile, bei der du
+  gerade bist, die GPU bekommt. Auch ein komplett abgebautes Dialogfenster
+  wird jetzt als geschlossen erkannt. Zeilen, die beim Ueberspringen schon ihr
+  Audio puffern, werden ebenfalls gestoppt -- bisher rutschten genau die am
+  Abbruch vorbei und liefen vollstaendig durch.
+
+[FIX] Stimmenauswahl in der Dialog-Leiste funktioniert auch ohne Stimme
+  Ein NPC ohne nutzbare Stimme (oder ein stummgeschalteter) wurde nie als
+  aktueller Sprecher gemeldet -- die Auswahlliste blieb leer und man konnte
+  ihm im Dialog keine Stimme zuweisen. Der Sprecher wird jetzt gemeldet,
+  sobald er feststeht.
+
+[FIX] Auswahl bei doppelten Anzeigenamen greift auf die richtige Stimme
+  Zwei Sprachproben koennen denselben kurzen Anzeigenamen ergeben. Die Liste
+  haelt solche Eintraege jetzt auseinander und loest die Auswahl gegen genau
+  die angezeigte Liste auf, statt still eine andere Stimme zu setzen.
+
+[FIX] Lange Spielsitzungen sammeln keinen Speicher mehr an
+  Jede gesprochene Zeile blieb fuer die gesamte Laufzeit in der Sprachwarte-
+  schlange und der Wiedergabe-Buchfuehrung liegen. Fertige Zeilen werden jetzt
+  freigegeben -- der Speicherbedarf waechst ueber eine lange Sitzung nicht mehr,
+  und das Abbrechen eines Dialogs bleibt schnell, statt mit der Spieldauer
+  langsamer zu werden.
+
+[FIX] Sprecher ohne Namen bekommen eine passende Stimme
+  Ein NPC, dessen Namen Echokraut nicht aufloesen konnte -- ein namenloser
+  Sprechblasen-Sprecher oder eine "???"-Zeile, bevor sie einer Figur zugeordnet
+  ist -- bekam immer die erste Stimme der Liste, unabhaengig von Rasse,
+  Geschlecht und Alter. Solche Sprecher durchlaufen jetzt die normale
+  Zuordnung wie alle anderen.
+
+[FIX] Dialoge werden nach einer grossen Dialog-Ernte nicht mehr langsam
+  Um den Sprecher aufzuloesen, wurde pro Zeile die komplette Figuren-Tabelle
+  aus der Datenbank gelesen. Bei einer geernteten Datenbank waren das
+  zehntausende Zeilen je gesprochener Zeile; es ist jetzt eine einzelne
+  Abfrage.
+
+[FIX] Das Spiel friert nicht mehr ein, waehrend Echokraut die Stimmen neu laedt
+  Stimmen neu laden, TTS-Engine wechseln, ein erfolgreicher Verbindungstest und
+  der Start einer lokalen Engine holten die Stimmenliste ueber das Netzwerk,
+  waehrend das Spiel darauf wartete -- bis zu fuenf Sekunden Standbild, wenn der
+  Server langsam oder weg war. Das laeuft jetzt im Hintergrund.
+
+[FIX] Das Ueberspringen einer Zeile bricht nicht mehr die falsche Erzeugung ab
+  Bei EchokrauTTS wurde beim Abbrechen immer der zuletzt gesehene Auftrag
+  abgebrochen. Hatte die naechste Zeile schon mit der Erzeugung begonnen, traf
+  es diese -- die Zeile, zu der man gesprungen war, blieb stumm. Der Abbruch
+  haengt jetzt an genau dem Auftrag, zu dem er gehoert, und uebersteht auch
+  einen Neuaufbau der Backend-Verbindung.
+
+[FIX] Die Dialog-Ernte meldet jetzt, wenn Spieldaten verschoben wurden
+  Einige Spieltabellen werden ueber feste Spaltenpositionen gelesen, die Square
+  zwischen Patches verschiebt. Passierte das, lieferte die Ernte stillschweigend
+  weniger Verknuepfungen und sah aus, als haette sie schlicht nichts gefunden.
+  Jetzt steht im Log, dass die Spalten nicht mehr passen.
+
+[FIX] Einstellungsfenster kosten weniger, wenn sie offen stehen
+  Das Konfigurationsfenster schrieb in jedem Bild die Ausgrauung von rund
+  vierzig Bedienelementen neu, egal ob sich etwas geaendert hatte. Jetzt wird
+  nur noch geschrieben, wenn ein Element tatsaechlich seinen Zustand wechselt.
+
+[FIX] Zugeordnete NPC- und Spielerlisten stolpern nicht mehr unter Last
+  Die Listen, die Echokraut im Speicher haelt, wurden von der Oberflaeche
+  gelesen, waehrend die Dialog-Verarbeitung hineinschrieb -- das konnte einen
+  Fehler ausloesen und den laufenden Vorgang abbrechen, am ehesten sichtbar
+  waehrend einer Dialog-Ernte oder in einem regen Gespraech. Lesezugriffe
+  arbeiten jetzt auf einer stabilen Momentaufnahme.
+
+[FIX] "Zugeordnete Spieler leeren" leert jetzt wirklich alle
+  Der Knopf entfernte einen einzigen Spieler und brach dann mit einem internen
+  Fehler ab, sodass die Liste wie festgefahren aussah. Das Leeren zugeordneter
+  NPCs und Sprechblasen war nie betroffen.
+
+[FIX] Keine "Echokraut erzeugt Fehler"-Meldung mehr, wenn der TTS-Server aus ist
+  Ein noch nicht laufendes Backend ist beim Anmelden der Normalfall, Echokraut
+  hat es aber als Fehler protokolliert -- und daraufhin zeigt Dalamud seine
+  Fehlermeldung. Verbindungs- und Stimmenlisten-Fehlschlaege werden jetzt als
+  Warnung protokolliert. Fehler, die tatsaechlich Sprachausgabe kosten, bleiben
+  Fehler.
+
+[FIX] Nachtraeglich aktualisierte Daten kommen wieder bei dir an
+  Einiges holt Echokraut zur Laufzeit statt es fest einzubauen -- die
+  Download-Adressen, die Tabellen fuer NPC-Rassen und -Geschlechter, Emoticons,
+  die Stimmennamen-Listen und die Quest-NPC-Aliasse. Das alles wurde von einem
+  Branch gelesen, den die Release-Pipeline nicht mehr aktualisiert; er war damit
+  still eingefroren, und spaeter veroeffentlichte Korrekturen kamen nie an.
+  Gelesen wird jetzt vom Branch, der die Releases tatsaechlich bekommt.
+
+[FIX] Wiederholte Verbindungspruefungen verlieren keine Netzwerk-Sockets mehr
+  Die regelmaessige Pruefung "ist der TTS-Server erreichbar" baute jedes Mal
+  eine neue Verbindung auf und verwendete sie nie wieder, was ueber eine lange
+  Sitzung den Socket-Pool des Systems erschoepfen konnte. Die Pruefung nutzt
+  jetzt eine einzige langlebige Verbindung.
