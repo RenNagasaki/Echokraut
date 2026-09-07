@@ -1,0 +1,701 @@
+using Echotools.Logging.Services;
+using Echokraut.Backend;
+using Echokraut.DataClasses;
+using Echokraut.DataClasses.Database;
+using Echotools.Logging.DataClasses;
+using Echokraut.Enums;
+using Echotools.Logging.Enums;
+using Echokraut.Helper.Functional;
+using Echokraut.Services.Queue;
+using System;
+using System.IO;
+using System.Collections.Generic;
+using System.Linq;
+using System.Net.Http;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace Echokraut.Services;
+
+/// <summary>
+/// Service responsible for TTS backend communication and generation queue processing
+/// </summary>
+public class BackendService : IBackendService, IDisposable
+{
+    private readonly IVoiceMessageQueue _queue;
+    private readonly ILogService _log;
+    private readonly Configuration _config;
+    private readonly IAlltalkInstanceService _alltalkInstance;
+    private readonly IEchokrauTtsInstanceService _echokrauTtsInstance;
+    private readonly INpcDataService _npcData;
+    private readonly IAudioFileService _audioFiles;
+    private readonly IDatabaseService _db;
+    private readonly IAudioPlaybackService _audioPlayback;
+    private readonly CancellationTokenSource _cancellationTokenSource;
+    private readonly Task _generationTask;
+
+    private ITTSBackend? _backend;
+    private readonly Random _random;
+
+    /// <summary>
+    /// The backend request that is in flight right now, together with the engine's id for it (if
+    /// the engine hands one out). Generation is serialised, so there is at most one. Entry and job
+    /// id live in a single record so <see cref="OnSourceCancelled"/> reads a consistent pair —
+    /// reading them from two fields could pair one line's entry with the next line's job id.
+    /// The id is kept here rather than in the backend because the backend instance is recreated on
+    /// every <see cref="RefreshBackend"/>, which would silently drop it.
+    /// </summary>
+    private sealed record GenerationInFlight(VoiceMessageEntry Entry, string? JobId);
+
+    private volatile GenerationInFlight? _inFlight;
+
+    public event Action? VoicesMapped;
+    public event Action? CharacterMapped;
+
+    public BackendService(
+        IVoiceMessageQueue queue,
+        ILogService log,
+        Configuration config,
+        IAlltalkInstanceService alltalkInstance,
+        IEchokrauTtsInstanceService echokrauTtsInstance,
+        INpcDataService npcData,
+        IAudioFileService audioFiles,
+        IDatabaseService db,
+        IAudioPlaybackService audioPlayback)
+    {
+        _queue = queue ?? throw new ArgumentNullException(nameof(queue));
+        _log = log ?? throw new ArgumentNullException(nameof(log));
+        _config = config ?? throw new ArgumentNullException(nameof(config));
+        _alltalkInstance = alltalkInstance ?? throw new ArgumentNullException(nameof(alltalkInstance));
+        _echokrauTtsInstance = echokrauTtsInstance ?? throw new ArgumentNullException(nameof(echokrauTtsInstance));
+        _npcData = npcData ?? throw new ArgumentNullException(nameof(npcData));
+        _audioFiles = audioFiles ?? throw new ArgumentNullException(nameof(audioFiles));
+        _db = db ?? throw new ArgumentNullException(nameof(db));
+        _audioPlayback = audioPlayback ?? throw new ArgumentNullException(nameof(audioPlayback));
+
+        _random = new Random(Guid.NewGuid().GetHashCode());
+        _cancellationTokenSource = new CancellationTokenSource();
+        _generationTask = Task.Run(() => GenerationLoopAsync(_cancellationTokenSource.Token));
+        _alltalkInstance.OnInstanceReady += RefreshBackend;
+        _echokrauTtsInstance.OnInstanceReady += RefreshBackend;
+        _db.DatabaseWiped += RefreshBackend;
+        _queue.SourceCancelled += OnSourceCancelled;
+        Task.Run(RefreshBackend);
+    }
+
+    // ── Active-engine helpers (route by Configuration.BackendSelection) ───────
+    // Single place that knows which engine is active, so the gates below stay engine-agnostic.
+    private ITTSBackend CreateActiveBackend() =>
+        _config.BackendSelection == TTSBackends.EchokrauTTS
+            ? new EchokrauTtsBackend(_config, _log)
+            : new AlltalkBackend(_config, _log, _audioFiles);
+
+    private string ActiveBaseUrl() =>
+        _config.BackendSelection == TTSBackends.EchokrauTTS ? _config.EchokrauTts.BaseUrl : _config.Alltalk.BaseUrl;
+
+    private string ActiveReadyPath() =>
+        _config.BackendSelection == TTSBackends.EchokrauTTS ? _config.EchokrauTts.HealthPath : _config.Alltalk.ReadyPath;
+
+    private bool ActiveLocalInstall() =>
+        _config.BackendSelection == TTSBackends.EchokrauTTS ? _config.EchokrauTts.LocalInstall : _config.Alltalk.LocalInstall;
+
+    /// <summary>Is the active engine's LOCAL instance running? Each engine has its own instance
+    /// service tracking the spawned process.</summary>
+    private bool ActiveLocalRunning() =>
+        _config.BackendSelection == TTSBackends.EchokrauTTS
+            ? _echokrauTtsInstance.InstanceRunning
+            : _alltalkInstance.InstanceRunning;
+
+    private bool CanConnectActive()
+    {
+        var it = _config.ActiveInstanceType;
+        if (it == AlltalkInstanceType.Remote) return true;        // reachability checked elsewhere
+        if (it == AlltalkInstanceType.Local) return ActiveLocalRunning();
+        return false;                                             // None
+    }
+
+    public void RefreshBackend()
+    {
+        if (!CanConnectActive()) return;
+
+        var eventId = new EKEventId(0, TextSource.None);
+        _log.Info(nameof(RefreshBackend), $"Initializing backend: {_config.BackendSelection}", eventId);
+        _backend = CreateActiveBackend();
+        // The backend just (re)connected — e.g. a local instance became ready. Drop the cached
+        // reachability so the next status check re-probes immediately instead of showing a stale
+        // "offline" for up to the 30s TTL.
+        InvalidateReachabilityCache();
+        MapVoices(eventId);
+    }
+
+    public void SetBackendType(TTSBackends backendType)
+    {
+        if (!CanConnectActive()) return;
+
+        var eventId = new EKEventId(0, TextSource.None);
+        _log.Info(nameof(SetBackendType), $"Creating backend instance: {backendType}", eventId);
+        _backend = CreateActiveBackend();
+        MapVoices(eventId);
+    }
+
+    private void MapVoices(EKEventId eventId)
+    {
+        _log.Info(nameof(MapVoices), "Loading and mapping voices", eventId);
+        var backendVoices = _backend!.GetAvailableVoices(eventId);
+
+        // null means backend was unavailable (connection error, timeout, etc.)
+        // — skip voice mapping entirely to avoid wiping existing voice assignments.
+        if (backendVoices == null)
+        {
+            _log.Warning(nameof(MapVoices), "Backend unavailable, skipping voice mapping to preserve existing data", eventId);
+            return;
+        }
+
+        var existingVoices = _db.GetVoices();
+        var existingKeys = existingVoices.Select(v => v.BackendVoice).ToHashSet();
+
+        var newVoices = backendVoices.FindAll(p => !existingKeys.Contains(p));
+
+        if (newVoices.Count > 0)
+        {
+            _log.Debug(nameof(MapVoices), $"Adding {newVoices.Count} new voices", eventId);
+            foreach (var newVoice in newVoices)
+            {
+                var voiceName = Path.GetFileNameWithoutExtension(newVoice);
+                var newEkVoice = new EchokrautVoice
+                {
+                    BackendVoice = newVoice,
+                    VoiceName = voiceName,
+                    Volume = 1,
+                    AllowedGenders = new List<Genders>(),
+                    AllowedRaces = new List<NpcRaces>(),
+                    IsDefault = newVoice.Equals(Constants.NARRATORVOICE, StringComparison.OrdinalIgnoreCase),
+                    UseAsRandom = voiceName.Contains("NPC")
+                };
+                _npcData.ReSetVoiceGenders(newEkVoice, eventId);
+                _npcData.ReSetVoiceRaces(newEkVoice, eventId);
+                _db.UpsertVoice(VoiceEntityMapper.ToEntity(newEkVoice));
+            }
+        }
+
+        // Re-read only when the block above actually inserted something.
+        if (newVoices.Count > 0)
+            existingVoices = _db.GetVoices();
+
+        var ekVoices = existingVoices.Select(VoiceEntityMapper.ToVoice).ToList();
+        var oldVoices = ekVoices.FindAll(
+            p => backendVoices.Find(f => f == p.BackendVoice) == null);
+
+        if (oldVoices.Count > 0)
+        {
+            foreach (var oldVoice in oldVoices)
+            {
+                EchokrautVoice? replacement = null;
+                if (oldVoice.BackendVoice.Contains("NPC"))
+                {
+                    var candidates = ekVoices.FindAll(
+                        f => !oldVoices.Contains(f) && f.VoiceName.Contains("NPC") &&
+                             f.IsAdultVoice == oldVoice.IsAdultVoice &&
+                             f.IsChildVoice == oldVoice.IsChildVoice &&
+                             f.IsElderVoice == oldVoice.IsElderVoice &&
+                             !oldVoice.AllowedRaces.Except(f.AllowedRaces).Any());
+                    replacement = candidates.Count > 0 ? candidates[_random.Next(0, candidates.Count)] : null;
+                }
+                else
+                {
+                    replacement = ekVoices.Find(
+                        f => !oldVoices.Contains(f) && f.VoiceName == oldVoice.VoiceName);
+                }
+                _npcData.MigrateOldData(oldVoice, replacement);
+                _db.DeleteVoice(oldVoice.BackendVoice);
+            }
+        }
+
+        _npcData.MigrateOldData();
+        // Same here: only the deletion loop above can have changed the table since ekVoices
+        // was built.
+        if (oldVoices.Count > 0)
+            ekVoices = _db.GetVoices().Select(VoiceEntityMapper.ToVoice).ToList();
+        _npcData.RefreshSelectables(ekVoices);
+        VoicesMapped?.Invoke();
+        _log.Info(nameof(MapVoices), "Voices mapped successfully", eventId);
+    }
+
+    public bool IsBackendAvailable()
+    {
+        var it = _config.ActiveInstanceType;
+        if (it == AlltalkInstanceType.None) return true;
+        if (it == AlltalkInstanceType.Local) return ActiveLocalInstall();     // running checked elsewhere
+        if (it == AlltalkInstanceType.Remote) return !string.IsNullOrWhiteSpace(ActiveBaseUrl());
+        return false;
+    }
+
+    // ── Reachability (real health check, 30s TTL cache) ──────────────────────
+
+    private static readonly TimeSpan ReachabilityCacheTtl = TimeSpan.FromSeconds(30);
+    private static readonly TimeSpan ReachabilityRequestTimeout = TimeSpan.FromSeconds(3);
+
+    // Long-lived, like the backends' clients. A per-probe `using var http = new HttpClient(...)`
+    // leaves its socket in TIME_WAIT; over a long session of health probes that exhausts the
+    // ephemeral port pool — the same failure the AllTalk streaming client was fixed for.
+    private static readonly HttpClient _probeClient = new() { Timeout = ReachabilityRequestTimeout };
+    private DateTime _lastReachabilityCheck = DateTime.MinValue;
+    private bool _lastReachabilityResult;
+    private readonly SemaphoreSlim _reachabilityLock = new(1, 1);
+
+    public bool? CachedReachability =>
+        DateTime.UtcNow - _lastReachabilityCheck < ReachabilityCacheTtl
+            ? _lastReachabilityResult
+            : (bool?)null;
+
+    public void InvalidateReachabilityCache() => _lastReachabilityCheck = DateTime.MinValue;
+
+    public async Task<bool> IsBackendReachableAsync()
+    {
+        if (DateTime.UtcNow - _lastReachabilityCheck < ReachabilityCacheTtl)
+            return _lastReachabilityResult;
+
+        await _reachabilityLock.WaitAsync();
+        try
+        {
+            // Re-check inside the lock — another caller may have populated the cache while we waited.
+            if (DateTime.UtcNow - _lastReachabilityCheck < ReachabilityCacheTtl)
+                return _lastReachabilityResult;
+
+            var reachable = await PingBackendAsync();
+            _lastReachabilityResult = reachable;
+            _lastReachabilityCheck = DateTime.UtcNow;
+            return reachable;
+        }
+        finally
+        {
+            _reachabilityLock.Release();
+        }
+    }
+
+    private async Task<bool> PingBackendAsync()
+    {
+        // First gate on the config-only availability check.
+        if (!IsBackendAvailable()) return false;
+
+        var it = _config.ActiveInstanceType;
+
+        // "None" instance type means no local generation is expected — treat as reachable so
+        // GoogleDriveRequestVoiceLine flows aren't blocked by this check.
+        if (it == AlltalkInstanceType.None) return true;
+
+        // Local install — the instance-running flag is the cheap happy path. But it only reflects
+        // whether THIS session spawned-and-detected the server; a wrapper that survived a plugin
+        // reload or was started externally would leave it false forever. So when the flag is not
+        // set, fall through to the same real HTTP probe Remote uses instead of reporting a
+        // permanent "offline".
+        if (it == AlltalkInstanceType.Local && ActiveLocalRunning())
+            return true;
+
+        // Remote (or Local with the running flag unset) — actual HTTP GET on the active engine's
+        // ready/health endpoint.
+        try
+        {
+            var baseUrl = (ActiveBaseUrl() ?? "").TrimEnd('/');
+            var readyPath = ActiveReadyPath() ?? "/";
+            if (!readyPath.StartsWith('/')) readyPath = "/" + readyPath;
+            var url = baseUrl + readyPath;
+
+            using var resp = await _probeClient.GetAsync(url);
+            return resp.IsSuccessStatusCode;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    public void ProcessVoiceMessage(VoiceMessage voiceMessage)
+    {
+        if (voiceMessage == null) throw new ArgumentNullException(nameof(voiceMessage));
+        
+        var eventId = voiceMessage.EventId;
+        _log.Info(nameof(ProcessVoiceMessage), $"Processing [{voiceMessage.Language}]: {voiceMessage.Text[..Math.Min(100, voiceMessage.Text.Length)]}...", eventId);
+        
+        // Determine priority - dialogue gets priority over bubbles
+        var isPriority = voiceMessage.Source switch
+        {
+            TextSource.AddonTalk or 
+            TextSource.AddonBattleTalk or 
+            TextSource.AddonCutsceneSelectString or 
+            TextSource.AddonSelectString or 
+            TextSource.VoiceTest => true,
+            _ => false
+        };
+        
+        _queue.Enqueue(voiceMessage, isPriority);
+    }
+
+    public async Task<bool> GenerateVoice(VoiceMessage message)
+    {
+        // None-mode hard gate — the plugin's "Audio Files Only" setup must never hit a TTS
+        // backend. Today this only fires from VoiceClipManager actions and the runtime
+        // pipeline if the upstream NPC routing path slips through; either way we drop
+        // silently at Debug level (no warning spam — None mode is a valid configuration).
+        if (!_config.HasLiveGeneration)
+        {
+            _log.Debug(nameof(GenerateVoice), "Skipping generation: live generation disabled (InstanceType=None)", message.EventId);
+            return false;
+        }
+
+        if (_backend == null)
+        {
+            _log.Error(nameof(GenerateVoice), "Backend not initialized", message.EventId);
+            return false;
+        }
+
+        var eventId = message.EventId;
+        _log.Info(nameof(GenerateVoice), "Generating...", eventId);
+        
+        try
+        {
+            // The resolved Voice object is derived from Speaker.Voices (the in-memory selectable
+            // list), which can be stale/empty when the backend was unavailable at startup and only
+            // connected later — MapVoices never ran, so the getter can't resolve the key even though
+            // one is assigned. The persisted `voice` key is the source of truth for generation, so
+            // fall back to it rather than failing just because the selectable snapshot is out of date.
+            var voice = message.Speaker.Voice?.BackendVoice;
+            if (string.IsNullOrEmpty(voice))
+                voice = message.Speaker.voice;
+            if (string.IsNullOrEmpty(voice))
+            {
+                _log.Warning(nameof(GenerateVoice), "No voice assigned to speaker", eventId);
+                return false;
+            }
+            
+            var responseStream = await _backend.GenerateAudioStreamFromVoice(
+                eventId,
+                message,
+                voice,
+                message.Language,
+                // Attach the engine's job id to the in-flight record, so a cancellation aborts
+                // exactly this request. Guarded on the entry still being the current one: a
+                // late-arriving header must not resurrect a record the finally block already
+                // cleared, or graft this id onto the next line's entry.
+                onJobStarted: jobId =>
+                {
+                    var current = _inFlight;
+                    if (current != null && ReferenceEquals(current.Entry.Message, message))
+                        _inFlight = current with { JobId = jobId };
+                });
+            
+            if (responseStream != null)
+            {
+                message.Stream = responseStream;
+                return true;
+            }
+            
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _log.Error(nameof(GenerateVoice), ex.ToString(), eventId);
+            return false;
+        }
+    }
+
+    public async Task<string> CheckReady(EKEventId eventId)
+    {
+        if (_backend == null)
+        {
+            _log.Info(nameof(CheckReady), "Backend not initialized, creating instance for connection test", eventId);
+            _backend = CreateActiveBackend();
+        }
+
+        return await _backend.CheckReady(eventId);
+    }
+
+    public void CancelAll()
+    {
+        _log.Info(nameof(CancelAll), "Stopping all voice processing", new EKEventId(0, TextSource.None));
+        _queue.CancelAll();
+    }
+
+    public void NotifyCharacterMapped()
+    {
+        CharacterMapped?.Invoke();
+    }
+
+    public void GetVoiceOrRandom(EKEventId eventId, NpcMapData npcData)
+    {
+        _log.Debug(nameof(GetVoiceOrRandom),
+            $"Searching voice: {npcData.Voice?.VoiceName ?? ""} for NPC: {npcData.Name}", eventId);
+
+        var ekVoices = _db.GetVoices().Select(VoiceEntityMapper.ToVoice).ToList();
+        var picked = PickVoice(npcData, ekVoices);
+
+        if (picked != npcData.Voice)
+        {
+            npcData.Voice = picked;
+            if (picked != null)
+                _npcData.SaveCharacter(npcData);
+        }
+
+        if (picked != null)
+            _log.Debug(nameof(GetVoiceOrRandom), $"Voice: {picked} for NPC: {npcData.Name}", eventId);
+        else
+            _log.Error(nameof(GetVoiceOrRandom), $"Couldn't find voice for NPC: {npcData.Name}", eventId);
+    }
+
+    /// <summary>
+    /// True if the voice is enabled, default-marked, name-matched to the NPC, OR matches the
+    /// NPC's race/gender/body-type constraints. Mirrors <see cref="EchokrautVoice.IsSelectable"/>
+    /// so the dropdown's offerings are honoured by the backend — without the name-match clause,
+    /// a user pick like "Male_Elezen_Alphinaud" for an "Alphinaud" NPC whose formal race/gender
+    /// doesn't match would be silently overruled by <see cref="EnsureFittingVoice"/>.
+    /// </summary>
+    public bool IsVoiceFittingForNpc(EchokrautVoice? voice, NpcMapData npc)
+    {
+        if (voice == null || !voice.IsEnabled) return false;
+        if (voice.IsDefault) return true;
+
+        // Name-substring match — accept any voice whose name contains the NPC's name regardless
+        // of the formal race/gender/body-type filter, matching IsSelectable.
+        if (!string.IsNullOrEmpty(npc.Name) &&
+            voice.VoiceName.Contains(npc.Name, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var isGenderedRace = _npcData.IsGenderedRace(npc.Race);
+        if (isGenderedRace && voice.AllowedGenders.Count > 0 && !voice.AllowedGenders.Contains(npc.Gender))
+            return false;
+        if (voice.AllowedRaces.Count > 0 && !voice.AllowedRaces.Contains(npc.Race))
+            return false;
+
+        return npc.BodyType switch
+        {
+            BodyType.Child => voice.IsChildVoice,
+            BodyType.Elder => voice.IsElderVoice,
+            _ => voice.IsAdultVoice,
+        };
+    }
+
+    /// <summary>
+    /// If the NPC's currently-assigned voice doesn't fit (race/gender/body-type mismatch, disabled,
+    /// or none assigned), re-pick via PickVoice and persist the new assignment to the character.
+    /// Returns true if a change was made.
+    /// </summary>
+    public bool EnsureFittingVoice(NpcMapData npcData, EKEventId eventId)
+    {
+        if (IsVoiceFittingForNpc(npcData.Voice, npcData)) return false;
+
+        var oldVoiceKey = npcData.voice ?? "";
+        npcData.voice = ""; // clear so PickVoice's short-circuit doesn't keep the bad assignment
+        var voices = _db.GetVoices().Select(VoiceEntityMapper.ToVoice).ToList();
+        var picked = PickVoice(npcData, voices);
+
+        if (picked == null)
+        {
+            npcData.voice = oldVoiceKey; // restore so callers see the original key in their warnings
+            return false;
+        }
+
+        npcData.Voice = picked;
+        _npcData.SaveCharacter(npcData);
+        _log.Info(nameof(EnsureFittingVoice),
+            $"Auto-assigned voice '{picked.BackendVoice}' for {npcData.Name} ({npcData.Gender} {npcData.Race}, {npcData.BodyType})" +
+            (string.IsNullOrEmpty(oldVoiceKey) ? "" : $" — replaced unfitting '{oldVoiceKey}'"),
+            eventId);
+        return true;
+    }
+
+    public EchokrautVoice? PickVoice(NpcMapData npcData, IList<EchokrautVoice> voices)
+    {
+        var voiceItem = npcData.Voice;
+        var bodyType = npcData.BodyType;
+
+        EchokrautVoice? defaultVoice = null;
+        for (var i = 0; i < voices.Count; i++)
+        {
+            if (voices[i].IsDefault) { defaultVoice = voices[i]; break; }
+        }
+
+        // Short-circuit only if the existing voice still fits the NPC. After a Race/Gender
+        // edit (e.g. via NPC edit window) the previously assigned voice may no longer match;
+        // falling through forces a re-pick by name → race/gender → default.
+        if (voiceItem != null
+            && (defaultVoice == null || voiceItem.BackendVoice != defaultVoice.BackendVoice)
+            && IsVoiceFittingForNpc(voiceItem, npcData))
+            return voiceItem;
+
+        var npcName = npcData.Name ?? string.Empty;
+
+        // Try to find voice by name. Guarded on a non-empty name because "anything".Contains("")
+        // is true — an NPC without a resolvable name (unnamed bubble speaker, "???" before the
+        // alias lookup resolves it) matched the very first voice in the list and never reached
+        // the race/gender filter below. IsVoiceFittingForNpc has the same guard.
+        if (!string.IsNullOrWhiteSpace(npcName))
+        {
+            for (var i = 0; i < voices.Count; i++)
+            {
+                if (voices[i].VoiceName.Contains(npcName, StringComparison.OrdinalIgnoreCase))
+                    return voices[i];
+            }
+        }
+
+        // Find by race/gender
+        var isGenderedRace = _npcData.IsGenderedRace(npcData.Race);
+        List<EchokrautVoice>? matches = null;
+        for (var i = 0; i < voices.Count; i++)
+        {
+            if (voices[i].FitsNpcData(npcData.Gender, npcData.Race, bodyType, isGenderedRace))
+                (matches ??= new List<EchokrautVoice>()).Add(voices[i]);
+        }
+
+        if (matches != null && matches.Count > 0)
+            return matches[_random.Next(0, matches.Count)];
+
+        return defaultVoice;
+    }
+
+    /// <summary>
+    /// A source was cancelled (text advanced, dialog closed, /ek cancel). If its line is the one
+    /// currently being synthesised, tell the engine to stop: discarding the finished audio later
+    /// keeps it inaudible, but the engine would still occupy the GPU with it and delay the line
+    /// the player actually wants to hear. Fire-and-forget — this runs on the game thread.
+    /// </summary>
+    private void OnSourceCancelled(TextSource source)
+    {
+        // Single read — Entry and JobId must come from the same snapshot.
+        var current = _inFlight;
+        var backend = _backend;
+        if (current == null || backend == null || current.Entry.Message.Source != source) return;
+
+        var eventId = current.Entry.Message.EventId;
+        var jobId = current.JobId;
+        _log.Info(nameof(OnSourceCancelled), "Aborting in-flight generation — line was skipped", eventId);
+        _ = Task.Run(async () =>
+        {
+            try { await backend.StopGenerating(eventId, jobId); }
+            catch (Exception ex) { _log.Warning(nameof(OnSourceCancelled), ex.Message, eventId); }
+        });
+    }
+
+    private async Task GenerationLoopAsync(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
+            {
+                // Try to get next message pending generation
+                if (_queue.TryDequeuePendingGeneration(out var entry) && entry != null)
+                {
+                    // Obsolete = the player skipped past this line while it was still queued or
+                    // being built. Don't spend a backend round-trip on audio nobody will hear.
+                    if (entry.State == Queue.VoiceMessageState.Cancelled || _queue.IsObsolete(entry.Message))
+                    {
+                        _queue.MarkAsCancelled(entry.Id);
+                        entry.Message.Stream?.Dispose();
+                        entry.Message.Stream = null!;
+                        continue;
+                    }
+                    await ProcessGenerationAsync(entry, cancellationToken);
+                }
+                
+                // Small delay to prevent tight loop
+                await Task.Delay(100, cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when shutting down
+                break;
+            }
+            catch (Exception ex)
+            {
+                var eventId = new EKEventId(0, TextSource.None);
+                _log.Error(nameof(GenerationLoopAsync), $"Error in generation loop: {ex}", eventId);
+                await Task.Delay(1000, cancellationToken); // Back off on error
+            }
+        }
+    }
+
+    private async Task ProcessGenerationAsync(VoiceMessageEntry entry, CancellationToken cancellationToken)
+    {
+        var message = entry.Message;
+        var eventId = message.EventId;
+
+        try
+        {
+            // Locally-loaded audio already has a stream — skip backend generation
+            if (message.LoadedLocally && message.Stream != null)
+            {
+                _queue.MarkAsReadyToPlay(entry.Id);
+                return;
+            }
+
+            _queue.MarkAsGenerating(entry.Id);
+            _log.Info(nameof(ProcessGenerationAsync), "Generating next queued audio", eventId);
+
+            // Generate audio. _generatingEntry is what lets a cancellation abort THIS request
+            // (see OnSourceCancelled) instead of only discarding its result afterwards.
+            _inFlight = new GenerationInFlight(entry, null);
+            bool success;
+            try
+            {
+                success = await GenerateVoice(message);
+            }
+            finally
+            {
+                _inFlight = null;
+            }
+
+            // Generation can take seconds (slow GPU, long line). If the dialog was closed, the
+            // player skipped ahead, or the queue was flushed meanwhile, drop the result instead
+            // of handing it to the playback queue — otherwise it plays "out of nowhere" once it
+            // happens to be ready.
+            if (entry.State == Queue.VoiceMessageState.Cancelled || _queue.IsObsolete(message))
+            {
+                _queue.MarkAsCancelled(entry.Id);
+                _log.Info(nameof(ProcessGenerationAsync), "Discarding generated audio — line was skipped", eventId);
+                message.Stream?.Dispose();
+                message.Stream = null;
+                _audioPlayback.RecreationStarted = false;
+                return;
+            }
+
+            if (success && message.Stream != null)
+            {
+                _queue.MarkAsReadyToPlay(entry.Id);
+                _log.Info(nameof(ProcessGenerationAsync), "Audio generated successfully", eventId);
+            }
+            else
+            {
+                _queue.MarkAsFailed(entry.Id, new Exception("Failed to generate audio"));
+                _audioPlayback.RecreationStarted = false;
+                _log.Error(nameof(ProcessGenerationAsync), "Failed to generate audio", eventId);
+            }
+        }
+        catch (Exception ex)
+        {
+            _queue.MarkAsFailed(entry.Id, ex);
+            _audioPlayback.RecreationStarted = false;
+            _log.Error(nameof(ProcessGenerationAsync), $"Error generating audio: {ex}", eventId);
+        }
+    }
+
+    public void Dispose()
+    {
+        _alltalkInstance.OnInstanceReady -= RefreshBackend;
+        _echokrauTtsInstance.OnInstanceReady -= RefreshBackend;
+        _db.DatabaseWiped -= RefreshBackend;
+        _queue.SourceCancelled -= OnSourceCancelled;
+        try
+        {
+            _cancellationTokenSource.Cancel();
+            _generationTask.Wait(TimeSpan.FromSeconds(5));
+        }
+        catch (Exception ex)
+        {
+            var eventId = new EKEventId(0, TextSource.None);
+            _log.Error(nameof(Dispose), $"Error during disposal: {ex}", eventId);
+        }
+        finally
+        {
+            _cancellationTokenSource?.Dispose();
+        }
+    }
+}
