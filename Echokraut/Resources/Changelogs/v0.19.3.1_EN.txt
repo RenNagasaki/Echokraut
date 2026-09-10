@@ -1,0 +1,138 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.3.1
+================================================================================
+
+
+==============================================================================
+MAJOR NEW FEATURES
+==============================================================================
+
+[Sharing] Pass your generated audio on as a single package
+  Game Data Tools has a new Import / Export section that writes all your
+  generated voice lines into one package file, and reads such a package back in.
+  The package carries the NPC, the language and the voice of every single file,
+  so the installation that receives it assigns them correctly - even for NPCs or
+  dialogue lines that installation has never seen. Characters and dialogue lines
+  it does not know yet are created on import.
+
+  - Audio files you already have are never overwritten by an import; the line is
+    still marked as generated.
+  - Lines that address you by name are exported only in their shareable
+    "Adventurer" form. The version that speaks your own character's name stays
+    on your machine.
+  - Export can be limited to a single game language.
+
+[Harvest] Thousands of NPC conversations are harvested that were skipped before
+  The harvest now reads the game's scripted dialogue sheets - beast tribe and
+  seasonal event NPCs, side content, inn keepers, aetheryte attendants and the
+  like. That is around 14,700 additional dialogue lines, a body of text no
+  previous version looked at, and the largest gap that was left.
+
+  - Speakers are taken from the dialogue key, or from the NPC the conversation
+    belongs to when that is unambiguous.
+  - Menu captions, system messages and your own dialogue choices are recognised
+    as such and are not stored as NPC speech.
+  - Lines whose speaker cannot be determined are written to
+    harvest/scripted_alias_candidates.json for you to review, rather than being
+    assigned to a guessed NPC.
+
+==============================================================================
+IMPROVEMENTS
+==============================================================================
+
+[Voices] The voice pack ships new child voices
+  The child voices of the first pack were real recordings of children, but in a
+  different language, and cloned speech built from them did not sound good
+  enough in practice. All 60 of them have been replaced. The new child voices
+  are built from English speakers of the same source as the adult voices, with
+  their pitch and their vocal tract raised into a child register, so they carry
+  a child's timbre and an English accent. The 200 adult voices are unchanged.
+
+  - The voice files keep their names, so an NPC that already uses a child voice
+    keeps its assignment — it will simply sound different from now on.
+  - To get the new voices, download the voice pack again from Game Data Tools,
+    or reinstall your TTS engine. Note that for a locally installed engine this
+    replaces the whole voice folder, so move any voices of your own out of it
+    first.
+  - These are child-sounding adult speakers, not recordings of children. The
+    exact change made to every clip is recorded in the pack's ATTRIBUTION.csv,
+    as the license of the source recordings requires.
+
+[Setup] New installations default to C:\LocalTTS
+  The suggested install folder in the setup wizard is now C:\LocalTTS instead of
+  C:\alltalk_tts, which named one engine for a folder that holds both. Only the
+  suggestion changed - an existing installation keeps its folder and is never
+  moved, and the per-engine subfolders inside it are unchanged.
+
+==============================================================================
+BUG FIXES
+==============================================================================
+
+[Playback] Streaming voices no longer flood the log
+  While a streamed line was playing, the buffer watchdog could react to its own
+  restart and pause, refill and resume thousands of times per second, writing a
+  "stream underrun" line each time. Dalamud's log filled up with the same
+  message and the game stuttered. The watchdog now measures the buffer the same
+  way playback does and rebuffers at most a couple of times per second.
+
+[3D audio] Voices follow the camera correctly again
+  The listener orientation was read from the wrong part of the camera matrix. It
+  happened to be right while the camera was level, so it looked fine, but drifted
+  as soon as the camera was tilted - measured 146 degrees where the real angle was
+  101, with "up" pointing down. Direction and elevation now match the camera at
+  every angle.
+
+[3D audio] The audible range setting now applies from the start
+  The configured range only ever reached the audio engine when the slider in the
+  settings was moved, and was forgotten again on the next start. Every session
+  silently ran with the engine default instead of your setting.
+
+[3D audio] Moving speakers no longer detune voices
+  Touching the audible range slider also switched on the doppler effect, which
+  shifted the pitch of a voice whenever the speaker or you moved. It stays off now,
+  as it was always meant to.
+
+[Dialogue] Your character's name is used consistently again
+  Lines that address you by name are stored with a placeholder, which is filled in
+  with your character's name when the line is spoken. That name was only picked up
+  once the first dialogue of a session had played, so before that everything using
+  it failed quietly: the Voice Clip Manager could generate audio in which the TTS
+  reads "-PlayerFirstName-" out loud, and the same stored line read differently
+  before and after your first conversation. Your name is now kept up to date on its
+  own, generating a line whose placeholder could not be filled is refused outright
+  instead of producing that audio, and the Voice Clip Manager now shows the stored
+  line as it is, placeholder included.
+
+[Dialogue] Talking to an NPC no longer duplicates its harvested lines
+  A line spoken in game was stored with your character's name baked into it, so it
+  no longer matched the harvested entry it belonged to and ended up as a second
+  entry for the same line. Both pointed at the same audio file but were tracked
+  separately. Live dialogue is now stored with the placeholder, like the harvest
+  does. Game Data Tools has a new "Player Name Cleanup" that restores existing
+  entries and merges the duplicates - it lists what it would change before you
+  apply it, and never deletes an audio file.
+
+[Harvest] Unused development text is no longer stored as dialogue
+  Square Enix keeps rows for lines that were cut, filling them with a Japanese
+  placeholder instead of removing them. Where such a row still differed between
+  languages it slipped through as ordinary NPC dialogue and would be read out
+  loud. They are recognised and skipped now, in quest, cutscene and scripted
+  dialogue alike.
+
+[Harvest] Cutscene lines with a silent audio file are picked up again
+  A line counted as voice acted whenever an audio file for it existed, even when
+  that file was an empty one-byte stub left behind for a cut line. Those lines
+  were dropped although the game plays nothing for them.
+
+[Interface] Clearing mapped NPCs no longer freezes the game
+  Clearing mapped NPCs, players or bubbles did all of its work - deleting audio
+  folders and database rows - inside the button's own click handler, on the game's
+  thread, and rebuilt its caches once per entry. With a short list nobody noticed.
+  Once a dialogue harvest has filled the database it froze the game and then killed
+  it. The three buttons now do their work in the background and rebuild the caches
+  once at the end.
+
+[Playback] Fixed a crash when a voice was positioned during startup
+  Positioning a voice while it was still buffering could dereference uninitialised
+  state and take the whole game down with it.
