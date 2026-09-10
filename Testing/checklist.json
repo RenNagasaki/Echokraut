@@ -1,0 +1,194 @@
+{
+  "plugin": "Echokraut",
+  "version": "0.19.3.2",
+  "intro": "Items marked NEW were added or changed in this version — please test those first. CRITICAL means: if it fails, the version must not ship.",
+  "components": [
+    {
+      "name": "Plugin",
+      "sections": [
+        {
+          "title": "Installation & startup",
+          "items": [
+            { "id": "inst-install", "text": "Plugin installs from the repository without an error", "critical": true },
+            { "id": "inst-update", "text": "Updating from the previous version keeps settings and database", "critical": true },
+            { "id": "inst-noerr", "text": "No \"Echokraut is creating errors\" popup from Dalamud after startup", "critical": true },
+            { "id": "inst-cmd", "text": "Both /echokraut and /ek open the window", "hint": "Both commands must be registered." },
+            { "id": "inst-changelog", "text": "Changelog popup appears after the update and lists this version's entries" },
+            { "id": "inst-version", "text": "Window title shows the correct version number" },
+            { "id": "inst-default-path", "text": "A fresh installation suggests C:\\LocalTTS as the install folder", "hint": "Remove the plugin config (or use a clean profile) so the setup wizard runs, and read the install path it proposes. It must be C:\\LocalTTS, not C:\\alltalk_tts." },
+            { "id": "inst-existing-path-kept", "text": "An existing installation keeps its install folder after the update", "hint": "Update from an older version whose install sits under C:\\alltalk_tts (or a custom folder). The path in Settings must be unchanged and the engine must still start - nothing is moved.", "critical": true },
+            { "id": "inst-path-validation-lang", "text": "Install-path error messages appear in the selected language", "hint": "Switch the client to German/French/Japanese and enter an invalid install path (a relative one, and a bare drive root like C:\\). Both messages must be translated, not English." }
+          ]
+        },
+        {
+          "title": "Community dialogue database (Echolines)",
+          "items": [
+            { "id": "cdb-switch-wizard", "text": "The setup wizard offers the sharing switch, on by default", "hint": "Run the first-time wizard to its last page. The checkbox must be there, ticked, with the sentence explaining what is sent.", "new": true },
+            { "id": "cdb-switch-settings", "text": "Settings -> General has the same switch, and it is the same value", "hint": "Toggle it in Settings, reopen the window: the state must persist. It is one setting shown in two places, not two settings.", "new": true, "critical": true },
+            { "id": "cdb-off-sends-nothing", "text": "With the switch off, nothing is sent at all", "hint": "Turn it off, talk to several NPCs, and check the log: there must be no Echolines traffic whatsoever.", "new": true, "critical": true },
+            { "id": "cdb-no-chat", "text": "Chat is never reported", "hint": "With sharing ON, write in say/party/tell and have others write too. Nothing you or anyone typed may appear in the reported lines - only NPC dialogue, battle dialogue and bubbles.", "new": true, "critical": true },
+            { "id": "cdb-no-player-name", "text": "Lines addressing you by name are sent with a placeholder", "hint": "Find dialogue that uses your character name. The reported text must contain <PLAYERNAME>/<PLAYERFIRSTNAME>, never the real name.", "new": true, "critical": true },
+            { "id": "cdb-quiet", "text": "Reporting is invisible in game", "hint": "No message, no progress bar, no error - even with the network unplugged or a wrong address configured. The game must not stutter when a batch is sent.", "new": true, "critical": true },
+            { "id": "cdb-none-mode", "text": "Reporting also works in None mode", "hint": "Set the backend to None (no audio generated at all) and talk to NPCs. Lines must still be reported - those installations are the most valuable contributors.", "new": true },
+            { "id": "cdb-no-repeat", "text": "The same line is not reported twice", "hint": "Talk to the same NPC repeatedly, then restart the game and repeat. Each line should be sent once, not on every encounter.", "new": true },
+            { "id": "cdb-harvest-import", "text": "A finished harvest submits its result in the background", "hint": "Run a full harvest (no quest-type filter). Afterwards the log must show the import starting and working through chunks, slowly - roughly one request every 11 seconds. The game must stay responsive throughout.", "new": true },
+            { "id": "cdb-harvest-resume", "text": "An interrupted harvest import continues where it stopped", "hint": "Start a harvest import, note the chunk number in the log, then unload the plugin or log out. On the next harvest the import must resume near that chunk instead of starting at 1.", "new": true, "critical": true },
+            { "id": "cdb-harvest-filtered", "text": "A filtered harvest does NOT submit", "hint": "Run a harvest restricted to one quest type. No import may start - a partial harvest must not be shipped as if it were complete.", "new": true }
+          ]
+        },
+        {
+          "title": "Backend connection",
+          "items": [
+            { "id": "be-alltalk", "text": "AllTalk backend: connection is detected and voices are loaded" },
+            { "id": "be-ekt", "text": "EchokrauTTS backend: connection is detected and voices are loaded" },
+            { "id": "be-switch", "text": "Switching backends at runtime works without restarting the game" },
+            { "id": "be-offline", "text": "Backend down or unreachable: a clear message instead of a crash or a freeze", "critical": true },
+            { "id": "be-stream", "text": "Streaming generation: playback starts before the clip has finished generating", "hint": "Not only at the very end — audio should audibly start well before generation completes." },
+            { "id": "be-engine-list", "text": "EchokrauTTS engine dropdown lists the engines the wrapper publishes", "hint": "Backend tab -> EchokrauTTS local instance -> TTS engine. The list is read from the wrapper repo, not from the plugin: it must show every engine of the current EchokrauTTS release, not only XTTS and F5.", "new": true },
+            { "id": "vp-language-pack", "text": "Voice pack download follows the client language", "hint": "Trigger a voice pack download (fresh install or Game Data Tools). dalamud.log must state which language pack was used: the client's own when one is published, otherwise \"falling back to the English one\". With only the English pack published, every client language must still get a working pack.", "new": true },
+            { "id": "be-engine-descriptions", "text": "First-time setup explains what each engine is for", "hint": "Run the setup wizard: above the engine dropdown there must be one line per offered engine saying who it is for. In German/French/Japanese clients the lines must be translated.", "new": true },
+            { "id": "be-engine-too-old", "text": "An engine the installed wrapper is too old for is shown but cannot be selected", "hint": "With an older wrapper installed the newer engine appears as \"NAME (from wrapper version X)\". Clicking it must leave the selection unchanged; after updating the wrapper and reopening the window it becomes selectable.", "new": true },
+            { "id": "be-engine-kept", "text": "The engine selected before the plugin update is still selected afterwards", "hint": "Set the engine to F5, update the plugin, reopen the settings: it must still say F5 and the wrapper must still start with that engine.", "new": true },
+            { "id": "be-engine-offline", "text": "Engine dropdown still works without internet", "hint": "Block network access and open the settings: the dropdown must still list the engines the plugin ships with instead of being empty.", "new": true },
+            { "id": "be-stream-log", "text": "Streaming playback does not flood dalamud.log", "hint": "Play a few streamed lines, then search dalamud.log for \"Stream underrun\": a handful of lines is fine, hundreds of identical lines with the same timestamp are not. Watch for stutter while a line plays." }
+          ]
+        },
+        {
+          "title": "Local installer (EchokrautLocalInstaller)",
+          "items": [
+            { "id": "eli-install", "text": "A fresh install of AllTalk / EchokrauTTS completes successfully" },
+            { "id": "eli-check", "text": "\"Check for updates\" correctly reports either an available update or up-to-date" },
+            { "id": "eli-update", "text": "\"Update\" installs the zip from the same release as the reported tag" },
+            { "id": "eli-failed", "text": "A failed check returns the button to \"Check for updates\" (it does not claim you are up to date)" },
+            { "id": "eli-after-update", "text": "After the update finished, the button reads \"Check for updates\" again", "hint": "It must not still say \"Update\" — clicking it a second time must not reinstall the same release." },
+            { "id": "eli-uptodate-inert", "text": "A greyed-out \"Update\" (after a check that found nothing) does nothing when clicked" },
+            { "id": "eli-keep", "text": "Updating the wrapper leaves voices and models untouched", "critical": true }
+          ]
+        },
+        {
+          "title": "Playback in game",
+          "items": [
+            { "id": "play-dialog", "text": "NPC dialogue windows are read out", "critical": true },
+            { "id": "play-bubble", "text": "Speech bubbles are read out" },
+            { "id": "play-battle", "text": "Battle talk and cutscene lines are read out" },
+            { "id": "play-chat", "text": "Chat messages are read out according to the configured settings" },
+            { "id": "play-stop", "text": "Dismissing a dialogue stops playback immediately" },
+            { "id": "play-queue", "text": "Clicking rapidly through dialogue never overlaps or leaves playback stuck", "critical": true },
+            { "id": "play-voiced", "text": "Lines already voiced by the game are not spoken a second time" },
+            { "id": "play-volume", "text": "The volume slider takes effect immediately" }
+          ]
+        },
+        {
+          "title": "3D audio",
+          "items": [
+            { "id": "3d-dir", "text": "The voice comes from the NPC's direction — turning the camera audibly moves it", "hint": "Test this with the camera TILTED as well, not just level: the old reading was only correct while the camera was horizontal.", "critical": true },
+            { "id": "3d-dist", "text": "Distance matters: farther away is quieter" },
+            { "id": "3d-range-start", "text": "The audible range setting survives a restart", "hint": "Set the range, restart the game, and compare how far away a voice is still audible — without touching the slider again. It used to fall back to the engine default on every start." },
+            { "id": "3d-no-doppler", "text": "A moving speaker does not change the voice's pitch", "hint": "Move the slider once, then listen to a walking NPC or move yourself while a line plays: the voice must not warble or detune." },
+            { "id": "3d-off", "text": "With 3D audio disabled, playback is clean and centred" }
+          ]
+        },
+        {
+          "title": "Voices & assignment",
+          "items": [
+            { "id": "voice-npc-correction", "text": "Correcting an NPC's gender or race changes the existing entry and takes effect", "hint": "Pick an NPC the game classifies wrongly, change gender (or race) and save. There must be NO second entry, the entry must stay findable, and the NPC must sound different on the next line. Reopening the editor must still show your correction.", "new": true, "critical": true },
+            { "id": "voice-npc-correction-survives", "text": "The correction survives the NPC speaking again", "hint": "After correcting, let the same NPC speak several more lines, then reopen the list. The correction must still be there - it is written on every line from game data, which is what used to erase it.", "new": true, "critical": true },
+            { "id": "voice-npc-correction-clear", "text": "Selecting the game's own value again removes the correction", "hint": "Set gender back to what the game reports and save. The asterisk marking a corrected entry must disappear.", "new": true },
+            { "id": "voice-auto", "text": "New NPCs automatically get a fitting voice (gender / race)" },
+            { "id": "voice-manual", "text": "A manually assigned voice survives a restart", "critical": true },
+            { "id": "voice-test", "text": "Previewing a voice in the voice selection works" },
+            { "id": "voice-pack", "text": "The voice pack downloads and its 260 voices show up in the selection", "hint": "Game Data Tools -> Voice Pack, or a fresh engine install. Expect 100 male and 100 female adult voices plus 30 male and 30 female child voices.", "critical": true },
+            { "id": "voice-pack-install", "text": "A fresh local AllTalk / EchokrauTTS install seeds its voices from the pack automatically", "hint": "Install an engine from scratch. The setup wizard should show download progress and the engine's voice folder should end up holding the pack's voices.", "critical": true },
+            { "id": "voice-pack-manual", "text": "Manual download from Game Data Tools lands in the right folder", "hint": "It targets the active engine's voice folder when the engine runs locally, otherwise your local save location. Careful: for a locally installed engine that folder is REPLACED, so put your own voices somewhere else before testing." },
+            { "id": "voice-pack-update", "text": "Downloading the pack over an existing one really replaces the child voices", "hint": "The child voices changed in this version but kept their filenames. After a second download the '-Child' voices must sound English and child-like, not Icelandic. If they still sound like the old ones, the files were not overwritten.", "critical": true },
+            { "id": "voice-pack-child", "text": "Child NPCs get one of the child voices, not an adult one", "hint": "Talk to an obviously young NPC. The pack ships 30 male and 30 female child voices (their filenames contain '-Child'); auto-assignment should pick from those.", "critical": true },
+            { "id": "voice-pack-child-quality", "text": "Generated child speech is intelligible and actually sounds like a child", "hint": "Let a child NPC speak a few longer lines. Expect a child-like timbre with an English accent. Listen for the failure modes of the pitch shift: a metallic or watery ring, breathy artefacts, or a voice that just sounds like a sped-up adult.", "critical": true },
+            { "id": "voice-pack-gender", "text": "Male NPCs get male pack voices and female NPCs female ones", "hint": "Gender and race are read out of the voice filename. If everyone ends up with the same voice, or gender is ignored, the filenames were not parsed.", "critical": true },
+            { "id": "voice-pack-custom", "text": "A configured custom voices URL still wins: the pack download is skipped", "hint": "With a custom voices URL set, installing an engine must not pull the pack over your own voices." },
+            { "id": "voice-pack-license", "text": "LICENSE.txt and ATTRIBUTION.csv end up in the voice folder", "hint": "Both ship inside the pack and must be present after the download - they carry the CC BY 4.0 attribution for every voice." },
+            { "id": "voice-phonetic", "text": "Phonetic corrections are applied to pronunciation" },
+            { "id": "voice-mute", "text": "A muted dialogue stays silent" }
+          ]
+        },
+        {
+          "title": "User interface (native UI)",
+          "items": [
+            { "id": "ui-open", "text": "Every tab opens without freezing or crashing the game", "critical": true },
+            { "id": "ui-page", "text": "Long lists page cleanly (page numbers, arrows, no crash while paging)" },
+            { "id": "ui-clip", "text": "Voice Clip Manager: play, regenerate and delete all work" },
+            { "id": "ui-log", "text": "Log tab keeps showing new entries and the filters take effect" },
+            { "id": "ui-clamp", "text": "The window cannot be dragged fully off screen" },
+            { "id": "ui-lang", "text": "Language switching (EN/DE/FR/JA): no empty or truncated labels" },
+            { "id": "ui-disabled-inert", "text": "Greyed-out controls do nothing when clicked (buttons, checkboxes, sliders, dropdowns)", "hint": "In \"Audio files only\" mode the dimmed generate buttons and the dimmed chat/voice options must not react at all." },
+            { "id": "ui-mode-switch", "text": "Settings -> Backend: the SELECTED mode is the greyed-out one, the other two are clickable and switch modes", "hint": "Same in the setup wizard for AllTalk / EchokrauTTS. You must never end up unable to switch back.", "critical": true }
+          ]
+        },
+        {
+          "title": "Database & persistence",
+          "items": [
+            { "id": "db-migrate", "text": "An existing echokraut.db migrates without data loss", "critical": true },
+            { "id": "db-fresh", "text": "A fresh install creates the database without errors" },
+            { "id": "db-restart", "text": "Settings, voices and phonetics survive a game restart" }
+          ]
+        },
+        {
+          "title": "Player name placeholders",
+          "items": [
+            { "id": "pn-spoken", "text": "A line that addresses you by name is spoken with your character name, never with \"-PlayerFirstName-\"", "hint": "Restart the game and, WITHOUT talking to any NPC first, generate audio in the Voice Clip Manager for a harvested line containing -PlayerFirstName- or -PlayerName-, then play it. Previously the placeholder itself was read out loud.", "critical": true },
+            { "id": "pn-display", "text": "The Voice Clip Manager shows the stored line with its placeholder, before and after your first conversation", "hint": "Open a harvested line containing -PlayerFirstName-. It must read identically right after login and after talking to an NPC. It used to switch to your character name once the first dialogue had played." },
+            { "id": "pn-no-dupe", "text": "Talking to an NPC does not add a second entry for a line that was already harvested", "hint": "Harvest a quest whose dialogue addresses you by name, note the entry, then play that dialogue in game. The Voice Clip Manager must still show ONE entry for that line, still with the placeholder." },
+            { "id": "pn-cleanup", "text": "Game Data Tools -> Player Name Cleanup restores old entries and merges duplicates", "hint": "Dry Run reports what it would restore/merge with before/after samples and changes nothing. Apply then removes the duplicates while the surviving entry keeps its generated audio. A second run must report nothing left to do." },
+            { "id": "pn-cleanup-nologin", "text": "Player Name Cleanup refuses to run while your character name is unknown", "hint": "Trigger it before login: it must say the character name isn't known yet instead of doing anything." }
+          ]
+        },
+        {
+          "title": "Audio package import / export",
+          "items": [
+            { "id": "pkg-export", "text": "Game Data Tools -> Import / Export writes a package file containing your generated audio", "hint": "Generate audio for a few clips, then press Export Package. The file appears at the path shown in the input, the progress bar runs, and the result line reports the number of files and the size.", "critical": true },
+            { "id": "pkg-export-lang", "text": "The language dropdown limits the export to that game language", "hint": "With clips in two languages present, export once with \"All languages\" and once with a single language. The single-language package must contain fewer files." },
+            { "id": "pkg-export-personal", "text": "Lines speaking your own character name are not exported", "hint": "Generate a line containing -PlayerFirstName- for your character and export. The result line must count it under \"Personal clips skipped\". Only its shareable Adventurer variants may be in the package.", "critical": true },
+            { "id": "pkg-import", "text": "Importing a package on another installation assigns every file to the right NPC, language and voice", "hint": "Take the package to an installation that never harvested those NPCs. After Import Package the Voice Clip Manager lists the NPCs and their lines, the clips count as generated, and playing one plays the imported audio.", "critical": true },
+            { "id": "pkg-import-keep", "text": "An import never overwrites audio you generated yourself", "hint": "Import a package whose lines you already generated locally. The result line counts them under \"Already present\" and your own audio file is unchanged." },
+            { "id": "pkg-import-twice", "text": "Importing the same package twice changes nothing the second time", "hint": "Run the import again on the same package: no new characters, no new dialogues, no duplicated entries in the Voice Clip Manager." },
+            { "id": "pkg-import-bad", "text": "A file that is not an Echokraut package is refused with a readable message", "hint": "Point the import at any other zip or a non-existent path. It must report the problem in the output area and leave the database untouched, not fail silently." }
+          ]
+        },
+        {
+          "title": "Dialog harvest completeness",
+          "items": [
+            { "id": "harv-scripted", "text": "Game Data Tools harvest picks up scripted dialogue (custom/raid/warp/... sheets)", "hint": "Run a full harvest and check the log for \"Scripted sheet harvest: ... lines added\". Expect roughly 14,700 lines added. Then talk to a beast tribe or seasonal event NPC and confirm the line is now voiced.", "critical": true },
+            { "id": "harv-no-devtext", "text": "No NPC ever reads out Japanese placeholder text", "hint": "On a German or French client especially. Search the Voice Clip Manager for a line containing an asterisk-star marker; there must be none - neither in quest dialogue nor in the newly harvested scripted dialogue.", "critical": true },
+            { "id": "harv-no-menu-text", "text": "Harvested scripted dialogue contains no menu captions or your own answers", "hint": "Spot-check the newly harvested NPCs in the Voice Clip Manager: entries like \"Enter\", a menu title, or one of your own dialogue choices must not appear as NPC lines.", "critical": false },
+            { "id": "harv-alias-candidates", "text": "Unattributable speakers are reported instead of guessed", "hint": "After the harvest, harvest/scripted_alias_candidates.json exists in your local save location and lists tokens with a sample line. It should NOT be empty (expect a few hundred distinct tokens).", "critical": false },
+            { "id": "harv-voiced-still-skipped", "text": "Voice-acted cutscene lines are still skipped", "hint": "Regression check for the harvest changes: play a fully voiced MSQ cutscene. Echokraut must stay silent and let the game speak; it must not talk over the original voice acting.", "critical": true },
+            { "id": "harv-clear-npcs", "text": "Clearing mapped NPCs after a harvest does not freeze the game", "hint": "Run a full harvest first, then Settings -> General -> Clear mapped NPCs and confirm. The button must show \"Clearing...\", the game must stay responsive, and the log must end with \"Cleared N mapped characters.\" Repeat for Clear mapped players and Clear mapped bubbles.", "critical": true }
+          ]
+        },
+        {
+          "title": "Endurance & stability",
+          "items": [
+            { "id": "perf-fps", "text": "No noticeable FPS drops while playback is running" },
+            { "id": "perf-long", "text": "30+ minutes of play with no crash, no freeze and no steadily growing memory use", "critical": true },
+            { "id": "perf-zone", "text": "Zone changes and cutscenes abort playback cleanly" },
+            { "id": "perf-unload", "text": "Disabling or reloading the plugin leaves no errors in the Dalamud log" }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "EchokrauTTS (server component)",
+      "sections": [
+        {
+          "title": "Operation",
+          "items": [
+            { "id": "srv-start", "text": "The wrapper starts and reports itself as ready", "critical": true },
+            { "id": "srv-gpu", "text": "The GPU is used (generation is faster than real time)" },
+            { "id": "srv-stream", "text": "/tts delivers audio progressively (chunked), not only at the end", "critical": true },
+            { "id": "srv-voices", "text": "The voice list is served to the plugin correctly" },
+            { "id": "srv-restart", "text": "Restarting the wrapper is noticed by the plugin and playback works again afterwards" }
+          ]
+        }
+      ]
+    }
+  ]
+}
