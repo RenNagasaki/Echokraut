@@ -1,0 +1,90 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.1.0
+================================================================================
+
+
+==============================================================================
+MAJOR NEW FEATURES
+==============================================================================
+
+[Backend] EchokrauTTS — a new local TTS engine alongside AllTalk
+  Echokraut can now use EchokrauTTS (a self-contained F5-TTS voice-cloning
+  engine) as an alternative to AllTalk. EchokrauTTS is the default engine for
+  new installs; existing setups keep their current AllTalk configuration. You
+  can pick the engine in the First-Time wizard and in Settings -> Backend,
+  install and run it locally, or point at a remote instance. AllTalk and
+  EchokrauTTS live side by side under the same install folder, and switching
+  engines copies your voices over so both stay ready to use.
+
+  - Local EchokrauTTS: install and run the engine on your own machine, fully
+    automated on Windows (same one-click flow as local AllTalk).
+  - Remote EchokrauTTS: connect Echokraut to a running EchokrauTTS server by URL
+    (Settings -> Backend), same as a remote AllTalk.
+  - Engine selection everywhere: pick AllTalk or EchokrauTTS in the First-Time
+    wizard (Step 1 now shows the chosen engine's setup) and switch anytime in
+    Settings -> Backend.
+
+
+==============================================================================
+IMPROVEMENTS
+==============================================================================
+
+[Backend] Choose the local EchokrauTTS voice engine (XTTS or F5)
+  Local EchokrauTTS now lets you pick its voice engine — XTTS (default, better
+  quality) or F5 — in the First-Time wizard and Settings -> Backend. Both engines
+  are installed, so switching just restarts the local instance (no reinstall).
+
+[Backend] Optional FP16 speedup for local EchokrauTTS (XTTS on NVIDIA GPUs)
+  When a GPU is detected, Settings -> Backend (and the First-Time wizard) show an
+  FP16 checkbox for local EchokrauTTS. Enabling it loads the XTTS model in half
+  precision for roughly 1.3-1.8x faster generation. Toggling restarts the local
+  instance.
+
+[Voice Clip Manager] Smoother, crash-free NPC browsing
+  The NPC list now uses a virtualized tree that scrolls large catalogs without
+  the occasional native crash. Per-NPC actions (Generate All Unsaved, Delete All
+  Saved, Edit Character) now live at the top of the voice-clip detail window that
+  opens when you pick a category.
+
+
+==============================================================================
+BUG FIXES
+==============================================================================
+
+[Dialogue] Switching an NPC's voice in the dialogue toolbar no longer crashes
+  Changing the voice from the dropdown in the dialogue window (especially twice
+  in a row) could hard-crash the game. The native UI toolkit was updated and the
+  voice dropdown reworked so this is gone.
+
+[Backend] NPCs stayed silent after connecting a backend that was offline at startup
+  If the TTS backend wasn't reachable when the plugin loaded and you connected it
+  later (e.g. via the Backend tab), talking to an NPC failed with "No voice
+  assigned" even though a voice was set. Voice generation now uses the assigned
+  voice directly, and a successful connection test refreshes the voice list so
+  everything lines up again without a restart.
+
+[Startup] Plugin no longer fails to load when the setup wizard opens at launch
+  On a fresh install (or whenever the First-Time wizard or the post-update
+  changelog popup opened during startup) the window was created off the main
+  thread, which could make the plugin fail to load with a "Not on main thread"
+  error. Startup windows now open on the correct thread.
+
+[Config] EchokrauTTS backend settings no longer vanish after reopening the window
+  Closing and reopening the config window could leave the EchokrauTTS section in
+  Settings -> Backend blank. It now lays out correctly on every open.
+
+[Voice Clip Manager] Backend status no longer sticks on "offline" for a live backend
+  The reachability indicator now refreshes the moment a local backend becomes
+  ready and falls back to a real health check, so it stops briefly showing a
+  stale "offline" while generation is actually working.
+
+[Backend] Start/Stop/Install buttons no longer freeze the game
+  Starting, stopping, or (re)installing a local backend from Settings -> Backend
+  ran its shutdown/kill work on the UI thread, freezing the game for a moment.
+  That work now runs in the background.
+
+[Database] Database file no longer stays locked after unloading the plugin
+  Reloading or disabling the plugin now reliably releases the SQLite database
+  handle (connection pool + file lock), so the .db can be deleted or reset
+  without restarting the game.

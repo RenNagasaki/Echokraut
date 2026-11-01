@@ -1,0 +1,143 @@
+﻿using System;
+using Dalamud.Game;
+using Dalamud.Game.ClientState.Objects.Enums;
+using Dalamud.Plugin.Services;
+using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
+using Echokraut.Enums;
+using Echotools.Logging.Enums;
+using Echotools.Logging.Services;
+
+namespace Echokraut.Services;
+
+internal class VoiceTestService : IVoiceTestService
+{
+    private readonly ILogService _log;
+    private readonly IVolumeService _volumeService;
+    private readonly IBackendService _backend;
+    private readonly IAudioPlaybackService _audioPlayback;
+    private readonly IClientState _clientState;
+    private readonly IGameObjectService _gameObjects;
+    private readonly Configuration _config;
+    private readonly INpcDataService _npcData;
+
+    private readonly IDialogStateService _dialogState;
+    public EchokrautVoice? TestingVoice { get; private set; }
+    public bool IsPlaying => _audioPlayback.IsPlaying;
+
+    public event Action? TestStateChanged;
+
+    public VoiceTestService(
+        Echotools.Logging.Services.ILogService log,
+        IVolumeService volumeService,
+        IBackendService backend,
+        IAudioPlaybackService audioPlayback,
+        IClientState clientState,
+        IGameObjectService gameObjects,
+        Configuration config,
+        INpcDataService npcData,
+        IDialogStateService dialogState)
+    {
+        _log = log;
+        _volumeService = volumeService;
+        _backend = backend;
+        _audioPlayback = audioPlayback;
+        _clientState = clientState;
+        _gameObjects = gameObjects;
+        _config = config;
+        _npcData = npcData;
+
+        _audioPlayback.CurrentMessageChanged += OnCurrentMessageChanged;
+        _dialogState = dialogState ?? throw new ArgumentNullException(nameof(dialogState));
+
+    }
+
+    public bool IsTestingVoice(EchokrautVoice voice) => TestingVoice == voice;
+
+    public void TestVoice(EchokrautVoice voice)
+    {
+        // Pre-check: if we've recently confirmed the backend is unreachable, abort fast.
+        // Null cache (no recent check) is treated optimistically — a single test is cheap to fail.
+        // Kick off an async refresh in the background so the next call has fresh info.
+        if (_backend.CachedReachability == false)
+        {
+            _log.Warning(nameof(TestVoice),
+                "Backend not reachable — voice test aborted. Check AllTalk connection.",
+                new EKEventId(0, TextSource.AddonTalk));
+            _ = _backend.IsBackendReachableAsync();
+            return;
+        }
+        if (_backend.CachedReachability == null)
+            _ = _backend.IsBackendReachableAsync();
+
+        StopVoice();
+        TestingVoice = voice;
+
+        var _baseId = _log.Start(nameof(TestVoice), TextSource.AddonTalk);
+        var eventId = new EKEventId(_baseId.Id, _baseId.TextSource);
+        _log.Debug(nameof(TestVoice), $"Testing voice: {voice}", eventId);
+
+        var volume = _volumeService.GetVoiceVolume(eventId) * voice.Volume;
+        var speaker = new NpcMapData(ObjectKind.None)
+        {
+            Gender = voice.AllowedGenders.Count > 0 ? voice.AllowedGenders[0] : Genders.Male,
+            Race = voice.AllowedRaces.Count > 0 ? voice.AllowedRaces[0] : NpcRaces.Hyur,
+            Name = voice.VoiceName,
+            Voices = _npcData.GetEchokrautVoices(),
+            Voice = voice
+        };
+
+        var text = GetTestText();
+        var voiceMessage = new VoiceMessage
+        {
+            SpeakerObj = null,
+            Source = TextSource.VoiceTest,
+            Speaker = speaker,
+            Text = text,
+            OriginalText = text,
+            Language = _clientState.ClientLanguage,
+            EventId = eventId,
+            SpeakerFollowObj = _gameObjects.LocalPlayer,
+            Volume = volume
+        };
+
+        if (volume > 0)
+        {
+            _backend.ProcessVoiceMessage(voiceMessage);
+        }
+        else
+        {
+            _log.Debug(nameof(TestVoice), "Skipping voice inference. Volume is 0", eventId);
+            _log.End(nameof(TestVoice), eventId);
+            TestingVoice = null;
+        }
+
+        TestStateChanged?.Invoke();
+    }
+
+    public void StopVoice()
+    {
+        TestingVoice = null;
+        if (_dialogState.CurrentVoiceMessage != null)
+            _audioPlayback.StopPlaying(_dialogState.CurrentVoiceMessage);
+        _log.End(nameof(StopVoice), new EKEventId(0, TextSource.AddonTalk));
+        TestStateChanged?.Invoke();
+    }
+
+    private void OnCurrentMessageChanged(VoiceMessage? message)
+    {
+        if (message == null && TestingVoice != null)
+        {
+            TestingVoice = null;
+            TestStateChanged?.Invoke();
+        }
+    }
+
+    private string GetTestText() => _clientState.ClientLanguage switch
+    {
+        ClientLanguage.German => Constants.TESTMESSAGEDE,
+        ClientLanguage.French => Constants.TESTMESSAGEFR,
+        ClientLanguage.Japanese => Constants.TESTMESSAGEJP,
+        _ => Constants.TESTMESSAGEEN,
+    };
+}

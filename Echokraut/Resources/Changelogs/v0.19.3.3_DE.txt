@@ -1,0 +1,72 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.3.3
+================================================================================
+
+
+==============================================================================
+GROSSE NEUERUNGEN
+==============================================================================
+
+[Stimmen] Eigene Erzaehlerstimme waehlen
+  Erzaehltext und Systemmeldungen (die Zeilen, die niemand spricht) waren fest an
+  die mitgelieferte Stimme "Narrator.wav" gebunden. Jetzt kann jede Stimme die
+  Erzaehlerstimme sein.
+
+  - Reiter "Stimmen" -> "Konfigurieren" bei einer Stimme -> "Als Erzaehlerstimme
+    verwenden".
+  - Die aktuelle Erzaehlerstimme ist in der Liste mit "(Erzaehler)" markiert.
+  - Haken weg = zurueck zur mitgelieferten Narrator.wav. Das passiert auch von
+    allein, wenn die gewaehlte Stimme abgeschaltet wird oder mit einem neuen
+    Stimmpaket verschwindet - der Erzaehler verstummt nie.
+  - Die Wahl greift bei der naechsten erzaehlten Zeile; bereits erzeugte Audios
+    bleiben, bis sie geloescht oder neu erzeugt werden.
+
+==============================================================================
+FEHLERBEHEBUNGEN
+==============================================================================
+
+[Installation] Lokale EchokrauTTS-Installation funktioniert unter Linux
+  Unter Linux (XIVLauncher) brachen lokale Installation und Start nach
+  Sekundenbruchteilen ab. Der Installer laeuft dort in Wine neben dem Spiel und
+  konnte den Wrapper nicht als natives Linux-Programm starten. Jetzt tut er das,
+  verfolgt den Fortschritt und beendet den Server beim Stoppen oder Schliessen
+  des Spiels. Die alte AllTalk-Installation gibt es unter Linux nicht; sie sagt
+  das jetzt deutlich, statt still zu scheitern.
+
+[Dialog] Klicks in einem Echokraut-Fenster springen nicht mehr im Dialog weiter
+  Klicks in Konfiguration, Spieldaten-Werkzeuge, Sprachclip-Verwaltung und den
+  beiden Bearbeiten-Fenstern kamen bis zur Dialogbox durch und haben sie
+  weitergeschaltet. Die Klickpruefung folgt dem Fenster jetzt in der tatsaechlich
+  eingestellten HUD-Groesse und erfasst auch die Fenster "Stimme konfigurieren"
+  und "Charakter bearbeiten".
+
+[Dialog] Das Stimmen-Auswahlfeld im Dialog folgt Aenderungen
+  Neu hinzugefuegte oder entfernte Stimmen erschienen erst nach einem Neustart,
+  und eine in der Sprachclip-Verwaltung geaenderte NPC-Stimme wurde weiter mit
+  dem alten Wert angezeigt. Beides wird jetzt uebernommen, und die dem NPC
+  tatsaechlich zugewiesene Stimme steht immer zur Auswahl - auch wenn der
+  Rassen-/Geschlechterfilter sie sonst ausblenden wuerde.
+
+[Backend] Beim Wechsel der Engine wird die alte abgeschaltet
+  Beim Wechsel zwischen AllTalk und EchokrauTTS lief die vorherige Engine weiter,
+  belegte weiter Grafikspeicher und meldete sich weiter als laufend.
+
+[Audio] Keine Fehltoene mehr, waehrend die GPU generiert
+  Wenn die Engine langsamer erzeugt als abgespielt wird (XTTS auf einer mittleren
+  GPU), stotterte sich die Wiedergabe durch die Zeile. Echokraut misst jetzt die
+  Liefergeschwindigkeit und wartet bei einer so langsamen Quelle die ganze Zeile
+  ab, um sie dann in einem Stueck abzuspielen. Schnelle Systeme sind nicht
+  betroffen und starten weiterhin frueh.
+
+[Installation] XTTS-Installation scheitert nicht mehr an "Dem Client fehlt
+  ein erforderliches Recht"
+  Unter Windows ohne Entwicklermodus konnte die EchokrauTTS-Installation mit
+  der XTTS-Engine beim Modell-Download abbrechen (WinError 1314). Der Wrapper
+  (EchokrauTTS 0.0.1.7) laedt das Modell jetzt ohne dieses Recht herunter.
+
+[Installation] Zweimal gestarteter Installer macht die Installation nicht kaputt
+  Wurde die lokale Installation ein zweites Mal gestartet, waehrend die erste
+  noch lief, konnte der EchokrauTTS-Ordner dauerhaft gesperrt bleiben
+  ("Zugriff verweigert"). Der neuere Lauf uebernimmt jetzt und raeumt auf, was
+  der aeltere hinterlassen hat.
