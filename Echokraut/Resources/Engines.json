@@ -1,0 +1,20 @@
+{
+  "version": 1,
+  "engines": [
+    {
+      "id": "xtts",
+      "name": "XTTS",
+      "minVersion": "0.0.0.1"
+    },
+    {
+      "id": "f5",
+      "name": "F5",
+      "minVersion": "0.0.0.1"
+    },
+    {
+      "id": "moss",
+      "name": "MOSS",
+      "minVersion": "0.0.1.0"
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
+using System.Net.Http;
+using System.Threading.Tasks;
+
+namespace Echokraut.Services;
+
+public interface IGoogleDriveSyncService
+{
+    void StartSync();
+    void StopSync();
+    Task DownloadFolder(string localSavePath, string shareLink);
+    Task CreateDriveServicePkceAsync();
+    Task<bool> UploadFile(string drivePath, string fileName, string filePath, EKEventId eventId);
+    string CheckForGoogleAndConvertToDirectDownloadLink(string link, out bool isGoogle);
+    HttpResponseMessage DownloadGoogleDrive(string downloadUrl, HttpResponseMessage response, HttpClient client);
+}

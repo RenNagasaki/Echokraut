@@ -1,0 +1,91 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.3.2
+================================================================================
+
+
+==============================================================================
+MAJOR NEW FEATURES
+==============================================================================
+
+[Community] Echokraut helps complete the dialogue database - and you can turn it off
+  When you talk to an NPC, Echokraut now reports that dialogue line to a central
+  database, so lines missing from the plugin's own data can be found and added.
+  This is ON by default and runs quietly in the background.
+
+  - Only three things are sent: the dialogue line, its language, and which NPC
+    says it. Your character name is replaced by a placeholder before sending.
+  - Nothing about you is sent - no character name, no world, no account, no
+    play time, no file paths.
+  - Only NPC speech is reported: dialogue boxes, battle dialogue and speech
+    bubbles. Nothing you write or choose yourself is ever sent, chat included.
+  - Running a dialogue harvest also contributes its result. That upload is spread
+    over about an hour in the background, continues where it stopped if you log
+    out, and follows the same switch.
+  - You can switch it off any time under Settings -> General.
+
+
+[TTS] New EchokrauTTS engines show up without a plugin update
+  The engine list under the local EchokrauTTS instance is no longer built into the
+  plugin - it is read from the wrapper's own release, so an engine added by a new
+  EchokrauTTS version appears here on its own.
+
+  - An engine your installed wrapper is too old for is still listed, marked
+    "(from wrapper version X)", and cannot be picked until you update the wrapper
+    with the Update button right next to it.
+  - Your current engine choice is kept.
+
+==============================================================================
+BUG FIXES
+==============================================================================
+
+[NPCs] Correcting an NPC's gender or race now actually takes effect
+  Changing the gender or race of a saved character created a second entry
+  instead of changing the existing one, and the new entry was never used - the
+  NPC kept sounding exactly as before. The reason was that gender and race were
+  part of how a character is identified, while the game reports them fresh for
+  every line: a corrected entry could no longer be found, and the next line
+  simply recreated the original one.
+
+  - Your correction is now stored alongside the character instead of replacing
+    what the game reports, so it is found and applied every time.
+  - It steers the automatic voice choice as well, not only the voices offered
+    in the list.
+  - Corrected characters are marked with an asterisk, so it stays visible why
+    an entry differs from what the game says.
+  - Picking the game's own value again removes the correction.
+
+[TTS] Fresh installs no longer get an outdated EchokrauTTS wrapper
+  New installations pulled wrapper 0.0.0.2 while much newer releases were long
+  available - the shipped download link had not been updated. It now points at
+  the current wrapper (0.0.1.6), which also brings the MOSS engine. Existing
+  installations are unaffected and keep being offered the update through
+  "Check for updates".
+
+[Voices] Voice packs can now be published per game language
+  Echokraut downloads the voice pack matching your client language, and falls
+  back to the English pack when none has been published for it yet. Nothing
+  changes today - English is still the only pack - but a German, French or
+  Japanese pack will reach you without a plugin update.
+
+[TTS] The engine list now follows the wrapper without a plugin restart
+  Two rough edges from the first test round with the new EchokrauTTS release:
+
+  - After updating the wrapper, the newly installed engine stayed greyed out
+    until the plugin was reloaded. The list now follows the update while the
+    window is open.
+  - During the first-time setup, an engine the wrapper being installed does not
+    contain was offered without its "(from wrapper version X)" hint.
+  - The first-time setup explains what each engine is for, so the choice can be
+    made without knowing the names: quality on a GPU, fastest once running, or
+    the small one that leaves the graphics card to the game.
+  - It also ships the current EchokrauTTS release, so the CPU-friendly engine is
+    there from the start.
+  - The first-time setup now lists only the engines the release it installs
+    actually contains; the Backend tab keeps showing the others, where the
+    update button next to them can unlock them.
+  - The Start button no longer looks usable before anything is installed.
+  - Removed the "Generate per sentence" option: it had quietly stopped doing
+    anything, and streaming generation solves the same problem better - the
+    first words are spoken while the rest is still being generated, without
+    cutting the line into pieces.

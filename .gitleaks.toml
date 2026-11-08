@@ -1,0 +1,16 @@
+# gitleaks config for the CI secret scan (see the `gitleaks` job in .gitlab-ci.yml).
+# Extends gitleaks' built-in rule set and adds project-specific allowlists so known
+# safe files don't trip the scan.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Project allowlist"
+paths = [
+  # Example/placeholder secret files ship dummy values by design
+  # (e.g. Echokraut/Services/DriveAuthProvider.Secrets.cs.example).
+  '''.*\.example$''',
+  # Changelog + doc text may quote setting names; never real secrets.
+  '''Echokraut/Resources/Changelogs/.*''',
+]

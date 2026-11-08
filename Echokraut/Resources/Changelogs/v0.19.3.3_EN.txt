@@ -1,0 +1,69 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.3.3
+================================================================================
+
+
+==============================================================================
+MAJOR NEW FEATURES
+==============================================================================
+
+[Voices] Pick your own narrator voice
+  Narration and system text (the lines nobody speaks) used to be locked to the
+  voice shipped as "Narrator.wav". Any voice can be the narrator now.
+
+  - Voices tab -> Configure on a voice -> "Use as narrator voice".
+  - The voice acting as narrator is marked with "(Narrator)" in the voice list.
+  - Untick it to go back to the shipped Narrator.wav. The same happens by itself
+    if your chosen voice is switched off or disappears with a new voice pack -
+    the narrator never falls silent.
+  - Your pick takes effect on the next narrated line; already narrated lines keep
+    their saved audio until it is deleted or regenerated.
+
+==============================================================================
+BUG FIXES
+==============================================================================
+
+[Install] Local EchokrauTTS install works on Linux
+  On Linux (XIVLauncher) the local install and start failed within a split
+  second. The installer runs inside Wine next to the game and could not start
+  the wrapper as a native Linux program. It now does, follows its progress, and
+  shuts the server down when you stop it or close the game. The legacy AllTalk
+  install is not available on Linux and now says so instead of failing silently.
+
+[Dialogue] Clicking in an Echokraut window no longer skips the dialogue
+  Clicks in the Configuration, Game Data Tools, Voice Clip Manager and the two
+  edit popups reached the dialogue box underneath and advanced it. The click test
+  now follows the window at the HUD scale you actually play at, and covers the
+  Configure-voice and Edit-character popups as well.
+
+[Dialogue] The voice dropdown in the in-dialogue options keeps up with changes
+  Voices you added or removed showed up only after a restart, and a voice you
+  changed for the NPC in the Voice Clip Manager still read as the old one. The
+  dropdown now follows both, and it always offers the voice the NPC is actually
+  assigned - even one the race/gender filter would hide.
+
+[Backend] Switching the engine shuts the old one down
+  Switching between AllTalk and EchokrauTTS left the previous engine running, so
+  it kept its model in graphics memory and still reported itself as running.
+
+[Audio] No more garbled lines while the GPU generates
+  When the engine produces audio slower than it plays (XTTS on a modest GPU),
+  playback used to stutter its way through the line. Echokraut now measures the
+  delivery rate and, for a source that slow, waits for the whole line and then
+  plays it in one piece. Fast setups are unaffected and still start early.
+
+[Install] XTTS install no longer fails with "A required privilege is not held"
+  On Windows without Developer Mode, installing EchokrauTTS with the XTTS
+  engine could stop while downloading the model (WinError 1314). The wrapper
+  (EchokrauTTS 0.0.1.7) now downloads it without needing that privilege.
+
+[Install] Starting the installer twice no longer breaks the install
+  Starting the local install a second time while the first was still running
+  could leave the EchokrauTTS folder locked for good ("Access is denied"). The
+  newer run now takes over and cleans up what the older one left behind.
+
+[Install] XTTS engine starts again after a fresh install
+  With the current XTTS model download, the EchokrauTTS server stopped right
+  at startup ("No such file or directory ... model.pth\config.json"). The
+  wrapper (EchokrauTTS 0.0.1.8) now finds the downloaded model correctly.
