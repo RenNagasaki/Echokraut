@@ -1,0 +1,12 @@
+[submodule "OtterGui"]
+	path = OtterGui
+	url = https://github.com/Ottermandias/OtterGui
+[submodule "Echotools"]
+	path = Echotools
+	url = https://github.com/RenNagasaki/Echotools.git
+[submodule "KamiToolKit"]
+	path = KamiToolKit
+	url = https://github.com/MidoriKami/KamiToolKit.git
+[submodule "echoscd"]
+	path = echoscd
+	url = https://gitlab.echotools.cloud/echotools/echoscd.git

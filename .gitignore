@@ -1,0 +1,39 @@
+.vs/
+obj/
+bin/
+*.user
+ApiKeys.json
+*.Secrets.cs
+.sonarqube/
+
+# Local test secrets — copy .example.env to .env and fill in values.
+.env
+!.example.env
+
+# --- Shared Claude Code project config (global ~/.gitignore_global ignores .claude/) ---
+# Re-include only the committed gate hook + its registration; keep local/agent state ignored.
+!.claude/
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+!.claude/commands/
+!.claude/workflows/
+
+# macOS metadata (Finder, Spotlight, Time Machine, resource forks)
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk

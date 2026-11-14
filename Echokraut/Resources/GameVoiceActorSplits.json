@@ -1,0 +1,5 @@
+{
+  "version": 2,
+  "_comment": "Voice-actor changes per NPC name + language (plan game-voice-reference §2.5, F4: the newest epoch is used). Ships empty; local override: <pluginConfigDir>/game_voice_actor_splits.json. Entry: { \"npcName\": \"...\", \"language\": \"EN|DE|FR|JA\", \"boundaryPatches\": [\"06010\"] }",
+  "splits": []
+}
