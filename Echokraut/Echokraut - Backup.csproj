@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="Dalamud.Plugin.Bootstrap.targets" />
+
+  <PropertyGroup>
+    <Version>0.8.8.0</Version>
+    <Description>A TTS Dalamud Plugin that breaks the silence! For self hosted TTS Services.</Description>
+    <PackageProjectUrl>https://github.com/RenNagasaki/Echokraut</PackageProjectUrl>
+    <PackageLicenseExpression>AGPL-3.0-or-later</PackageLicenseExpression>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <None Remove="Anamnesis\Data\Equipment.json" />
+    <None Remove="Anamnesis\Data\Images.json" />
+    <None Remove="Anamnesis\Data\ItemCategories.json" />
+    <None Remove="Anamnesis\Data\NpcNames.json" />
+    <None Remove="Anamnesis\Data\Tips.json" />
+    <None Remove="Utils\NpcRacesMap.json" />
+    <None Remove="Utils\overridenModelIds.txt" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="Anamnesis\Data\Equipment.json" />
+    <EmbeddedResource Include="Anamnesis\Data\Images.json" />
+    <EmbeddedResource Include="Anamnesis\Data\ItemCategories.json" />
+    <EmbeddedResource Include="Anamnesis\Data\NpcNames.json" />
+    <EmbeddedResource Include="Anamnesis\Data\Tips.json" />
+    <EmbeddedResource Include="Utils\overridenModelIds.txt">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="R3" Version="1.1.13" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\ClickLib\ClickLib\ClickLib.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Resource Include="Utils\NpcRacesMap.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Update="Properties\Resources.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Update="Properties\Resources.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="Resources\Echokraut.png">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Update="DalamudPackager" Version="2.1.13" />
+  </ItemGroup>
+</Project>

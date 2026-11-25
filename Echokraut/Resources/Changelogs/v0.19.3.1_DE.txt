@@ -1,0 +1,143 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.3.1
+================================================================================
+
+
+==============================================================================
+GROSSE NEUERUNGEN
+==============================================================================
+
+[Weitergabe] Erzeugte Sprachausgabe als ein einziges Paket weitergeben
+  Die Spieldaten-Werkzeuge haben einen neuen Bereich "Import / Export", der alle
+  erzeugten Sprachzeilen in eine Paketdatei schreibt und ein solches Paket auch
+  wieder einliest. Das Paket enthaelt zu jeder einzelnen Datei den NPC, die
+  Sprache und die Stimme, sodass die empfangende Installation sie richtig
+  zuordnet - auch bei NPCs oder Dialogzeilen, die sie noch nie gesehen hat.
+  Unbekannte Charaktere und Dialogzeilen werden beim Import angelegt.
+
+  - Bereits vorhandene Audiodateien werden von einem Import nie ueberschrieben;
+    die Zeile gilt trotzdem als erzeugt.
+  - Zeilen, die dich mit Namen ansprechen, werden nur in ihrer teilbaren
+    "Abenteurer"-Form exportiert. Die Fassung, die den Namen deines eigenen
+    Charakters spricht, bleibt auf deinem Rechner.
+  - Der Export laesst sich auf eine einzelne Spielsprache eingrenzen.
+
+[Sammeln] Tausende NPC-Gespraeche, die bisher uebersprungen wurden
+  Das Sammeln liest jetzt auch die Skript-Dialogtabellen des Spiels - NPCs der
+  Stammesvoelker und Saison-Events, Nebeninhalte, Wirte, Aetheryt-Verwalter und
+  aehnliche. Das sind rund 14.700 zusaetzliche Dialogzeilen, ein Textbestand,
+  den keine fruehere Version angesehen hat, und die groesste verbliebene Luecke.
+
+  - Der Sprecher kommt aus dem Dialogschluessel oder, wenn eindeutig, aus dem
+    NPC, zu dem das Gespraech gehoert.
+  - Menuetexte, Systemmeldungen und deine eigenen Antwortmoeglichkeiten werden
+    als solche erkannt und nicht als NPC-Sprache gespeichert.
+  - Zeilen, deren Sprecher sich nicht bestimmen laesst, landen zum Nachsehen in
+    harvest/scripted_alias_candidates.json, statt einem geratenen NPC
+    zugeordnet zu werden.
+
+==============================================================================
+VERBESSERUNGEN
+==============================================================================
+
+[Stimmen] Das Stimmpaket bringt neue Kinderstimmen
+  Die Kinderstimmen des ersten Pakets waren echte Aufnahmen von Kindern, aber in
+  einer anderen Sprache, und die daraus geklonte Sprache klang in der Praxis
+  nicht gut genug. Alle 60 wurden ersetzt. Die neuen Kinderstimmen entstehen aus
+  englischen Sprechern derselben Quelle wie die Erwachsenenstimmen, deren
+  Tonhoehe und Stimmtrakt in eine Kinderlage angehoben wurden; sie haben damit
+  die Klangfarbe eines Kindes und einen englischen Akzent. Die 200
+  Erwachsenenstimmen bleiben unveraendert.
+
+  - Die Dateinamen bleiben gleich. Ein NPC, dem bereits eine Kinderstimme
+    zugewiesen ist, behaelt seine Zuordnung und klingt ab jetzt nur anders.
+  - Zum Aktualisieren das Stimmpaket in den Game Data Tools erneut
+    herunterladen oder die TTS-Engine neu installieren. Achtung: bei einer
+    lokal installierten Engine wird dabei der komplette Stimmenordner ersetzt -
+    eigene Stimmen vorher herausnehmen.
+  - Es sind kindlich klingende erwachsene Sprecher, keine Aufnahmen von Kindern.
+    Was genau an jedem Clip veraendert wurde, steht in der ATTRIBUTION.csv des
+    Pakets, so wie es die Lizenz der Originalaufnahmen verlangt.
+
+[Einrichtung] Neuinstallationen schlagen C:\LocalTTS vor
+  Der vorgeschlagene Installationsordner im Einrichtungsassistenten ist jetzt
+  C:\LocalTTS statt C:\alltalk_tts - letzteres benannte eine Engine fuer einen
+  Ordner, der beide enthaelt. Geaendert hat sich nur der Vorschlag: eine
+  bestehende Installation behaelt ihren Ordner und wird nicht verschoben, und
+  die Unterordner je Engine darin bleiben ebenfalls unveraendert.
+
+==============================================================================
+FEHLERBEHEBUNGEN
+==============================================================================
+
+[Wiedergabe] Streamende Stimmen fluten das Log nicht mehr
+  Waehrend eine gestreamte Zeile lief, konnte die Puffer-Ueberwachung auf ihren
+  eigenen Neustart reagieren und tausende Male pro Sekunde anhalten, nachfuellen
+  und fortsetzen - jedes Mal mit einer "stream underrun"-Zeile. Das Dalamud-Log
+  lief damit voll und das Spiel stockte. Die Ueberwachung misst den Puffer jetzt
+  genauso wie die Wiedergabe selbst und puffert hoechstens noch ein paar Mal pro
+  Sekunde nach.
+
+[3D-Audio] Stimmen folgen der Kamera wieder korrekt
+  Die Hoererausrichtung wurde aus dem falschen Teil der Kameramatrix gelesen. Bei
+  waagerechter Kamera stimmte sie zufaellig, sah also richtig aus, lief aber bei
+  geneigter Kamera weg - gemessen 146 Grad, wo der echte Winkel 101 betrug, mit
+  einem "Oben", das nach unten zeigte. Richtung und Hoehe stimmen jetzt in jeder
+  Kameralage.
+
+[3D-Audio] Die eingestellte Hoerweite gilt jetzt ab dem Start
+  Der eingestellte Wert erreichte die Audio-Engine nur, wenn der Regler in den
+  Einstellungen bewegt wurde, und war beim naechsten Start wieder vergessen. Jede
+  Sitzung lief also unbemerkt mit dem Standardwert der Engine statt mit deinem.
+
+[3D-Audio] Bewegte Sprecher verstimmen die Stimme nicht mehr
+  Das Anfassen des Hoerweite-Reglers schaltete nebenbei den Doppler-Effekt ein, der
+  die Tonhoehe veraenderte, sobald sich der Sprecher oder du bewegten. Er bleibt
+  jetzt aus, so wie vorgesehen.
+
+[Dialoge] Der Name deines Charakters wird wieder durchgaengig verwendet
+  Zeilen, die dich mit Namen ansprechen, werden mit einem Platzhalter gespeichert,
+  der beim Sprechen durch deinen Charakternamen ersetzt wird. Dieser Name wurde
+  aber erst bekannt, nachdem der erste Dialog einer Sitzung gelaufen war - bis
+  dahin scheiterte alles, was ihn braucht, stillschweigend: der Voice Clip Manager
+  konnte Audio erzeugen, in dem die Stimme woertlich "-PlayerFirstName-" vorliest,
+  und dieselbe gespeicherte Zeile las sich vor und nach dem ersten Gespraech
+  unterschiedlich. Der Name wird jetzt von selbst aktuell gehalten, eine Zeile mit
+  nicht ersetzbarem Platzhalter wird gar nicht erst erzeugt, und der Voice Clip
+  Manager zeigt die gespeicherte Zeile so wie sie ist - mit Platzhalter.
+
+[Dialoge] Ein Gespraech mit einem NPC dupliziert seine geharvesteten Zeilen nicht mehr
+  Eine im Spiel gesprochene Zeile wurde mit deinem Charakternamen darin gespeichert
+  und passte damit nicht mehr zu dem geharvesteten Eintrag, zu dem sie gehoert - es
+  entstand ein zweiter Eintrag fuer dieselbe Zeile. Beide zeigten auf dieselbe
+  Audiodatei, wurden aber getrennt gefuehrt. Live-Dialoge werden jetzt mit dem
+  Platzhalter gespeichert, genau wie beim Harvest. In den Game Data Tools gibt es
+  dafuer neu "Player Name Cleanup": es stellt bestehende Eintraege wieder her und
+  fuehrt die Duplikate zusammen, zeigt vorher an was es aendern wuerde und loescht
+  nie eine Audiodatei.
+
+[Sammeln] Unbenutzter Entwicklertext wird nicht mehr als Dialog gespeichert
+  Square Enix behaelt Zeilen, die aus dem Spiel genommen wurden, und fuellt sie
+  mit einem japanischen Platzhalter, statt sie zu entfernen. Wo sich so eine
+  Zeile zwischen den Sprachen noch unterschied, rutschte sie als ganz normaler
+  NPC-Dialog durch und wurde vorgelesen. Sie wird jetzt erkannt und
+  uebersprungen - in Quest-, Cutscene- und Skript-Dialogen gleichermassen.
+
+[Sammeln] Cutscene-Zeilen mit stummer Audiodatei werden wieder erfasst
+  Eine Zeile galt als vertont, sobald es ueberhaupt eine Audiodatei zu ihr gab -
+  auch dann, wenn diese Datei nur ein leerer Rest von einem Byte war, der von
+  einer gestrichenen Zeile uebrig blieb. Solche Zeilen fielen heraus, obwohl das
+  Spiel dazu nichts abspielt.
+
+[Oberflaeche] Das Loeschen zugeordneter NPCs friert das Spiel nicht mehr ein
+  Zugeordnete NPCs, Spieler oder Bubbles zu loeschen erledigte alles - Audioordner
+  und Datenbankzeilen - direkt im Klick-Handler des Knopfes, auf dem Spiel-Thread,
+  und baute je Eintrag die Zwischenspeicher neu auf. Bei kurzer Liste fiel das nicht
+  auf. Sobald ein Dialog-Sammellauf die Datenbank gefuellt hat, fror es das Spiel ein
+  und riss es dann mit. Die drei Knoepfe arbeiten jetzt im Hintergrund und bauen die
+  Zwischenspeicher einmal am Ende neu auf.
+
+[Wiedergabe] Absturz behoben, wenn eine Stimme waehrend des Starts positioniert wurde
+  Wurde eine Stimme positioniert, waehrend sie noch puffert, konnte uninitialisierter
+  Zustand ausgelesen werden und das ganze Spiel mitreissen.

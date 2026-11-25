@@ -1,0 +1,185 @@
+{
+  "version": 1,
+  "aliases": [
+      {
+          "ShortName": "vritra",
+          "NpcName": "Vrtra",
+          "Comment": ""
+      },
+      {
+          "ShortName": "varshahnbig",
+          "NpcName": "Varshahn",
+          "Comment": ""
+      },
+      {
+          "ShortName": "originalsphene",
+          "NpcName": "Sphene",
+          "Comment": ""
+      },
+      {
+          "ShortName": "venas",
+          "NpcName": "Venat",
+          "Comment": ""
+      },
+      {
+          "ShortName": "mysteryvoice",
+          "NpcName": "G'raha Tia",
+          "Comment": ""
+      },
+      {
+          "ShortName": "edmont",
+          "NpcName": "Count Edmont De Fortemps",
+          "Comment": ""
+      },
+      {
+          "ShortName": "iceheart",
+          "NpcName": "Ysayle",
+          "Comment": ""
+      },
+      {
+          "ShortName": "blackknight",
+          "NpcName": "Golbez",
+          "Comment": ""
+      },
+      {
+          "ShortName": "shadowhunter",
+          "NpcName": "Gaius",
+          "Comment": ""
+      },
+      {
+          "ShortName": "thordan",
+          "NpcName": "King Thordan",
+          "Comment": ""
+      },
+      {
+          "ShortName": "awaheen",
+          "NpcName": "Ahewann",
+          "Comment": ""
+      },
+      {
+          "ShortName": "newsphene",
+          "NpcName": "Sphene",
+          "Comment": ""
+      },
+      {
+          "ShortName": "lysenarration",
+          "NpcName": "Lyse",
+          "Comment": ""
+      },
+      {
+          "ShortName": "firemonolith",
+          "NpcName": "Rubicante",
+          "Comment": ""
+      },
+      {
+          "ShortName": "windmonolith",
+          "NpcName": "Barbariccia",
+          "Comment": ""
+      },
+      {
+          "ShortName": "ironmask",
+          "NpcName": "Ilberd",
+          "Comment": ""
+      },
+      {
+          "ShortName": "earthmonolith",
+          "NpcName": "Scarmiglione",
+          "Comment": ""
+      },
+      {
+          "ShortName": "dummyardbert",
+          "NpcName": "Elidibus",
+          "Comment": ""
+      },
+      {
+          "ShortName": "endsinger",
+          "NpcName": "The Endsinger",
+          "Comment": ""
+      },
+      {
+          "ShortName": "immigrationcontrolstaff",
+          "NpcName": "Worldly Affairs Official",
+          "Comment": ""
+      },
+      {
+          "ShortName": "zada",
+          "NpcName": "2nd Order Patriarch Za Da",
+          "Comment": ""
+      },
+      {
+          "ShortName": "garleanleaderdoma",
+          "NpcName": "Imperial Pilus Prior",
+          "Comment": ""
+      },
+      {
+          "ShortName": "igeyohrm",
+          "NpcName": "Igeyorhm",
+          "Comment": ""
+      },
+      {
+          "ShortName": "watermonolith",
+          "NpcName": "Cagnazzo",
+          "Comment": ""
+      },
+      {
+          "ShortName": "pippin",
+          "NpcName": "Pipin",
+          "Comment": ""
+      },
+      {
+          "ShortName": "virasoldier",
+          "NpcName": "Vira Battlemaid",
+          "Comment": ""
+      },
+      {
+          "ShortName": "pippin",
+          "NpcName": "Pipin",
+          "Comment": ""
+      },
+      {
+          "ShortName": "pippin",
+          "NpcName": "Pipin",
+          "Comment": ""
+      },
+      {
+          "ShortName": "pippin",
+          "NpcName": "Pipin",
+          "Comment": ""
+      },
+      {
+          "ShortName": "pippin",
+          "NpcName": "Pipin",
+          "Comment": ""
+      },
+      {
+          "ShortName": "pippin",
+          "NpcName": "Pipin",
+          "Comment": ""
+      },
+      {
+          "ShortName": "pippin",
+          "NpcName": "Pipin",
+          "Comment": ""
+      },
+      {
+          "ShortName": "pippin",
+          "NpcName": "Pipin",
+          "Comment": ""
+      },
+      {
+          "ShortName": "pippin",
+          "NpcName": "Pipin",
+          "Comment": ""
+      },
+      {
+          "ShortName": "pippin",
+          "NpcName": "Pipin",
+          "Comment": ""
+      },
+      {
+          "ShortName": "pippin",
+          "NpcName": "Pipin",
+          "Comment": ""
+      }
+  ]
+}

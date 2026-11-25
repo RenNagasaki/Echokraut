@@ -1,0 +1,93 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.3.2
+================================================================================
+
+
+==============================================================================
+GROSSE NEUERUNGEN
+==============================================================================
+
+[Gemeinschaft] Echokraut vervollstaendigt die Dialog-Datenbank - abschaltbar
+  Wenn du mit einem NPC sprichst, meldet Echokraut diese Dialogzeile jetzt an eine
+  zentrale Datenbank, damit Zeilen gefunden werden koennen, die in den Daten des
+  Plugins fehlen. Das ist standardmaessig AN und laeuft still im Hintergrund.
+
+  - Gesendet werden nur drei Dinge: die Dialogzeile, ihre Sprache und welcher NPC
+    sie spricht. Dein Charaktername wird vorher durch einen Platzhalter ersetzt.
+  - Ueber dich wird nichts gesendet - kein Charaktername, keine Welt, kein Account,
+    keine Spielzeit, keine Dateipfade.
+  - Gemeldet wird ausschliesslich NPC-Sprache: Dialogfenster, Kampfdialoge und
+    Sprechblasen. Was du selbst schreibst oder auswaehlst, wird nie gesendet,
+    der Chat eingeschlossen.
+  - Ein Dialog-Harvest steuert sein Ergebnis ebenfalls bei. Das laeuft ueber etwa
+    eine Stunde im Hintergrund, macht nach einem Abbruch dort weiter wo es
+    aufgehoert hat, und haengt am selben Schalter.
+  - Du kannst es jederzeit unter Einstellungen -> Allgemein abschalten.
+
+
+[TTS] Neue EchokrauTTS-Engines erscheinen ohne Plugin-Update
+  Die Engine-Liste bei der lokalen EchokrauTTS-Instanz steckt nicht mehr im Plugin -
+  sie wird aus dem Release des Wrappers gelesen. Eine Engine, die eine neue
+  EchokrauTTS-Version mitbringt, taucht hier also von selbst auf.
+
+  - Eine Engine, fuer die dein installierter Wrapper zu alt ist, steht trotzdem in
+    der Liste, markiert mit "(erst ab Wrapper-Version X)", und ist erst waehlbar,
+    wenn du den Wrapper mit dem Update-Knopf daneben aktualisierst.
+  - Deine bisherige Engine-Auswahl bleibt erhalten.
+
+==============================================================================
+FEHLERBEHEBUNGEN
+==============================================================================
+
+[NPCs] Geschlecht oder Rasse eines NPCs zu korrigieren wirkt jetzt wirklich
+  Wer bei einem gespeicherten Charakter Geschlecht oder Rasse geaendert hat,
+  bekam einen zweiten Eintrag statt einer Aenderung - und der neue Eintrag
+  wurde nie benutzt, der NPC klang weiter genau wie vorher. Ursache war, dass
+  Geschlecht und Rasse Teil der Identitaet eines Charakters waren, das Spiel sie
+  aber bei jeder Zeile neu meldet: ein korrigierter Eintrag war damit nicht mehr
+  auffindbar, und die naechste Zeile legte den urspruenglichen einfach neu an.
+
+  - Die Korrektur wird jetzt neben dem Charakter gespeichert, statt das zu
+    ersetzen was das Spiel meldet - dadurch wird sie jedes Mal gefunden und
+    angewendet.
+  - Sie steuert auch die automatische Stimmenwahl, nicht nur die Stimmen, die
+    in der Liste angeboten werden.
+  - Korrigierte Charaktere sind mit einem Sternchen markiert, damit sichtbar
+    bleibt, warum ein Eintrag von der Angabe des Spiels abweicht.
+  - Waehlt man wieder den Wert des Spiels, verschwindet die Korrektur.
+
+[TTS] Neuinstallationen bekommen nicht mehr einen veralteten EchokrauTTS-Wrapper
+  Neuinstallationen zogen Wrapper 0.0.0.2, obwohl laengst deutlich neuere Releases
+  verfuegbar waren - der mitgelieferte Download-Link war nicht nachgezogen worden.
+  Er zeigt jetzt auf den aktuellen Wrapper (0.0.1.6), der auch die MOSS-Engine bringt.
+  Bestehende Installationen sind nicht betroffen und bekommen das Update weiterhin
+  ueber "Nach Updates suchen" angeboten.
+
+[Stimmen] Stimmpakete koennen jetzt je Spielsprache veroeffentlicht werden
+  Echokraut laedt das Paket zur Sprache deines Clients und faellt auf das
+  englische zurueck, solange fuer sie keines veroeffentlicht ist. Heute aendert
+  sich nichts - Englisch ist weiterhin das einzige Paket - aber ein deutsches,
+  franzoesisches oder japanisches erreicht dich ohne Plugin-Update.
+
+[TTS] Die Engine-Liste folgt dem Wrapper jetzt ohne Plugin-Neustart
+  Zwei Ecken aus der ersten Testrunde mit dem neuen EchokrauTTS-Release:
+
+  - Nach einem Wrapper-Update blieb die frisch installierte Engine ausgegraut,
+    bis das Plugin neu geladen wurde. Die Liste zieht jetzt bei offenem Fenster
+    nach.
+  - In der Ersteinrichtung wurde eine Engine, die der zu installierende Wrapper
+    gar nicht enthaelt, ohne den Hinweis "(erst ab Wrapper-Version X)" angeboten.
+  - Die Ersteinrichtung erklaert, wofuer jede Engine gedacht ist, damit die Wahl
+    ohne Vorwissen moeglich ist: Qualitaet mit Grafikkarte, am schnellsten im
+    Lauf, oder die kleine, die die Grafikkarte dem Spiel laesst.
+  - Sie installiert ausserdem das aktuelle EchokrauTTS-Release, die
+    prozessorfreundliche Engine ist damit von Anfang an dabei.
+  - Die Ersteinrichtung zeigt jetzt nur die Engines, die das dort installierte
+    Release wirklich enthaelt; im Backend-Tab stehen die uebrigen weiterhin, weil
+    der Update-Knopf daneben sie freischalten kann.
+  - Der Start-Knopf sieht nicht mehr benutzbar aus, solange nichts installiert ist.
+  - Die Option "Pro Satz generieren" ist entfernt: sie hat still nichts mehr
+    bewirkt, und die Streaming-Erzeugung loest dasselbe Problem besser - die
+    ersten Worte kommen, waehrend der Rest noch erzeugt wird, ohne die Zeile zu
+    zerschneiden.
