@@ -1,0 +1,934 @@
+﻿using Echotools.Logging.Services;
+using Echokraut.DataClasses;
+using Echokraut.Enums;
+using Echotools.Logging.DataClasses;
+using Echokraut.Helper.Functional;
+using Echokraut.Localization;
+using Echotools.Logging.Enums;
+using System;
+using System.Collections.Generic;
+using System.Diagnostics;
+using System.IO;
+using System.IO.Compression;
+using System.Linq;
+using System.Net;
+using System.Net.Http;
+using System.Runtime.InteropServices;
+using System.Threading;
+using System.Threading.Tasks;
+using Dalamud.Plugin.Services;
+
+namespace Echokraut.Services;
+
+/// <summary>
+/// Local EchokrauTTS process lifecycle, parallel to <see cref="AlltalkInstanceService"/>. Drives the
+/// shared EchokrautLocalInstaller's <c>echokrautts</c> mode, which (optionally downloads then) runs
+/// the wrapper's self-bootstrap. Unlike AllTalk, the wrapper bootstrap is a SINGLE long-running
+/// process that installs (idempotent) AND serves — so Install and Start are the same launch, Install
+/// just downloads the wrapper first. Readiness is signalled by a <c>Ready.EchokrauTTS.txt</c> file
+/// (separate from AllTalk's Ready.txt so both engines coexist).
+/// </summary>
+public sealed class EchokrauTtsInstanceService : IEchokrauTtsInstanceService, IDisposable
+{
+    private const string ReadyFileName = "Ready.EchokrauTTS.txt";
+    // Written by the installer on the wrapper's 'error' event; must match Constants.ECHOKRAUTTSERRORFILE there.
+    internal const string ErrorFileName = "Error.EchokrauTTS.json";
+    private const int DefaultPort = 8765;
+
+    private readonly ILogService _log;
+    private readonly Configuration _config;
+    private readonly IRemoteUrlService _remoteUrls;
+    private readonly IClientState _clientState;
+    private readonly IVoicePackService _voicePack;
+
+    private readonly ITtsEngineCatalogService _engineCatalog;
+    public event Action? OnInstanceReady;
+
+    public bool Installing { get; private set; }
+    public bool InstanceRunning { get; private set; }
+    public bool InstanceStarting { get; private set; }
+    public bool InstanceStopping { get; private set; }
+    public string CurrentInstallStatus { get; private set; } = string.Empty;
+    public string LaunchFailure { get; private set; } = string.Empty;
+    // Bumped by StopInstance. A launch thread that sees it changed ended because of a stop, not a
+    // failure — also when the next launch (Reinstall = stop + install) already began meanwhile.
+    private int _stopGeneration;
+    public float CurrentInstallProgress { get; private set; }
+
+    // Result of the last "Check for updates". Null until the user asks; once set it takes precedence
+    // over the RemoteUrls baseline for BOTH the tag and the download URL — they must stay paired, or
+    // an update would install the old zip and record the new version against it.
+    private GitHubReleaseParser.Release? _foundRelease;
+
+    /// <inheritdoc/>
+    public string LatestWrapperVersion =>
+        _foundRelease?.Tag ?? _remoteUrls.Urls.EchokrauTtsVersion ?? string.Empty;
+
+    /// <inheritdoc/>
+    public WrapperUpdateState UpdateState { get; private set; } = WrapperUpdateState.NotChecked;
+
+    /// <inheritdoc/>
+    public string UpdateCheckError { get; private set; } = string.Empty;
+
+    /// <summary>Zip to install: the release found by the update check, else the shipped baseline.</summary>
+    private string WrapperDownloadUrl =>
+        _foundRelease?.DownloadUrl ?? _remoteUrls.Urls.EchokrauTtsUrl;
+
+    /// <inheritdoc/>
+    public async Task CheckForWrapperUpdateAsync()
+    {
+        var eventId = new EKEventId(0, TextSource.Backend);
+        var apiUrl = _remoteUrls.Urls.EchokrauTtsReleasesUrl;
+        if (string.IsNullOrWhiteSpace(apiUrl))
+        {
+            UpdateCheckError = "no release URL configured";
+            UpdateState = WrapperUpdateState.CheckFailed;
+            _log.Warning(nameof(CheckForWrapperUpdateAsync),
+                "RemoteUrls.echokrauTtsReleasesUrl is empty — cannot check for wrapper updates.", eventId);
+            return;
+        }
+
+        UpdateState = WrapperUpdateState.Checking;
+        UpdateCheckError = string.Empty;
+        var (release, error) = await FetchReleaseAsync(apiUrl).ConfigureAwait(false);
+        if (release == null)
+        {
+            Fail(error ?? "no release", eventId);
+            return;
+        }
+
+        _foundRelease = release;
+        UpdateState = WrapperUpdatePolicy.IsUpdateAvailable(
+            _config.EchokrauTts.LocalInstall, _config.EchokrauTts.InstalledWrapperVersion, release.Tag)
+            ? WrapperUpdateState.UpdateAvailable
+            : WrapperUpdateState.UpToDate;
+        _log.Info(nameof(CheckForWrapperUpdateAsync),
+            $"Latest wrapper release is {release.Tag}; installed is " +
+            $"{WrapperUpdatePolicy.Display(_config.EchokrauTts.InstalledWrapperVersion)} → {UpdateState}", eventId);
+    }
+
+    /// <inheritdoc/>
+    public async Task<string?> SelectWrapperReleaseAsync(string tag)
+    {
+        var url = GitHubReleaseParser.ReleaseByTagUrl(_remoteUrls.Urls.EchokrauTtsReleasesUrl, tag);
+        if (url == null) return $"cannot derive the release URL for {tag} from echokrauTtsReleasesUrl";
+        var (release, error) = await FetchReleaseAsync(url).ConfigureAwait(false);
+        if (release == null) return $"release {tag}: {error}";
+        // The answer must be the release asked for: tag and zip stay paired, or Install records one and runs another.
+        if (!string.Equals(release.Tag, tag.Trim(), StringComparison.Ordinal))
+            return $"GitHub answered release {release.Tag} for {tag}";
+        _foundRelease = release;
+        _log.Info(nameof(SelectWrapperReleaseAsync), $"Install will fetch wrapper release {release.Tag}",
+            new EKEventId(0, TextSource.Backend));
+        return null;
+    }
+
+    /// <summary>One GitHub release lookup: the release, or why there is none (HTTP status, parse failure, network).</summary>
+    private async Task<(GitHubReleaseParser.Release? Release, string? Error)> FetchReleaseAsync(string apiUrl)
+    {
+        try
+        {
+            using var req = new HttpRequestMessage(HttpMethod.Get, apiUrl);
+            // GitHub rejects API requests without a User-Agent, and asks for an explicit API version.
+            req.Headers.TryAddWithoutValidation("User-Agent", "Echokraut");
+            req.Headers.TryAddWithoutValidation("Accept", "application/vnd.github+json");
+
+            var res = await _releaseClient.SendAsync(req).ConfigureAwait(false);
+            var body = await res.Content.ReadAsStringAsync().ConfigureAwait(false);
+            if (!res.IsSuccessStatusCode)
+            {
+                // 403 here is almost always the unauthenticated rate limit (60/h per IP), which is
+                // worth naming: it is not an outage and it resolves by waiting.
+                var hint = res.StatusCode == HttpStatusCode.Forbidden ? " (GitHub rate limit?)" : string.Empty;
+                return (null, $"GitHub returned {(int)res.StatusCode}{hint}");
+            }
+
+            return GitHubReleaseParser.TryParseLatestRelease(body, out var release, out var reason)
+                ? (release, null)
+                : (null, reason);
+        }
+        catch (Exception ex)
+        {
+            // Offline, DNS, timeout — recoverable and user-triggered, so Warning, not Error.
+            return (null, ex.Message);
+        }
+    }
+
+    /// <summary>A failed lookup must never look like "you are up to date" — it returns the button to
+    /// "Check for updates" and keeps the reason for the label next to it.</summary>
+    private void Fail(string reason, EKEventId eventId)
+    {
+        UpdateCheckError = reason;
+        UpdateState = WrapperUpdateState.CheckFailed;
+        _log.Warning(nameof(CheckForWrapperUpdateAsync), $"Wrapper update check failed: {reason}", eventId);
+    }
+
+    private bool IsWindows { get; }
+
+    // Short timeout: the update check is a foreground action the user is waiting on, and a hanging
+    // GitHub request must not leave the button stuck in "Checking...".
+    private static readonly HttpClient _updateCheckClient = new() { Timeout = TimeSpan.FromSeconds(10) };
+    private readonly HttpClient _releaseClient;
+
+    private Task? _instanceThread;
+    private Process? _instanceProcess;
+    private volatile bool _instanceProcessIsRunning;
+    // Port the tracked local process was started with. StopInstance aims /shutdown at it, never at
+    // BaseUrl: after a switch to Remote, BaseUrl names the remote server (which must not be shut down).
+    private int? _launchedPort;
+
+    public EchokrauTtsInstanceService(ILogService log, Configuration config, IRemoteUrlService remoteUrls,
+        IClientState clientState, IVoicePackService voicePack, ITtsEngineCatalogService engineCatalog,
+        string? testWrapperZipPath = null, HttpClient? releaseClient = null, bool? isWindows = null)
+    {
+        _releaseClient = releaseClient ?? _updateCheckClient;
+        _log = log ?? throw new ArgumentNullException(nameof(log));
+        _config = config ?? throw new ArgumentNullException(nameof(config));
+        _remoteUrls = remoteUrls ?? throw new ArgumentNullException(nameof(remoteUrls));
+        _clientState = clientState ?? throw new ArgumentNullException(nameof(clientState));
+        _voicePack = voicePack ?? throw new ArgumentNullException(nameof(voicePack));
+        _engineCatalog = engineCatalog ?? throw new ArgumentNullException(nameof(engineCatalog));
+        TestWrapperZipPath = testWrapperZipPath;
+        // Dalamud's host probe only works inside the game; tests pass the platform.
+        IsWindows = isWindows ?? Dalamud.Utility.Util.GetHostPlatform() == OSPlatform.Windows;
+        UseTestInstallCatalog();
+    }
+
+    /// <summary>
+    /// On a test install the catalog comes from the build itself (<see cref="TestWrapperInstall.CatalogPath"/>),
+    /// never from the tag the plugin points at: that tag predates the build and would hide its new
+    /// engines. No-op for a released wrapper, and when the test zip carried no catalog.
+    /// </summary>
+    private void UseTestInstallCatalog()
+    {
+        var path = TestWrapperInstall.CatalogPath(
+            _config.EchokrauTts.InstalledWrapperVersion,
+            string.IsNullOrWhiteSpace(_config.TtsInstallRoot) ? null : TtsPaths.EchokrauTtsRoot(_config.TtsInstallRoot));
+        if (path != null) _engineCatalog.UseLocalCatalog(path);
+    }
+
+    /// <summary>Download the wrapper + bootstrap (install) + serve. Marks LocalInstall on ready.</summary>
+    public void Install() => Launch(WrapperLaunchMode.Install);
+
+    /// <summary>Run the wrapper bootstrap (install-if-needed) + serve, without re-downloading.</summary>
+    public void StartInstance() => Launch(WrapperLaunchMode.Start);
+
+    /// <inheritdoc/>
+    public void UpdateWrapper() => Launch(WrapperLaunchMode.Update);
+
+    /// <inheritdoc/>
+    public string? TestWrapperZipPath { get; }
+
+    // The UI asks TestInstallAvailable every frame, and the answer is a disk probe of a path that
+    // does not exist on any user's machine (null outside a dev load) — so it is cached, and re-probed only every few
+    // seconds. Without the cache every user would pay a failing file lookup per frame; without the
+    // re-probe the developer would have to restart the game after building a wrapper zip.
+    private static readonly TimeSpan TestInstallProbeInterval = TimeSpan.FromSeconds(5);
+    private DateTime _testInstallProbedAt = DateTime.MinValue;
+    private bool _testInstallAvailable;
+
+    /// <inheritdoc/>
+    public bool TestInstallAvailable
+    {
+        get
+        {
+            var now = DateTime.UtcNow;
+            if (now - _testInstallProbedAt < TestInstallProbeInterval) return _testInstallAvailable;
+            _testInstallProbedAt = now;
+            _testInstallAvailable = TestWrapperInstall.IsAvailable(TestWrapperZipPath);
+            return _testInstallAvailable;
+        }
+    }
+
+    /// <inheritdoc/>
+    public void InstallTestWrapper() => Launch(WrapperLaunchMode.TestInstall);
+
+    /// <inheritdoc/>
+    public void InstallCustomData(EKEventId eventId, bool installProcess = false)
+    {
+        var (pathValid, _) = Windows.Native.NativeAlltalkBuilder.ValidateInstallPath(_config.TtsInstallRoot);
+        if (!pathValid)
+        {
+            _log.Warning(nameof(InstallCustomData), "Install path is invalid, aborting.", eventId);
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_config.EchokrauTts.CustomModelUrl)
+            && string.IsNullOrWhiteSpace(_config.EchokrauTts.CustomVoicesUrl))
+        {
+            _log.Warning(nameof(InstallCustomData), "No custom model or voices URL set — nothing to install.", eventId);
+            return;
+        }
+
+        try
+        {
+            // Restart the wrapper afterwards if it's running now, or if it would auto-start —
+            // otherwise a freshly installed custom model wouldn't be picked up until next launch.
+            var wasRunning = InstanceRunning || InstanceStarting;
+            var shouldRestart = wasRunning || (!installProcess && _config.EchokrauTts.AutoStartLocalInstance);
+
+            if (_instanceProcessIsRunning || _instanceProcess != null || _instanceThread != null)
+                StopInstance(eventId);
+            _instanceThread = Task.Run(() => RunCustomDataInstall(shouldRestart, eventId));
+        }
+        catch (Exception ex)
+        {
+            _log.Error(nameof(InstallCustomData), $"Error while installing EchokrauTTS custom data: {ex}", eventId);
+            StopInstance(eventId);
+        }
+    }
+
+    /// <inheritdoc/>
+    public IReadOnlyList<TtsEngineInfo> AvailableEngines => _engineCatalog.Engines;
+
+    /// <inheritdoc/>
+    public string ClientLanguageCode => LanguageCode(_clientState.ClientLanguage);
+
+    /// <inheritdoc/>
+    public bool ConfiguredEngineBlockedByLanguage =>
+        TtsEngineAvailability.IsBlockedByLanguage(AvailableEngines, _config.EchokrauTts.TtsBackendArg, ClientLanguageCode);
+
+    /// <inheritdoc/>
+    public void SwitchTtsBackend(string engineId)
+    {
+        if (string.IsNullOrWhiteSpace(engineId)) return;
+
+        var id = engineId.Trim().ToLowerInvariant();
+        if (string.Equals(_config.EchokrauTts.TtsBackendArg, id, StringComparison.Ordinal)) return;
+
+        _config.EchokrauTts.TtsEngine = id;
+        _config.Save();
+        RestartLocalIfRunning($"engine set to {id}");
+    }
+
+    /// <inheritdoc/>
+    public void SetXttsFp16(bool enabled)
+    {
+        if (_config.EchokrauTts.XttsFp16 == enabled) return;
+
+        _config.EchokrauTts.XttsFp16 = enabled;
+        _config.Save();
+        RestartLocalIfRunning($"XTTS fp16 set to {enabled}");
+    }
+
+    /// <inheritdoc/>
+    public void SetQwenTemperature(double temperature)
+    {
+        if (Math.Abs(_config.EchokrauTts.QwenTemperature - temperature) < 0.001) return;
+
+        _config.EchokrauTts.QwenTemperature = temperature;
+        _config.Save();
+        RestartLocalIfRunning($"Qwen temperature set to {_config.EchokrauTts.QwenTemperatureArg}");
+    }
+
+    /// <inheritdoc/>
+    public void SetResponseCache(bool enabled)
+    {
+        if (_config.EchokrauTts.ResponseCache == enabled) return;
+
+        _config.EchokrauTts.ResponseCache = enabled;
+        _config.Save();
+        RestartLocalIfRunning($"Response cache set to {(enabled ? "on" : "off")}");
+    }
+
+    /// <inheritdoc/>
+    public void SetPocketDecodeSteps(int steps)
+    {
+        if (_config.EchokrauTts.PocketDecodeSteps == steps) return;
+        if (!_config.EchokrauTts.TrySetPocketDecodeSteps(steps)) return;
+
+        _config.Save();
+        RestartLocalIfRunning($"Pocket decode steps set to {_config.EchokrauTts.PocketDecodeStepsArg}");
+    }
+
+    /// <inheritdoc/>
+    public void SetPocketLayers(int layers)
+    {
+        if (_config.EchokrauTts.PocketLayersEffective == layers) return;
+        if (Array.IndexOf(EchokrauTtsData.PocketLayerOptions, layers) < 0) return;
+
+        _config.EchokrauTts.PocketLayers = layers;
+        _config.Save();
+        RestartLocalIfRunning($"Pocket model set to {_config.EchokrauTts.PocketLayersArg} layers " +
+                              $"(decode steps {_config.EchokrauTts.PocketDecodeStepsArg})");
+    }
+
+    /// <summary>
+    /// Persist-then-apply helper for local-instance settings that only take effect at wrapper startup
+    /// (engine, fp16, Qwen options). Logs the change; if a local instance is running/starting,
+    /// restarts it so the new args are picked up. A switch to an engine the wrapper has not installed
+    /// yet makes that restart download it (lazy install, wrapper 0.0.2.0).
+    /// </summary>
+    private void RestartLocalIfRunning(string reason)
+    {
+        var eventId = new EKEventId(0, TextSource.Backend);
+        _log.Info(nameof(RestartLocalIfRunning), $"EchokrauTTS local: {reason}", eventId);
+        if (InstanceRunning || InstanceStarting)
+        {
+            _log.Info(nameof(RestartLocalIfRunning), "Restarting local instance to apply change", eventId);
+            StopInstance(eventId);
+            StartInstance();
+        }
+    }
+
+    private string EnsureInstaller(EKEventId eventId)
+    {
+        var exe = LocalInstallerProvisioner.Ensure(
+            _config.TtsInstallRoot, _remoteUrls.Urls.InstallerUrl, _remoteUrls.Urls.InstallerVersion,
+            _config.InstalledInstallerVersion, _log, eventId, out var downloadedVersion);
+        if (downloadedVersion != null)
+        {
+            _config.InstalledInstallerVersion = downloadedVersion;
+            _config.Save();
+        }
+        return exe;
+    }
+
+    /// <summary>Status text when the configured engine has no model for the game language.</summary>
+    internal static string LanguageBlockedStatus(string engineName, string language)
+        => string.Format(Loc.S(LanguageBlockedFormat), engineName, language);
+
+    internal const string LanguageBlockedFormat =
+        "{0} has no voice model for the game language '{1}'. Pick another engine in the Backend tab.";
+
+    private static string LanguageCode(Dalamud.Game.ClientLanguage lang) => VoiceScdPaths.LanguageCodeForScd(lang);
+
+    private int Port()
+    {
+        try { return new Uri(_config.EchokrauTts.BaseUrl).Port; }
+        catch { return DefaultPort; }
+    }
+
+    private void Launch(WrapperLaunchMode mode)
+    {
+        var eventId = new EKEventId(0, TextSource.Backend);
+        var (pathValid, _) = Windows.Native.NativeAlltalkBuilder.ValidateInstallPath(_config.TtsInstallRoot);
+        if (!pathValid)
+        {
+            _log.Warning(nameof(Launch), "Install path is invalid, aborting.", eventId);
+            return;
+        }
+        // Re-checked here and not only in the UI: the button is drawn from the same predicate, but a
+        // dimmed KamiToolKit node still delivers its click, and the zip can vanish between frames.
+        if (mode == WrapperLaunchMode.TestInstall && !TestInstallAvailable)
+        {
+            _log.Warning(nameof(Launch),
+                $"Test install requested but {TestWrapperZipPath} is not there — aborting.", eventId);
+            return;
+        }
+        // Checked here, not only by the greyed Start button: a login or an engine switch also starts the
+        // wrapper, and the wrapper would only refuse this pair after the installer window is gone.
+        if (ConfiguredEngineBlockedByLanguage)
+        {
+            _log.Warning(nameof(Launch),
+                $"Engine {_config.EchokrauTts.TtsBackendArg} has no model for language {ClientLanguageCode} — not starting.", eventId);
+            CurrentInstallStatus = LanguageBlockedStatus(
+                TtsEngineAvailability.Find(AvailableEngines, _config.EchokrauTts.TtsBackendArg)?.Name
+                    ?? _config.EchokrauTts.TtsBackendArg,
+                ClientLanguageCode);
+            CurrentInstallProgress = 0f;
+            return;
+        }
+        if (NeedsDownload(mode) && string.IsNullOrWhiteSpace(WrapperDownloadUrl))
+        {
+            _log.Warning(nameof(Launch),
+                "EchokrauTTS wrapper URL is not configured (RemoteUrls.echokrauTtsUrl) — local install " +
+                "is unavailable until the wrapper release is published. Use Remote mode meanwhile.", eventId);
+            CurrentInstallStatus = "EchokrauTTS download URL not configured";
+            return;
+        }
+
+        try
+        {
+            if (_instanceProcessIsRunning || _instanceProcess != null || _instanceThread != null)
+                StopInstance(eventId);
+            _instanceThread = Task.Run(() => RunInstance(mode, eventId));
+        }
+        catch (Exception ex)
+        {
+            _log.Error(nameof(Launch), $"Error while running EchokrauTTS instance: {ex}", eventId);
+            StopInstance(eventId);
+        }
+    }
+
+    // echokrautts|updateechokrautts <installRoot> <echokrauTtsUrl-or-empty> <isWindows> <port> <language> <parentPid> <ttsBackend> <xttsFp16> <qwenTemperature> <pocketDecodeSteps> <pocketLayers> <responseCacheMinutes>
+    // The update mode takes the SAME arguments; it only changes how the zip is unpacked (samples/
+    // and models/ are skipped so user voices and downloaded models survive).
+    private ProcessStartInfo BuildProcessInfo(WrapperLaunchMode mode, string installerExe) => new(installerExe)
+    {
+        UseShellExecute = true,
+        CreateNoWindow = false,
+        ArgumentList =
+        {
+            mode == WrapperLaunchMode.Update ? "updateechokrautts" : "echokrautts",
+            _config.TtsInstallRoot,
+            // Empty means "do not download" — the installer then bootstraps whatever is on disk.
+            // TestInstall relies on that: ExtractTestZip has already put the build there.
+            NeedsDownload(mode) ? WrapperDownloadUrl : string.Empty,
+            IsWindows.ToString(),
+            Port().ToString(),
+            LanguageCode(_clientState.ClientLanguage),
+            Environment.ProcessId.ToString(),
+            _config.EchokrauTts.TtsBackendArg,
+            _config.EchokrauTts.XttsFp16Arg,
+            _config.EchokrauTts.QwenTemperatureArg,
+            _config.EchokrauTts.PocketDecodeStepsArg,
+            _config.EchokrauTts.PocketLayersArg,
+            _config.EchokrauTts.ResponseCacheMinutesArg,
+        }
+    };
+
+    private static string InstallStatusText(WrapperLaunchMode mode) => mode switch
+    {
+        WrapperLaunchMode.Update => "Updating the EchokrauTTS wrapper (voices and models are kept)...",
+        WrapperLaunchMode.TestInstall => "Test-installing EchokrauTTS from a local zip...",
+        _ => "Installing EchokrauTTS (downloads model + deps, may take a while)...",
+    };
+
+    /// <summary>
+    /// Unpack the developer's locally built wrapper zip over <c>echokrautts/</c>, standing in for the
+    /// installer's download step. Overwrites without preserving <c>samples/</c> or <c>models/</c> —
+    /// the same wholesale unpack a real Install does, so the path being exercised is the real one
+    /// (the voice pack is re-seeded afterwards by <see cref="CompleteDownloadPhase"/>).
+    /// <para>Throws on failure rather than continuing: carrying on would bootstrap the PREVIOUS
+    /// wrapper and report success for a build that was never installed, which is the one outcome a
+    /// test install must not produce. <see cref="RunInstance"/> turns it into a failed status.</para>
+    /// </summary>
+    private void ExtractTestZip(EKEventId eventId)
+    {
+        var wrapperFolder = TtsPaths.EchokrauTtsRoot(_config.TtsInstallRoot);
+        _log.Info(nameof(ExtractTestZip),
+            $"Extracting test wrapper {TestWrapperZipPath} into {wrapperFolder}", eventId);
+        CurrentInstallStatus = "Unpacking the local test zip...";
+        CurrentInstallProgress = 0.20f;
+
+        Directory.CreateDirectory(wrapperFolder);
+        ZipFile.ExtractToDirectory(TestWrapperZipPath!, wrapperFolder, overwriteFiles: true);
+        _log.Info(nameof(ExtractTestZip), "Test wrapper extracted", eventId);
+    }
+
+    /// <summary>
+    /// Seed the EchokrauTTS voices on a fresh local install — the same curated, freely-licensed
+    /// voice pack <see cref="AlltalkInstanceService"/> downloads, but targeting EchokrauTTS's
+    /// samples folder (<c>echokrautts/samples/</c>) instead of AllTalk's voices folder.
+    /// Non-fatal: the install still completes if it fails; the user can re-run the download from
+    /// the Game Data Tools window. Pack progress (0..1) maps onto the install bar's 0.50..0.95 band.
+    /// </summary>
+    private void DownloadVoicePack(EKEventId eventId)
+    {
+        var ekRoot = TtsPaths.EchokrauTtsRoot(_config.TtsInstallRoot);
+        var samplesDir = TtsPaths.EchokrauTtsSamples(_config.TtsInstallRoot);
+        _log.Info(nameof(DownloadVoicePack), $"Downloading voice pack into {samplesDir}...", eventId);
+        CurrentInstallStatus = "Downloading voices...";
+        CurrentInstallProgress = 0.50f;
+
+        Action<string, int, int> onPackProgress = (label, current, total) =>
+        {
+            var ratio = total > 0 ? Math.Clamp((float)current / total, 0f, 1f) : 0f;
+            CurrentInstallProgress = 0.50f + ratio * 0.45f;
+            if (!string.IsNullOrEmpty(label))
+                CurrentInstallStatus = $"Voices — {label} ({current}/{total})";
+        };
+        try
+        {
+            _voicePack.ProgressChanged += onPackProgress;
+            using var packCts = new CancellationTokenSource();
+            _voicePack.DownloadAsync(packCts.Token,
+                outputRootOverride: ekRoot, outputSubfolder: TtsPaths.EchokrauTtsSamplesFolder)
+                .GetAwaiter().GetResult();
+            _log.Info(nameof(DownloadVoicePack), "Voice pack ready.", eventId);
+        }
+        catch (Exception ex)
+        {
+            // Non-fatal: install still completes. User can re-run the download from Game Data Tools.
+            _log.Warning(nameof(DownloadVoicePack),
+                $"Voice pack download failed during install: {ex.Message}. " +
+                $"Run it manually from Game Data Tools later.", eventId);
+        }
+        finally
+        {
+            _voicePack.ProgressChanged -= onPackProgress;
+        }
+    }
+
+    // installcustomdataek <installRoot> <customModelUrl> <customVoicesUrl> <isWindows> <shouldRestart> <port> <language> <parentPid> <ttsBackend> <xttsFp16> <qwenTemperature> <pocketDecodeSteps> <pocketLayers> <responseCacheMinutes>
+    private ProcessStartInfo BuildCustomDataProcessInfo(bool shouldRestart, string installerExe) => new(installerExe)
+    {
+        UseShellExecute = true,
+        CreateNoWindow = false,
+        ArgumentList =
+        {
+            "installcustomdataek",
+            _config.TtsInstallRoot,
+            _config.EchokrauTts.CustomModelUrl ?? string.Empty,
+            _config.EchokrauTts.CustomVoicesUrl ?? string.Empty,
+            IsWindows.ToString(),
+            shouldRestart.ToString(),
+            Port().ToString(),
+            LanguageCode(_clientState.ClientLanguage),
+            Environment.ProcessId.ToString(),
+            _config.EchokrauTts.TtsBackendArg,
+            _config.EchokrauTts.XttsFp16Arg,
+            _config.EchokrauTts.QwenTemperatureArg,
+            _config.EchokrauTts.PocketDecodeStepsArg,
+            _config.EchokrauTts.PocketLayersArg,
+            _config.EchokrauTts.ResponseCacheMinutesArg,
+        }
+    };
+
+    /// <summary>
+    /// Runs the installer's <c>installcustomdataek</c> mode: it drops the custom model/samples into
+    /// the wrapper layout and, when <paramref name="shouldRestart"/>, relaunches the wrapper (serve)
+    /// as one long-running process — mirroring <see cref="RunInstance"/>'s ready-file polling. When
+    /// no restart is wanted the installer just applies the data and exits.
+    /// </summary>
+    private void RunCustomDataInstall(bool shouldRestart, EKEventId eventId)
+    {
+        var stopGeneration = Volatile.Read(ref _stopGeneration);
+        try
+        {
+            Installing = true;
+            CurrentInstallStatus = "Installing custom data (downloads may take a while)...";
+            CurrentInstallProgress = 0.10f;
+            _log.Info(nameof(RunCustomDataInstall), $"Installing EchokrauTTS custom data (shouldRestart={shouldRestart})", eventId);
+
+            var installerExe = EnsureInstaller(eventId);
+            var readyFile = Path.Join(Path.GetDirectoryName(installerExe), ReadyFileName);
+            if (File.Exists(readyFile)) { try { File.Delete(readyFile); } catch { /* will be recreated */ } }
+            var errorFile = Path.Join(Path.GetDirectoryName(installerExe), ErrorFileName);
+            ClearLaunchFailure(errorFile);
+
+            if (shouldRestart) InstanceStarting = true;
+            _launchedPort = Port();
+            _instanceProcess = new Process { StartInfo = BuildCustomDataProcessInfo(shouldRestart, installerExe) };
+            _instanceProcess.Start();
+            _instanceProcessIsRunning = true;
+
+            if (!shouldRestart)
+            {
+                // Installer applies the custom data and exits — no serving process to track.
+                _instanceProcess.WaitForExit();
+                _instanceProcessIsRunning = false;
+                _instanceProcess.Dispose();
+                _instanceProcess = null;
+                _instanceThread = null;
+                Installing = false;
+                CurrentInstallStatus = "Done";
+                CurrentInstallProgress = 1.0f;
+                _log.Info(nameof(RunCustomDataInstall), "Custom data installed", eventId);
+                return;
+            }
+
+            // Installer applies the custom data then relaunches the wrapper (serve): poll ready.
+            while (!File.Exists(readyFile) && !_instanceProcess.HasExited)
+                Thread.Sleep(2000);
+
+            InstanceStarting = false;
+            Installing = false;
+            if (!File.Exists(readyFile))
+            {
+                ReportEndBeforeReady(WrapperLaunchMode.Install, errorFile, stopGeneration, nameof(RunCustomDataInstall), eventId);
+                InstanceRunning = false;
+                _instanceProcessIsRunning = false;
+                return;
+            }
+
+            CurrentInstallStatus = "Done";
+            CurrentInstallProgress = 1.0f;
+            InstanceRunning = true;
+            _log.Info(nameof(RunCustomDataInstall), "Custom data installed, instance restarted", eventId);
+            OnInstanceReady?.Invoke();
+
+            _instanceProcess.WaitForExit();
+            _instanceProcessIsRunning = false;
+            InstanceRunning = false;
+            _log.Info(nameof(RunCustomDataInstall), "EchokrauTTS instance stopped", eventId);
+        }
+        catch (Exception ex)
+        {
+            var failed = stopGeneration == Volatile.Read(ref _stopGeneration);
+            StopInstance(eventId);
+            Installing = false;
+            CurrentInstallStatus = $"Failed: {ex.Message}";
+            if (failed) LaunchFailure = CurrentInstallStatus;
+            CurrentInstallProgress = 0f;
+            _log.Error(nameof(RunCustomDataInstall), $"Error while installing EchokrauTTS custom data: {ex}", eventId);
+        }
+    }
+
+    /// <param name="installedVersion">Tag to record as installed. Normally
+    /// <see cref="LatestWrapperVersion"/>; a test install passes
+    /// <see cref="TestWrapperInstall.VersionMarker"/> instead, because what is on disk then is not
+    /// any published release and claiming a real tag would both mislabel the Backend tab and
+    /// suppress the update that would replace the test build.</param>
+    private void MarkInstalled(string installedVersion)
+    {
+        _config.EchokrauTts.LocalInstall = true;
+        // LatestWrapperVersion, not the RemoteUrls baseline: after a successful update check this is
+        // the tag of the release we actually downloaded, and tag + zip must stay paired.
+        _config.EchokrauTts.InstalledWrapperVersion = installedVersion;
+        _config.FirstTime = false;
+        _config.Save();
+        RefreshUpdateStateAfterInstall();
+        Installing = false;
+        CurrentInstallStatus = "Done";
+        CurrentInstallProgress = 1.0f;
+    }
+
+    /// <summary>
+    /// Records the wrapper tag after an update. Unlike <see cref="MarkInstalled"/> this must NOT
+    /// touch <c>LocalInstall</c>/<c>FirstTime</c> — an update only happens on an install that
+    /// already exists, and the first-time wizard state is none of its business.
+    /// </summary>
+    private void MarkUpdated()
+    {
+        // LatestWrapperVersion, not the RemoteUrls baseline: after a successful update check this is
+        // the tag of the release we actually downloaded, and tag + zip must stay paired.
+        _config.EchokrauTts.InstalledWrapperVersion = LatestWrapperVersion;
+        _config.Save();
+        RefreshUpdateStateAfterInstall();
+        Installing = false;
+        CurrentInstallStatus = "Done";
+        CurrentInstallProgress = 1.0f;
+    }
+
+    /// <summary>
+    /// Puts the button back to "Check for updates" once an install/update wrote a new tag. Without
+    /// this the state stays <see cref="WrapperUpdateState.UpdateAvailable"/> and the button keeps
+    /// offering an install that already happened. <see cref="_foundRelease"/> is deliberately kept —
+    /// it is still the newest release we know of, and it must stay paired with its download URL for
+    /// a later reinstall.
+    /// </summary>
+    private void RefreshUpdateStateAfterInstall()
+    {
+        UpdateState = WrapperUpdatePolicy.StateAfterInstall();
+        UpdateCheckError = string.Empty;
+    }
+
+    /// <summary>Whether the installer is handed a release URL to fetch. The test install is the one
+    /// mode that installs without downloading — its zip already lies on disk.</summary>
+    private static bool NeedsDownload(WrapperLaunchMode mode)
+        => mode is WrapperLaunchMode.Install or WrapperLaunchMode.Update;
+
+    /// <summary>Whether this launch is an install (progress bar, status text, post-ready bookkeeping)
+    /// rather than a plain start.</summary>
+    private static bool IsInstallPhase(WrapperLaunchMode mode) => mode != WrapperLaunchMode.Start;
+
+    private string LaunchDescription(WrapperLaunchMode mode) => mode switch
+    {
+        WrapperLaunchMode.Update => $"Updating EchokrauTTS wrapper to {_remoteUrls.Urls.EchokrauTtsVersion}",
+        WrapperLaunchMode.Install => "Installing + starting EchokrauTTS",
+        WrapperLaunchMode.TestInstall => $"Test-installing EchokrauTTS from {TestWrapperZipPath}",
+        _ => "Starting EchokrauTTS instance",
+    };
+
+    /// <summary>Status text when the installer exited before the ready file appeared: the reason the
+    /// installer handed over (<see cref="ErrorFileName"/>), else what did not complete. An installer
+    /// older than the error file never writes one, so the plain start then points at its log.</summary>
+    /// <param name="stoppedOnPurpose">The user (or an engine switch) stopped it: no reason to show,
+    /// and a plain start that was stopped is no failure at all.</param>
+    internal static string ExitStatus(WrapperLaunchMode mode, string? reason, bool stoppedOnPurpose = false)
+    {
+        if (!stoppedOnPurpose && !string.IsNullOrWhiteSpace(reason))
+            return string.Format(Loc.S(LaunchFailedFormat), reason);
+        return mode switch
+        {
+            WrapperLaunchMode.Update => "Failed: update did not complete",
+            WrapperLaunchMode.Install => "Failed: install did not complete",
+            WrapperLaunchMode.TestInstall => "Failed: test install did not complete",
+            _ => stoppedOnPurpose ? string.Empty : Loc.S(StoppedWithoutReason),
+        };
+    }
+
+    private void ReportEndBeforeReady(WrapperLaunchMode mode, string errorFile, int stopGeneration,
+        string caller, EKEventId eventId)
+    {
+        var stoppedOnPurpose = stopGeneration != Volatile.Read(ref _stopGeneration);
+        CurrentInstallStatus = ExitStatus(mode, stoppedOnPurpose ? null : ReadLaunchError(errorFile), stoppedOnPurpose);
+        if (!stoppedOnPurpose) LaunchFailure = CurrentInstallStatus;
+        _log.Warning(caller, stoppedOnPurpose
+            ? "Installer exited before EchokrauTTS became ready (stopped)"
+            : $"Installer exited before EchokrauTTS became ready: {CurrentInstallStatus}", eventId);
+    }
+
+    internal const string LaunchFailedFormat = "EchokrauTTS stopped: {0}";
+
+    internal const string StoppedWithoutReason =
+        "EchokrauTTS stopped before it was ready. The reason is in EchokrautLocalInstaller.log.";
+
+    /// <summary>The reason in the installer's error file: the wrapper's message (already in the game
+    /// language), else its key; null without a readable file.</summary>
+    internal static string? ReadLaunchError(string errorFile)
+    {
+        try
+        {
+            if (!File.Exists(errorFile)) return null;
+            var obj = Newtonsoft.Json.Linq.JObject.Parse(File.ReadAllText(errorFile));
+            var message = (string?)obj["message"];
+            if (!string.IsNullOrWhiteSpace(message)) return message.Trim();
+            var key = (string?)obj["key"];
+            return string.IsNullOrWhiteSpace(key) ? null : key.Trim();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or Newtonsoft.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>A new launch or a deliberate stop: the reason of an earlier end no longer applies.</summary>
+    private void ClearLaunchFailure(string errorFile)
+    {
+        LaunchFailure = string.Empty;
+        if (File.Exists(errorFile)) { try { File.Delete(errorFile); } catch { /* the next launch clears it */ } }
+    }
+
+    /// <summary>
+    /// Post-ready bookkeeping for the two download flavours. <b>An update must never reach
+    /// <see cref="DownloadVoicePack"/></b>: the installer deliberately left <c>samples/</c> alone,
+    /// and the pack service wipes that folder before unpacking — it would take the user's voices
+    /// with it, which is exactly what the update promises not to do.
+    /// </summary>
+    private void CompleteDownloadPhase(WrapperLaunchMode mode, EKEventId eventId)
+    {
+        if (mode == WrapperLaunchMode.Update)
+        {
+            MarkUpdated();
+            _log.Info(nameof(CompleteDownloadPhase),
+                $"EchokrauTTS wrapper updated to {_config.EchokrauTts.InstalledWrapperVersion}", eventId);
+            return;
+        }
+        if (!IsInstallPhase(mode)) return;
+
+        // Fresh install: seed the curated voice pack into echokrautts/samples (mirror of AllTalk's
+        // install-time download) before marking complete — UNLESS the user supplied their own custom
+        // voices, in which case they don't want the default pack (they install their voices via
+        // "Install only custom data").
+        if (string.IsNullOrWhiteSpace(_config.EchokrauTts.CustomVoicesUrl))
+            DownloadVoicePack(eventId);
+        else
+            _log.Info(nameof(CompleteDownloadPhase),
+                "Custom voices provided — skipping voice pack download.", eventId);
+        MarkInstalled(mode == WrapperLaunchMode.TestInstall
+            ? TestWrapperInstall.VersionMarker
+            : LatestWrapperVersion);
+        if (mode == WrapperLaunchMode.TestInstall) UseTestInstallCatalog();
+    }
+
+    private void RunInstance(WrapperLaunchMode mode, EKEventId eventId)
+    {
+        var stopGeneration = Volatile.Read(ref _stopGeneration);
+        try
+        {
+            if (IsInstallPhase(mode))
+            {
+                Installing = true;
+                CurrentInstallStatus = InstallStatusText(mode);
+                CurrentInstallProgress = 0.10f;
+            }
+            InstanceStarting = true;
+            _log.Info(nameof(RunInstance), LaunchDescription(mode), eventId);
+
+            // Must happen before the installer starts: it is handed an empty URL for this mode, so
+            // the zip on disk is the only thing it will ever bootstrap.
+            if (mode == WrapperLaunchMode.TestInstall)
+                ExtractTestZip(eventId);
+
+            var installerExe = EnsureInstaller(eventId);
+            var readyFile = Path.Join(Path.GetDirectoryName(installerExe), ReadyFileName);
+            if (File.Exists(readyFile)) { try { File.Delete(readyFile); } catch { /* will be recreated */ } }
+            var errorFile = Path.Join(Path.GetDirectoryName(installerExe), ErrorFileName);
+            ClearLaunchFailure(errorFile);
+
+            _launchedPort = Port();
+            _instanceProcess = new Process { StartInfo = BuildProcessInfo(mode, installerExe) };
+            _instanceProcess.Start();
+            _instanceProcessIsRunning = true;
+
+            // The bootstrap installs-then-serves in one long-running process: wait for the ready
+            // file (written by the installer on the NDJSON 'ready' event), NOT for exit.
+            while (!File.Exists(readyFile) && !_instanceProcess.HasExited)
+                Thread.Sleep(2000);
+
+            InstanceStarting = false;
+            if (!File.Exists(readyFile))
+            {
+                Installing = false;
+                ReportEndBeforeReady(mode, errorFile, stopGeneration, nameof(RunInstance), eventId);
+                InstanceRunning = false;
+                _instanceProcessIsRunning = false;
+                return;
+            }
+
+            CompleteDownloadPhase(mode, eventId);
+
+            InstanceRunning = true;
+            _log.Info(nameof(RunInstance), "EchokrauTTS instance ready", eventId);
+            OnInstanceReady?.Invoke();
+
+            _instanceProcess.WaitForExit();
+            _instanceProcessIsRunning = false;
+            InstanceRunning = false;
+            _log.Info(nameof(RunInstance), "EchokrauTTS instance stopped", eventId);
+        }
+        catch (Exception ex)
+        {
+            var failed = stopGeneration == Volatile.Read(ref _stopGeneration);
+            StopInstance(eventId);
+            Installing = false;
+            CurrentInstallStatus = $"Failed: {ex.Message}";
+            if (failed) LaunchFailure = CurrentInstallStatus;
+            CurrentInstallProgress = 0f;
+            _log.Error(nameof(RunInstance), $"Error while running EchokrauTTS instance: {ex}", eventId);
+        }
+    }
+
+    /// <summary>
+    /// Where <see cref="StopInstance"/> sends <c>/shutdown</c>: always the loopback port the local
+    /// process was started with — the plugin only ever stops a wrapper it launched itself.
+    /// </summary>
+    internal static string LocalShutdownUrl(int port, string shutdownPath) =>
+        $"http://127.0.0.1:{port}/{shutdownPath.TrimStart('/')}";
+
+    public void StopInstance(EKEventId eventId)
+    {
+        try
+        {
+            if (_instanceThread == null && _instanceProcess == null) return;
+
+            _log.Info(nameof(StopInstance), "Stopping EchokrauTTS instance", eventId);
+            Interlocked.Increment(ref _stopGeneration);
+            InstanceStopping = true;
+
+            // Best-effort graceful shutdown so the Python server tears down cleanly + frees the port.
+            try
+            {
+                using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
+                http.PostAsync(LocalShutdownUrl(_launchedPort ?? DefaultPort, _config.EchokrauTts.ShutdownPath),
+                    new StringContent("")).GetAwaiter().GetResult();
+            }
+            catch { /* server may already be down — fall through to kill */ }
+
+            var installerDir = Path.Join(_config.TtsInstallRoot, LocalInstallerProvisioner.InstallerFolderName);
+            var readyFile = Path.Join(installerDir, ReadyFileName);
+            if (File.Exists(readyFile)) File.Delete(readyFile);
+            ClearLaunchFailure(Path.Join(installerDir, ErrorFileName));
+
+            InstanceRunning = false;
+            InstanceStarting = false;
+            _instanceProcessIsRunning = false;
+
+            if (_instanceProcess is { HasExited: false })
+                _instanceProcess.Kill(true);
+            _instanceProcess?.Dispose();
+            _instanceProcess = null;
+            _instanceThread = null;
+            _launchedPort = null;
+            InstanceStopping = false;
+        }
+        catch (Exception ex)
+        {
+            _log.Error(nameof(StopInstance), $"Error while stopping EchokrauTTS instance: {ex}", eventId);
+        }
+    }
+
+    public void Dispose() => StopInstance(new EKEventId(0, TextSource.Backend));
+}

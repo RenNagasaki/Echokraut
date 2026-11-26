@@ -1,0 +1,62 @@
+{
+  "version": 1,
+  "engines": [
+    {
+      "id": "qwen-1.7b",
+      "name": "Qwen 1.7B",
+      "description": "Like Qwen 0.6B but sounds better. For strong NVIDIA graphics cards with about 5 GB of free VRAM next to the game.",
+      "quality": 5,
+      "hardware": "gpu",
+      "vramGb": 5,
+      "load": "high",
+      "minVersion": "0.0.2.0"
+    },
+    {
+      "id": "qwen-0.6b",
+      "name": "Qwen 0.6B",
+      "description": "Closest match to the reference voice. Needs an NVIDIA graphics card (AMD with ROCm is experimental) and about 4 GB of free VRAM next to the game; keeps the GPU busy while it speaks.",
+      "quality": 4,
+      "hardware": "gpu",
+      "vramGb": 4,
+      "load": "high",
+      "minVersion": "0.0.2.0"
+    },
+    {
+      "id": "xtts",
+      "name": "XTTS",
+      "quality": 4,
+      "hardware": "gpu",
+      "vramGb": 3,
+      "load": "medium",
+      "minVersion": "0.0.0.1"
+    },
+    {
+      "id": "f5",
+      "name": "F5",
+      "quality": 3,
+      "hardware": "gpu",
+      "vramGb": 2,
+      "load": "medium",
+      "minVersion": "0.0.0.1"
+    },
+    {
+      "id": "pocket",
+      "name": "Pocket TTS",
+      "description": "Runs on the processor, so your graphics card stays with the game, and sounds clearly better than MOSS. One model per language (no Japanese); needs a reasonably fast CPU.",
+      "quality": 3,
+      "hardware": "cpu",
+      "cores": 4,
+      "load": "medium",
+      "minVersion": "0.0.2.0",
+      "languages": ["de", "en", "es", "fr", "it", "pt"]
+    },
+    {
+      "id": "moss",
+      "name": "MOSS",
+      "quality": 1,
+      "hardware": "cpu",
+      "load": "low",
+      "minVersion": "0.0.1.0"
+    }
+  ]
+}
