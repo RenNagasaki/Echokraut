@@ -1,0 +1,258 @@
+﻿================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.3.3
+================================================================================
+
+
+==============================================================================
+GROSSE NEUERUNGEN
+==============================================================================
+
+[Stimmen] Optional: NPCs sprechen mit ihrer eigenen Spielstimme (EchokrauTTS)
+  Fuer NPCs, die irgendwo im Spiel vertont sind, kann EchokrauTTS jetzt deren
+  vertonte Zeilen aus DEINER EIGENEN FFXIV-Installation als Stimmreferenz nutzen -
+  nur fuer denselben NPC, nie fuer einen "aehnlichen". Standardmaessig aus; das
+  Stimmenpaket bleibt Standard und spricht fuer jeden NPC ohne vertonte Zeile.
+
+  - Einstellungen -> Backend -> "Spielstimme als Referenz". Beim Einschalten
+    erscheint ein kurzer Hinweis, den du bestaetigen musst. Die Aufnahmen werden
+    nur im Arbeitsspeicher dekodiert und nie auf die Festplatte geschrieben.
+  - Nur mit deiner eigenen, privaten EchokrauTTS-Instanz verwenden - nicht mit
+    Servern anderer Personen oder geteilten/oeffentlichen Servern. Erzeugte
+    Ausgabe nicht veroeffentlichen, streamen, aufnehmen oder weitergeben.
+  - "Index fuer alle vertonten NPCs aufbauen" waehlt einmalig die besten Clips fuer
+    jeden vertonten Sprecher im Spiel - auch fuer NPCs, die du noch nie getroffen
+    hast. Der Lauf zeigt die Restzeit, laesst sich abbrechen und setzt beim
+    naechsten Mal dort fort; nach einem Spielpatch werden nur geaenderte Sprecher
+    neu bewertet (die Einstellungen sagen, wie viele). "Beste Clips mit Whisper
+    pruefen" ist gruendlicher, ohne geht es deutlich schneller.
+  - Ohne Index kommt ein NPC mit "Aktuellen NPC beim Gespraechsstart bewerten"
+    auch nebenbei dazu: Schon seine erste Zeile wartet kurz (hoechstens 4
+    Sekunden) auf eine schnelle Auswahl und spricht dann mit der Spielstimme.
+  - Hat ein Charakter im Laufe der Story den Synchronsprecher gewechselt (z. B.
+    Y'shtola ab 6.1), spricht er mit der Stimme, die zu der Quest passt, die du
+    gerade spielst - auch beim Nachspielen im New Game+. Die Liste der Wechsel
+    und die Zuordnung "Sprecher -> NPC" werden zentral gepflegt und mit dem
+    Plugin ausgeliefert.
+  - "Charakter bearbeiten" in der Sprachclip-Verwaltung: Feld "Spielstimme" fuer
+    Sonderfaelle ("-" = keine Spielstimme fuer diesen NPC).
+  - Mit Spielstimme erzeugte Zeilen bleiben auf deinem PC: Sie fehlen in
+    .ekpack-Exporten und Google-Drive-Uploads und sind in der Sprachclip-
+    Verwaltung mit "[Spielstimme]" markiert. Beim Abschalten bietet Echokraut an,
+    sie zu loeschen.
+  - Braucht EchokrauTTS mit einer passenden Engine (nicht AllTalk, nicht MOSS auf
+    PyTorch); sonst steht das in den Einstellungen und das Stimmenpaket spricht.
+
+[Stimmen] Neue EchokrauTTS-Engines: Qwen 0.6B und Qwen 1.7B
+  Zwei neue Stimm-Engines, die von allen bisherigen am naechsten an die
+  Referenzstimmen herankommen; das erste Wort ist nach etwa einer Drittelsekunde
+  zu hoeren.
+
+  - Einstellungen -> Backend -> EchokrauTTS -> TTS-Engine: "Qwen 0.6B" (rund 4 GB
+    freier Grafikspeicher neben dem Spiel) oder "Qwen 1.7B" (klingt besser, rund
+    5 GB).
+  - Braucht eine NVIDIA-Grafikkarte; AMD mit ROCm ist experimentell. Ohne
+    passende Karte bricht die Installation mit einer klaren Meldung ab, statt
+    herunterzuladen.
+  - Qwen haelt die Grafikkarte beim Sprechen voll beschaeftigt - ruckelt das
+    Spiel, zurueck auf XTTS wechseln.
+  - Option unter der Engine-Liste: "ruhigere Betonung".
+  - Braucht EchokrauTTS 0.0.2.0 und den lokalen Installer 1.3.2.0 (beides wird
+    beim naechsten Start bzw. ueber "Nach Updates suchen" geholt).
+
+[Stimmen] Neue EchokrauTTS-Engine: Pocket TTS
+  Eine Stimm-Engine, die auf dem Prozessor laeuft - die Grafikkarte bleibt also
+  beim Spiel - und deutlich besser klingt als MOSS.
+
+  - Einstellungen -> Backend -> EchokrauTTS -> TTS-Engine: "Pocket TTS".
+  - Ein Modell je Sprache: Deutsch, Franzoesisch, Italienisch, Spanisch,
+    Portugiesisch und Englisch. Japanisch gibt es nicht: mit japanischem
+    Spielclient ist der Eintrag ausgegraut ("in dieser Spielsprache nicht
+    verfuegbar") und EchokrauTTS wird damit nicht gestartet, es wird also nichts
+    umsonst heruntergeladen.
+  - "Pocket TTS: Modellgroesse": 24 Layer (Standard, besserer Klang) oder 6 Layer
+    (etwa doppelt so schnell, klingt etwas schlechter). Deutsch, Italienisch,
+    Spanisch und Portugiesisch gibt es in beiden Groessen; Franzoesisch nur mit
+    24 Layern, Englisch nur mit 6.
+  - "Pocket TTS: Dekodierschritte": 4 ist empfohlen; 1 ist etwas schneller, kann
+    aber gelegentlich hallen (nur bei 24 Layern), 8 ist langsamer. Jede
+    Modellgroesse merkt sich ihre eigene Einstellung.
+  - Braucht EchokrauTTS 0.0.2.0 und den lokalen Installer 1.3.2.0.
+
+[Stimmen] Die Engine-Liste vergleicht die Engines
+  Jeder Eintrag in der EchokrauTTS-Engine-Liste sagt jetzt, wie gut die Engine
+  klingt und was sie braucht, z. B. "Qwen 1.7B (Qualitaet 5/5, GPU ~5 GB, hohe
+  Last)" oder "Pocket TTS (Qualitaet 3/5, CPU, 4 Kerne)". Die Liste ist von der
+  besten zur einfachsten sortiert. Die Noten stammen aus Hoertests mit deutschen
+  Stimmen.
+
+[Installation] EchokrauTTS installiert nur noch die genutzte Engine
+  Die lokale Installation lud bisher alle Engines und alle Modelle (rund 18 GB).
+  Jetzt kommt nur die gewaehlte Engine (und bei F5 nur deine Sprache) - rund
+  8 GB fuer eine Engine. Ein Engine-Wechsel laedt die neue beim naechsten Start
+  nach, das dauert einmalig ein paar Minuten. Modelle nicht mehr genutzter
+  Engines bleiben in <Installationsordner>/echokrautts/models, bis du sie selbst
+  loeschst.
+
+[Stimmen] Eigene Erzaehlerstimme waehlen
+  Erzaehltext und Systemmeldungen (die Zeilen, die niemand spricht) waren fest an
+  die mitgelieferte Stimme "Narrator.wav" gebunden. Jetzt kann jede Stimme die
+  Erzaehlerstimme sein.
+
+  - Reiter "Stimmen" -> "Konfigurieren" bei einer Stimme -> "Als Erzaehlerstimme
+    verwenden".
+  - Die aktuelle Erzaehlerstimme ist in der Liste mit "(Erzaehler)" markiert.
+  - Haken weg = zurueck zur mitgelieferten Narrator.wav. Das passiert auch von
+    allein, wenn die gewaehlte Stimme abgeschaltet wird oder mit einem neuen
+    Stimmpaket verschwindet - der Erzaehler verstummt nie.
+  - Die Wahl greift bei der naechsten erzaehlten Zeile; bereits erzeugte Audios
+    bleiben, bis sie geloescht oder neu erzeugt werden.
+
+[Stimmen] Neu erzeugen liefert immer eine neue Aufnahme
+  Vorbereitung auf eine kommende EchokrauTTS-Version, die eine gleiche Zeile,
+  die innerhalb weniger Minuten erneut angefragt wird, aus einem kurzlebigen
+  Zwischenspeicher beantwortet (und zwei Anfragen derselben Zeile eine einzige
+  Erzeugung teilen laesst). Zeilen aus der Sprachclip-Verwaltung umgehen diesen
+  Zwischenspeicher, "Erzeugen"/"Neu erzeugen" dort liefert also immer eine
+  frische Aufnahme.
+
+==============================================================================
+VERBESSERUNGEN
+==============================================================================
+
+[Backend] EchokrauTTS 0.0.2.0 wird jetzt installiert und als Update angeboten
+  Neue Installationen bekommen EchokrauTTS 0.0.2.0, bestehende sehen es
+  unter "Nach Updates suchen". Es bringt die Engines Qwen und Pocket TTS;
+  mit einem aelteren EchokrauTTS stehen sie als "(erst ab Wrapper-Version
+  0.0.2.0)" in der Liste, bis du aktualisierst. Ausserdem blockiert eine abgebrochene Zeile
+  nicht mehr gelegentlich die naechste.
+
+[Backend] EchokrauTTS zeigt nur die Optionen der gewaehlten Engine
+  Der FP16-Haken (XTTS), die beiden Qwen-Optionen sowie Modellgroesse und
+  Dekodierschritte von Pocket TTS erscheinen jetzt nur, solange ihre Engine
+  gewaehlt ist - in den Backend-Einstellungen und in der Ersteinrichtung.
+
+[Backend] Die Backend-Einstellungen sagen, warum EchokrauTTS nicht startet
+  Beendet sich das lokale EchokrauTTS, bevor es bereit ist, steht der Grund
+  jetzt rot unter dem Installationspfad (z. B. "Pocket TTS hat kein Modell fuer
+  Sprache ja"), statt dass der Knopf stumm von "Starting..." auf "Start"
+  zurueckspringt. Braucht den aktualisierten lokalen Installer (wird
+  automatisch geholt); bis dahin verweist die Zeile auf
+  EchokrautLocalInstaller.log.
+
+[Backend] Wechsel weg von "Lokale TTS" beendet die lokale Engine
+  Wer in den Backend-Einstellungen "Remote-Server" oder "Nur Audiodateien"
+  waehlt, beendet jetzt zuerst die lokale EchokrauTTS-/AllTalk-Instanz - sie
+  belegt danach keinen Grafikspeicher und kein Konsolenfenster mehr im
+  Hintergrund.
+
+[Dialog] Optional: Saetze, die ueber zwei Textfenster gehen, werden am Stueck gelesen
+  Endet ein Textfenster mitten im Satz, liest die Stimme den Rest des Satzes
+  (aus dem naechsten Fenster des Spiels) gleich mit, statt mitten im Satz
+  abzubrechen; das naechste Fenster beginnt danach. Das gilt auch fuer lange
+  Zeilen, die das Spiel auf mehrere Fenster verteilt, und eine Pause ("...")
+  mitten im Satz schneidet ihn nicht mehr ab. Ein Fenster, das nur noch das
+  schon gelesene Satzende enthaelt, wird uebersprungen (bei automatischem
+  Weiterblaettern). Standardmaessig aus:
+  Einstellungen -> Allgemein -> "Ueber Textfenster geteilte Saetze zusammenfuehren".
+
+[Community] Zeilen ueber mehrere Textfenster werden gekennzeichnet
+  Ist "Hilf mit, die Gemeinschafts-Dialogdatenbank zu vervollstaendigen" an,
+  werden lange Zeilen, die das Spiel auf mehrere Textfenster verteilt, jetzt
+  als solche markiert - aus dem Harvest der Game Data Tools nach ihrer Laenge,
+  beim Spielen genau (nur mit "Ueber Textfenster geteilte Saetze
+  zusammenfuehren"). Eine schon gesendete Zeile wird einmal
+  mit der Markierung nachgesendet; sonst aendert sich nichts daran, was geteilt
+  wird.
+
+[Hilfe] Selbsttest: im Spiel pruefen, ob alles funktioniert
+  "/ektest" prueft deine Einrichtung in wenigen Sekunden, ohne Questfortschritt:
+  Charakter, Spieldaten, Datenbank, Verbindung zur Sprach-Engine, Stimmen, einen
+  erzeugten und abgespielten Testsatz und - falls eingeschaltet - das
+  Zusammenfuehren geteilter Saetze und die Spielstimmen. Das Ergebnis steht im
+  Chat und als Berichtsdatei; "/ektest all" ergaenzt drei Schritte, in denen du
+  einen NPC ansprichst, auf eine Sprechblase wartest und in /sagen schreibst.
+  Dieselben Schritte gibt es auch im Selbsttest-Fenster von Dalamud. Der Testsatz
+  wird nicht gespeichert und hinterlaesst keine Eintraege.
+
+
+==============================================================================
+FEHLERBEHEBUNGEN
+==============================================================================
+
+[Audio] Kein Spielabsturz mehr bei 3D-Sprachzeilen
+  Mit eingeschaltetem 3D-Audio konnte eine vorgelesene Chatzeile (und andere
+  3D-Zeilen) das Spiel sofort beenden: Die Sprecherposition wurde ausserhalb des
+  Haupt-Threads des Spiels gelesen, was das aktuelle Dalamud verbietet. Die
+  Positionen werden jetzt im Haupt-Thread gelesen.
+
+[Installation] Lokale EchokrauTTS-Installation funktioniert unter Linux
+  Unter Linux (XIVLauncher) brachen lokale Installation und Start nach
+  Sekundenbruchteilen ab. Der Installer laeuft dort in Wine neben dem Spiel und
+  konnte den Wrapper nicht als natives Linux-Programm starten. Jetzt tut er das,
+  verfolgt den Fortschritt und beendet den Server beim Stoppen oder Schliessen
+  des Spiels. Die alte AllTalk-Installation gibt es unter Linux nicht; sie sagt
+  das jetzt deutlich, statt still zu scheitern.
+
+[Dialog] Klicks in einem Echokraut-Fenster springen nicht mehr im Dialog weiter
+  Klicks in Konfiguration, Spieldaten-Werkzeuge, Sprachclip-Verwaltung und den
+  beiden Bearbeiten-Fenstern kamen bis zur Dialogbox durch und haben sie
+  weitergeschaltet. Die Klickpruefung folgt dem Fenster jetzt in der tatsaechlich
+  eingestellten HUD-Groesse und erfasst auch die Fenster "Stimme konfigurieren"
+  und "Charakter bearbeiten".
+
+[Dialog] Das Stimmen-Auswahlfeld im Dialog folgt Aenderungen
+  Neu hinzugefuegte oder entfernte Stimmen erschienen erst nach einem Neustart,
+  und eine in der Sprachclip-Verwaltung geaenderte NPC-Stimme wurde weiter mit
+  dem alten Wert angezeigt. Beides wird jetzt uebernommen, und die dem NPC
+  tatsaechlich zugewiesene Stimme steht immer zur Auswahl - auch wenn der
+  Rassen-/Geschlechterfilter sie sonst ausblenden wuerde.
+
+[Backend] Wechsel auf ein entferntes EchokrauTTS schaltet diesen Server nicht mehr ab
+  Wer von einem lokalen auf ein entferntes EchokrauTTS umgestellt hat, waehrend
+  das lokale noch lief, schickte die Abschalt-Anfrage an den entfernten Server
+  statt an den lokalen. Gestoppt wird jetzt immer der lokale Server auf diesem PC.
+
+[Backend] Beim Wechsel der Engine wird die alte abgeschaltet
+  Beim Wechsel zwischen AllTalk und EchokrauTTS lief die vorherige Engine weiter,
+  belegte weiter Grafikspeicher und meldete sich weiter als laufend.
+
+[Audio] Keine Fehltoene mehr, waehrend die GPU generiert
+  Wenn die Engine langsamer erzeugt als abgespielt wird (XTTS auf einer mittleren
+  GPU), stotterte sich die Wiedergabe durch die Zeile. Echokraut misst jetzt die
+  Liefergeschwindigkeit und wartet bei einer so langsamen Quelle die ganze Zeile
+  ab, um sie dann in einem Stueck abzuspielen. Schnelle Systeme sind nicht
+  betroffen und starten weiterhin frueh.
+
+[Installation] XTTS-Installation scheitert nicht mehr an "Dem Client fehlt
+  ein erforderliches Recht"
+  Unter Windows ohne Entwicklermodus konnte die EchokrauTTS-Installation mit
+  der XTTS-Engine beim Modell-Download abbrechen (WinError 1314). Der Wrapper
+  (EchokrauTTS 0.0.1.7) laedt das Modell jetzt ohne dieses Recht herunter.
+
+[Installation] Zweimal gestarteter Installer macht die Installation nicht kaputt
+  Wurde die lokale Installation ein zweites Mal gestartet, waehrend die erste
+  noch lief, konnte der EchokrauTTS-Ordner dauerhaft gesperrt bleiben
+  ("Zugriff verweigert"). Der neuere Lauf uebernimmt jetzt und raeumt auf, was
+  der aeltere hinterlassen hat.
+
+[Installation] XTTS-Engine startet nach einer Neuinstallation wieder
+  Mit dem aktuellen XTTS-Modell-Download brach der EchokrauTTS-Server direkt
+  beim Start ab ("No such file or directory ... model.pth\config.json"). Der
+  Wrapper (EchokrauTTS 0.0.1.8) findet das heruntergeladene Modell jetzt richtig.
+
+[Backend] EchokrauTTS erholt sich nach einem GPU-Fehler selbst
+  Nach einem "CUDA error: device-side assert triggered" lief der lokale
+  EchokrauTTS-Server weiter, scheiterte aber an jeder folgenden Zeile. Er beendet
+  sich jetzt selbst und der Installer startet ihn neu (bis zu 3-mal in 15
+  Minuten); Zeilen, die waehrend des Neuladens des Modells anfallen, entfallen.
+  Braucht EchokrauTTS 0.0.1.9 (Einstellungen -> Backend -> "Nach Updates
+  suchen"); der aktualisierte lokale Installer (1.3.1.0) wird beim naechsten
+  Start automatisch geladen.
+
+[UI] Seltener Abstuerze, wenn Echokraut mit offenem Fenster neu laedt
+  Wurde das Plugin neu geladen oder aktualisiert, waehrend zum Beispiel das
+  Konfigurationsfenster offen war, konnte das Spiel ein paar Sekunden spaeter
+  abstuerzen: Das Fenster schloss sich noch, als das Plugin schon weg war.
+  Echokraut wartet jetzt, bis seine Fenster wirklich zu sind, bevor es sich
+  entlaedt, soweit das Spiel es zulaesst.

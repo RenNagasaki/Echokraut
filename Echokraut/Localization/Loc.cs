@@ -1,0 +1,1006 @@
+﻿using System.Collections.Generic;
+using Dalamud.Game;
+
+namespace Echokraut.Localization;
+
+/// <summary>
+/// Localization lookup. The English text is the dictionary key; non-English
+/// translations are stored per <see cref="ClientLanguage"/>.
+/// Call <see cref="Init"/> once at startup, then <see cref="S"/> everywhere.
+/// </summary>
+public static class Loc
+{
+    private static ClientLanguage _lang = ClientLanguage.English;
+
+    public static void Init(ClientLanguage lang) => _lang = lang;
+
+    /// <summary>Returns the translated string for the current client language.
+    /// Falls back to <paramref name="key"/> (the English text) if no translation exists.</summary>
+    public static string S(string key) =>
+        _lang != ClientLanguage.English && Translation(key, _lang) is { } val ? val : key;
+
+    /// <summary>The stored <paramref name="lang"/> translation of <paramref name="key"/>, null when there is none.
+    /// Also lets tests check that new strings are translated.</summary>
+    internal static string? Translation(string key, ClientLanguage lang) =>
+        Translations.TryGetValue(key, out var map) && map.TryGetValue(lang, out var val) ? val : null;
+
+    /// <summary>Every English key that has a translation entry (the E2E stage <c>ui</c> looks for keys shown untranslated).</summary>
+    internal static IEnumerable<string> Keys => Translations.Keys;
+
+    // Shorthand aliases used by many files
+    private static readonly ClientLanguage DE = ClientLanguage.German;
+    private static readonly ClientLanguage FR = ClientLanguage.French;
+    private static readonly ClientLanguage JP = ClientLanguage.Japanese;
+
+    // ─────────────────────────────────────────────────────────────────────
+    // Translations — key = English text, value = { lang → translation }
+    // ─────────────────────────────────────────────────────────────────────
+
+    private static readonly Dictionary<string, Dictionary<ClientLanguage, string>> Translations = new()
+    {
+        // ── Top-level tabs ────────────────────────────────────────────────
+        ["Settings"] = new() { { DE, "Einstellungen" }, { FR, "Paramètres" }, { JP, "設定" } },
+        ["Voice Sel."] = new() { { DE, "Stimmen" }, { FR, "Voix" }, { JP, "ボイス選択" } },
+        ["Voice selection"] = new() { { DE, "Stimmenauswahl" }, { FR, "Sélection de voix" }, { JP, "ボイス選択" } },
+        ["Phonetics"] = new() { { DE, "Phonetik" }, { FR, "Phonétique" }, { JP, "音声修正" } },
+        ["Phonetic corrections"] = new() { { DE, "Phonetische Korrekturen" }, { FR, "Corrections phonétiques" }, { JP, "音声修正" } },
+        ["Logs"] = new() { { DE, "Protokoll" }, { FR, "Journaux" }, { JP, "ログ" } },
+
+        // ── Settings sub-tabs ─────────────────────────────────────────────
+        ["General"] = new() { { DE, "Allgemein" }, { FR, "Général" }, { JP, "全般" } },
+        ["Dialogue"] = new() { { DE, "Dialog" }, { FR, "Dialogue" }, { JP, "ダイアログ" } },
+        ["Chat"] = new() { { DE, "Chat" }, { FR, "Chat" }, { JP, "チャット" } },
+        ["Storage"] = new() { { DE, "Speicher" }, { FR, "Stockage" }, { JP, "保存" } },
+        ["Backend"] = new() { { DE, "Backend" }, { FR, "Backend" }, { JP, "バックエンド" } },
+
+        // ── Voice selection sub-tabs ──────────────────────────────────────
+        ["NPCs"] = new() { { DE, "NPCs" }, { FR, "PNJ" }, { JP, "NPC" } },
+        ["Players"] = new() { { DE, "Spieler" }, { FR, "Joueurs" }, { JP, "プレイヤー" } },
+        ["Bubbles"] = new() { { DE, "Sprechblasen" }, { FR, "Bulles" }, { JP, "吹き出し" } },
+        ["Voices"] = new() { { DE, "Stimmen" }, { FR, "Voix" }, { JP, "ボイス" } },
+
+        // ── Section headers ───────────────────────────────────────────────
+        ["In-Game Controls:"] = new() { { DE, "Spielinterne Steuerung:" }, { FR, "Contrôles en jeu :" }, { JP, "ゲーム内コントロール:" } },
+        ["In-Game Controls"] = new() { { DE, "Spielinterne Steuerung" }, { FR, "Contrôles en jeu" }, { JP, "ゲーム内コントロール" } },
+        ["Reset Data"] = new() { { DE, "Daten zurücksetzen" }, { FR, "Réinitialiser les données" }, { JP, "データリセット" } },
+        ["Reset Data:"] = new() { { DE, "Daten zurücksetzen:" }, { FR, "Réinitialiser les données :" }, { JP, "データリセット:" } },
+        ["Battle Dialogue"] = new() { { DE, "Kampfdialog" }, { FR, "Dialogue de combat" }, { JP, "バトルダイアログ" } },
+        ["NPC Bubbles"] = new() { { DE, "NPC-Sprechblasen" }, { FR, "Bulles PNJ" }, { JP, "NPC吹き出し" } },
+        ["Google Drive"] = new() { { DE, "Google Drive" }, { FR, "Google Drive" }, { JP, "Google Drive" } },
+        ["3D Space"] = new() { { DE, "3D-Raum" }, { FR, "Espace 3D" }, { JP, "3D空間" } },
+        ["3D Space Debug Info"] = new() { { DE, "3D-Raum Debuginfo" }, { FR, "Infos de débogage 3D" }, { JP, "3D空間デバッグ情報" } },
+        ["Chat channels"] = new() { { DE, "Chat-Kanäle" }, { FR, "Canaux de chat" }, { JP, "チャットチャンネル" } },
+        ["Instance type"] = new() { { DE, "Instanztyp" }, { FR, "Type d'instance" }, { JP, "インスタンスタイプ" } },
+        ["Local instance"] = new() { { DE, "Lokale Instanz" }, { FR, "Instance locale" }, { JP, "ローカルインスタンス" } },
+        ["Advanced options"] = new() { { DE, "Erweiterte Optionen" }, { FR, "Options avancées" }, { JP, "詳細オプション" } },
+        ["Remote connection"] = new() { { DE, "Remote-Verbindung" }, { FR, "Connexion distante" }, { JP, "リモート接続" } },
+        ["Service options"] = new() { { DE, "Dienstoptionen" }, { FR, "Options du service" }, { JP, "サービスオプション" } },
+        ["Filter Options"] = new() { { DE, "Filteroptionen" }, { FR, "Options de filtre" }, { JP, "フィルターオプション" } },
+        ["Advanced Filters"] = new() { { DE, "Erweiterte Filter" }, { FR, "Filtres avancés" }, { JP, "詳細フィルター" } },
+        ["Install process:"] = new() { { DE, "Installation:" }, { FR, "Processus d'installation :" }, { JP, "インストール:" } },
+        ["Available commands"] = new() { { DE, "Verfügbare Befehle" }, { FR, "Commandes disponibles" }, { JP, "利用可能なコマンド" } },
+
+        // ── General settings ──────────────────────────────────────────────
+        ["Enabled"] = new() { { DE, "Aktiviert" }, { FR, "Activé" }, { JP, "有効" } },
+        ["Use native FFXIV UI"] = new() { { DE, "Native FFXIV-Oberfläche verwenden" }, { FR, "Utiliser l'interface native FFXIV" }, { JP, "ネイティブFFXIV UIを使用" } },
+        ["Remove stutters"] = new() { { DE, "Stottern entfernen" }, { FR, "Supprimer les bégaiements" }, { JP, "吃音を除去" } },
+        ["Join sentences split across dialogue boxes"] = new()
+        {
+            { DE, "Über Textfenster geteilte Sätze zusammenführen" },
+            { FR, "Réunir les phrases coupées entre deux bulles de dialogue" },
+            { JP, "ウィンドウをまたぐ文をつなげて読み上げる" },
+        },
+        ["When a box ends mid-sentence, the rest of the sentence is read along with it and skipped in the next box."] = new()
+        {
+            { DE, "Endet ein Textfenster mitten im Satz, wird der Rest des Satzes gleich mitgesprochen und im nächsten Fenster übersprungen." },
+            { FR, "Si une bulle s'arrête au milieu d'une phrase, la fin de la phrase est lue avec elle et sautée dans la bulle suivante." },
+            { JP, "文の途中でウィンドウが終わる場合、文の残りを続けて読み上げ、次のウィンドウではその部分を省略します。" },
+        },
+        ["Hide UI in cutscenes"] = new() { { DE, "UI in Zwischensequenzen ausblenden" }, { FR, "Masquer l'interface en cinématique" }, { JP, "カットシーン中にUIを非表示" } },
+        ["Remove punctuation (may reduce speech hallucinations)"] = new()
+        {
+            { DE, "Satzzeichen entfernen (kann Sprachfehler reduzieren)" },
+            { FR, "Supprimer la ponctuation (peut réduire les artefacts vocaux)" },
+            { JP, "句読点を除去（音声異常の低減に役立つ場合があります）" },
+        },
+        ["Show Play/Pause, Stop and Mute buttons in dialogue"] = new()
+        {
+            { DE, "Play/Pause-, Stopp- und Stummschaltung-Buttons im Dialog anzeigen" },
+            { FR, "Afficher les boutons Lecture/Pause, Arrêt et Muet dans les dialogues" },
+            { JP, "ダイアログに再生/一時停止、停止、ミュートボタンを表示" },
+        },
+
+        // ── Dialogue settings ─────────────────────────────────────────────
+        ["Voice dialogue"] = new() { { DE, "Dialog vertonen" }, { FR, "Dialogues vocaux" }, { JP, "ダイアログをボイス化" } },
+        ["Voice dialogue in 3D space"] = new() { { DE, "Dialog im 3D-Raum vertonen" }, { FR, "Dialogues vocaux en 3D" }, { JP, "3D空間でダイアログをボイス化" } },
+        ["Voice player choices in cutscenes"] = new() { { DE, "Spielerauswahl in Zwischensequenzen vertonen" }, { FR, "Voix des choix du joueur en cinématique" }, { JP, "カットシーンでプレイヤーの選択肢をボイス化" } },
+        ["Voice player choices outside cutscenes"] = new() { { DE, "Spielerauswahl außerhalb von Zwischensequenzen vertonen" }, { FR, "Voix des choix du joueur hors cinématique" }, { JP, "カットシーン外でプレイヤーの選択肢をボイス化" } },
+        ["Cancel voice on text advance"] = new() { { DE, "Stimme bei Textfortschritt abbrechen" }, { FR, "Annuler la voix lors de l'avancement du texte" }, { JP, "テキスト送り時にボイスを中止" } },
+        ["Auto-advance dialogue after speech completes"] = new() { { DE, "Dialog nach Sprachausgabe automatisch weiterschalten" }, { FR, "Avancer le dialogue automatiquement après la lecture" }, { JP, "音声完了後にダイアログを自動進行" } },
+        ["Voice retainer dialogue"] = new() { { DE, "Gehilfendialoge vertonen" }, { FR, "Dialogues de servants vocaux" }, { JP, "リテイナーダイアログをボイス化" } },
+
+        // ── Battle dialogue ───────────────────────────────────────────────
+        ["Voice battle dialogue"] = new() { { DE, "Kampfdialoge vertonen" }, { FR, "Dialogues de combat vocaux" }, { JP, "バトルダイアログをボイス化" } },
+        ["Queue battle dialogue"] = new() { { DE, "Kampfdialoge in Warteschlange" }, { FR, "Mettre en file les dialogues de combat" }, { JP, "バトルダイアログをキューに入れる" } },
+
+        // ── Bubbles ───────────────────────────────────────────────────────
+        ["Voice NPC bubbles"] = new() { { DE, "NPC-Sprechblasen vertonen" }, { FR, "Bulles PNJ vocales" }, { JP, "NPC吹き出しをボイス化" } },
+        ["Voice bubbles in cities"] = new() { { DE, "Sprechblasen in Städten vertonen" }, { FR, "Bulles vocales en ville" }, { JP, "街中の吹き出しをボイス化" } },
+        ["Use camera as 3D sound source"] = new() { { DE, "Kamera als 3D-Klangquelle verwenden" }, { FR, "Utiliser la caméra comme source sonore 3D" }, { JP, "カメラを3D音源として使用" } },
+
+        // ── Chat ──────────────────────────────────────────────────────────
+        ["Voice chat"] = new() { { DE, "Chat vertonen" }, { FR, "Chat vocal" }, { JP, "チャットをボイス化" } },
+        ["Voice chat in 3D space"] = new() { { DE, "Chat im 3D-Raum vertonen" }, { FR, "Chat vocal en 3D" }, { JP, "3D空間でチャットをボイス化" } },
+        ["Voice your own chat"] = new() { { DE, "Eigenen Chat vertonen" }, { FR, "Voix de votre propre chat" }, { JP, "自分のチャットをボイス化" } },
+        ["Voice Say"] = new() { { DE, "Sagen vertonen" }, { FR, "Dire vocal" }, { JP, "Sayをボイス化" } },
+        ["Voice Yell"] = new() { { DE, "Rufen vertonen" }, { FR, "Crier vocal" }, { JP, "Yellをボイス化" } },
+        ["Voice Shout"] = new() { { DE, "Schreien vertonen" }, { FR, "Hurler vocal" }, { JP, "Shoutをボイス化" } },
+        ["Voice Free Company"] = new() { { DE, "Freie Gesellschaft vertonen" }, { FR, "Compagnie libre vocal" }, { JP, "FCをボイス化" } },
+        ["Voice Tell"] = new() { { DE, "Flüstern vertonen" }, { FR, "Chuchotement vocal" }, { JP, "Tellをボイス化" } },
+        ["Voice Party"] = new() { { DE, "Gruppe vertonen" }, { FR, "Groupe vocal" }, { JP, "Partyをボイス化" } },
+        ["Voice Alliance"] = new() { { DE, "Allianz vertonen" }, { FR, "Alliance vocal" }, { JP, "Allianceをボイス化" } },
+        ["Voice Novice Network"] = new() { { DE, "Neulingschat vertonen" }, { FR, "Réseau des novices vocal" }, { JP, "ビギナーチャンネルをボイス化" } },
+        ["Voice linkshells"] = new() { { DE, "Linkshells vertonen" }, { FR, "Linkshells vocal" }, { JP, "リンクシェルをボイス化" } },
+        ["Voice cross-world linkshells"] = new() { { DE, "Weltenübergreifende Linkshells vertonen" }, { FR, "Linkshells inter-mondes vocal" }, { JP, "クロスワールドリンクシェルをボイス化" } },
+        ["DetectLanguage automatically detects the language of chat messages. Register for a free API key at:"] = new()
+        {
+            { DE, "DetectLanguage erkennt die Sprache von Chat-Nachrichten automatisch. Registrieren Sie sich kostenlos unter:" },
+            { FR, "DetectLanguage détecte automatiquement la langue des messages. Inscrivez-vous gratuitement sur :" },
+            { JP, "DetectLanguageはチャットメッセージの言語を自動検出します。無料のAPIキーはこちらから取得できます:" },
+        },
+        ["Detect Language API Key"] = new() { { DE, "DetectLanguage API-Schlüssel" }, { FR, "Clé API DetectLanguage" }, { JP, "DetectLanguage APIキー" } },
+        ["Detect Language API key (detectlanguage.com)"] = new() { { DE, "DetectLanguage API-Schlüssel (detectlanguage.com)" }, { FR, "Clé API DetectLanguage (detectlanguage.com)" }, { JP, "DetectLanguage APIキー (detectlanguage.com)" } },
+
+        // ── 3D slider ─────────────────────────────────────────────────────
+        ["3D audible range (shared) — higher = shorter range, 0 = on player"] = new()
+        {
+            { DE, "3D-Hörbereich (geteilt) — höher = kürzere Reichweite, 0 = am Spieler" },
+            { FR, "Portée audible 3D (partagée) — plus élevé = portée courte, 0 = sur le joueur" },
+            { JP, "3D可聴範囲（共有）— 高い＝範囲が狭い、0＝プレイヤー位置" },
+        },
+
+        // ── Storage / Save settings ───────────────────────────────────────
+        ["Search audio locally before generating"] = new() { { DE, "Audio lokal suchen bevor generiert wird" }, { FR, "Rechercher l'audio localement avant de générer" }, { JP, "生成前にローカルで音声を検索" } },
+        ["Search for audio locally before generating"] = new() { { DE, "Audio lokal suchen bevor generiert wird" }, { FR, "Rechercher l'audio localement avant de générer" }, { JP, "生成前にローカルで音声を検索" } },
+        ["Save generated audio locally"] = new() { { DE, "Generiertes Audio lokal speichern" }, { FR, "Enregistrer l'audio généré localement" }, { JP, "生成した音声をローカルに保存" } },
+        ["Create directory if it doesn't exist"] = new() { { DE, "Verzeichnis erstellen, falls nicht vorhanden" }, { FR, "Créer le dossier s'il n'existe pas" }, { JP, "ディレクトリが存在しない場合は作成" } },
+        ["Create directory if missing"] = new() { { DE, "Verzeichnis erstellen, falls nicht vorhanden" }, { FR, "Créer le dossier s'il n'existe pas" }, { JP, "ディレクトリが存在しない場合は作成" } },
+        ["Local audio directory path"] = new() { { DE, "Lokaler Audio-Verzeichnispfad" }, { FR, "Chemin du dossier audio local" }, { JP, "ローカル音声ディレクトリパス" } },
+        ["Auto-generate shareable alias variants for player-name dialog"] = new()
+        {
+            { DE, "Teilbare Alias-Varianten für Dialoge mit Spielernamen automatisch erzeugen" },
+            { FR, "Générer automatiquement des variantes partageables avec un alias pour les dialogues contenant le nom du joueur" },
+            { JP, "プレイヤー名を含むダイアログの共有可能な汎用名バージョンを自動生成" },
+        },
+        ["Helping build a voice line database benefits everyone. Please consider opting in."] = new()
+        {
+            { DE, "Der Aufbau einer Sprachzeilen-Datenbank nützt allen. Bitte erwägen Sie teilzunehmen." },
+            { FR, "Contribuer à la base de données vocale profite à tous. Merci d'envisager de participer." },
+            { JP, "ボイスラインデータベースの構築は全員の役に立ちます。ぜひご協力ください。" },
+        },
+        ["Send dialogue lines to Ren Nagasaki's share for a voice line database"] = new()
+        {
+            { DE, "Dialogzeilen an Ren Nagasakis Share für eine Sprachzeilen-Datenbank senden" },
+            { FR, "Envoyer les lignes de dialogue au partage de Ren Nagasaki pour une base vocale" },
+            { JP, "ボイスラインデータベース用にRen Nagasakiの共有フォルダに台詞を送信" },
+        },
+        ["Upload to Google Drive (requires local save)"] = new()
+        {
+            { DE, "Auf Google Drive hochladen (erfordert lokale Speicherung)" },
+            { FR, "Téléverser sur Google Drive (nécessite la sauvegarde locale)" },
+            { JP, "Google Driveにアップロード（ローカル保存が必要）" },
+        },
+        ["Download from Google Drive share"] = new() { { DE, "Von Google Drive Share herunterladen" }, { FR, "Télécharger depuis le partage Google Drive" }, { JP, "Google Drive共有からダウンロード" } },
+        ["Download periodically (every 60 min, new files only)"] = new()
+        {
+            { DE, "Regelmäßig herunterladen (alle 60 Min., nur neue Dateien)" },
+            { FR, "Télécharger périodiquement (toutes les 60 min, nouveaux fichiers uniquement)" },
+            { JP, "定期的にダウンロード（60分ごと、新規ファイルのみ）" },
+        },
+        ["Google Drive share link"] = new() { { DE, "Google Drive Share-Link" }, { FR, "Lien de partage Google Drive" }, { JP, "Google Drive共有リンク" } },
+        ["Download now"] = new() { { DE, "Jetzt herunterladen" }, { FR, "Télécharger maintenant" }, { JP, "今すぐダウンロード" } },
+
+        // ── Backend / Alltalk ─────────────────────────────────────────────
+        ["Local instance (runs on your GPU or CPU)"] = new() { { DE, "Lokale Instanz (nutzt Ihre GPU oder CPU)" }, { FR, "Instance locale (utilise votre GPU ou CPU)" }, { JP, "ローカルインスタンス（GPUまたはCPUで実行）" } },
+        ["Remote instance (connect to a server)"] = new() { { DE, "Remote-Instanz (Verbindung zu einem Server)" }, { FR, "Instance distante (connexion à un serveur)" }, { JP, "リモートインスタンス（サーバーに接続）" } },
+        ["No instance (audio files only, no generation)"] = new() { { DE, "Keine Instanz (nur Audiodateien, keine Generierung)" }, { FR, "Aucune instance (fichiers audio uniquement)" }, { JP, "インスタンスなし（音声ファイルのみ、生成なし）" } },
+        ["Remote instance"] = new() { { DE, "Remote-Instanz" }, { FR, "Instance distante" }, { JP, "リモートインスタンス" } },
+        ["No instance"] = new() { { DE, "Keine Instanz" }, { FR, "Aucune instance" }, { JP, "インスタンスなし" } },
+        ["Streaming generation (play audio before full text is generated)"] = new()
+        {
+            { DE, "Streaming-Generierung (Audio abspielen, bevor der gesamte Text generiert ist)" },
+            { FR, "Génération en streaming (lecture avant la fin de la génération)" },
+            { JP, "ストリーミング生成（全文生成前に音声を再生）" },
+        },
+        ["Auto-start local instance on plugin load"] = new() { { DE, "Lokale Instanz beim Laden des Plugins automatisch starten" }, { FR, "Démarrer l'instance locale au chargement du plugin" }, { JP, "プラグイン読み込み時にローカルインスタンスを自動起動" } },
+        ["CPU mode (no GPU required, slower)"] = new() { { DE, "CPU-Modus (keine GPU erforderlich, langsamer)" }, { FR, "Mode CPU (pas de GPU requis, plus lent)" }, { JP, "CPUモード（GPU不要、低速）" } },
+        ["TTS engine (restarts local instance on change)"] = new() { { DE, "TTS-Engine (startet lokale Instanz bei Änderung neu)" }, { FR, "Moteur TTS (redémarre l'instance locale en cas de changement)" }, { JP, "TTSエンジン（変更時にローカルインスタンスを再起動）" } },
+        ["Solid quality. Needs a graphics card and takes about two seconds before the first word is heard. Pick this if your GPU has room to spare."] = new() { { DE, "Solide Qualität. Braucht eine Grafikkarte und lässt etwa zwei Sekunden bis zum ersten Wort verstreichen. Nimm sie, wenn deine GPU Luft hat." }, { FR, "Qualité solide. Nécessite une carte graphique et met environ deux secondes avant le premier mot. À choisir si votre GPU a de la marge." }, { JP, "安定した品質。グラフィックカードが必要で、最初の一語まで約2秒かかります。GPUに余裕があるならこちら。" } },
+        ["Fastest overall once it starts, but the slowest to begin, and it needs a written transcript for every voice sample. Largest download."] = new() { { DE, "Insgesamt am schnellsten, sobald sie läuft, aber am langsamsten beim Anfangen — und sie braucht zu jeder Stimmprobe einen geschriebenen Text. Größter Download." }, { FR, "La plus rapide dans l'ensemble une fois lancée, mais la plus lente à démarrer, et elle exige une transcription écrite pour chaque échantillon de voix. Téléchargement le plus lourd." }, { JP, "動き出せば総合的に最速ですが、開始は最も遅く、音声サンプルごとに書き起こしが必要です。ダウンロードは最大。" } },
+        ["For weaker machines: runs on the processor, so your graphics card stays with the game, starts speaking almost instantly and is a small download. Sounds noticeably rougher, and long sentences can fall behind."] = new() { { DE, "Für schwache Rechner: läuft auf dem Prozessor, die Grafikkarte bleibt also beim Spiel, sie fängt fast sofort an zu sprechen und ist ein kleiner Download. Klingt merklich rauer, und lange Sätze können hinterherhinken." }, { FR, "Pour les machines modestes : tourne sur le processeur, la carte graphique reste au jeu, commence à parler presque instantanément et se télécharge vite. Le rendu est nettement plus rugueux et les longues phrases peuvent prendre du retard." }, { JP, "非力なPC向け：CPUで動作するためグラフィックカードはゲームに残り、ほぼ即座に話し始め、ダウンロードも小さめ。音質は明らかに粗く、長い文では処理が追いつかないことがあります。" } },
+        ["Quality {0}/5"] = new() { { DE, "Qualität {0}/5" }, { FR, "Qualité {0}/5" }, { JP, "品質 {0}/5" } },
+        ["GPU ~{0} GB"] = new() { { DE, "GPU ~{0} GB" }, { FR, "GPU ~{0} Go" }, { JP, "GPU 約{0}GB" } },
+        ["CPU, {0} cores"] = new() { { DE, "CPU, {0} Kerne" }, { FR, "CPU, {0} cœurs" }, { JP, "CPU {0}コア" } },
+        ["high load"] = new() { { DE, "hohe Last" }, { FR, "charge élevée" }, { JP, "高負荷" } },
+        ["medium load"] = new() { { DE, "mittlere Last" }, { FR, "charge moyenne" }, { JP, "中負荷" } },
+        ["light"] = new() { { DE, "leicht" }, { FR, "léger" }, { JP, "軽量" } },
+        ["{0} (not available in this game language)"] = new() { { DE, "{0} (in dieser Spielsprache nicht verfügbar)" }, { FR, "{0} (indisponible dans cette langue de jeu)" }, { JP, "{0}（このゲーム言語では利用不可）" } },
+        ["{0} has no voice model for the game language '{1}'. Pick another engine in the Backend tab."] = new() { { DE, "{0} hat kein Sprachmodell für die Spielsprache '{1}'. Bitte im Backend-Tab eine andere Engine wählen." }, { FR, "{0} n'a pas de modèle vocal pour la langue de jeu '{1}'. Choisissez un autre moteur dans l'onglet Backend." }, { JP, "{0} にはゲーム言語 '{1}' の音声モデルがありません。バックエンドタブで別のエンジンを選んでください。" } },
+        ["EchokrauTTS stopped: {0}"] = new() { { DE, "EchokrauTTS wurde beendet: {0}" }, { FR, "EchokrauTTS s'est arrêté : {0}" }, { JP, "EchokrauTTSが停止しました：{0}" } },
+        ["EchokrauTTS stopped before it was ready. The reason is in EchokrautLocalInstaller.log."] = new() { { DE, "EchokrauTTS wurde beendet, bevor es bereit war. Der Grund steht in EchokrautLocalInstaller.log." }, { FR, "EchokrauTTS s'est arrêté avant d'être prêt. La raison figure dans EchokrautLocalInstaller.log." }, { JP, "EchokrauTTSは準備完了前に停止しました。理由はEchokrautLocalInstaller.logに記録されています。" } },
+        ["{0} (from wrapper version {1})"] = new() { { DE, "{0} (erst ab Wrapper-Version {1})" }, { FR, "{0} (à partir de la version {1} du wrapper)" }, { JP, "{0}（ラッパーのバージョン{1}以降）" } },
+        ["Closest match to the reference voice. Needs an NVIDIA graphics card (AMD with ROCm is experimental) and about 4 GB of free VRAM next to the game; keeps the GPU busy while it speaks."] = new() { { DE, "Am nächsten an der Referenzstimme. Braucht eine NVIDIA-Grafikkarte (AMD mit ROCm experimentell) und rund 4 GB freien Grafikspeicher neben dem Spiel; hält die Grafikkarte beim Sprechen voll beschäftigt." }, { FR, "Le plus proche de la voix de référence. Nécessite une carte graphique NVIDIA (AMD avec ROCm expérimental) et environ 4 Go de mémoire vidéo libre à côté du jeu ; occupe pleinement la carte graphique pendant la parole." }, { JP, "参照音声に最も近い声。NVIDIAグラフィックカード（ROCm対応AMDは実験的）と、ゲームとは別に約4GBの空きVRAMが必要。発話中はGPUをほぼ占有します。" } },
+        ["Like Qwen 0.6B but sounds better. For strong NVIDIA graphics cards with about 5 GB of free VRAM next to the game."] = new() { { DE, "Wie Qwen 0.6B, klingt aber besser. Für starke NVIDIA-Grafikkarten mit rund 5 GB freiem Grafikspeicher neben dem Spiel." }, { FR, "Comme Qwen 0.6B, mais avec un meilleur rendu. Pour les cartes graphiques NVIDIA puissantes disposant d'environ 5 Go de mémoire vidéo libre à côté du jeu." }, { JP, "Qwen 0.6Bと同様ですが、より自然な音質。ゲームとは別に約5GBの空きVRAMがある高性能なNVIDIAグラフィックカード向け。" } },
+        ["Reuse identical lines for a few minutes (restarts local instance)"] = new() { { DE, "Gleiche Zeilen ein paar Minuten wiederverwenden (startet lokale Instanz neu)" }, { FR, "Réutiliser les répliques identiques pendant quelques minutes (redémarre l'instance locale)" }, { JP, "同じセリフを数分間再利用する（ローカルインスタンスを再起動）" } },
+        ["Qwen: calmer delivery (temperature 0.7 instead of 0.9)"] = new() { { DE, "Qwen: ruhigere Betonung (Temperatur 0,7 statt 0,9)" }, { FR, "Qwen : diction plus calme (température 0,7 au lieu de 0,9)" }, { JP, "Qwen：落ち着いた話し方（温度0.9の代わりに0.7）" } },
+        ["Runs on the processor, so your graphics card stays with the game, and sounds clearly better than MOSS. One model per language (no Japanese); needs a reasonably fast CPU."] = new() { { DE, "Läuft auf dem Prozessor, die Grafikkarte bleibt also beim Spiel, und klingt deutlich besser als MOSS. Ein Modell je Sprache (kein Japanisch); braucht einen einigermaßen schnellen Prozessor." }, { FR, "Tourne sur le processeur, la carte graphique reste donc au jeu, et sonne nettement mieux que MOSS. Un modèle par langue (pas de japonais) ; nécessite un processeur assez rapide." }, { JP, "CPUで動作するためグラフィックカードはゲームに残り、MOSSより明らかに自然な音質。言語ごとに1モデル（日本語なし）。ある程度高速なCPUが必要。" } },
+        ["Pocket TTS: model size"] = new() { { DE, "Pocket TTS: Modellgröße" }, { FR, "Pocket TTS : taille du modèle" }, { JP, "Pocket TTS：モデルサイズ" } },
+        ["24 layers - better sound"] = new() { { DE, "24 Layer - besserer Klang" }, { FR, "24 couches - meilleur son" }, { JP, "24層 - 高音質" } },
+        ["6 layers - about twice as fast"] = new() { { DE, "6 Layer - etwa doppelt so schnell" }, { FR, "6 couches - environ deux fois plus rapide" }, { JP, "6層 - 約2倍高速" } },
+        ["{0} (24 layers only)"] = new() { { DE, "{0} (nur 24 Layer)" }, { FR, "{0} (24 couches uniquement)" }, { JP, "{0}（24層のみ）" } },
+        ["Pocket TTS: decoding steps"] = new() { { DE, "Pocket TTS: Dekodierschritte" }, { FR, "Pocket TTS : étapes de décodage" }, { JP, "Pocket TTS：デコードステップ数" } },
+        ["1 - fastest, occasional echo"] = new() { { DE, "1 - am schnellsten, gelegentlich Hall" }, { FR, "1 - le plus rapide, écho occasionnel" }, { JP, "1 - 最速、時々エコー" } },
+        ["4 - recommended"] = new() { { DE, "4 - empfohlen" }, { FR, "4 - recommandé" }, { JP, "4 - 推奨" } },
+        ["8 - slowest"] = new() { { DE, "8 - am langsamsten" }, { FR, "8 - le plus lent" }, { JP, "8 - 最も遅い" } },
+        ["Faster XTTS generation with FP16 (needs NVIDIA GPU, ~1.3-1.8x)"] = new() { { DE, "Schnellere XTTS-Generierung mit FP16 (NVIDIA-GPU nötig, ~1,3-1,8x)" }, { FR, "Génération XTTS plus rapide avec FP16 (GPU NVIDIA requis, ~1,3-1,8x)" }, { JP, "FP16でXTTS生成を高速化（NVIDIA GPU必須、約1.3～1.8倍）" } },
+        ["Is Windows 11"] = new() { { DE, "Windows 11" }, { FR, "Windows 11" }, { JP, "Windows 11" } },
+        ["Local install path (no spaces or dashes)"] = new() { { DE, "Lokaler Installationspfad (keine Leerzeichen oder Bindestriche)" }, { FR, "Chemin d'installation local (sans espaces ni tirets)" }, { JP, "ローカルインストールパス（スペースやダッシュなし）" } },
+        ["Custom model URL (zip with one root folder)"] = new() { { DE, "Benutzerdefinierte Modell-URL (ZIP mit einem Stammordner)" }, { FR, "URL du modèle personnalisé (zip avec un dossier racine)" }, { JP, "カスタムモデルURL（ルートフォルダ1つのzip）" } },
+        ["Custom voices URL (zip with \"voices\" folder)"] = new() { { DE, "Benutzerdefinierte Stimmen-URL (ZIP mit \"voices\"-Ordner)" }, { FR, "URL des voix personnalisées (zip avec dossier \"voices\")" }, { JP, "カスタムボイスURL（「voices」フォルダ付きzip）" } },
+        ["Custom voices URL (zip of sample files)"] = new() { { DE, "Benutzerdefinierte Stimmen-URL (ZIP mit Sample-Dateien)" }, { FR, "URL des voix personnalisées (zip de fichiers d'échantillons)" }, { JP, "カスタムボイスURL（サンプルファイルのzip）" } },
+        ["Install only custom data"] = new() { { DE, "Nur benutzerdefinierte Daten installieren" }, { FR, "Installer uniquement les données personnalisées" }, { JP, "カスタムデータのみインストール" } },
+        ["Install"] = new() { { DE, "Installieren" }, { FR, "Installer" }, { JP, "インストール" } },
+        ["Reinstall"] = new() { { DE, "Neuinstallieren" }, { FR, "Réinstaller" }, { JP, "再インストール" } },
+        ["Help complete the community dialogue database"] = new()
+        {
+            { DE, "Hilf mit, die Gemeinschafts-Dialogdatenbank zu vervollständigen" },
+            { FR, "Aidez à compléter la base de dialogues communautaire" },
+            { JP, "コミュニティの台詞データベース作成に協力する" },
+        },
+        ["Sends the dialogue line, its language and the NPC. Never your character name."] = new()
+        {
+            { DE, "Sendet die Dialogzeile, ihre Sprache und den NPC. Niemals deinen Charakternamen." },
+            { FR, "Envoie la ligne de dialogue, sa langue et le PNJ. Jamais le nom de votre personnage." },
+            { JP, "台詞・言語・NPC名のみを送信します。あなたのキャラクター名は送信されません。" },
+        },
+        ["Install Test"] = new() { { DE, "Test installieren" }, { FR, "Installer le test" }, { JP, "テスト版インストール" } },
+        ["Test-installing..."] = new() { { DE, "Testinstallation läuft..." }, { FR, "Installation de test..." }, { JP, "テスト版インストール中..." } },
+        ["Installing..."] = new() { { DE, "Installiere..." }, { FR, "Installation..." }, { JP, "インストール中..." } },
+        ["Update"] = new() { { DE, "Aktualisieren" }, { FR, "Mettre à jour" }, { JP, "更新" } },
+        ["Check for updates"] = new() { { DE, "Nach Updates suchen" }, { FR, "Rechercher des mises à jour" }, { JP, "更新を確認" } },
+        ["Checking..."] = new() { { DE, "Suche..." }, { FR, "Recherche..." }, { JP, "確認中..." } },
+        ["up to date"] = new() { { DE, "aktuell" }, { FR, "à jour" }, { JP, "最新" } },
+        ["update check failed"] = new() { { DE, "Update-Suche fehlgeschlagen" }, { FR, "échec de la recherche" }, { JP, "更新確認に失敗" } },
+        ["Wrapper"] = new() { { DE, "Wrapper" }, { FR, "Wrapper" }, { JP, "ラッパー" } },
+        ["latest"] = new() { { DE, "neueste" }, { FR, "dernière" }, { JP, "最新" } },
+        ["Reinstall (removes existing and installs fresh)"] = new() { { DE, "Neuinstallieren (bestehende Installation löschen und neu installieren)" }, { FR, "Réinstaller (supprime l'existant et installe à neuf)" }, { JP, "再インストール（既存を削除して新規インストール）" } },
+        ["Start"] = new() { { DE, "Starten" }, { FR, "Démarrer" }, { JP, "開始" } },
+        ["Stop"] = new() { { DE, "Stoppen" }, { FR, "Arrêter" }, { JP, "停止" } },
+        ["Starting..."] = new() { { DE, "Starte..." }, { FR, "Démarrage..." }, { JP, "起動中..." } },
+        ["Stopping..."] = new() { { DE, "Stoppe..." }, { FR, "Arrêt..." }, { JP, "停止中..." } },
+        ["Running"] = new() { { DE, "Läuft" }, { FR, "En cours" }, { JP, "実行中" } },
+        ["Test"] = new() { { DE, "Testen" }, { FR, "Tester" }, { JP, "テスト" } },
+        ["Testing..."] = new() { { DE, "Teste..." }, { FR, "Test en cours..." }, { JP, "テスト中..." } },
+        ["Reload model"] = new() { { DE, "Modell neu laden" }, { FR, "Recharger le modèle" }, { JP, "モデルを再読み込み" } },
+        ["Reload voices"] = new() { { DE, "Stimmen neu laden" }, { FR, "Recharger les voix" }, { JP, "ボイスを再読み込み" } },
+        ["Alltalk base URL"] = new() { { DE, "Alltalk Basis-URL" }, { FR, "URL de base Alltalk" }, { JP, "Alltalk ベースURL" } },
+        ["EchokrauTTS base URL"] = new() { { DE, "EchokrauTTS Basis-URL" }, { FR, "URL de base EchokrauTTS" }, { JP, "EchokrauTTS ベースURL" } },
+        ["EchokrauTTS local instance"] = new() { { DE, "EchokrauTTS lokale Instanz" }, { FR, "Instance locale EchokrauTTS" }, { JP, "EchokrauTTS ローカルインスタンス" } },
+        ["EchokrauTTS remote connection"] = new() { { DE, "EchokrauTTS Remote-Verbindung" }, { FR, "Connexion distante EchokrauTTS" }, { JP, "EchokrauTTS リモート接続" } },
+        ["Model name to reload"] = new() { { DE, "Modellname zum Neuladen" }, { FR, "Nom du modèle à recharger" }, { JP, "再読み込みするモデル名" } },
+        ["Model to reload"] = new() { { DE, "Modellname zum Neuladen" }, { FR, "Nom du modèle à recharger" }, { JP, "再読み込みするモデル名" } },
+        ["Local instance path:"] = new() { { DE, "Pfad der lokalen Instanz:" }, { FR, "Chemin de l'instance locale :" }, { JP, "ローカルインスタンスパス:" } },
+
+        // ── Alltalk error/info texts ──────────────────────────────────────
+        ["The Alltalk path must not contain spaces or dashes.\r\nPlease make sure it's formatted correctly."] = new()
+        {
+            { DE, "Der Alltalk-Pfad darf keine Leerzeichen oder Bindestriche enthalten.\r\nBitte stellen Sie sicher, dass er korrekt formatiert ist." },
+            { FR, "Le chemin Alltalk ne doit pas contenir d'espaces ni de tirets.\r\nVeuillez vérifier le format." },
+            { JP, "Alltalkのパスにスペースやダッシュを含めることはできません。\r\n正しい形式になっているか確認してください。" },
+        },
+        ["The Alltalk path must not be empty.\r\nPlease enter a valid path."] = new()
+        {
+            { DE, "Der Alltalk-Pfad darf nicht leer sein.\r\nBitte geben Sie einen gültigen Pfad ein." },
+            { FR, "Le chemin Alltalk ne doit pas être vide.\r\nVeuillez entrer un chemin valide." },
+            { JP, "Alltalkのパスを空にすることはできません。\r\n有効なパスを入力してください。" },
+        },
+        // Key must match the call site in NativeAlltalkBuilder VERBATIM. It did not: the dictionary
+        // said "C:\\Alltalk" while the call passed the install-root example, so the lookup missed and
+        // every language silently got the English text. Both now carry the current default root.
+        ["Please enter an absolute path (e.g. C:\\LocalTTS)."] = new()
+        {
+            { DE, "Bitte geben Sie einen absoluten Pfad ein (z.B. C:\\LocalTTS)." },
+            { FR, "Veuillez entrer un chemin absolu (ex. C:\\LocalTTS)." },
+            { JP, "絶対パスを入力してください（例: C:\\LocalTTS）。" },
+        },
+        ["The path must point to a subfolder, not the root of a drive (e.g. C:\\LocalTTS)."] = new()
+        {
+            { DE, "Der Pfad muss auf einen Unterordner zeigen, nicht auf das Wurzelverzeichnis eines Laufwerks (z.B. C:\\LocalTTS)." },
+            { FR, "Le chemin doit pointer vers un sous-dossier, pas vers la racine d'un lecteur (ex. C:\\LocalTTS)." },
+            { JP, "パスはドライブのルートではなくサブフォルダを指定してください（例: C:\\LocalTTS）。" },
+        },
+        ["The path contains invalid characters."] = new()
+        {
+            { DE, "Der Pfad enthält ungültige Zeichen." },
+            { FR, "Le chemin contient des caractères invalides." },
+            { JP, "パスに無効な文字が含まれています。" },
+        },
+        ["The path must not contain spaces or dashes."] = new()
+        {
+            { DE, "Der Pfad darf keine Leerzeichen oder Bindestriche enthalten." },
+            { FR, "Le chemin ne doit pas contenir d'espaces ni de tirets." },
+            { JP, "パスにスペースやダッシュを含めることはできません。" },
+        },
+        ["The CUDA Toolkit does not appear to be installed.\r\nIt is required for local Alltalk instances."] = new()
+        {
+            { DE, "Das CUDA Toolkit scheint nicht installiert zu sein.\r\nEs wird für lokale Alltalk-Instanzen benötigt." },
+            { FR, "Le CUDA Toolkit ne semble pas être installé.\r\nIl est requis pour les instances locales Alltalk." },
+            { JP, "CUDA Toolkitがインストールされていないようです。\r\nローカルAlltalkインスタンスに必要です。" },
+        },
+        ["Custom XTTS model URL (zip file with all files in one root folder):"] = new()
+        {
+            { DE, "Benutzerdefinierte XTTS-Modell-URL (ZIP-Datei mit einem Stammordner):" },
+            { FR, "URL du modèle XTTS personnalisé (fichier zip avec un dossier racine) :" },
+            { JP, "カスタムXTTSモデルURL（ルートフォルダ1つのzipファイル）:" },
+        },
+        ["Custom voices URL (zip file with a \"voices\" root folder):"] = new()
+        {
+            { DE, "Benutzerdefinierte Stimmen-URL (ZIP-Datei mit \"voices\"-Stammordner):" },
+            { FR, "URL des voix personnalisées (fichier zip avec dossier racine \"voices\") :" },
+            { JP, "カスタムボイスURL（「voices」ルートフォルダ付きzipファイル）:" },
+        },
+        ["The installation requires about 20 GB of disk space and may take a while depending on your connection."] = new()
+        {
+            { DE, "Die Installation benötigt ca. 20 GB Speicherplatz und kann je nach Verbindung einige Zeit dauern." },
+            { FR, "L'installation nécessite environ 20 Go d'espace disque et peut prendre du temps selon votre connexion." },
+            { JP, "インストールには約20GBのディスク容量が必要で、接続速度によっては時間がかかる場合があります。" },
+        },
+        ["Up to two shell windows may open during installation — you can follow the progress there."] = new()
+        {
+            { DE, "Während der Installation können bis zu zwei Konsolenfenster geöffnet werden — dort können Sie den Fortschritt verfolgen." },
+            { FR, "Jusqu'à deux fenêtres de console peuvent s'ouvrir pendant l'installation — vous pouvez suivre la progression." },
+            { JP, "インストール中に最大2つのシェルウィンドウが開く場合があります。そこで進捗を確認できます。" },
+        },
+        ["You are not on Windows. Additional setup steps are required to use Alltalk locally."] = new()
+        {
+            { DE, "Sie verwenden nicht Windows. Zusätzliche Einrichtungsschritte sind erforderlich, um Alltalk lokal zu nutzen." },
+            { FR, "Vous n'êtes pas sous Windows. Des étapes supplémentaires sont nécessaires pour utiliser Alltalk localement." },
+            { JP, "Windowsではありません。Alltalkをローカルで使用するには追加のセットアップ手順が必要です。" },
+        },
+        ["Please refer to the Discord or the install instructions from erew123 (link above)."] = new()
+        {
+            { DE, "Bitte beachten Sie den Discord oder die Installationsanweisungen von erew123 (Link oben)." },
+            { FR, "Veuillez consulter le Discord ou les instructions d'installation d'erew123 (lien ci-dessus)." },
+            { JP, "Discordまたはerew123のインストール手順（上のリンク）をご参照ください。" },
+        },
+        ["If you have already completed these steps, you can ignore this message."] = new()
+        {
+            { DE, "Wenn Sie diese Schritte bereits abgeschlossen haben, können Sie diese Meldung ignorieren." },
+            { FR, "Si vous avez déjà effectué ces étapes, vous pouvez ignorer ce message." },
+            { JP, "これらの手順を完了済みの場合は、このメッセージを無視してください。" },
+        },
+        ["No audio will be generated in this mode."] = new()
+        {
+            { DE, "In diesem Modus wird kein Audio generiert." },
+            { FR, "Aucun audio ne sera généré dans ce mode." },
+            { JP, "このモードでは音声は生成されません。" },
+        },
+        ["Only use this if you are unable to run Alltalk at all."] = new()
+        {
+            { DE, "Verwenden Sie dies nur, wenn Sie Alltalk überhaupt nicht ausführen können." },
+            { FR, "N'utilisez ceci que si vous ne pouvez pas du tout exécuter Alltalk." },
+            { JP, "Alltalkを全く使用できない場合にのみ使用してください。" },
+        },
+        ["You will need to obtain audio files from a friend or via a Google Drive share link."] = new()
+        {
+            { DE, "Sie müssen Audiodateien von einem Freund oder über einen Google Drive Share-Link besorgen." },
+            { FR, "Vous devrez obtenir les fichiers audio d'un ami ou via un lien de partage Google Drive." },
+            { JP, "友人またはGoogle Drive共有リンクから音声ファイルを入手する必要があります。" },
+        },
+
+        // ── First Time Wizard ─────────────────────────────────────────────
+        ["Welcome to Echokraut!"] = new() { { DE, "Willkommen bei Echokraut!" }, { FR, "Bienvenue dans Echokraut !" }, { JP, "Echokrautへようこそ！" } },
+        ["This plugin gives nearly every text in the game a voice using Alltalk TTS."] = new()
+        {
+            { DE, "Dieses Plugin gibt fast jedem Text im Spiel eine Stimme mittels Alltalk TTS." },
+            { FR, "Ce plugin donne une voix à presque tous les textes du jeu grâce à Alltalk TTS." },
+            { JP, "このプラグインはAlltalk TTSを使用して、ゲーム内のほぼすべてのテキストにボイスを付けます。" },
+        },
+        ["Choose how you want to set up text-to-speech:"] = new()
+        {
+            { DE, "Wählen Sie aus, wie Sie die Sprachausgabe einrichten möchten:" },
+            { FR, "Choisissez comment configurer la synthèse vocale :" },
+            { JP, "テキスト読み上げのセットアップ方法を選択してください:" },
+        },
+        ["Local TTS"] = new() { { DE, "Lokale TTS" }, { FR, "TTS local" }, { JP, "ローカルTTS" } },
+        ["Runs on your GPU or CPU — best quality, requires ~20GB disk space"] = new()
+        {
+            { DE, "Läuft auf Ihrer GPU oder CPU — beste Qualität, benötigt ~20 GB Speicherplatz" },
+            { FR, "Fonctionne sur votre GPU ou CPU — meilleure qualité, nécessite ~20 Go d'espace" },
+            { JP, "GPUまたはCPUで実行 — 最高品質、約20GBのディスク容量が必要" },
+        },
+        ["Local TTS\nRuns on your GPU or CPU — best quality, requires ~20GB disk space"] = new()
+        {
+            { DE, "Lokale TTS\nLäuft auf Ihrer GPU oder CPU — beste Qualität, benötigt ~20 GB Speicherplatz" },
+            { FR, "TTS local\nFonctionne sur votre GPU ou CPU — meilleure qualité, nécessite ~20 Go d'espace" },
+            { JP, "ローカルTTS\nGPUまたはCPUで実行 — 最高品質、約20GBのディスク容量が必要" },
+        },
+        ["Remote Server"] = new() { { DE, "Remote-Server" }, { FR, "Serveur distant" }, { JP, "リモートサーバー" } },
+        ["Choose your TTS engine:"] = new() { { DE, "Wähle deine TTS-Engine:" }, { FR, "Choisissez votre moteur TTS :" }, { JP, "TTSエンジンを選択：" } },
+        ["Engine"] = new() { { DE, "Engine" }, { FR, "Moteur" }, { JP, "エンジン" } },
+        ["Connect to a server running your chosen TTS engine (yours or someone else's)"] = new()
+        {
+            { DE, "Verbindung zu einem Server mit der gewählten TTS-Engine herstellen (eigener oder fremder)" },
+            { FR, "Connexion à un serveur exécutant le moteur TTS choisi (le vôtre ou celui d'un autre)" },
+            { JP, "選択したTTSエンジンを実行しているサーバーに接続（自分または他人のサーバー）" },
+        },
+        ["Connect to a server running Alltalk (yours or someone else's)"] = new()
+        {
+            { DE, "Verbindung zu einem Server mit Alltalk herstellen (eigener oder fremder)" },
+            { FR, "Connexion à un serveur Alltalk (le vôtre ou celui d'un autre)" },
+            { JP, "Alltalkを実行しているサーバーに接続（自分または他人のサーバー）" },
+        },
+        ["Remote Server\nConnect to a server running Alltalk (yours or someone else's)"] = new()
+        {
+            { DE, "Remote-Server\nVerbindung zu einem Server mit Alltalk herstellen (eigener oder fremder)" },
+            { FR, "Serveur distant\nConnexion à un serveur Alltalk (le vôtre ou celui d'un autre)" },
+            { JP, "リモートサーバー\nAlltalkを実行しているサーバーに接続（自分または他人のサーバー）" },
+        },
+        ["Audio Files Only"] = new() { { DE, "Nur Audiodateien" }, { FR, "Fichiers audio uniquement" }, { JP, "音声ファイルのみ" } },
+        ["No generation — use pre-made audio from friends or Google Drive"] = new()
+        {
+            { DE, "Keine Generierung — verwenden Sie vorgefertigte Audiodateien von Freunden oder Google Drive" },
+            { FR, "Pas de génération — utilisez des fichiers audio préparés par des amis ou Google Drive" },
+            { JP, "生成なし — 友人やGoogle Driveから既製の音声ファイルを使用" },
+        },
+        ["Audio Files Only\nNo generation — use pre-made audio from friends or Google Drive"] = new()
+        {
+            { DE, "Nur Audiodateien\nKeine Generierung — verwenden Sie vorgefertigte Audiodateien von Freunden oder Google Drive" },
+            { FR, "Fichiers audio uniquement\nPas de génération — utilisez des fichiers audio préparés par des amis ou Google Drive" },
+            { JP, "音声ファイルのみ\n生成なし — 友人やGoogle Driveから既製の音声ファイルを使用" },
+        },
+        ["You will need to get audio files from a friend or via Google Drive."] = new()
+        {
+            { DE, "Sie müssen Audiodateien von einem Freund oder über Google Drive besorgen." },
+            { FR, "Vous devrez obtenir les fichiers audio d'un ami ou via Google Drive." },
+            { JP, "友人またはGoogle Driveから音声ファイルを入手する必要があります。" },
+        },
+        ["Local audio directory (where audio files will be stored):"] = new()
+        {
+            { DE, "Lokales Audioverzeichnis (wo Audiodateien gespeichert werden):" },
+            { FR, "Dossier audio local (où les fichiers audio seront stockés) :" },
+            { JP, "ローカル音声ディレクトリ（音声ファイルの保存先）:" },
+        },
+        ["No audio will be generated. Use pre-made audio from friends or Google Drive."] = new()
+        {
+            { DE, "Es wird kein Audio generiert. Verwenden Sie vorgefertigte Audiodateien von Freunden oder Google Drive." },
+            { FR, "Aucun audio ne sera généré. Utilisez des fichiers audio préparés par des amis ou Google Drive." },
+            { JP, "音声は生成されません。友人やGoogle Driveから既製の音声ファイルを使用してください。" },
+        },
+        ["Download from Google Drive"] = new() { { DE, "Von Google Drive herunterladen" }, { FR, "Télécharger depuis Google Drive" }, { JP, "Google Driveからダウンロード" } },
+        ["Local audio directory"] = new() { { DE, "Lokales Audioverzeichnis" }, { FR, "Dossier audio local" }, { JP, "ローカル音声ディレクトリ" } },
+        ["You're all set! Press the button below to start using Echokraut."] = new()
+        {
+            { DE, "Alles bereit! Drücken Sie den Button unten, um Echokraut zu verwenden." },
+            { FR, "Vous êtes prêt ! Appuyez sur le bouton ci-dessous pour commencer." },
+            { JP, "準備完了！下のボタンを押してEchokrautの使用を開始してください。" },
+        },
+        ["Use /ek in chat to open the full configuration window at any time."] = new()
+        {
+            { DE, "Verwenden Sie /ek im Chat, um jederzeit das Konfigurationsfenster zu öffnen." },
+            { FR, "Utilisez /ek dans le chat pour ouvrir la fenêtre de configuration à tout moment." },
+            { JP, "チャットで /ek と入力すると、いつでも設定ウィンドウを開けます。" },
+        },
+        ["Use /ek in chat to open the full configuration window."] = new()
+        {
+            { DE, "Verwenden Sie /ek im Chat, um das Konfigurationsfenster zu öffnen." },
+            { FR, "Utilisez /ek dans le chat pour ouvrir la fenêtre de configuration." },
+            { JP, "チャットで /ek と入力すると設定ウィンドウを開けます。" },
+        },
+        ["You're all set!"] = new() { { DE, "Alles bereit!" }, { FR, "Vous êtes prêt !" }, { JP, "準備完了！" } },
+
+        // ── First-time wizard: Step 1 header + Step 2 finish summary ──────
+        ["Configure your setup"] = new() { { DE, "Richte deine Konfiguration ein" }, { FR, "Configurez votre installation" }, { JP, "セットアップを構成" } },
+        ["No live generation. Echokraut will only play pre-existing audio files."] = new()
+        {
+            { DE, "Keine Live-Generierung. Echokraut spielt nur vorhandene Audiodateien ab." },
+            { FR, "Pas de génération en direct. Echokraut ne lit que les fichiers audio existants." },
+            { JP, "ライブ生成なし。Echokrautは既存の音声ファイルのみ再生します。" },
+        },
+        ["Mode"] = new() { { DE, "Modus" }, { FR, "Mode" }, { JP, "モード" } },
+        ["Install path"] = new() { { DE, "Installationspfad" }, { FR, "Chemin d'installation" }, { JP, "インストールパス" } },
+        ["Install status"] = new() { { DE, "Installationsstatus" }, { FR, "État d'installation" }, { JP, "インストール状況" } },
+        ["Installed"] = new() { { DE, "Installiert" }, { FR, "Installé" }, { JP, "インストール済み" } },
+        ["Not installed yet"] = new() { { DE, "Noch nicht installiert" }, { FR, "Pas encore installé" }, { JP, "未インストール" } },
+        ["Server URL"] = new() { { DE, "Server-URL" }, { FR, "URL du serveur" }, { JP, "サーバーURL" } },
+        ["Connection"] = new() { { DE, "Verbindung" }, { FR, "Connexion" }, { JP, "接続" } },
+        ["Connection successful"] = new() { { DE, "Verbindung erfolgreich" }, { FR, "Connexion réussie" }, { JP, "接続成功" } },
+        ["Not yet tested"] = new() { { DE, "Noch nicht getestet" }, { FR, "Pas encore testé" }, { JP, "未テスト" } },
+        ["Audio path"] = new() { { DE, "Audio-Pfad" }, { FR, "Chemin audio" }, { JP, "音声パス" } },
+        ["Disabled"] = new() { { DE, "Deaktiviert" }, { FR, "Désactivé" }, { JP, "無効" } },
+        ["Testing..."] = new() { { DE, "Teste..." }, { FR, "Test en cours..." }, { JP, "テスト中..." } },
+        ["No backend selected"] = new() { { DE, "Kein Backend ausgewählt" }, { FR, "Aucun backend sélectionné" }, { JP, "バックエンド未選択" } },
+
+        // ── Common buttons ────────────────────────────────────────────────
+        ["Next"] = new() { { DE, "Weiter" }, { FR, "Suivant" }, { JP, "次へ" } },
+        ["I Understand"] = new() { { DE, "Verstanden" }, { FR, "J'ai compris" }, { JP, "了解" } },
+        ["Play"] = new() { { DE, "Abspielen" }, { FR, "Lecture" }, { JP, "再生" } },
+        ["Pause"] = new() { { DE, "Pause" }, { FR, "Pause" }, { JP, "一時停止" } },
+        ["Mute"] = new() { { DE, "Stumm" }, { FR, "Muet" }, { JP, "ミュート" } },
+        ["Add"] = new() { { DE, "Hinzufügen" }, { FR, "Ajouter" }, { JP, "追加" } },
+        ["Delete"] = new() { { DE, "Löschen" }, { FR, "Supprimer" }, { JP, "削除" } },
+        ["Global Volume"] = new() { { DE, "Gesamtlautstärke" }, { FR, "Volume global" }, { JP, "全体音量" } },
+        ["OK?"] = new() { { DE, "OK?" }, { FR, "OK ?" }, { JP, "OK?" } },
+        ["Delete audio"] = new() { { DE, "Audio lösch." }, { FR, "Suppr. audio" }, { JP, "音声削除" } },
+        ["Delete mapping"] = new() { { DE, "Zuord. lösch." }, { FR, "Suppr. assoc." }, { JP, "割当削除" } },
+        ["Clear logs"] = new() { { DE, "Protokoll leeren" }, { FR, "Effacer les journaux" }, { JP, "ログをクリア" } },
+        ["Clear mapped NPCs"] = new() { { DE, "Zugeordnete NPCs löschen" }, { FR, "Effacer les PNJ associés" }, { JP, "マッピング済みNPCをクリア" } },
+        ["Clear mapped players"] = new() { { DE, "Zugeordnete Spieler löschen" }, { FR, "Effacer les joueurs associés" }, { JP, "マッピング済みプレイヤーをクリア" } },
+        ["Clear mapped bubbles"] = new() { { DE, "Zugeordnete Sprechblasen löschen" }, { FR, "Effacer les bulles associées" }, { JP, "マッピング済み吹き出しをクリア" } },
+        ["Wipe database & local audio"] = new() { { DE, "Datenbank & lokales Audio löschen" }, { FR, "Effacer base de données & audio local" }, { JP, "データベースとローカル音声を消去" } },
+        ["Confirm wipe everything!"] = new() { { DE, "Alles wirklich löschen!" }, { FR, "Confirmer tout effacer !" }, { JP, "全消去を確認！" } },
+        ["Wiping..."] = new() { { DE, "Lösche..." }, { FR, "Effacement..." }, { JP, "消去中..." } },
+        ["Scanning {0} for dialogs..."] = new() { { DE, "Durchsuche {0} nach Dialogen..." }, { FR, "Analyse de {0} pour les dialogues..." }, { JP, "{0}でダイアログをスキャン中..." } },
+        ["Loading NPC names..."] = new() { { DE, "Lade NPC-Namen..." }, { FR, "Chargement des noms de PNJ..." }, { JP, "NPC名を読み込み中..." } },
+        ["Loading BNpc names..."] = new() { { DE, "Lade BNpc-Namen..." }, { FR, "Chargement des noms BNpc..." }, { JP, "BNpc名を読み込み中..." } },
+        ["Loading SwitchTalkVariation..."] = new() { { DE, "Lade SwitchTalkVariation..." }, { FR, "Chargement de SwitchTalkVariation..." }, { JP, "SwitchTalkVariationを読み込み中..." } },
+        ["Loading NPC data..."] = new() { { DE, "Lade NPC-Daten..." }, { FR, "Chargement des données PNJ..." }, { JP, "NPCデータを読み込み中..." } },
+        ["Loading NPC locations..."] = new() { { DE, "Lade NPC-Standorte..." }, { FR, "Chargement des emplacements PNJ..." }, { JP, "NPCの場所を読み込み中..." } },
+        ["Building DefaultTalk chain lookup..."] = new() { { DE, "Erstelle DefaultTalk-Verkettung..." }, { FR, "Construction de la chaîne DefaultTalk..." }, { JP, "DefaultTalkチェーンを構築中..." } },
+        ["Building Balloon lookup..."] = new() { { DE, "Erstelle Sprechblasen-Index..." }, { FR, "Construction de l'index des bulles..." }, { JP, "吹き出しインデックスを構築中..." } },
+        ["Scanning LGB territory files..."] = new() { { DE, "Scanne LGB-Gebietsdateien..." }, { FR, "Analyse des fichiers de territoire LGB..." }, { JP, "LGB地域ファイルをスキャン中..." } },
+        ["LGB pass 2: searching for {0} unmatched Balloon IDs..."] = new() { { DE, "LGB Durchgang 2: suche {0} nicht zugeordnete Sprechblasen..." }, { FR, "LGB passe 2 : recherche de {0} bulles non associées..." }, { JP, "LGBパス2: 未一致の吹き出しID {0}件を検索中..." } },
+        ["Processing named NPCs..."] = new() { { DE, "Verarbeite benannte NPCs..." }, { FR, "Traitement des PNJ nommés..." }, { JP, "名前付きNPCを処理中..." } },
+        ["Processing unnamed NPCs..."] = new() { { DE, "Verarbeite unbenannte NPCs..." }, { FR, "Traitement des PNJ non nommés..." }, { JP, "名前なしNPCを処理中..." } },
+        ["Diagnosing unmatched DefaultTalk..."] = new() { { DE, "Diagnostiziere nicht zugeordnete DefaultTalks..." }, { FR, "Diagnostic des DefaultTalk non associés..." }, { JP, "未一致のDefaultTalkを診断中..." } },
+        ["Collecting unmatched dialogs..."] = new() { { DE, "Sammle nicht zugeordnete Dialoge..." }, { FR, "Collecte des dialogues non associés..." }, { JP, "未一致のダイアログを収集中..." } },
+        ["Scanning for quest dialogs..."] = new() { { DE, "Durchsuche Quest-Dialoge..." }, { FR, "Analyse des dialogues de quête..." }, { JP, "クエストダイアログをスキャン中..." } },
+        ["Clearing..."] = new() { { DE, "Wird gelöscht..." }, { FR, "Suppression..." }, { JP, "削除中..." } },
+        ["Harvesting cutscene dialogs..."] = new() { { DE, "Sammle Cutscene-Dialoge..." }, { FR, "Collecte des dialogues de scènes cinématiques..." }, { JP, "カットシーンダイアログを収集中..." } },
+        ["Harvesting scripted dialogs..."] = new() { { DE, "Sammle Skript-Dialoge..." }, { FR, "Collecte des dialogues scriptés..." }, { JP, "スクリプトダイアログを収集中..." } },
+        ["Saving voice clips to database..."] = new() { { DE, "Speichere Sprachclips in der Datenbank..." }, { FR, "Enregistrement des clips vocaux en base..." }, { JP, "ボイスクリップをデータベースに保存中..." } },
+        ["Linking dialogs to characters..."] = new() { { DE, "Verknüpfe Dialoge mit Charakteren..." }, { FR, "Liaison des dialogues aux personnages..." }, { JP, "ダイアログをキャラクターに紐付け中..." } },
+        ["{0} generation progress"] = new() { { DE, "Generierungsfortschritt: {0}" }, { FR, "Progression de génération : {0}" }, { JP, "{0} 生成進捗" } },
+        ["Done: {0} dialogs persisted"] = new() { { DE, "Fertig: {0} Dialoge gespeichert" }, { FR, "Terminé : {0} dialogues enregistrés" }, { JP, "完了: {0}件のダイアログを保存しました" } },
+        ["Cancelled."] = new() { { DE, "Abgebrochen." }, { FR, "Annulé." }, { JP, "キャンセルされました。" } },
+        ["Error: {0}"] = new() { { DE, "Fehler: {0}" }, { FR, "Erreur : {0}" }, { JP, "エラー: {0}" } },
+        ["Confirm clear NPCs!"] = new() { { DE, "NPCs löschen bestätigen!" }, { FR, "Confirmer l'effacement des PNJ !" }, { JP, "NPCクリアを確認！" } },
+        ["Confirm clear players!"] = new() { { DE, "Spieler löschen bestätigen!" }, { FR, "Confirmer l'effacement des joueurs !" }, { JP, "プレイヤークリアを確認！" } },
+        ["Confirm clear bubbles!"] = new() { { DE, "Sprechblasen löschen bestätigen!" }, { FR, "Confirmer l'effacement des bulles !" }, { JP, "吹き出しクリアを確認！" } },
+        ["Reload remote mappings"] = new() { { DE, "Remote-Zuordnungen neu laden" }, { FR, "Recharger les associations distantes" }, { JP, "リモートマッピングを再読み込み" } },
+        ["Join discord server"] = new() { { DE, "Discord-Server beitreten" }, { FR, "Rejoindre le serveur Discord" }, { JP, "Discordサーバーに参加" } },
+        ["Alltalk Github"] = new() { { DE, "Alltalk GitHub" }, { FR, "Alltalk GitHub" }, { JP, "Alltalk GitHub" } },
+        ["Configure"] = new() { { DE, "Konfigurieren" }, { FR, "Configurer" }, { JP, "設定" } },
+        ["Data Harvest"] = new() { { DE, "Daten-Export" }, { FR, "Récolte de données" }, { JP, "データ収集" } },
+        ["Start Harvest"] = new() { { DE, "Export starten" }, { FR, "Démarrer la récolte" }, { JP, "収集開始" } },
+        ["Stop Harvest"] = new() { { DE, "Export stoppen" }, { FR, "Arrêter la récolte" }, { JP, "収集停止" } },
+        ["Export Quest Lua Debug"] = new() { { DE, "Quest-Lua-Debug exportieren" }, { FR, "Exporter debug Lua quête" }, { JP, "クエストLuaデバッグ出力" } },
+
+        // ── Encounter History ────────────────────────────────────────────
+        ["Voice Clip Manager"] = new() { { DE, "Sprachaufnahmen-Verwaltung" }, { FR, "Gestionnaire de clips vocaux" }, { JP, "音声クリップ管理" } },
+        ["Voice Clip Detail"] = new() { { DE, "Sprachaufnahmen-Details" }, { FR, "Détails du clip vocal" }, { JP, "音声クリップ詳細" } },
+        ["Open configuration window"] = new() { { DE, "Konfigurationsfenster öffnen" }, { FR, "Ouvrir la fenêtre de configuration" }, { JP, "設定ウィンドウを開く" } },
+        ["Open Game Data Tools window"] = new() { { DE, "Game-Data-Tools-Fenster öffnen" }, { FR, "Ouvrir la fenêtre Outils de données" }, { JP, "ゲームデータツールウィンドウを開く" } },
+        ["Open Voice Clip Manager"] = new() { { DE, "Sprachaufnahmen-Verwaltung öffnen" }, { FR, "Ouvrir le gestionnaire de clips vocaux" }, { JP, "音声クリップ管理を開く" } },
+        ["Edit Character"] = new() { { DE, "Charakter bearbeiten" }, { FR, "Modifier le personnage" }, { JP, "キャラクター編集" } },
+        ["Generate All Unsaved"] = new() { { DE, "Alle nicht gespeicherten generieren" }, { FR, "Générer tous les non sauvegardés" }, { JP, "未保存をすべて生成" } },
+        ["Delete All Saved"] = new() { { DE, "Alle gespeicherten löschen" }, { FR, "Supprimer tous les sauvegardés" }, { JP, "保存済みをすべて削除" } },
+        ["Clear History"] = new() { { DE, "Verlauf löschen" }, { FR, "Effacer l'historique" }, { JP, "履歴をクリア" } },
+        ["Click again to confirm!"] = new() { { DE, "Erneut klicken zum Bestätigen!" }, { FR, "Cliquez à nouveau pour confirmer !" }, { JP, "もう一度クリックして確認！" } },
+        ["NPC Name"] = new() { { DE, "NPC-Name" }, { FR, "Nom du PNJ" }, { JP, "NPC名" } },
+        ["Text Content"] = new() { { DE, "Textinhalt" }, { FR, "Contenu du texte" }, { JP, "テキスト内容" } },
+        ["Group by NPC"] = new() { { DE, "Nach NPC gruppieren" }, { FR, "Grouper par PNJ" }, { JP, "NPCごとにグループ化" } },
+        ["Race/Gender"] = new() { { DE, "Rasse/Geschlecht" }, { FR, "Race/Genre" }, { JP, "種族/性別" } },
+        ["Voice Clips"] = new() { { DE, "Sprachaufnahmen" }, { FR, "Clips vocaux" }, { JP, "音声クリップ" } },
+        ["Generated"] = new() { { DE, "Generiert" }, { FR, "Générés" }, { JP, "生成済み" } },
+        ["Main Scenario"] = new() { { DE, "Hauptszenario" }, { FR, "Épopée" }, { JP, "メインクエスト" } },
+        ["Side Quest"] = new() { { DE, "Nebenquest" }, { FR, "Quête annexe" }, { JP, "サブクエスト" } },
+        ["Unlock / Class Quest"] = new() { { DE, "Freischalt-/Jobquest" }, { FR, "Quête de déverrouillage" }, { JP, "解放/ジョブクエスト" } },
+        ["Beast Tribe"] = new() { { DE, "Stammesquest" }, { FR, "Quête tribale" }, { JP, "蛮族クエスト" } },
+        ["Repeatable"] = new() { { DE, "Wiederholbar" }, { FR, "Répétable" }, { JP, "リピータブル" } },
+        ["Seasonal Event"] = new() { { DE, "Saisonales Event" }, { FR, "Événement saisonnier" }, { JP, "季節イベント" } },
+        ["Non-Quest Dialog"] = new() { { DE, "Nicht-Quest-Dialog" }, { FR, "Dialogue hors quête" }, { JP, "クエスト外" } },
+        ["All"] = new() { { DE, "Alle" }, { FR, "Tous" }, { JP, "すべて" } },
+        ["Unknown Area"] = new() { { DE, "Unbekanntes Gebiet" }, { FR, "Zone inconnue" }, { JP, "不明なエリア" } },
+        ["Timestamp"] = new() { { DE, "Zeitstempel" }, { FR, "Horodatage" }, { JP, "タイムスタンプ" } },
+        ["NPC"] = new() { { DE, "NPC" }, { FR, "PNJ" }, { JP, "NPC" } },
+        ["Text"] = new() { { DE, "Text" }, { FR, "Texte" }, { JP, "テキスト" } },
+        ["Actions"] = new() { { DE, "Aktionen" }, { FR, "Actions" }, { JP, "アクション" } },
+        ["Generate"] = new() { { DE, "Generieren" }, { FR, "Générer" }, { JP, "生成" } },
+        ["Generate again"] = new() { { DE, "Erneut generieren" }, { FR, "Régénérer" }, { JP, "再生成" } },
+        ["Generating voice clips..."] = new() { { DE, "Sprachaufnahmen werden generiert..." }, { FR, "Génération des clips vocaux..." }, { JP, "音声クリップを生成中..." } },
+        ["Generation progress"] = new() { { DE, "Generierungsfortschritt" }, { FR, "Progression de génération" }, { JP, "生成進捗" } },
+        ["Play voice clip"] = new() { { DE, "Sprachaufnahme abspielen" }, { FR, "Lire le clip vocal" }, { JP, "音声クリップを再生" } },
+        ["Generate and play voice clip"] = new() { { DE, "Sprachaufnahme generieren und abspielen" }, { FR, "Générer et lire le clip vocal" }, { JP, "音声クリップを生成して再生" } },
+        ["Stop voice clip"] = new() { { DE, "Wiedergabe stoppen" }, { FR, "Arrêter la lecture" }, { JP, "再生を停止" } },
+        ["Delete audio"] = new() { { DE, "Audio löschen" }, { FR, "Supprimer l'audio" }, { JP, "音声を削除" } },
+        ["No voice clips found."] = new() { { DE, "Keine Sprachaufnahmen gefunden." }, { FR, "Aucun clip vocal trouvé." }, { JP, "音声クリップが見つかりません。" } },
+        ["Gen All"] = new() { { DE, "Alle gen." }, { FR, "Tout gén." }, { JP, "全生成" } },
+        ["Del All"] = new() { { DE, "Alle lösch." }, { FR, "Tout suppr." }, { JP, "全削除" } },
+        ["Cancel"] = new() { { DE, "Abbrechen" }, { FR, "Annuler" }, { JP, "キャンセル" } },
+        ["Save"] = new() { { DE, "Speichern" }, { FR, "Enregistrer" }, { JP, "保存" } },
+        ["(none)"] = new() { { DE, "(keine)" }, { FR, "(aucune)" }, { JP, "（なし）" } },
+        ["Saved"] = new() { { DE, "Gespeichert" }, { FR, "Sauvegardé" }, { JP, "保存済み" } },
+        ["Muted"] = new() { { DE, "Stumm" }, { FR, "Muet" }, { JP, "ミュート" } },
+        ["Chat"] = new() { { DE, "Chat" }, { FR, "Chat" }, { JP, "チャット" } },
+        ["Unknown"] = new() { { DE, "Unbekannt" }, { FR, "Inconnu" }, { JP, "不明" } },
+        ["Generate and play"] = new() { { DE, "Generieren und abspielen" }, { FR, "Générer et lire" }, { JP, "生成して再生" } },
+
+        // ── Dialog controls ───────────────────────────────────────────────
+        ["Resume dialogue"] = new() { { DE, "Dialog fortsetzen" }, { FR, "Reprendre le dialogue" }, { JP, "ダイアログを再開" } },
+        ["Pause dialogue"] = new() { { DE, "Dialog pausieren" }, { FR, "Mettre en pause le dialogue" }, { JP, "ダイアログを一時停止" } },
+        ["Replay dialogue"] = new() { { DE, "Dialog wiederholen" }, { FR, "Rejouer le dialogue" }, { JP, "ダイアログをリプレイ" } },
+        ["Stop dialogue"] = new() { { DE, "Dialog stoppen" }, { FR, "Arrêter le dialogue" }, { JP, "ダイアログを停止" } },
+        ["Mute dialogue"] = new() { { DE, "Dialog stummschalten" }, { FR, "Couper le dialogue" }, { JP, "ダイアログをミュート" } },
+        ["Unmute dialogue"] = new() { { DE, "Stummschaltung aufheben" }, { FR, "Réactiver le dialogue" }, { JP, "ミュート解除" } },
+        ["Auto-advance"] = new() { { DE, "Auto-Weiter" }, { FR, "Avance auto" }, { JP, "自動進行" } },
+
+        // ── Voice Selection ───────────────────────────────────────────────
+        ["Search..."] = new() { { DE, "Suchen..." }, { FR, "Rechercher..." }, { JP, "検索..." } },
+        ["Filter"] = new() { { DE, "Filter" }, { FR, "Filtre" }, { JP, "フィルター" } },
+        ["Gender"] = new() { { DE, "Geschlecht" }, { FR, "Genre" }, { JP, "性別" } },
+        ["Race"] = new() { { DE, "Volk" }, { FR, "Race" }, { JP, "種族" } },
+        ["Name"] = new() { { DE, "Name" }, { FR, "Nom" }, { JP, "名前" } },
+        ["Voice"] = new() { { DE, "Stimme" }, { FR, "Voix" }, { JP, "ボイス" } },
+        ["Volume"] = new() { { DE, "Lautstärke" }, { FR, "Volume" }, { JP, "音量" } },
+        ["Lock"] = new() { { DE, "Sperren" }, { FR, "Verrouiller" }, { JP, "ロック" } },
+        ["Use"] = new() { { DE, "Verwenden" }, { FR, "Utiliser" }, { JP, "使用" } },
+        ["En"] = new() { { DE, "An" }, { FR, "Act." }, { JP, "有効" } },
+        ["Voice Name"] = new() { { DE, "Stimmenname" }, { FR, "Nom de la voix" }, { JP, "ボイス名" } },
+        ["Note"] = new() { { DE, "Notiz" }, { FR, "Note" }, { JP, "メモ" } },
+        ["No entries found."] = new() { { DE, "Keine Einträge gefunden." }, { FR, "Aucune entrée trouvée." }, { JP, "エントリが見つかりません。" } },
+        ["No voices configured."] = new() { { DE, "Keine Stimmen konfiguriert." }, { FR, "Aucune voix configurée." }, { JP, "ボイスが設定されていません。" } },
+
+        // ── Phonetics ─────────────────────────────────────────────────────
+        ["Original"] = new() { { DE, "Original" }, { FR, "Original" }, { JP, "原文" } },
+        ["Corrected"] = new() { { DE, "Korrigiert" }, { FR, "Corrigé" }, { JP, "修正後" } },
+        ["New original"] = new() { { DE, "Neues Original" }, { FR, "Nouvel original" }, { JP, "新しい原文" } },
+        ["New corrected"] = new() { { DE, "Neue Korrektur" }, { FR, "Nouvelle correction" }, { JP, "新しい修正" } },
+        ["No phonetic corrections found."] = new() { { DE, "Keine phonetischen Korrekturen gefunden." }, { FR, "Aucune correction phonétique trouvée." }, { JP, "音声修正が見つかりません。" } },
+
+        // ── Logs ──────────────────────────────────────────────────────────
+        ["Show debug logs"] = new() { { DE, "Debug-Protokoll anzeigen" }, { FR, "Afficher les journaux de débogage" }, { JP, "デバッグログを表示" } },
+        ["Show error logs"] = new() { { DE, "Fehlerprotokoll anzeigen" }, { FR, "Afficher les journaux d'erreurs" }, { JP, "エラーログを表示" } },
+        ["Show ID 0 entries"] = new() { { DE, "ID-0-Einträge anzeigen" }, { FR, "Afficher les entrées ID 0" }, { JP, "ID 0のエントリを表示" } },
+        ["No log entries."] = new() { { DE, "Keine Protokolleinträge." }, { FR, "Aucune entrée de journal." }, { JP, "ログエントリがありません。" } },
+
+        // ── Log tab names ─────────────────────────────────────────────────
+        ["Player choice in cutscenes"] = new() { { DE, "Spielerauswahl in Zwischensequenzen" }, { FR, "Choix du joueur en cinématique" }, { JP, "カットシーンでの選択肢" } },
+        ["Player choice"] = new() { { DE, "Spielerauswahl" }, { FR, "Choix du joueur" }, { JP, "選択肢" } },
+
+        // ── Collapsible toggle prefixes ───────────────────────────────────
+        ["[+] Advanced Options"] = new() { { DE, "[+] Erweiterte Optionen" }, { FR, "[+] Options avancées" }, { JP, "[+] 詳細オプション" } },
+        ["[-] Advanced Options"] = new() { { DE, "[-] Erweiterte Optionen" }, { FR, "[-] Options avancées" }, { JP, "[-] 詳細オプション" } },
+
+        // ── Misc ──────────────────────────────────────────────────────────
+        ["Configuration"] = new() { { DE, "Konfiguration" }, { FR, "Configuration" }, { JP, "設定" } },
+        ["First Time Setup"] = new() { { DE, "Ersteinrichtung" }, { FR, "Configuration initiale" }, { JP, "初回セットアップ" } },
+
+        // ── Changelog window ──────────────────────────────────────────────
+        ["What's New"] = new() { { DE, "Neuerungen" }, { FR, "Nouveautés" }, { JP, "新機能" } },
+        ["Echokraut Update — What's New"] = new() { { DE, "Echokraut-Update — Neuerungen" }, { FR, "Mise à jour Echokraut — Nouveautés" }, { JP, "Echokrautアップデート — 新機能" } },
+        ["I've read it"] = new() { { DE, "Gelesen" }, { FR, "J'ai lu" }, { JP, "了解" } },
+        ["No changelog available."] = new() { { DE, "Kein Changelog verfügbar." }, { FR, "Aucun changelog disponible." }, { JP, "変更履歴はありません。" } },
+
+        // ── Game Data Tools window ────────────────────────────────────────
+        ["Game Data Tools"] = new() { { DE, "Spieldaten-Werkzeuge" }, { FR, "Outils de données du jeu" }, { JP, "ゲームデータツール" } },
+        ["Quest Dialog Harvest"] = new() { { DE, "Quest-Dialog-Sammlung" }, { FR, "Récolte de dialogues de quête" }, { JP, "クエスト会話の取得" } },
+        ["Voice Pack"] = new() { { DE, "Stimmenpaket" }, { FR, "Pack de voix" }, { JP, "ボイスパック" } },
+        ["Import / Export"] = new() { { DE, "Import / Export" }, { FR, "Import / Export" }, { JP, "インポート / エクスポート" } },
+        // ── Audio packages (Import / Export section) ──────────────────────
+        ["Pack all your generated audio into a single file you can pass on, or read such a package from someone else. The package carries the NPC, language and voice of every file, so the receiving installation assigns them correctly. Clips that speak your own character's name are never exported — their shareable \"Adventurer\" variants are."]
+            = new() {
+                { DE, "Packt deine gesamte erzeugte Sprachausgabe in eine einzelne Datei zum Weitergeben — oder liest ein solches Paket von jemand anderem ein. Das Paket enthält zu jeder Datei NPC, Sprache und Stimme, damit die empfangende Installation sie richtig zuordnet. Clips, die den Namen deines eigenen Charakters sprechen, werden nie exportiert — ihre teilbaren „Abenteurer\"-Varianten schon." },
+                { FR, "Regroupe tout votre audio généré dans un seul fichier à transmettre, ou lit un tel paquet reçu de quelqu'un d'autre. Le paquet contient le PNJ, la langue et la voix de chaque fichier, afin que l'installation réceptrice les attribue correctement. Les clips qui prononcent le nom de votre propre personnage ne sont jamais exportés — leurs variantes partageables « Aventurier » le sont." },
+                { JP, "生成済みの音声をまとめて 1 つのファイルにパックして渡したり、他の人から受け取ったパッケージを読み込みます。パッケージには各ファイルの NPC・言語・ボイスが含まれるため、受け取った側の環境でも正しく割り当てられます。自分のキャラクター名を話すクリップは決してエクスポートされません（共有可能な「冒険者」バリアントはエクスポートされます）。" } },
+        ["Package file"] = new() { { DE, "Paketdatei" }, { FR, "Fichier de paquet" }, { JP, "パッケージファイル" } },
+        ["Export Package"] = new() { { DE, "Paket exportieren" }, { FR, "Exporter le paquet" }, { JP, "パッケージを書き出す" } },
+        ["Import Package"] = new() { { DE, "Paket importieren" }, { FR, "Importer le paquet" }, { JP, "パッケージを読み込む" } },
+        ["All languages"] = new() { { DE, "Alle Sprachen" }, { FR, "Toutes les langues" }, { JP, "すべての言語" } },
+        ["Japanese"] = new() { { DE, "Japanisch" }, { FR, "Japonais" }, { JP, "日本語" } },
+        ["English"] = new() { { DE, "Englisch" }, { FR, "Anglais" }, { JP, "英語" } },
+        ["German"] = new() { { DE, "Deutsch" }, { FR, "Allemand" }, { JP, "ドイツ語" } },
+        ["French"] = new() { { DE, "Französisch" }, { FR, "Français" }, { JP, "フランス語" } },
+        ["No package operation run yet."] = new() { { DE, "Noch kein Paketvorgang ausgeführt." }, { FR, "Aucune opération de paquet exécutée." }, { JP, "パッケージ操作はまだ実行されていません。" } },
+        ["Enter a target file for the package first."] = new() { { DE, "Zuerst eine Zieldatei für das Paket angeben." }, { FR, "Indiquez d'abord un fichier cible pour le paquet." }, { JP, "先にパッケージの保存先ファイルを入力してください。" } },
+        ["Enter the package file to import first."] = new() { { DE, "Zuerst die zu importierende Paketdatei angeben." }, { FR, "Indiquez d'abord le fichier de paquet à importer." }, { JP, "先に読み込むパッケージファイルを入力してください。" } },
+        ["Export running..."] = new() { { DE, "Export läuft ..." }, { FR, "Export en cours..." }, { JP, "書き出し中..." } },
+        ["Import running..."] = new() { { DE, "Import läuft ..." }, { FR, "Import en cours..." }, { JP, "読み込み中..." } },
+        ["Exporting audio package"] = new() { { DE, "Audiopaket wird exportiert" }, { FR, "Export du paquet audio" }, { JP, "音声パッケージを書き出しています" } },
+        ["Importing audio package"] = new() { { DE, "Audiopaket wird importiert" }, { FR, "Import du paquet audio" }, { JP, "音声パッケージを読み込んでいます" } },
+        ["Export failed"] = new() { { DE, "Export fehlgeschlagen" }, { FR, "Échec de l'export" }, { JP, "書き出しに失敗しました" } },
+        ["Import failed"] = new() { { DE, "Import fehlgeschlagen" }, { FR, "Échec de l'import" }, { JP, "読み込みに失敗しました" } },
+        ["Package written"] = new() { { DE, "Paket geschrieben" }, { FR, "Paquet écrit" }, { JP, "パッケージを書き出しました" } },
+        ["Package imported"] = new() { { DE, "Paket importiert" }, { FR, "Paquet importé" }, { JP, "パッケージを読み込みました" } },
+        ["Files"] = new() { { DE, "Dateien" }, { FR, "Fichiers" }, { JP, "ファイル" } },
+        ["Missing on disk"] = new() { { DE, "Nicht auf Platte" }, { FR, "Absents du disque" }, { JP, "ディスク上に無し" } },
+        ["Personal clips skipped"] = new() { { DE, "Persönliche Clips übersprungen" }, { FR, "Clips personnels ignorés" }, { JP, "個人用クリップをスキップ" } },
+        ["Size"] = new() { { DE, "Größe" }, { FR, "Taille" }, { JP, "サイズ" } },
+        ["Clips"] = new() { { DE, "Clips" }, { FR, "Clips" }, { JP, "クリップ" } },
+        ["New characters"] = new() { { DE, "Neue Charaktere" }, { FR, "Nouveaux personnages" }, { JP, "新規キャラクター" } },
+        ["New dialogues"] = new() { { DE, "Neue Dialoge" }, { FR, "Nouveaux dialogues" }, { JP, "新規会話" } },
+        ["Already present"] = new() { { DE, "Bereits vorhanden" }, { FR, "Déjà présents" }, { JP, "既に存在" } },
+        ["Failed"] = new() { { DE, "Fehlgeschlagen" }, { FR, "Échoués" }, { JP, "失敗" } },
+
+        ["Quest Lua Debug"] = new() { { DE, "Quest-Lua-Debug" }, { FR, "Debug Lua quête" }, { JP, "クエスト Lua デバッグ" } },
+        ["Export the disassembled Lua script and bytecode trace for a single quest. Used to investigate why a quest's NPC dialog isn't getting matched."]
+            = new() {
+                { DE, "Exportiert das disassemblierte Lua-Skript und den Bytecode-Trace einer einzelnen Quest. Wird genutzt, um zu untersuchen, warum NPC-Dialoge einer Quest nicht zugeordnet werden." },
+                { FR, "Exporte le script Lua désassemblé et la trace de bytecode d'une seule quête. Utile pour comprendre pourquoi le dialogue NPC d'une quête n'est pas associé." },
+                { JP, "単一クエストの逆アセンブル済み Lua スクリプトとバイトコードのトレースを出力します。クエストの NPC 会話が一致しない原因を調査するのに使用します。" } },
+        ["Scan game data for NPC dialog text and persist linked entries to the database. Use this to populate or refresh your voice clip catalog after a game patch."]
+            = new() {
+                { DE, "Spieldaten nach NPC-Dialogtexten durchsuchen und verknüpfte Einträge in der Datenbank ablegen. Damit füllst oder aktualisierst du deinen Sprachclip-Katalog nach einem Spielpatch." },
+                { FR, "Analyse les données du jeu pour les dialogues NPC et enregistre les entrées liées en base. Utile pour peupler ou rafraîchir le catalogue de clips vocaux après un patch." },
+                { JP, "ゲームデータから NPC のセリフテキストを取得し、関連付けてデータベースに保存します。ゲームパッチ後にボイスクリップのカタログを更新するのに使います。" } },
+        ["Download a curated set of freely-licensed reference voices (male, female and child) from the internet and install them into your TTS engine's voice folder. Every voice comes from a source whose license permits redistribution; the pack ships the license and attribution files alongside the samples."]
+            = new() {
+                { DE, "Lädt ein kuratiertes Set frei lizenzierter Referenzstimmen (männlich, weiblich und Kinder) aus dem Internet und installiert sie in den Stimmenordner deiner TTS-Engine. Jede Stimme stammt aus einer Quelle, deren Lizenz die Weitergabe erlaubt; Lizenz- und Attributionsdateien liegen dem Paket bei." },
+                { FR, "Télécharge un ensemble sélectionné de voix de référence libres de droits (hommes, femmes et enfants) et les installe dans le dossier de voix de votre moteur TTS. Chaque voix provient d'une source dont la licence autorise la redistribution ; les fichiers de licence et d'attribution sont fournis avec le pack." },
+                { JP, "自由に利用できるライセンスの参照ボイス（男性・女性・子ども）をインターネットから取得し、TTS エンジンのボイスフォルダーへインストールします。すべてのボイスは再配布を許可するライセンスのソースから取得され、ライセンスと帰属表示のファイルが同梱されます。" } },
+        ["Coming soon: backup / restore of database + configuration, and import/export of community voice sets."]
+            = new() {
+                { DE, "Bald verfügbar: Sicherung / Wiederherstellung von Datenbank + Konfiguration sowie Im-/Export von Community-Stimmensets." },
+                { FR, "Bientôt : sauvegarde / restauration de la base et de la configuration, et import/export de packs vocaux communautaires." },
+                { JP, "近日公開：データベース＋設定のバックアップ／復元、およびコミュニティ・ボイスセットのインポート／エクスポート。" } },
+        ["Download Voice Pack"] = new() { { DE, "Stimmenpaket herunterladen" }, { FR, "Télécharger le pack de voix" }, { JP, "ボイスパックをダウンロード" } },
+        ["Stop"] = new() { { DE, "Stopp" }, { FR, "Arrêter" }, { JP, "停止" } },
+        ["Starting..."] = new() { { DE, "Wird gestartet…" }, { FR, "Démarrage…" }, { JP, "開始中…" } },
+        ["Failed — see logs"] = new() { { DE, "Fehlgeschlagen — siehe Logs" }, { FR, "Échec — voir les journaux" }, { JP, "失敗 — ログを参照" } },
+        ["Cancelled"] = new() { { DE, "Abgebrochen" }, { FR, "Annulé" }, { JP, "キャンセル済み" } },
+        ["Done"] = new() { { DE, "Fertig" }, { FR, "Terminé" }, { JP, "完了" } },
+        ["Idle"] = new() { { DE, "Bereit" }, { FR, "Inactif" }, { JP, "待機中" } },
+        ["Done — {0} files written"] = new() { { DE, "Fertig — {0} Dateien geschrieben" }, { FR, "Terminé — {0} fichiers écrits" }, { JP, "完了 — {0} ファイル書き込み済み" } },
+        ["Open Voice Clip Manager"] = new() { { DE, "Voice-Clip-Manager öffnen" }, { FR, "Ouvrir le Gestionnaire de clips vocaux" }, { JP, "ボイスクリップマネージャーを開く" } },
+
+        // ── NPC Attribution Repair (Game Data Tools section) ─────────────
+        ["NPC Attribution Repair"] = new() { { DE, "NPC-Zuordnung reparieren" }, { FR, "Réparer l'attribution des PNJ" }, { JP, "NPC帰属の修復" } },
+        ["Walk the database and fix NPC dialogues that ended up under the wrong character (e.g. anonymous \"???\" speakers attributed to the first match instead of the real NPC). Dry-Run shows what would change; Apply moves the dialogues to the correct character and deletes empty character rows. No audio files are deleted."]
+            = new() {
+                { DE, "Datenbank durchgehen und Dialoge reparieren, die unter dem falschen NPC gelandet sind (z.B. anonyme \"???\"-Sprecher wurden dem ersten Treffer statt dem echten NPC zugeordnet). Probelauf zeigt, was geändert würde; Anwenden verschiebt die Dialoge zum richtigen Charakter und löscht leere Charakter-Einträge. Es werden keine Audiodateien gelöscht." },
+                { FR, "Parcourt la base de données et corrige les dialogues PNJ associés au mauvais personnage (par ex. locuteurs anonymes \"???\" attribués au premier résultat plutôt qu'au vrai PNJ). L'aperçu indique ce qui changerait ; Appliquer déplace les dialogues vers le bon personnage et supprime les entrées de personnage vides. Aucun fichier audio n'est supprimé." },
+                { JP, "データベースをスキャンし、誤ったキャラクターに紐づいた NPC のセリフを修復します（例：匿名「???」の発話が最初の候補に割り当てられ、実際の NPC ではないケース）。プレビューでは変更内容を表示し、適用すると正しいキャラクターへ移動し、空になったキャラクター行を削除します。音声ファイルは削除されません。" } },
+        ["Dry Run"] = new() { { DE, "Probelauf" }, { FR, "Aperçu" }, { JP, "プレビュー" } },
+        ["Apply Repair"] = new() { { DE, "Reparatur anwenden" }, { FR, "Appliquer la réparation" }, { JP, "修復を適用" } },
+        ["Press Dry Run to scan the database."] = new() {
+            { DE, "Probelauf drücken, um die Datenbank zu scannen." },
+            { FR, "Appuyez sur Aperçu pour analyser la base de données." },
+            { JP, "プレビューを押してデータベースをスキャンします。" } },
+        ["Scanning database — please wait..."] = new() {
+            { DE, "Datenbank wird durchsucht — bitte warten..." },
+            { FR, "Analyse de la base de données — veuillez patienter..." },
+            { JP, "データベースをスキャン中 — お待ちください..." } },
+        ["Dry run cancelled."] = new() { { DE, "Probelauf abgebrochen." }, { FR, "Aperçu annulé." }, { JP, "プレビューを中止しました。" } },
+        ["Dry run failed: {0}"] = new() { { DE, "Probelauf fehlgeschlagen: {0}" }, { FR, "Échec de l'aperçu : {0}" }, { JP, "プレビューに失敗しました: {0}" } },
+        ["Applying repair to {0} entries..."] = new() {
+            { DE, "Reparatur wird auf {0} Einträge angewendet..." },
+            { FR, "Application de la réparation à {0} entrées..." },
+            { JP, "{0} 件の項目に修復を適用中..." } },
+        ["Apply cancelled."] = new() { { DE, "Anwenden abgebrochen." }, { FR, "Application annulée." }, { JP, "適用を中止しました。" } },
+        ["Apply failed: {0}"] = new() { { DE, "Anwenden fehlgeschlagen: {0}" }, { FR, "Échec de l'application : {0}" }, { JP, "適用に失敗しました: {0}" } },
+        ["Scanned {0} instances. No repairs needed — every dialog is attributed to its canonical NPC. Skipped: {1} without Lumina row, {2} without a canonical character row in the DB."]
+            = new() {
+                { DE, "{0} Einträge geprüft. Keine Reparatur nötig — alle Dialoge sind dem kanonischen NPC zugeordnet. Übersprungen: {1} ohne Lumina-Eintrag, {2} ohne kanonische Charakterzeile in der DB." },
+                { FR, "{0} entrées analysées. Aucune réparation nécessaire — chaque dialogue est attribué à son PNJ canonique. Ignorés : {1} sans entrée Lumina, {2} sans personnage canonique en base." },
+                { JP, "{0} 件をスキャンしました。修復は不要です — すべてのセリフが正しい NPC に紐付いています。スキップ: Lumina 行なし {1} 件、DB に正規キャラクター行なし {2} 件。" } },
+        ["...and {0} more."] = new() { { DE, "...und {0} weitere." }, { FR, "...et {0} de plus." }, { JP, "...他 {0} 件。" } },
+        ["Found {0} mis-attributed instances out of {1} scanned. Skipped: {2} without Lumina row, {3} without canonical character row.\n\n{4}{5}\n\nPress Apply Repair to move the dialogues to the correct characters."]
+            = new() {
+                { DE, "{0} falsch zugeordnete Einträge von {1} geprüften gefunden. Übersprungen: {2} ohne Lumina-Eintrag, {3} ohne kanonische Charakterzeile.\n\n{4}{5}\n\nReparatur anwenden drücken, um die Dialoge dem richtigen Charakter zuzuordnen." },
+                { FR, "{0} entrées mal attribuées sur {1} analysées. Ignorées : {2} sans entrée Lumina, {3} sans personnage canonique.\n\n{4}{5}\n\nAppuyez sur Appliquer la réparation pour déplacer les dialogues vers les bons personnages." },
+                { JP, "{1} 件のうち {0} 件で誤った帰属を検出しました。スキップ: Lumina 行なし {2} 件、正規キャラクター行なし {3} 件。\n\n{4}{5}\n\n「修復を適用」を押して、セリフを正しいキャラクターに移動します。" } },
+        ["Repair applied. Reassigned {0} instances, moved {1} voice clips, merged-and-deleted {2} duplicate clips, deleted {3} emptied character rows. Re-open the Voice Clip Manager to see the cleaned view."]
+            = new() {
+                { DE, "Reparatur abgeschlossen. {0} Zuordnungen verschoben, {1} Voice-Clips bewegt, {2} doppelte Clips zusammengeführt und gelöscht, {3} leere Charakter-Einträge gelöscht. Voice-Clip-Manager neu öffnen, um die bereinigte Sicht zu sehen." },
+                { FR, "Réparation appliquée. {0} attributions réassignées, {1} clips vocaux déplacés, {2} clips dupliqués fusionnés et supprimés, {3} personnages vides supprimés. Rouvrez le Gestionnaire de clips vocaux pour voir la vue nettoyée." },
+                { JP, "修復を適用しました。{0} 件の帰属を移動、{1} 件のボイスクリップを移動、{2} 件の重複クリップをマージ＆削除、{3} 件の空キャラクター行を削除しました。クリーンな表示を確認するにはボイスクリップマネージャーを再度開いてください。" } },
+
+        // ── Player Name Cleanup (Game Data Tools section) ────────────────
+        ["Player Name Cleanup"] = new() { { DE, "Spielernamen bereinigen" }, { FR, "Nettoyage du nom du joueur" }, { JP, "プレイヤー名のクリーンアップ" } },
+        ["Dialogues stored before this version could contain your character's real name instead of the -PlayerName- placeholder, which created a duplicate entry next to the harvested one. This puts the placeholders back and merges the duplicates. No audio file is deleted."]
+            = new() {
+                { DE, "Vor dieser Version gespeicherte Dialoge können den echten Namen deines Charakters statt des Platzhalters -PlayerName- enthalten; dadurch entstand ein doppelter Eintrag neben dem geharvesteten. Dies setzt die Platzhalter wieder ein und führt die Duplikate zusammen. Es wird keine Audiodatei gelöscht." },
+                { FR, "Les dialogues enregistrés avant cette version peuvent contenir le vrai nom de votre personnage au lieu du marqueur -PlayerName-, ce qui créait une entrée en double à côté de celle issue de la collecte. Ceci rétablit les marqueurs et fusionne les doublons. Aucun fichier audio n'est supprimé." },
+                { JP, "このバージョンより前に保存されたセリフには、プレースホルダー -PlayerName- ではなくキャラクター名がそのまま含まれている場合があり、収集済みの項目とは別に重複した項目が作られていました。これはプレースホルダーを復元し、重複を統合します。音声ファイルは削除されません。" } },
+        ["Apply Cleanup"] = new() { { DE, "Bereinigung anwenden" }, { FR, "Appliquer le nettoyage" }, { JP, "クリーンアップを適用" } },
+        ["Applying cleanup — please wait..."] = new() {
+            { DE, "Bereinigung wird angewendet — bitte warten..." },
+            { FR, "Application du nettoyage — veuillez patienter..." },
+            { JP, "クリーンアップを適用中 — お待ちください..." } },
+        ["Your character name isn't known yet — log in and try again."] = new() {
+            { DE, "Dein Charaktername ist noch nicht bekannt — melde dich an und versuche es erneut." },
+            { FR, "Le nom de votre personnage n'est pas encore connu — connectez-vous et réessayez." },
+            { JP, "キャラクター名がまだ判明していません — ログインしてからもう一度お試しください。" } },
+        ["Cleanup cancelled."] = new() { { DE, "Bereinigung abgebrochen." }, { FR, "Nettoyage annulé." }, { JP, "クリーンアップを中止しました。" } },
+        ["Cleanup failed: {0}"] = new() { { DE, "Bereinigung fehlgeschlagen: {0}" }, { FR, "Échec du nettoyage : {0}" }, { JP, "クリーンアップに失敗しました: {0}" } },
+        ["Scanned {0} dialogues. Nothing to clean up — no stored dialogue contains your character's name."]
+            = new() {
+                { DE, "{0} Dialoge geprüft. Nichts zu bereinigen — kein gespeicherter Dialog enthält deinen Charakternamen." },
+                { FR, "{0} dialogues analysés. Rien à nettoyer — aucun dialogue enregistré ne contient le nom de votre personnage." },
+                { JP, "{0} 件のセリフをスキャンしました。クリーンアップは不要です — キャラクター名を含む保存済みセリフはありません。" } },
+        ["Found {0} dialogues to restore and {1} duplicates to merge (out of {2} scanned). Press Apply Cleanup to write the changes.{3}"]
+            = new() {
+                { DE, "{0} wiederherzustellende Dialoge und {1} zusammenzuführende Duplikate gefunden (von {2} geprüften). Bereinigung anwenden drücken, um die Änderungen zu schreiben.{3}" },
+                { FR, "{0} dialogues à restaurer et {1} doublons à fusionner (sur {2} analysés). Appuyez sur Appliquer le nettoyage pour écrire les modifications.{3}" },
+                { JP, "復元するセリフ {0} 件、統合する重複 {1} 件を検出しました（スキャン {2} 件）。「クリーンアップを適用」を押すと変更が書き込まれます。{3}" } },
+        ["Cleanup applied. Restored {0} dialogues, merged {1} duplicates, moved {2} generated audio records, dropped {3} redundant ones. Re-open the Voice Clip Manager to see the cleaned view."]
+            = new() {
+                { DE, "Bereinigung abgeschlossen. {0} Dialoge wiederhergestellt, {1} Duplikate zusammengeführt, {2} Einträge erzeugter Audios verschoben, {3} überflüssige entfernt. Voice-Clip-Manager neu öffnen, um die bereinigte Sicht zu sehen." },
+                { FR, "Nettoyage appliqué. {0} dialogues restaurés, {1} doublons fusionnés, {2} enregistrements audio déplacés, {3} redondants supprimés. Rouvrez le Gestionnaire de clips vocaux pour voir la vue nettoyée." },
+                { JP, "クリーンアップを適用しました。{0} 件のセリフを復元、{1} 件の重複を統合、{2} 件の生成音声レコードを移動、{3} 件の不要なものを削除しました。クリーンな表示を確認するにはボイスクリップマネージャーを再度開いてください。" } },
+
+        ["Select a directory via dialog."] = new() { { DE, "Verzeichnis über Dialog auswählen." }, { FR, "Sélectionner un dossier via le dialogue." }, { JP, "ダイアログでフォルダを選択。" } },
+        ["Choose audio files directory"] = new() { { DE, "Audiodateien-Verzeichnis wählen" }, { FR, "Choisir le dossier des fichiers audio" }, { JP, "音声ファイルディレクトリを選択" } },
+        ["Choose alltalk instance directory"] = new() { { DE, "Alltalk-Instanzverzeichnis wählen" }, { FR, "Choisir le dossier de l'instance Alltalk" }, { JP, "Alltalkインスタンスディレクトリを選択" } },
+        ["Test Connection"] = new() { { DE, "Verbindung testen" }, { FR, "Tester la connexion" }, { JP, "接続テスト" } },
+        ["Connection test result:"] = new() { { DE, "Verbindungstest-Ergebnis:" }, { FR, "Résultat du test de connexion :" }, { JP, "接続テスト結果:" } },
+
+        // ── Additional keys (from ConfigWindow / ImGui) ──────────────────
+        ["Add phonetic correction"] = new() { { DE, "Phonetische Korrektur hinzufügen" }, { FR, "Ajouter une correction phonétique" }, { JP, "音声修正を追加" } },
+        ["Remove phonetic correction"] = new() { { DE, "Phonetische Korrektur entfernen" }, { FR, "Supprimer la correction phonétique" }, { JP, "音声修正を削除" } },
+        ["All"] = new() { { DE, "Alle" }, { FR, "Tous" }, { JP, "全て" } },
+        ["Always jump to bottom"] = new() { { DE, "Immer nach unten springen" }, { FR, "Toujours aller en bas" }, { JP, "常に最下部に移動" } },
+        ["Base Url"] = new() { { DE, "Basis-URL" }, { FR, "URL de base" }, { JP, "ベースURL" } },
+        ["Adult Voice"] = new() { { DE, "Erwachsenenstimme" }, { FR, "Voix adulte" }, { JP, "大人の声" } },
+        ["Child Voice"] = new() { { DE, "Kinderstimme" }, { FR, "Voix d'enfant" }, { JP, "子供の声" } },
+        ["Click again to confirm deletion!"] = new() { { DE, "Zum Bestätigen erneut klicken!" }, { FR, "Cliquez à nouveau pour confirmer !" }, { JP, "もう一度クリックして確認！" } },
+        ["Custom model URL"] = new() { { DE, "Benutzerdefinierte Modell-URL" }, { FR, "URL du modèle personnalisé" }, { JP, "カスタムモデルURL" } },
+        ["Custom voices URL"] = new() { { DE, "Benutzerdefinierte Stimmen-URL" }, { FR, "URL des voix personnalisées" }, { JP, "カスタムボイスURL" } },
+        ["Default Voice:"] = new() { { DE, "Standardstimme:" }, { FR, "Voix par défaut :" }, { JP, "デフォルトボイス:" } },
+        ["DetectLanguage.com"] = new() { { DE, "DetectLanguage.com" }, { FR, "DetectLanguage.com" }, { JP, "DetectLanguage.com" } },
+        ["First time using Echokraut"] = new() { { DE, "Erstmalige Nutzung von Echokraut" }, { FR, "Première utilisation d'Echokraut" }, { JP, "Echokrautの初回利用" } },
+        ["Genders"] = new() { { DE, "Geschlechter" }, { FR, "Genres" }, { JP, "性別" } },
+        ["ID"] = new() { { DE, "ID" }, { FR, "ID" }, { JP, "ID" } },
+        ["Log:"] = new() { { DE, "Protokoll:" }, { FR, "Journal :" }, { JP, "ログ:" } },
+        ["Message"] = new() { { DE, "Nachricht" }, { FR, "Message" }, { JP, "メッセージ" } },
+        ["Method"] = new() { { DE, "Methode" }, { FR, "Méthode" }, { JP, "メソッド" } },
+        ["None"] = new() { { DE, "Keine" }, { FR, "Aucun" }, { JP, "なし" } },
+        ["Options"] = new() { { DE, "Optionen" }, { FR, "Options" }, { JP, "オプション" } },
+        ["Options:"] = new() { { DE, "Optionen:" }, { FR, "Options :" }, { JP, "オプション:" } },
+        ["Races"] = new() { { DE, "Völker" }, { FR, "Races" }, { JP, "種族" } },
+        ["Random NPC"] = new() { { DE, "Zufälliger NPC" }, { FR, "PNJ aléatoire" }, { JP, "ランダムNPC" } },
+        ["Reset"] = new() { { DE, "Zurücksetzen" }, { FR, "Réinitialiser" }, { JP, "リセット" } },
+        ["Select Backend"] = new() { { DE, "Backend auswählen" }, { FR, "Sélectionner le backend" }, { JP, "バックエンドを選択" } },
+        ["Stop Voice"] = new() { { DE, "Stimme stoppen" }, { FR, "Arrêter la voix" }, { JP, "ボイスを停止" } },
+        ["Test Voice"] = new() { { DE, "Stimme testen" }, { FR, "Tester la voix" }, { JP, "ボイスをテスト" } },
+        ["Voice NPC bubbles in cities"] = new() { { DE, "NPC-Sprechblasen in Städten vertonen" }, { FR, "Bulles PNJ vocales en ville" }, { JP, "街中のNPC吹き出しをボイス化" } },
+        ["Will remove all local saved audio files for this character"] = new()
+        {
+            { DE, "Alle lokal gespeicherten Audiodateien für diesen Charakter werden gelöscht" },
+            { FR, "Tous les fichiers audio locaux de ce personnage seront supprimés" },
+            { JP, "このキャラクターのローカル保存済み音声ファイルがすべて削除されます" },
+        },
+        ["Reset genders"] = new() { { DE, "Geschlechter zurücksetzen" }, { FR, "Réinitialiser les genres" }, { JP, "性別をリセット" } },
+        ["Reset races"] = new() { { DE, "Völker zurücksetzen" }, { FR, "Réinitialiser les races" }, { JP, "種族をリセット" } },
+
+        // ── Voice Config Window ──────────────────────────────────────────
+        ["Use as random NPC voice"] = new() { { DE, "Als zufällige NPC-Stimme verwenden" }, { FR, "Utiliser comme voix PNJ aléatoire" }, { JP, "ランダムNPCボイスとして使用" } },
+        ["Elder Voice"] = new() { { DE, "Ältere Stimme" }, { FR, "Voix de personne âgée" }, { JP, "高齢者の声" } },
+        ["Use as narrator voice"] = new() { { DE, "Als Erzählerstimme verwenden" }, { FR, "Utiliser comme voix du narrateur" }, { JP, "ナレーターボイスとして使用" } },
+        ["Narrator"] = new() { { DE, "Erzähler" }, { FR, "Narrateur" }, { JP, "ナレーター" } },
+        ["Allowed genders"] = new() { { DE, "Erlaubte Geschlechter" }, { FR, "Genres autorisés" }, { JP, "許可する性別" } },
+        ["Allowed races"] = new() { { DE, "Erlaubte Völker" }, { FR, "Races autorisées" }, { JP, "許可する種族" } },
+
+        // ── Genders ──────────────────────────────────────────────────────
+        ["None"] = new() { { DE, "Keine" }, { FR, "Aucun" }, { JP, "なし" } },
+        ["Male"] = new() { { DE, "Männlich" }, { FR, "Masculin" }, { JP, "男性" } },
+        ["Female"] = new() { { DE, "Weiblich" }, { FR, "Féminin" }, { JP, "女性" } },
+
+        // ── FFXIV Races (official localized names) ───────────────────────
+        // Playable races
+        ["Hyur"] = new() { { DE, "Hyuran" }, { FR, "Hyuran" }, { JP, "ヒューラン" } },
+        ["Elezen"] = new() { { DE, "Elezen" }, { FR, "Élézen" }, { JP, "エレゼン" } },
+        ["Miqote"] = new() { { DE, "Miqo'te" }, { FR, "Miqo'te" }, { JP, "ミコッテ" } },
+        ["Roegadyn"] = new() { { DE, "Roegadyn" }, { FR, "Roegadyn" }, { JP, "ルガディン" } },
+        ["Lalafell"] = new() { { DE, "Lalafell" }, { FR, "Lalafell" }, { JP, "ララフェル" } },
+        ["Viera"] = new() { { DE, "Viera" }, { FR, "Viéra" }, { JP, "ヴィエラ" } },
+        ["AuRa"] = new() { { DE, "Au Ra" }, { FR, "Au Ra" }, { JP, "アウラ" } },
+        ["Hrothgar"] = new() { { DE, "Hrothgar" }, { FR, "Hrothgar" }, { JP, "ロスガル" } },
+        // Beast tribes & NPCs
+        ["Amaljaa"] = new() { { DE, "Amalj'aa" }, { FR, "Amalj'aa" }, { JP, "アマルジャ" } },
+        ["Ixal"] = new() { { DE, "Ixal" }, { FR, "Ixal" }, { JP, "イクサル" } },
+        ["Sylph"] = new() { { DE, "Sylphe" }, { FR, "Sylphe" }, { JP, "シルフ" } },
+        ["Goblin"] = new() { { DE, "Goblin" }, { FR, "Gobelin" }, { JP, "ゴブリン" } },
+        ["Moogle"] = new() { { DE, "Mogry" }, { FR, "Mog" }, { JP, "モーグリ" } },
+        ["MamoolJa"] = new() { { DE, "Mamool Ja" }, { FR, "Mamool Ja" }, { JP, "マムージャ" } },
+        ["Qiqirn"] = new() { { DE, "Qiqirn" }, { FR, "Qiqirn" }, { JP, "キキルン" } },
+        ["VanuVanu"] = new() { { DE, "Vanu Vanu" }, { FR, "Vanu Vanu" }, { JP, "バヌバヌ" } },
+        ["Kojin"] = new() { { DE, "Kojin" }, { FR, "Kojin" }, { JP, "コウジン" } },
+        ["Ananta"] = new() { { DE, "Ananta" }, { FR, "Ananta" }, { JP, "アナンタ" } },
+        ["Lupin"] = new() { { DE, "Lupin" }, { FR, "Lupin" }, { JP, "ルピン" } },
+        ["Arkasodara"] = new() { { DE, "Arkasodara" }, { FR, "Arkasodara" }, { JP, "アルカソーダラ" } },
+        ["NuMou"] = new() { { DE, "Nu Mou" }, { FR, "Nu Mou" }, { JP, "ヌ・モウ" } },
+        ["Pixie"] = new() { { DE, "Pixie" }, { FR, "Pixie" }, { JP, "ピクシー" } },
+        ["Loporrit"] = new() { { DE, "Loporrit" }, { FR, "Loporrit" }, { JP, "ロポリット" } },
+        ["Frog"] = new() { { DE, "Frosch" }, { FR, "Grenouille" }, { JP, "カエル" } },
+        ["Ea"] = new() { { DE, "Ea" }, { FR, "Éa" }, { JP, "エア" } },
+        ["YokHuy"] = new() { { DE, "Yok Huy" }, { FR, "Yok Huy" }, { JP, "ヨカ・フイ" } },
+        ["Endless"] = new() { { DE, "Endlos" }, { FR, "Éternel" }, { JP, "エンドレス" } },
+        ["Sahagin"] = new() { { DE, "Sahagin" }, { FR, "Sahuagin" }, { JP, "サハギン" } },
+        ["Kobold"] = new() { { DE, "Kobold" }, { FR, "Kobold" }, { JP, "コボルド" } },
+        ["Gnath"] = new() { { DE, "Gnath" }, { FR, "Gnath" }, { JP, "グナース" } },
+        ["Namazu"] = new() { { DE, "Namazu" }, { FR, "Namazu" }, { JP, "ナマズオ" } },
+        ["Omicron"] = new() { { DE, "Omikron" }, { FR, "Omicron" }, { JP, "オミクロン" } },
+
+        // ── Game-voice reference (plan game-voice-reference §5/§6) ─────────
+        ["Game voice reference"] = new() { { DE, "Spielstimme als Referenz" }, { FR, "Voix du jeu comme référence" }, { JP, "ゲームボイスを参照に使用" } },
+        ["Game voice"] = new() { { DE, "Spielstimme" }, { FR, "Voix du jeu" }, { JP, "ゲームボイス" } },
+        ["Uses voiced lines of the same NPC from your own FFXIV installation as reference for EchokrauTTS (in memory only). Off by default; the voice pack stays the default and the fallback."] = new() { { DE, "Nutzt vertonte Zeilen desselben NPCs aus deiner eigenen FFXIV-Installation als Referenz für EchokrauTTS (nur im Arbeitsspeicher). Standardmäßig aus; das Stimmenpaket bleibt Standard und Rückfall." }, { FR, "Utilise des répliques doublées du même PNJ issues de ta propre installation de FFXIV comme référence pour EchokrauTTS (en mémoire uniquement). Désactivé par défaut ; le pack de voix reste la valeur par défaut et la solution de repli." }, { JP, "自分のFFXIVインストールにある同じNPCのボイス付きセリフを、EchokrauTTSの参照として使います（メモリ内のみ）。初期設定はオフで、ボイスパックが標準かつ代替として残ります。" } },
+        ["Use game voices as reference (EchokrauTTS)"] = new() { { DE, "Spielstimmen als Referenz nutzen (EchokrauTTS)" }, { FR, "Utiliser les voix du jeu comme référence (EchokrauTTS)" }, { JP, "ゲームボイスを参照に使う（EchokrauTTS）" } },
+        ["Remote server: only use your own private instance, never a server of other people or a shared/public one."] = new() { { DE, "Remote-Server: nur mit deiner eigenen, privaten Instanz verwenden – nie mit Servern anderer Personen oder geteilten/öffentlichen Servern." }, { FR, "Serveur distant : utilise uniquement ta propre instance privée, jamais le serveur d'autres personnes ni un serveur partagé/public." }, { JP, "リモートサーバー：自分専用のプライベートインスタンスでのみ使用し、他人のサーバーや共有・公開サーバーでは絶対に使わないでください。" } },
+        ["Rank the current NPC when a conversation starts"] = new() { { DE, "Aktuellen NPC beim Gesprächsstart bewerten" }, { FR, "Évaluer le PNJ actuel au début d'une conversation" }, { JP, "会話開始時に現在のNPCを評価する" } },
+        ["Clips generated with a game voice stay on this PC: they are not exported to .ekpack and not uploaded to Google Drive."] = new() { { DE, "Mit einer Spielstimme erzeugte Clips bleiben auf diesem PC: Sie werden nicht nach .ekpack exportiert und nicht zu Google Drive hochgeladen." }, { FR, "Les clips générés avec une voix du jeu restent sur ce PC : ils ne sont ni exportés en .ekpack ni envoyés sur Google Drive." }, { JP, "ゲームボイスで生成したクリップはこのPCに残ります。.ekpackへのエクスポートやGoogleドライブへのアップロードは行われません。" } },
+        ["Use game voices as reference?"] = new() { { DE, "Spielstimmen als Referenz nutzen?" }, { FR, "Utiliser les voix du jeu comme référence ?" }, { JP, "ゲームボイスを参照に使いますか？" } },
+        ["Echokraut can use voice recordings from your own FFXIV installation as a reference for the same NPC. They are decoded in memory only and never written to disk."] = new() { { DE, "Echokraut kann Sprachaufnahmen aus deiner eigenen FFXIV-Installation als Referenz für denselben NPC nutzen. Sie werden nur im Arbeitsspeicher dekodiert und nie auf die Festplatte geschrieben." }, { FR, "Echokraut peut utiliser les enregistrements vocaux de ta propre installation de FFXIV comme référence pour le même PNJ. Ils sont décodés uniquement en mémoire et ne sont jamais écrits sur le disque." }, { JP, "Echokrautは、自分のFFXIVインストールにある音声を同じNPCの参照として使用できます。音声はメモリ内でのみデコードされ、ディスクに書き込まれることはありません。" } },
+        ["The result is an AI imitation of real voice actors. Echokraut is not affiliated with Square Enix."] = new() { { DE, "Das Ergebnis ist eine KI-Nachahmung echter Synchronsprecher. Echokraut ist nicht mit Square Enix verbunden." }, { FR, "Le résultat est une imitation par IA de vrais comédiens de doublage. Echokraut n'est pas affilié à Square Enix." }, { JP, "生成結果は実在の声優をAIで模倣したものです。EchokrautはSquare Enixとは関係ありません。" } },
+        ["Do not publish, stream, record or share the generated audio."] = new() { { DE, "Erzeugte Ausgabe nicht veröffentlichen, streamen, aufnehmen oder weitergeben." }, { FR, "Ne publie, ne diffuse, n'enregistre et ne partage pas l'audio généré." }, { JP, "生成された音声を公開・配信・録音・共有しないでください。" } },
+        ["Only use this with your own private EchokrauTTS instance - not with servers run by other people or shared/public servers."] = new() { { DE, "Nur mit deiner eigenen, privaten EchokrauTTS-Instanz verwenden – nicht mit Servern anderer Personen oder geteilten/öffentlichen Servern." }, { FR, "À utiliser uniquement avec ta propre instance EchokrauTTS privée – pas avec des serveurs gérés par d'autres personnes ni des serveurs partagés/publics." }, { JP, "自分専用のプライベートなEchokrauTTSインスタンスでのみ使用してください。他人が運営するサーバーや共有・公開サーバーでは使用しないでください。" } },
+        ["For private use only. You can switch it off at any time; the voice pack stays the default."] = new() { { DE, "Nur für den privaten Gebrauch. Jederzeit abschaltbar; das Stimmenpaket bleibt Standard." }, { FR, "Pour un usage privé uniquement. Tu peux le désactiver à tout moment ; le pack de voix reste la valeur par défaut." }, { JP, "個人利用に限ります。いつでもオフにでき、ボイスパックが標準のまま残ります。" } },
+        ["I understand, enable"] = new() { { DE, "Verstanden, aktivieren" }, { FR, "J'ai compris, activer" }, { JP, "理解しました、有効にする" } },
+        ["Delete clips made with game voices?"] = new() { { DE, "Mit Spielstimme erzeugte Clips löschen?" }, { FR, "Supprimer les clips créés avec des voix du jeu ?" }, { JP, "ゲームボイスで作成したクリップを削除しますか？" } },
+        ["The game-voice reference is now off. Clips that were generated with a game voice can be deleted; otherwise they stay on this PC and are regenerated with the voice pack while the feature is off."] = new() { { DE, "Die Spielstimmen-Referenz ist jetzt aus. Mit einer Spielstimme erzeugte Clips können gelöscht werden; sonst bleiben sie auf diesem PC und werden, solange die Funktion aus ist, mit dem Stimmenpaket neu erzeugt." }, { FR, "La référence aux voix du jeu est maintenant désactivée. Les clips générés avec une voix du jeu peuvent être supprimés ; sinon ils restent sur ce PC et sont régénérés avec le pack de voix tant que la fonction est désactivée." }, { JP, "ゲームボイス参照はオフになりました。ゲームボイスで生成したクリップは削除できます。削除しない場合はこのPCに残り、機能がオフの間はボイスパックで再生成されます。" } },
+        ["Delete clips"] = new() { { DE, "Clips löschen" }, { FR, "Supprimer les clips" }, { JP, "クリップを削除" } },
+        ["Keep"] = new() { { DE, "Behalten" }, { FR, "Conserver" }, { JP, "残す" } },
+        ["Status: off - the voice pack speaks."] = new() { { DE, "Status: aus – das Stimmenpaket spricht." }, { FR, "État : désactivé – le pack de voix parle." }, { JP, "状態：オフ – ボイスパックが話します。" } },
+        ["Status: not supported by AllTalk - switch to EchokrauTTS. The voice pack speaks."] = new() { { DE, "Status: von AllTalk nicht unterstützt – wechsle zu EchokrauTTS. Das Stimmenpaket spricht." }, { FR, "État : non pris en charge par AllTalk – passe à EchokrauTTS. Le pack de voix parle." }, { JP, "状態：AllTalkでは非対応です – EchokrauTTSに切り替えてください。ボイスパックが話します。" } },
+        ["Status: checking the EchokrauTTS server..."] = new() { { DE, "Status: EchokrauTTS-Server wird geprüft …" }, { FR, "État : vérification du serveur EchokrauTTS…" }, { JP, "状態：EchokrauTTSサーバーを確認中…" } },
+        ["Status: this EchokrauTTS server cannot take a game-voice reference (update the wrapper; MOSS on PyTorch cannot). The voice pack speaks."] = new() { { DE, "Status: Dieser EchokrauTTS-Server kann keine Spielstimmen-Referenz annehmen (Wrapper aktualisieren; MOSS auf PyTorch kann es nicht). Das Stimmenpaket spricht." }, { FR, "État : ce serveur EchokrauTTS ne peut pas recevoir de référence de voix du jeu (mets à jour le wrapper ; MOSS sous PyTorch ne le peut pas). Le pack de voix parle." }, { JP, "状態：このEchokrauTTSサーバーはゲームボイス参照を受け付けられません（ラッパーを更新してください。PyTorch版MOSSは非対応）。ボイスパックが話します。" } },
+        ["Status: active - indexed NPCs speak with their game voice."] = new() { { DE, "Status: aktiv – indizierte NPCs sprechen mit ihrer Spielstimme." }, { FR, "État : actif – les PNJ indexés parlent avec leur voix du jeu." }, { JP, "状態：有効 – インデックス済みのNPCはゲームボイスで話します。" } },
+        ["Status: unknown"] = new() { { DE, "Status: unbekannt" }, { FR, "État : inconnu" }, { JP, "状態：不明" } },
+        ["Deleted {0} clip(s) made with game voices."] = new() { { DE, "{0} mit Spielstimme erzeugte Clip(s) gelöscht." }, { FR, "{0} clip(s) créé(s) avec des voix du jeu supprimé(s)." }, { JP, "ゲームボイスで作成したクリップを{0}件削除しました。" } },
+        ["Build index for all voiced NPCs"] = new() { { DE, "Index für alle vertonten NPCs aufbauen" }, { FR, "Construire l'index pour tous les PNJ doublés" }, { JP, "ボイス付きの全NPCのインデックスを作成" } },
+        ["Check the best clips with Whisper (slower, better)"] = new() { { DE, "Beste Clips mit Whisper prüfen (langsamer, besser)" }, { FR, "Vérifier les meilleurs clips avec Whisper (plus lent, meilleur)" }, { JP, "最良のクリップをWhisperで確認する（遅いが高品質）" } },
+        ["Also detect voice-actor changes (suggestions for the maintainers, best with XTTS)"] = new() { { DE, "Auch Sprecherwechsel erkennen (Vorschläge für die Pflege, am besten mit XTTS)" }, { FR, "Détecter aussi les changements de doubleur (suggestions pour la maintenance, idéalement avec XTTS)" }, { JP, "声優の交代も検出する（メンテナンス向けの提案、XTTS推奨）" } },
+        ["Every voiced NPC has a current game-voice index."] = new() { { DE, "Alle vertonten NPCs haben einen aktuellen Spielstimmen-Index." }, { FR, "Tous les PNJ doublés ont un index de voix du jeu à jour." }, { JP, "ボイス付きの全NPCに最新のゲームボイスインデックスがあります。" } },
+        ["{0} voiced speaker(s) without a current index (new game patch or first run)."] = new() { { DE, "{0} vertonte Sprecher ohne aktuellen Index (neuer Spielpatch oder erster Lauf)." }, { FR, "{0} locuteur(s) doublé(s) sans index à jour (nouveau patch du jeu ou première exécution)." }, { JP, "最新のインデックスがないボイス付き話者：{0}（新しいパッチまたは初回）。" } },
+        ["{0} left"] = new() { { DE, "noch {0}" }, { FR, "{0} restant" }, { JP, "残り{0}" } },
+        ["Index not built: {0}"] = new() { { DE, "Index nicht aufgebaut: {0}" }, { FR, "Index non construit : {0}" }, { JP, "インデックスは作成されませんでした：{0}" } },
+        ["Index built: {0} ranked ({1} with a game voice), {2} up to date, {3} unmatched (report in the harvest folder)."] = new() { { DE, "Index aufgebaut: {0} bewertet ({1} mit Spielstimme), {2} aktuell, {3} ohne Zuordnung (Bericht im Ordner harvest)." }, { FR, "Index construit : {0} évalué(s) ({1} avec voix du jeu), {2} à jour, {3} sans correspondance (rapport dans le dossier harvest)." }, { JP, "インデックス作成完了：{0}件を評価（ゲームボイスあり{1}件）、最新{2}件、未割り当て{3}件（レポートはharvestフォルダー）。" } },
+        ["Cancelled: {0} ranked ({1} with a game voice), {2} up to date, {3} unmatched (report in the harvest folder). A new run continues."] = new() { { DE, "Abgebrochen: {0} bewertet ({1} mit Spielstimme), {2} aktuell, {3} ohne Zuordnung (Bericht im Ordner harvest). Ein neuer Lauf setzt fort." }, { FR, "Annulé : {0} évalué(s) ({1} avec voix du jeu), {2} à jour, {3} sans correspondance (rapport dans le dossier harvest). Une nouvelle exécution reprend." }, { JP, "中止：{0}件を評価（ゲームボイスあり{1}件）、最新{2}件、未割り当て{3}件（レポートはharvestフォルダー）。再実行で続きから再開します。" } },
+        ["For maintainers: walk through the speaker tokens the game-voice index could not match to an NPC (report of the last index build). Decisions apply at once on this PC; \"Export for the repo\" writes the complete alias file to hand in, so every user gets the same matching."] = new() { { DE, "Für die Pflege: geht die Sprecher-Tokens durch, die der Spielstimmen-Index keinem NPC zuordnen konnte (Bericht des letzten Indexlaufs). Entscheidungen gelten sofort auf diesem PC; „Für das Repo exportieren“ schreibt die vollständige Alias-Datei zum Einreichen, damit alle Nutzer dieselbe Zuordnung bekommen." }, { FR, "Pour la maintenance : parcourt les jetons de locuteur que l'index des voix du jeu n'a pu associer à aucun PNJ (rapport de la dernière construction). Les décisions s'appliquent tout de suite sur ce PC ; « Exporter pour le dépôt » écrit le fichier d'alias complet à soumettre, pour que tous les utilisateurs aient la même correspondance." }, { JP, "メンテナンス向け：ゲームボイスのインデックスがNPCに割り当てられなかった話者トークンを順に確認します（前回のインデックス作成のレポート）。決定はこのPCで即座に反映されます。「リポジトリ用にエクスポート」で提出用の完全なエイリアスファイルを書き出し、全ユーザーが同じ割り当てを使えるようにします。" } },
+        ["Assign game voices"] = new() { { DE, "Spielstimmen zuordnen" }, { FR, "Attribuer les voix du jeu" }, { JP, "ゲームボイスを割り当てる" } },
+        ["No report loaded."] = new() { { DE, "Kein Bericht geladen." }, { FR, "Aucun rapport chargé." }, { JP, "レポートが読み込まれていません。" } },
+        ["English NPC name"] = new() { { DE, "Englischer NPC-Name" }, { FR, "Nom anglais du PNJ" }, { JP, "NPCの英語名" } },
+        ["Load report"] = new() { { DE, "Bericht laden" }, { FR, "Charger le rapport" }, { JP, "レポートを読み込む" } },
+        ["Export for the repo"] = new() { { DE, "Für das Repo exportieren" }, { FR, "Exporter pour le dépôt" }, { JP, "リポジトリ用にエクスポート" } },
+        ["Assign"] = new() { { DE, "Zuordnen" }, { FR, "Attribuer" }, { JP, "割り当てる" } },
+        ["No game voice"] = new() { { DE, "Keine Spielstimme" }, { FR, "Pas de voix du jeu" }, { JP, "ゲームボイスなし" } },
+        ["Skip"] = new() { { DE, "Überspringen" }, { FR, "Passer" }, { JP, "スキップ" } },
+        ["Back"] = new() { { DE, "Zurück" }, { FR, "Retour" }, { JP, "戻る" } },
+        ["No report at {0} — build the game-voice index first (Backend tab)."] = new() { { DE, "Kein Bericht unter {0} – zuerst den Spielstimmen-Index aufbauen (Reiter Backend)." }, { FR, "Aucun rapport dans {0} – construis d'abord l'index des voix du jeu (onglet Backend)." }, { JP, "{0} にレポートがありません。先にゲームボイスのインデックスを作成してください（バックエンドタブ）。" } },
+        ["{0} token(s) to check (report of {1:yyyy-MM-dd HH:mm})."] = new() { { DE, "{0} Token zu prüfen (Bericht vom {1:yyyy-MM-dd HH:mm})." }, { FR, "{0} jeton(s) à vérifier (rapport du {1:yyyy-MM-dd HH:mm})." }, { JP, "確認するトークン：{0}（{1:yyyy-MM-dd HH:mm} のレポート）。" } },
+        ["Assigned {0}, no game voice {1} (saved locally, effective now)."] = new() { { DE, "Zugeordnet {0}, keine Spielstimme {1} (lokal gespeichert, sofort wirksam)." }, { FR, "Attribués {0}, sans voix du jeu {1} (enregistré localement, effectif tout de suite)." }, { JP, "割り当て {0}、ゲームボイスなし {1}（ローカルに保存、即時反映）。" } },
+        ["All tokens of the report handled."] = new() { { DE, "Alle Tokens des Berichts erledigt." }, { FR, "Tous les jetons du rapport ont été traités." }, { JP, "レポートの全トークンを処理しました。" } },
+        ["{0} clip(s)"] = new() { { DE, "{0} Clip(s)" }, { FR, "{0} clip(s)" }, { JP, "クリップ{0}件" } },
+        ["Suggestions"] = new() { { DE, "Vorschläge" }, { FR, "Suggestions" }, { JP, "候補" } },
+        ["{0} alias(es) written to {1} — copy it over Echokraut/Resources/GameVoiceAliases.json and commit."] = new() { { DE, "{0} Alias(e) nach {1} geschrieben – über Echokraut/Resources/GameVoiceAliases.json kopieren und committen." }, { FR, "{0} alias écrit(s) dans {1} – copie-le sur Echokraut/Resources/GameVoiceAliases.json et commite." }, { JP, "{0}件のエイリアスを {1} に書き出しました。Echokraut/Resources/GameVoiceAliases.json に上書きしてコミットしてください。" } },
+        ["Game voice: speaker token (empty = automatic, - = none)"] = new() { { DE, "Spielstimme: Sprecher-Token (leer = automatisch, - = keine)" }, { FR, "Voix du jeu : jeton de locuteur (vide = automatique, - = aucune)" }, { JP, "ゲームボイス：話者トークン（空欄＝自動、- ＝なし）" } },
+        ["automatic"] = new() { { DE, "automatisch" }, { FR, "automatique" }, { JP, "自動" } },
+        ["Index build failed, see log."] = new() { { DE, "Indexaufbau fehlgeschlagen, siehe Protokoll." }, { FR, "Échec de la construction de l'index, voir le journal." }, { JP, "インデックスの作成に失敗しました。ログを確認してください。" } },
+        ["Building game-voice index..."] = new() { { DE, "Spielstimmen-Index wird aufgebaut …" }, { FR, "Construction de l'index des voix du jeu…" }, { JP, "ゲームボイスのインデックスを作成中…" } },
+        ["Deleting clips made with game voices..."] = new() { { DE, "Mit Spielstimme erzeugte Clips werden gelöscht …" }, { FR, "Suppression des clips créés avec des voix du jeu…" }, { JP, "ゲームボイスで作成したクリップを削除中…" } },
+        // ── In-game self-test (/ektest, Dalamud self-test window) ──────────
+        ["Logged-in character"] = new() { { DE, "Eingeloggter Charakter" }, { FR, "Personnage connecté" }, { JP, "ログイン中のキャラクター" } },
+        ["Game data"] = new() { { DE, "Spieldaten" }, { FR, "Données du jeu" }, { JP, "ゲームデータ" } },
+        ["Database access"] = new() { { DE, "Datenbankzugriff" }, { FR, "Accès à la base de données" }, { JP, "データベースへのアクセス" } },
+        ["Story progress"] = new() { { DE, "Story-Fortschritt" }, { FR, "Progression de l'histoire" }, { JP, "ストーリー進行度" } },
+        ["TTS backend reachable"] = new() { { DE, "TTS-Backend erreichbar" }, { FR, "Backend TTS joignable" }, { JP, "TTSバックエンドへの接続" } },
+        ["Voices available"] = new() { { DE, "Stimmen verfügbar" }, { FR, "Voix disponibles" }, { JP, "利用可能なボイス" } },
+        ["Speech generation"] = new() { { DE, "Sprachgenerierung" }, { FR, "Génération vocale" }, { JP, "音声生成" } },
+        ["Dialogue pipeline and playback"] = new() { { DE, "Dialog-Verarbeitung und Wiedergabe" }, { FR, "Traitement des dialogues et lecture" }, { JP, "ダイアログ処理と再生" } },
+        ["Sentence continuation index"] = new() { { DE, "Index für Satzfortsetzung" }, { FR, "Index de continuation des phrases" }, { JP, "文の続きのインデックス" } },
+        ["Game-voice reference"] = new() { { DE, "Spielstimmen-Referenz" }, { FR, "Référence de voix du jeu" }, { JP, "ゲームボイス参照" } },
+        ["Dialogue (interactive)"] = new() { { DE, "Dialog (interaktiv)" }, { FR, "Dialogue (interactif)" }, { JP, "ダイアログ（操作が必要）" } },
+        ["Talk to any NPC and let one line play."] = new() { { DE, "Sprich einen beliebigen NPC an und lass eine Zeile abspielen." }, { FR, "Parlez à un PNJ et laissez une réplique être lue." }, { JP, "任意のNPCに話しかけ、1行再生させてください。" } },
+        ["Speech bubble (interactive)"] = new() { { DE, "Sprechblase (interaktiv)" }, { FR, "Bulle de dialogue (interactif)" }, { JP, "吹き出し（操作が必要）" } },
+        ["Stand near NPCs that show speech bubbles (e.g. in a city) and wait."] = new() { { DE, "Stell dich zu NPCs mit Sprechblasen (z. B. in einer Stadt) und warte." }, { FR, "Placez-vous près de PNJ affichant des bulles (par ex. en ville) et attendez." }, { JP, "吹き出しを表示するNPCの近く（街など）で待ってください。" } },
+        ["Chat (interactive)"] = new() { { DE, "Chat (interaktiv)" }, { FR, "Chat (interactif)" }, { JP, "チャット（操作が必要）" } },
+        ["Write a line in /say."] = new() { { DE, "Schreib eine Zeile in /sagen." }, { FR, "Écrivez une ligne dans /dire." }, { JP, "/say で1行発言してください。" } },
+        ["Self-test started."] = new() { { DE, "Selbsttest gestartet." }, { FR, "Autotest lancé." }, { JP, "セルフテストを開始しました。" } },
+        ["The self-test is already running."] = new() { { DE, "Der Selbsttest läuft bereits." }, { FR, "L'autotest est déjà en cours." }, { JP, "セルフテストはすでに実行中です。" } },
+        ["An E2E run is going; the self-test waits until it has finished."] = new() { { DE, "Ein E2E-Lauf ist im Gange; der Selbsttest wartet, bis er fertig ist." }, { FR, "Un test E2E est en cours ; l'autotest attend qu'il soit terminé." }, { JP, "E2Eテストの実行中です。終了するまでセルフテストは待機します。" } },
+        ["E2E run started."] = new() { { DE, "E2E-Lauf gestartet." }, { FR, "Test E2E lancé." }, { JP, "E2Eテストを開始しました。" } },
+        ["E2E run finished."] = new() { { DE, "E2E-Lauf beendet." }, { FR, "Test E2E terminé." }, { JP, "E2Eテストが終了しました。" } },
+        ["The plugin runs on the E2E config until it is restored (restore.sh --live or restore.ps1)."] = new() { { DE, "Das Plugin läuft bis zur Wiederherstellung auf der E2E-Konfiguration (restore.sh --live oder restore.ps1)." }, { FR, "Le plugin fonctionne avec la configuration E2E jusqu'à sa restauration (restore.sh --live ou restore.ps1)." }, { JP, "復元するまで、プラグインはE2E設定で動作します（restore.sh --live または restore.ps1）。" } },
+    };
+}

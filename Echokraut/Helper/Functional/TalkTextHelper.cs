@@ -1,0 +1,706 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using Dalamud.Game.Text.SeStringHandling;
+using Dalamud.Game.Text.SeStringHandling.Payloads;
+using Echokraut.DataClasses;
+using Echotools.Logging.DataClasses;
+using Echokraut.Services;
+using Echotools.Logging.Services;
+using FFXIVClientStructs.FFXIV.Client.System.String;
+using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Component.GUI;
+using Dalamud.Game;
+using Humanizer;
+using System.Globalization;
+using GameObject = Dalamud.Game.ClientState.Objects.Types.IGameObject;
+
+namespace Echokraut.Helper.Functional
+{
+    public static partial class TalkTextHelper
+    {
+        [GeneratedRegex(@"\p{L}+|\p{M}+|\p{N}+|\s+", RegexOptions.Compiled)]
+        private static partial Regex SpeakableRegex();
+
+        [GeneratedRegex(@"(?<=\s|^)(\p{L}{1,2})-(?=\1)", RegexOptions.Compiled | RegexOptions.IgnoreCase)]
+        private static partial Regex StutterRegex();
+
+        [GeneratedRegex(@"(?<=(^|\s)+)([XILMV]+)(?=([ \!\?\.]|$|\n)+)", RegexOptions.Compiled)]
+        private static partial Regex RomanNumeralsRegex();
+
+        [GeneratedRegex(@"(\d+)+([\.])+(\d+)", RegexOptions.Compiled)]
+        private static partial Regex CurrencyRegex();
+
+        [GeneratedRegex(@"(\d+)", RegexOptions.Compiled)]
+        private static partial Regex IntegerRegex();
+
+        [GeneratedRegex(@"(\b(0?[1-9]|[12]\d|30|31)[^\w\d\r\n:](0?[1-9]|1[0-2])[^\w\d\r\n:](\d{4}|\d{2})\b)|(\b(0?[1-9]|1[0-2])[^\w\d\r\n:](0?[1-9]|[12]\d|30|31)[^\w\d\r\n:](\d{4}|\d{2})\b)", RegexOptions.Compiled)]
+        private static partial Regex DateRegex();
+
+        [GeneratedRegex(@"(?<=(^|\s|[\.\?\!])+)([0-1]?[0-9]|2[0-3]):[0-5][0-9](?=([ \!\?\.]|$|\n)+)", RegexOptions.Compiled)]
+        private static partial Regex TimeRegex();
+
+        [GeneratedRegex("<[^<]*>", RegexOptions.Compiled)]
+        private static partial Regex BracketedRegex();
+
+        private static readonly Regex SpeakableRx = SpeakableRegex();
+        private static readonly Regex StutterRx = StutterRegex();
+        private static readonly Regex RomanNumeralsRx = RomanNumeralsRegex();
+        private static readonly Regex CurrencyRx = CurrencyRegex();
+        private static readonly Regex IntegerRx = IntegerRegex();
+        private static readonly Regex DateRx = DateRegex();
+        private static readonly Regex TimeRx = TimeRegex();
+        private static readonly Regex BracketedRx = BracketedRegex();
+
+        public static unsafe AddonTalkText? ReadTalkAddon(AddonTalk* talkAddon)
+        {
+            if (talkAddon is null) return null;
+            return new AddonTalkText
+            {
+                Speaker = ReadTextNode(talkAddon->AtkTextNode220),
+                Text = ReadTextNode(talkAddon->AtkTextNode228)
+            };
+        }
+
+        public static unsafe AddonTalkText? ReadTalkAddon(AddonBattleTalk* talkAddon)
+        {
+            if (talkAddon is null) return null;
+            return new AddonTalkText
+            {
+                Speaker = ReadTextNode(talkAddon->Speaker),
+                Text = ReadTextNode(talkAddon->Text),
+            };
+        }
+
+        public static unsafe AddonTalkText? ReadSelectStringAddon(AddonSelectString* selectStringAddon)
+        {
+            if (selectStringAddon is null) return null;
+            var list = selectStringAddon->PopupMenu.PopupMenu.List;
+            if (list is null) return null;
+            var selectedItemIndex = list->SelectedItemIndex;
+            if (selectedItemIndex < 0 || selectedItemIndex >= list->GetItemCount()) return null;
+            var listItemRenderer = list->ItemRendererList[selectedItemIndex].AtkComponentListItemRenderer;
+            if (listItemRenderer is null) return null;
+            var buttonTextNode = listItemRenderer->AtkComponentButton.ButtonTextNode;
+            if (buttonTextNode is null) return null;
+            var text = ReadStringNode(buttonTextNode->NodeText);
+            return new AddonTalkText
+            {
+                Speaker = "PLAYER",
+                Text = text,
+            };
+        }
+
+        public static unsafe AddonTalkText? ReadCutSceneSelectStringAddon(AddonCutSceneSelectString* cutSceneSelectStringAddon)
+        {
+            if (cutSceneSelectStringAddon is null) return null;
+            var list = cutSceneSelectStringAddon->OptionList;
+            if (list is null) return null;
+            var selectedItemIndex = list->SelectedItemIndex;
+            if (selectedItemIndex < 0 || selectedItemIndex >= list->GetItemCount()) return null;
+            var listItemRenderer = list->ItemRendererList[selectedItemIndex].AtkComponentListItemRenderer;
+            if (listItemRenderer is null) return null;
+            var buttonTextNode = listItemRenderer->AtkComponentButton.ButtonTextNode;
+            if (buttonTextNode is null) return null;
+            var text = ReadStringNode(buttonTextNode->NodeText);
+            return new AddonTalkText
+            {
+                Speaker = "PLAYER",
+                Text = text,
+            };
+        }
+
+        private static unsafe string ReadTextNode(AtkTextNode* textNode)
+        {
+            if (textNode == null) return "";
+
+            var textPtr = textNode->NodeText.StringPtr;
+            var textLength = textNode->NodeText.BufUsed - 1; // Null-terminated; chop off the null byte
+            if (textLength is <= 0 or > int.MaxValue) return "";
+
+            var textLengthInt = Convert.ToInt32(textLength);
+
+            var seString = SeString.Parse(textPtr, textLengthInt);
+            return seString.TextValue
+                .Trim()
+                .Replace("\n", "")
+                .Replace("\r", "");
+        }
+
+        /// <summary>
+        /// Reads every option label out of an addon's <c>AtkComponentList</c> into
+        /// <paramref name="options"/> (cleared first). Shared by the SelectString /
+        /// CutSceneSelectString helpers.
+        /// </summary>
+        public static unsafe void ReadAddonOptions(AtkComponentList* list, List<string> options)
+        {
+            if (list is null) return;
+
+            options.Clear();
+
+            foreach (var index in Enumerable.Range(0, list->ListLength))
+            {
+                var listItemRenderer = list->ItemRendererList[index].AtkComponentListItemRenderer;
+                if (listItemRenderer is null) continue;
+
+                var buttonTextNode = listItemRenderer->AtkComponentButton.ButtonTextNode;
+                if (buttonTextNode is null) continue;
+
+                var buttonText = ReadStringNode(buttonTextNode->NodeText);
+
+                options.Add(buttonText);
+            }
+        }
+
+        public static unsafe string ReadStringNode(Utf8String textNode)
+        {
+            var textPtr = textNode.StringPtr;
+            var textLength = textNode.BufUsed - 1; // Null-terminated; chop off the null byte
+            if (textLength is <= 0 or > int.MaxValue) return "";
+
+            var textLengthInt = Convert.ToInt32(textLength);
+
+            var seString = SeString.Parse(textPtr, textLengthInt);
+            return seString.TextValue
+                .Trim()
+                .Replace("\n", "")
+                .Replace("\r", "");
+        }
+
+        public static string StripAngleBracketedText(string text)
+        {
+            // TextToTalk#17 "<sigh>"
+            return BracketedRx.Replace(text, "").Trim();
+        }
+
+        public static string ReplaceSsmlTokens(string text)
+        {
+            return text.Replace("&", "and");
+        }
+        
+        public static string[] SplitKeepLeft(string input, string delimiters)
+        {
+            // z.B. delimiters = ",;.!?"
+            var cls = "[" + Regex.Escape(delimiters) + "]";
+            return Regex.Split(input, $"(?<={cls})"); // split NACH dem Trenner
+        }
+
+        public static string NormalizePunctuation(string? text)
+        {
+            return text?
+                       // TextToTalk#29 emdashes and dashes and whatever else
+                       .Replace("─", " - ") // These are not the same character
+                       .Replace("—", " - ")
+                       .Replace("...", ".")
+                       .Replace("–", "-") ??
+                   ""; // Hopefully, this one is only in Kan-E-Senna's name? Otherwise, I'm not sure how to parse this correctly.
+        }
+
+        public static string ReplacePhonetics(string text, List<PhoneticCorrection> corrections)
+        {
+            foreach (var correction in corrections) {
+                text = text.Replace(correction.OriginalText.ToLower(), correction.CorrectedText.ToLower(), StringComparison.OrdinalIgnoreCase);
+            }
+
+            return text;
+        }
+
+        public static string StripWorldFromNames(SeString message)
+            => StripWorldFromNames(message, out _);
+
+        /// <summary>
+        /// Strips the world suffix from player names in the message body.
+        /// Also returns the localized world name (from PlayerPayload) and the world's Lumina row id
+        /// so callers can resolve the English server name via the World sheet.
+        /// </summary>
+        public static string StripWorldFromNames(SeString message, out uint worldRowId)
+        {
+            worldRowId = 0;
+            var world = "";
+            var cleanString = new SeStringBuilder();
+            foreach (var p in message.Payloads)
+            {
+                switch (p)
+                {
+                    case PlayerPayload pp:
+                        world = pp.World.Value.Name.ToString();
+                        if (worldRowId == 0) worldRowId = pp.World.RowId;
+                        break;
+                    case TextPayload tp when world != "" && tp.Text != null && tp.Text.Contains(world):
+                        cleanString.AddText(tp.Text.Replace(world, ""));
+                        break;
+                    default:
+                        cleanString.Add(p);
+                        break;
+                }
+            }
+
+            return cleanString.Build().TextValue;
+        }
+
+        public static bool TryGetEntityName(SeString input, out string name)
+        {
+            name = string.Join("", SpeakableRx.Matches(input.TextValue));
+            foreach (var p in input.Payloads)
+            {
+                if (p is PlayerPayload pp)
+                {
+                    // Simplest case; the payload has the raw name
+                    name = pp.PlayerName;
+                    return true;
+                }
+            }
+
+            return name != string.Empty;
+        }
+
+        /// <summary>
+        /// Removes single letters with a hyphen following them, since they aren't read as expected.
+        /// </summary>
+        /// <param name="text">The input text.</param>
+        /// <returns>The cleaned text.</returns>
+        public static string RemoveStutters(string? text)
+        {
+            if (string.IsNullOrEmpty(text)) return string.Empty;
+
+            var startsCapitalized = char.IsUpper(text, 0);
+            while (true)
+            {
+                if (!StutterRx.IsMatch(text)) break;
+                text = StutterRx.Replace(text, "");
+            }
+
+            var isCapitalized = char.IsUpper(text, 0);
+            if (startsCapitalized && !isCapitalized)
+            {
+                text = char.ToUpper(text[0]) + text[1..];
+            }
+
+            return text;
+        }
+
+        /// <summary>
+        /// Removes punctuation from the text
+        /// </summary>
+        /// <param name="text">The input text.</param>
+        /// <returns>The cleaned text.</returns>
+        public static string RemovePunctuation(string text)
+        {
+            var output = Regex.Replace(text, @"[.!?,;:\-…]+$", "");
+
+            return output;
+        }
+
+        public static string ReplaceEmoticons(ILogService log, EKEventId eventId, string cleanText, List<string> emoticons)
+        {
+            try
+            {
+                Regex r = new Regex(string.Join("|", emoticons.Select(s => Regex.Escape(s)).ToArray()));
+                cleanText = r.Replace(cleanText, string.Empty);
+            }
+            catch (Exception ex)
+            {
+                log.Error(nameof(ReplaceEmoticons), $"Error: {ex}", eventId);
+            }
+
+            return cleanText;
+        }
+
+        /// <summary>Maps the FFXIV client language to the matching specific culture (defaults to en-US).</summary>
+        public static CultureInfo GetCulture(ClientLanguage language) => language switch
+        {
+            ClientLanguage.German => CultureInfo.CreateSpecificCulture("de-DE"),
+            ClientLanguage.Japanese => CultureInfo.CreateSpecificCulture("ja-JP"),
+            ClientLanguage.French => CultureInfo.CreateSpecificCulture("fr-FR"),
+            _ => CultureInfo.CreateSpecificCulture("en-US"),
+        };
+
+        public static string ReplaceDate(ILogService log, EKEventId eventId, string cleanText, ClientLanguage language)
+        {
+            try
+            {
+                var culture = GetCulture(language);
+                var formats = new[] { "M-d-yyyy", "dd-MM-yyyy", "MM-dd-yyyy", "dd/MM/yyyy", "MM/dd/yyyy", "M.d.yyyy", "dd.MM.yyyy" }
+                        .Union(culture.DateTimeFormat.GetAllDateTimePatterns()).ToArray();
+                var dateRxResult = DateRx.Match(cleanText);
+                int i = 0;
+                while (dateRxResult.Success)
+                {
+                    var dateString = dateRxResult.Value;
+                    var date = DateTime.ParseExact(dateString, formats, culture, DateTimeStyles.AssumeLocal);
+                    var value = date.ToOrdinalWords();
+
+                    var regex = new Regex(Regex.Escape(dateString));
+                    cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                    log.Debug(nameof(ReplaceDate), $"Replaced '{dateString}' with '{value}'", eventId);
+
+                    dateRxResult = DateRx.Match(cleanText);
+                    i++;
+
+                    if (i > 50)
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Error(nameof(ReplaceDate), $"Error: {ex}", eventId);
+            }
+
+            return cleanText;
+        }
+
+        public static string ReplaceTime(ILogService log, EKEventId eventId, string cleanText, ClientLanguage language)
+        {
+            try
+            {
+                CultureInfo culture = GetCulture(language);
+
+                var timeRxResult = TimeRx.Match(cleanText);
+                int i = 0;
+                while (timeRxResult.Success)
+                {                    
+                    var timeString = timeRxResult.Value;
+
+                    if (language == ClientLanguage.German)
+                    {
+                        var time = TimeOnly.ParseExact(timeString, ["HH:mm", "H:mm"], culture, System.Globalization.DateTimeStyles.None);
+                        var value = time.Hour.ToWords(culture) + " Uhr " + (time.Minute == 0 ? "" : time.Minute.ToWords(culture));
+
+                        var oldCleanText = cleanText;
+                        var regex = new Regex(Regex.Escape(timeString + " (Uhr)"));
+                        cleanText = regex.Replace(cleanText, value.ToString(), 1); 
+                        regex = new Regex(Regex.Escape(timeString + " Uhr"));
+                        cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                        if (cleanText == oldCleanText)
+                        {
+                            regex = new Regex(Regex.Escape(timeString));
+                            cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                        }
+                        log.Debug(nameof(ReplaceTime), $"Replaced '{timeString}' with '{value}'", eventId);
+                    }
+                    else
+                    {
+                        var time = TimeOnly.ParseExact(timeString, ["HH:mm", "H:mm"], culture, System.Globalization.DateTimeStyles.None);
+                        var value = time.ToClockNotation();
+
+                        var regex = new Regex(Regex.Escape(timeString));
+                        cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                        log.Debug(nameof(ReplaceTime), $"Replaced '{timeString}' with '{value}'", eventId);
+                    }
+
+                    timeRxResult = TimeRx.Match(cleanText);
+                    i++;
+
+                    if (i > 50)
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Error(nameof(ReplaceTime), $"Error: {ex}", eventId);
+            }
+
+            return cleanText;
+        }
+
+        public static string ReplaceRomanNumbers(ILogService log, EKEventId eventId, string cleanText)
+        {
+            try
+            {
+                var romanNumerals = RomanNumeralsRx.Match(cleanText);
+                int i = 0;
+                while (romanNumerals.Success)
+                {
+                    var romanNumeralsText = romanNumerals.Value;
+
+                    var value = "i";
+                    if (romanNumeralsText != "I")
+                        value = romanNumeralsText.FromRoman().ToString();
+
+                    var regex = new Regex(Regex.Escape(romanNumeralsText));
+                    cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                    log.Debug(nameof(ReplaceRomanNumbers),
+                                    $"Replaced '{romanNumeralsText}' with '{value}'", eventId);
+
+                    romanNumerals = RomanNumeralsRx.Match(cleanText);
+
+                    i++;
+                    if (i > 50)
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Error(nameof(ReplaceRomanNumbers), $"Error: {ex}", eventId);
+            }
+
+            return cleanText;
+        }
+
+        public static string ReplaceCurrency(ILogService log, EKEventId eventId, string cleanText)
+        {
+            try
+            {
+                var currencyNumerals = CurrencyRx.Match(cleanText);
+                int i = 0;
+                while (currencyNumerals.Success)
+                {
+                    var currencyNumeralsText = currencyNumerals.Value;
+                    var value = currencyNumeralsText.Replace(".", "");
+
+                    var regex = new Regex(Regex.Escape(currencyNumeralsText));
+                    cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                    log.Debug(nameof(ReplaceCurrency), $"Replaced '{currencyNumeralsText}' with '{value}'", eventId);
+
+                    currencyNumerals = CurrencyRx.Match(cleanText);
+                    i++;
+
+                    if (i > 50)
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Error(nameof(ReplaceCurrency), $"Error: {ex}", eventId);
+            }
+
+            return cleanText;
+        }
+
+        internal static string ReplaceIntWithVerbal(ILogService log, EKEventId eventId, string cleanText, ClientLanguage language)
+        {
+            try
+            {
+                CultureInfo culture = GetCulture(language);
+
+                var integer = IntegerRx.Match(cleanText);
+                int i = 0;
+                while (integer.Success)
+                {
+                    var integerValue = Convert.ToInt32(integer.Value);
+                    var value = "";
+
+                    if (cleanText.Length >= (cleanText.IndexOf(integer.Value) + integer.Value.Length + 1) &&
+                        cleanText.Substring(cleanText.IndexOf(integer.Value) + integer.Value.Length, 1) == ".")
+                    {
+                        value = integerValue.ToOrdinalWords(culture);
+                        var regex = new Regex(Regex.Escape(integer.Value + "."));
+                        cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                        log.Debug(nameof(ReplaceIntWithVerbal), $"Replaced '{integer.Value}' with '{value}'", eventId);
+                    }
+                    else
+                    {
+                        value = integerValue.ToWords(culture);
+                        var regex = new Regex(Regex.Escape(integer.Value));
+                        cleanText = regex.Replace(cleanText, value.ToString(), 1);
+                        log.Debug(nameof(ReplaceIntWithVerbal), $"Replaced '{integer.Value}' with '{value}'", eventId);
+                    }
+
+                    integer = IntegerRx.Match(cleanText);
+                    i++;
+
+                    if (i > 50)
+                        break;
+                }
+            }
+            catch (Exception ex)
+            {
+                log.Error(nameof(ReplaceIntWithVerbal), $"Error: {ex}", eventId);
+            }
+
+            return cleanText;
+        }
+
+        public static bool IsSpeakable(string text)
+        {
+            // TextToTalk#41 Unspeakable text
+            return SpeakableRx.Match(text).Success;
+        }
+
+        public static string AnalyzeAndImproveText(string text)
+        {
+            var resultText = text;
+
+            resultText = Regex.Replace(resultText, @"(?<=^|[^/.\w])[a-zA-ZäöüÄÖÜ]+[\.\,\!\?](?=[a-zA-ZäöüÄÖÜ])", "$& ");
+
+            return resultText;
+        }
+
+        public static string CleanUpName(string name)
+        {
+            name = name.Replace("[a]", "");
+            name = Regex.Replace(name, "[^a-zA-Z0-9-äöüÄÖÜ' ]+", "");
+
+            return name;
+        }
+
+        public static string GetPlayerNameWithoutWorld(SeString playerName)
+        {
+            if (playerName.Payloads.FirstOrDefault(p => p is PlayerPayload) is PlayerPayload player)
+            {
+                return player.PlayerName;
+            }
+
+            return playerName.TextValue;
+        }
+
+        public static unsafe string GetBubbleName(Lumina.Excel.Sheets.TerritoryType? territory, GameObject? speaker, string text)
+        {
+            var zoneName = territory?.PlaceName.Value.Name.ToString() ?? "Unknown";
+
+            // Get map coordinates from speaker position
+            var coordStr = "";
+            if (speaker != null && territory != null)
+            {
+                try
+                {
+                    var pos = speaker.Position;
+                    var map = territory.Value.Map.Value;
+                    var sf = map.SizeFactor / 100.0f;
+                    var mapX = 41.0f / sf * ((pos.X + map.OffsetX) * sf + 1024.0f) / 2048.0f + 1.0f;
+                    var mapY = 41.0f / sf * ((pos.Z + map.OffsetY) * sf + 1024.0f) / 2048.0f + 1.0f;
+                    coordStr = $" ({mapX:F1}, {mapY:F1})";
+                }
+                catch { /* Map data unavailable for some territories */ }
+            }
+
+            return $"BB-{zoneName}{coordStr}";
+        }
+
+        public static string VoiceMessageToFileName(string voiceMessage)
+        {
+            var fileName = voiceMessage;
+            var temp = fileName.Split(Path.GetInvalidFileNameChars(), StringSplitOptions.RemoveEmptyEntries);
+            fileName = string.Join("", temp).ToLower().Replace(" ", "").Replace(".", "").Replace("!", "").Replace(",", "").Replace("-", "").Replace("_", "");
+            if (fileName.Length > 120)
+                fileName = fileName.Substring(0, 120);
+            return fileName;
+        }
+
+        public static string RemovePlayerNameInText(string text, string playerName)
+        {
+            if (string.IsNullOrEmpty(playerName)) return text;
+            var nameArr = playerName.Split(' ');
+            text = text.Replace(playerName, "<PLAYERNAME>");
+            if (nameArr.Length > 0) text = text.Replace(nameArr[0], "<PLAYERFIRSTNAME>");
+            if (nameArr.Length > 1) text = text.Replace(nameArr[1], "<PLAYERLASTNAME>");
+            return text;
+        }
+
+        public static string ExtractTokens(string text, IReadOnlyDictionary<string, string?> tokenMap)
+        {
+            // Extract tokens from the longest target values down to the shortest, to e.g.
+            // extract full names before first and last names.
+            foreach (var (k, v) in tokenMap
+                         .Where(kvp => kvp.Value is not null)
+                         .OrderByDescending(kvp => kvp.Value?.Length))
+            {
+                text = text.Replace(v!, k);
+            }
+
+            return text;
+        }
+
+        // ── Player name placeholder handling ──────────────────────
+
+        public const string PlaceholderFirstName = "-PlayerFirstName-";
+        public const string PlaceholderLastName = "-PlayerLastName-";
+        public const string PlaceholderFullName = "-PlayerName-";
+
+        /// <summary>
+        /// Returns a localized generic noun for the player ("Adventurer" / "Abenteurer(in)" /
+        /// "Aventurier(ière)" / "冒険者") used when generating shareable alias variants of a clip.
+        /// EN/JP have no gendered form — male and female callers get the same string.
+        /// </summary>
+        public static string GetPlayerAlias(ClientLanguage lang, bool isMale) => (lang, isMale) switch
+        {
+            (ClientLanguage.German, true)  => "Abenteurer",
+            (ClientLanguage.German, false) => "Abenteurerin",
+            (ClientLanguage.French, true)  => "Aventurier",
+            (ClientLanguage.French, false) => "Aventurière",
+            (ClientLanguage.Japanese, _)   => "冒険者",
+            _                               => "Adventurer",
+        };
+
+        public static bool ContainsPlayerPlaceholder(string text)
+        {
+            return text.Contains(PlaceholderFirstName)
+                || text.Contains(PlaceholderLastName)
+                || text.Contains(PlaceholderFullName);
+        }
+
+        public static string SubstitutePlaceholders(string text, string playerName, bool isMale = true)
+        {
+            if (string.IsNullOrEmpty(text)) return text;
+
+            // Resolve gender conditionals: -IfGender:male|female-
+            if (text.Contains("-IfGender:"))
+                text = ResolveGenderPlaceholders(text, isMale);
+
+            if (string.IsNullOrEmpty(playerName) || !ContainsPlayerPlaceholder(text))
+                return text;
+
+            var parts = playerName.Split(' ');
+            var firstName = parts.Length > 0 ? parts[0] : playerName;
+            var lastName = parts.Length > 1 ? parts[1] : "";
+
+            text = text.Replace(PlaceholderFullName, playerName);
+            text = text.Replace(PlaceholderFirstName, firstName);
+            text = text.Replace(PlaceholderLastName, lastName);
+            return text;
+        }
+
+        // ── Gender conditional placeholder handling ──────────────────
+
+        private const string GenderPlaceholderPrefix = "-IfGender:";
+        private const string GenderPlaceholderSuffix = "-";
+
+        /// <summary>
+        /// Create a gender placeholder from male and female text variants.
+        /// Format: -IfGender:maleText|femaleText-
+        /// </summary>
+        public static string MakeGenderPlaceholder(string maleText, string femaleText)
+        {
+            return $"{GenderPlaceholderPrefix}{maleText}|{femaleText}{GenderPlaceholderSuffix}";
+        }
+
+        /// <summary>
+        /// Check if text contains any gender placeholders.
+        /// </summary>
+        public static bool ContainsGenderPlaceholder(string text)
+        {
+            return text.Contains(GenderPlaceholderPrefix);
+        }
+
+        /// <summary>
+        /// Resolve all -IfGender:male|female- placeholders based on player gender.
+        /// </summary>
+        private static string ResolveGenderPlaceholders(string text, bool isMale)
+        {
+            var startIdx = 0;
+            while (true)
+            {
+                var start = text.IndexOf(GenderPlaceholderPrefix, startIdx, StringComparison.Ordinal);
+                if (start < 0) break;
+
+                var contentStart = start + GenderPlaceholderPrefix.Length;
+                var end = text.IndexOf(GenderPlaceholderSuffix, contentStart, StringComparison.Ordinal);
+                if (end < 0) break;
+
+                var content = text[contentStart..end];
+                var pipeIdx = content.IndexOf('|');
+                if (pipeIdx < 0) { startIdx = end + 1; continue; }
+
+                var maleForm = content[..pipeIdx];
+                var femaleForm = content[(pipeIdx + 1)..];
+                var resolved = isMale ? maleForm : femaleForm;
+
+                text = string.Concat(text[..start], resolved, text[(end + 1)..]);
+                startIdx = start + resolved.Length;
+            }
+            return text;
+        }
+    }
+}

@@ -1,0 +1,19 @@
+{
+    "Author": "Ren Nagasaki",
+    "Name": "Echokraut",
+    "InternalName": "Echokraut",
+    "Description": "A TTS Plugin that breaks the silence! For self hosted TTS Services. /ek",
+    "Punchline": "A TTS Plugin that breaks the silence! For self hosted TTS Services.",
+    "ApplicableVersion": "any",
+    "Tags": [
+        "TTS",
+        "Quest",
+        "Story",
+        "Dialog"
+    ],
+    "LoadRequiredState": 0,
+    "LoadSync": false,
+    "CanUnloadAsync": false,
+    "LoadPriority": 0,
+    "AcceptsFeedback": true
+}

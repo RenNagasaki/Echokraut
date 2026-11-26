@@ -1,0 +1,95 @@
+================================================================================
+ECHOKRAUT CHANGELOG
+v0.19.1.0
+================================================================================
+
+
+==============================================================================
+NEUE HAUPTFUNKTIONEN
+==============================================================================
+
+[Backend] EchokrauTTS — eine neue lokale TTS-Engine neben AllTalk
+  Echokraut kann jetzt EchokrauTTS (eine eigenstaendige F5-TTS-Engine zum
+  Stimmen-Klonen) als Alternative zu AllTalk nutzen. EchokrauTTS ist bei
+  Neuinstallationen die Standard-Engine; bestehende Setups behalten ihre
+  bisherige AllTalk-Konfiguration. Du waehlst die Engine im Erst-Start-
+  Assistenten und unter Einstellungen -> Backend, installierst und startest sie
+  lokal oder verbindest dich mit einer Remote-Instanz. AllTalk und EchokrauTTS
+  liegen nebeneinander im selben Installationsordner, und beim Wechsel werden
+  deine Voices kopiert, sodass beide einsatzbereit bleiben.
+
+  - Lokales EchokrauTTS: die Engine auf dem eigenen Rechner installieren und
+    starten, unter Windows vollautomatisch (gleicher Ein-Klick-Ablauf wie beim
+    lokalen AllTalk).
+  - Remote-EchokrauTTS: Echokraut per URL mit einem laufenden EchokrauTTS-Server
+    verbinden (Einstellungen -> Backend), genau wie bei einem Remote-AllTalk.
+  - Engine-Wahl ueberall: AllTalk oder EchokrauTTS im Erst-Start-Assistenten
+    waehlen (Schritt 1 zeigt jetzt das Setup der gewaehlten Engine) und
+    jederzeit unter Einstellungen -> Backend umschalten.
+
+
+==============================================================================
+VERBESSERUNGEN
+==============================================================================
+
+[Backend] Lokale EchokrauTTS-Voice-Engine waehlen (XTTS oder F5)
+  Lokales EchokrauTTS laesst dich jetzt seine Voice-Engine waehlen -- XTTS
+  (Standard, bessere Qualitaet) oder F5 -- im Erst-Start-Assistenten und unter
+  Einstellungen -> Backend. Beide Engines sind installiert, ein Wechsel startet
+  nur die lokale Instanz neu (keine Neuinstallation).
+
+[Backend] Optionaler FP16-Speedup fuer lokales EchokrauTTS (XTTS auf NVIDIA-GPUs)
+  Wird eine GPU erkannt, zeigen Einstellungen -> Backend (und der Erst-Start-
+  Assistent) eine FP16-Checkbox fuer lokales EchokrauTTS. Aktiviert laedt sie das
+  XTTS-Modell in halber Praezision fuer rund 1,3-1,8x schnellere Generierung.
+  Umschalten startet die lokale Instanz neu.
+
+[Voice-Clip-Manager] Fluessigeres, absturzfreies Durchsuchen der NPCs
+  Die NPC-Liste nutzt jetzt einen virtualisierten Baum, der grosse Kataloge ohne
+  den gelegentlichen nativen Absturz scrollt. Die NPC-Aktionen (Alle ungespeicherten
+  generieren, Alle gespeicherten loeschen, Charakter bearbeiten) liegen jetzt oben
+  im Voice-Clip-Detailfenster, das sich beim Auswaehlen einer Kategorie oeffnet.
+
+
+==============================================================================
+FEHLERBEHEBUNGEN
+==============================================================================
+
+[Dialog] Stimmenwechsel in der Dialog-Leiste stuerzt nicht mehr ab
+  Das Wechseln der Stimme ueber das Dropdown im Dialogfenster (besonders zweimal
+  hintereinander) konnte das Spiel hart abstuerzen lassen. Das native UI-Toolkit
+  wurde aktualisiert und das Stimmen-Dropdown ueberarbeitet -- damit ist das weg.
+
+[Backend] NPCs blieben stumm, wenn das Backend beim Start offline war
+  War das TTS-Backend beim Laden des Plugins nicht erreichbar und du hast es
+  spaeter verbunden (z. B. ueber den Backend-Tab), schlug das Ansprechen eines
+  NPCs mit "No voice assigned" fehl, obwohl eine Stimme gesetzt war. Die
+  Sprachausgabe nutzt jetzt die zugewiesene Stimme direkt, und ein erfolgreicher
+  Verbindungstest frischt die Stimmenliste auf, sodass wieder alles passt -- ohne
+  Neustart.
+
+[Start] Plugin laedt nicht mehr fehl, wenn der Assistent beim Start aufgeht
+  Bei einer Neuinstallation (oder immer wenn der Erst-Start-Assistent bzw. das
+  Changelog-Popup nach einem Update beim Start aufging) wurde das Fenster nicht
+  im Haupt-Thread erzeugt, wodurch das Plugin mit „Not on main thread" gar nicht
+  laden konnte. Start-Fenster oeffnen jetzt im richtigen Thread.
+
+[Konfiguration] EchokrauTTS-Backend-Einstellungen verschwinden nicht mehr nach Reopen
+  Das Schliessen und erneute Oeffnen des Konfigurationsfensters konnte den
+  EchokrauTTS-Bereich unter Einstellungen -> Backend leer lassen. Er wird jetzt
+  bei jedem Oeffnen korrekt angezeigt.
+
+[Voice-Clip-Manager] Backend-Status haengt nicht mehr auf „offline" bei laufendem Backend
+  Die Erreichbarkeitsanzeige aktualisiert sich jetzt sofort, sobald ein lokales
+  Backend bereit ist, und faellt auf einen echten Health-Check zurueck -- so
+  zeigt sie kein veraltetes „offline" mehr, waehrend die Generierung laeuft.
+
+[Backend] Start-/Stop-/Installieren-Buttons frieren das Spiel nicht mehr ein
+  Starten, Stoppen oder (Neu-)Installieren eines lokalen Backends unter
+  Einstellungen -> Backend lief mit seiner Shutdown-/Kill-Arbeit im UI-Thread und
+  fror das Spiel kurz ein. Diese Arbeit laeuft jetzt im Hintergrund.
+
+[Datenbank] DB-Datei bleibt nach Entladen des Plugins nicht mehr gesperrt
+  Neuladen oder Deaktivieren des Plugins gibt jetzt zuverlaessig das SQLite-
+  Datenbank-Handle frei (Connection-Pool + Datei-Sperre), sodass die .db ohne
+  Spiel-Neustart geloescht oder zurueckgesetzt werden kann.

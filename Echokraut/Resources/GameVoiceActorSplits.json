@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "_comment": "Voice-actor changes per NPC name (as shown in the client) + language (plan game-voice-reference §2.5, §11.4: the epoch matching the player's story progress is used). boundaryPatches = first clip token of the NEW voice, 5 digits XXYZZ (06100 = 6.1, 06006 = 6.0 part 6 — NOT 06010). Only confirmed changes with a checked token; research and open cases: docs/research/game-voice-actor-splits-de.md. Central copy is loaded from main (RemoteUrls.gameVoiceActorSplitsUrl); local override: <pluginConfigDir>/game_voice_actor_splits.json.",
+  "splits": [
+    {
+      "npcName": "Y'shtola",
+      "language": "DE",
+      "boundaryPatches": ["06100"],
+      "comment": "Annette Schreier -> Birge Tetzner ab 6.1 (~2022-04-12); bestätigt; gemessen gap 0.65 (xtts); https://spielestimmen.de/spiele/final-fantasy-xiv-online/"
+    },
+    {
+      "npcName": "Hydaelyn",
+      "language": "DE",
+      "boundaryPatches": ["06000"],
+      "comment": "Sonngard Dressler -> Antje von der Ahe ab 6.0 (~2021-12-07); bestätigt; gemessen gap 0.36 (xtts); https://spielestimmen.de/spiele/final-fantasy-xiv-online/"
+    },
+    {
+      "npcName": "Biggs",
+      "language": "DE",
+      "boundaryPatches": ["05000"],
+      "comment": "Gordon Piedesack -> Thomas Dehler ab 5.0 (~2019-07-02); bestätigt; Token eindeutig (keine Zeilen 03007..05000), Messung schwach; https://spielestimmen.de/spiele/final-fantasy-xiv-online/"
+    }
+  ]
+}
